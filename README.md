@@ -17,7 +17,7 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 - **Interactive tree editing** — Rooted trees with binary/ternary/polytomy branching, node and branch styling, collapse/expand, rerooting, ladderize.
 - **Multiple layouts** — Rectangular cladogram, rectangular phylogram, time-calibrated (with geological era bands), and circular; four orientations (LR/RL/TB/BT); auto and manual layout modes.
 - **Character/state system** — Discrete and continuous characters with color-blind-friendly palettes; Sankoff step matrices for asymmetric evolutionary costs.
-- **Evolutionary events** — 14 built-in event types (speciation modes, extinction, key innovations, adaptive radiations, bottlenecks, gene flow, biogeographic events) plus custom events, with causal-chain links.
+- **Evolutionary events** — 15 built-in event types across six groups (Speciation, Extinction, Key evolution, Gene flow, Biogeography, and a General group whose single member is the user-definable custom event), each marked with a distinct two-letter code and colour, with causal-chain links.
 - **Hypothesis layers** — Manage multiple competing hypotheses on a shared topology; tip states shared, internal-node hypotheses diverge.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
 - **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and side-by-side reconciliation view.
@@ -29,11 +29,13 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 
 | Platform | Minimum OS | Architecture | Disk Space | RAM |
 |----------|-----------|-------------|-----------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | ~50 MB | 512 MB |
-| Windows | 10 (64-bit) | x86_64 | ~50 MB | 512 MB |
-| Linux | glibc ≥ 2.28 | x86_64 | ~50 MB | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
+| Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
+| Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
 
-No external runtimes (Java, Python, or browser) required — the Tauri runtime bundles a native binary with a minimal system webview.
+The application ships no browser engine of its own, but it renders into the operating system's
+own web view (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), which must therefore
+be present on the host; no other runtime (Java, Python, or Node.js) is needed to run the app.
 
 ## Installation
 

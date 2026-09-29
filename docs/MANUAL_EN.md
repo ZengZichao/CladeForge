@@ -36,11 +36,11 @@ This manual covers every feature of the application, organised by workflow stage
 
 | Platform | Minimum OS | Architecture | Disk | RAM |
 |----------|-----------|-------------|------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | ~50 MB | 512 MB |
-| Windows | 10 (64-bit) | x86_64 | ~50 MB | 512 MB |
-| Linux | glibc ≥ 2.28 | x86_64 | ~50 MB | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
+| Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
+| Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
 
-No external runtimes (Java, Python, or browser) are required. The Tauri runtime bundles a native binary with a minimal system webview.
+The application ships no browser engine of its own, but it renders into the operating system's own web view (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), which must therefore be present on the host; no other runtime (Java, Python, or Node.js) is needed to run the app.
 
 ### Installation
 
@@ -270,7 +270,7 @@ In the Traits module, use the "Colour by" dropdown to colour nodes and branches 
 
 ## 6. Evolutionary Events
 
-CladeForge provides 14 built-in evolutionary event types, plus a custom event option. Events are *asserted by the user* — they represent your hypotheses about what happened at specific points in the tree.
+CladeForge provides 15 built-in evolutionary event types across six groups — Speciation, Extinction, Key evolution, Gene flow, Biogeography, and a General group whose single member is the user-definable custom event. Events are *asserted by the user* — they represent your hypotheses about what happened at specific points in the tree.
 
 ### Event Catalogue
 

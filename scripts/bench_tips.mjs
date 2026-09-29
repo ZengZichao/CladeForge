@@ -172,6 +172,18 @@ const SIZES = (process.env.BENCH_SIZES || '100,250,500,1000,2000,4000,10000')
   .map((s) => Number(s.trim()))
   .filter((n) => n > 1);
 const BASE_REPS = Number(process.env.BENCH_REPS || 20);
+const REALIZATIONS = Number(process.env.BENCH_REALIZATIONS || 5);
+
+/**
+ * Each (shape, size) is drawn REALIZATIONS times from distinct seeds. One tree per
+ * cell would make the published number a property of a single random topology —
+ * topology-dependent constants (Sankoff cost, missing-state count, node depth) then
+ * vary between cells for reasons that have nothing to do with size, and a shape
+ * effect cannot be separated from the luck of that one draw.
+ */
+function caseSeed(shape, n, realization) {
+  return 0xc1a7 + n * 7919 + (shape === 'balanced' ? 1 : 2) + realization * 104729;
+}
 
 function repsFor(n) {
   // Keep the whole run to a sane wall-clock: fewer reps on bigger trees.
@@ -205,8 +217,8 @@ function cellRounds(shape, n, op) {
   return CELLS.get(`${shape}|${n}|${op}`)?.length ?? 0;
 }
 
-function runCase(shape, n) {
-  const rnd = mulberry32(0xc1a7 + n * 7919 + (shape === 'balanced' ? 1 : 2));
+function runCase(shape, n, realization) {
+  const rnd = mulberry32(caseSeed(shape, n, realization));
   const newick = shape === 'balanced' ? balancedNewick(n, rnd) : pectinateNewick(n, rnd);
   const row = { shape, n, newickKB: (newick.length / 1024).toFixed(1), ops: {}, ok: true };
 
@@ -279,22 +291,29 @@ process.stdout.write(
   }  ${os.cpus().length} cores\n`
 );
 process.stdout.write(
-  `reps: n=100 -> ${repsFor(100)}, n=2000 -> ${repsFor(2000)}; runs per op: ${RUNS} (median of run medians); seed fixed (mulberry32)\n`,
+  `reps: n=100 -> ${repsFor(100)}, n=2000 -> ${repsFor(2000)}; `
+  + `${RUNS} interleaved rounds x ${REALIZATIONS} tree realizations = ${RUNS * REALIZATIONS} samples per cell; `
+  + `seeds mulberry32, 104729 apart per realization\n`,
 );
 // Print enough to make a re-run comparable: the generator seed per case and a
 // cheap checksum of the topology actually timed. Without them a different number
 // cannot be told apart from a different tree.
-process.stdout.write(`topology checksums (newick length + FNV-1a):\n`);
+process.stdout.write(`topology checksums (newick length + FNV-1a), all realizations:\n`);
 for (const shape of ['balanced', 'pectinate']) {
   for (const n of SIZES) {
-    const rnd = mulberry32(0xc1a7 + n * 7919 + (shape === 'balanced' ? 1 : 2));
-    const nw = shape === 'balanced' ? balancedNewick(n, rnd) : pectinateNewick(n, rnd);
-    let h = 0x811c9dc5;
-    for (let i = 0; i < nw.length; i += 1) {
-      h ^= nw.charCodeAt(i);
-      h = Math.imul(h, 0x01000193) >>> 0;
+    for (let realization = 0; realization < REALIZATIONS; realization += 1) {
+      const rnd = mulberry32(caseSeed(shape, n, realization));
+      const nw = shape === 'balanced' ? balancedNewick(n, rnd) : pectinateNewick(n, rnd);
+      let h = 0x811c9dc5;
+      for (let i = 0; i < nw.length; i += 1) {
+        h ^= nw.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      process.stdout.write(
+        `  ${shape}/${n}/r${realization}: seed=${caseSeed(shape, n, realization)} `
+        + `len=${nw.length} fnv1a=${h.toString(16).padStart(8, '0')}\n`,
+      );
     }
-    process.stdout.write(`  ${shape}/${n}: len=${nw.length} fnv1a=${h.toString(16).padStart(8, '0')}\n`);
   }
 }
 process.stdout.write('\n');
@@ -309,15 +328,17 @@ const SHAPES = (process.env.BENCH_SHAPE_ORDER || 'balanced,pectinate')
   .map((s) => s.trim())
   .filter(Boolean);
 let ROUND = 0;
-for (let round = 0; round < RUNS; round += 1) {
-  ROUND = round + 1;
-  // Alternate which shape takes the first position each round, so the
-  // first-case-pays penalty lands on both shapes equally instead of on whichever
-  // happens to be listed first.
-  const order = round % 2 === 0 ? SHAPES : [...SHAPES].reverse();
-  process.stdout.write(`round ${ROUND}/${RUNS}: ${order.join(', ')}\n`);
-  for (const shape of order) {
-    for (const n of SIZES) runCase(shape, n);
+for (let realization = 0; realization < REALIZATIONS; realization += 1) {
+  process.stdout.write(`realization ${realization + 1}/${REALIZATIONS}\n`);
+  for (let round = 0; round < RUNS; round += 1) {
+    ROUND += 1;
+    // Alternate which shape takes the first position each round, so the
+    // first-case-pays penalty lands on both shapes equally instead of on whichever
+    // happens to be listed first.
+    const order = ROUND % 2 === 0 ? SHAPES : [...SHAPES].reverse();
+    for (const shape of order) {
+      for (const n of SIZES) runCase(shape, n, realization);
+    }
   }
 }
 
@@ -340,19 +361,20 @@ const CASES = [];
 }
 
 process.stdout.write('\n## Median wall-clock milliseconds per operation\n\n');
-process.stdout.write('| Tree shape | Tips | ' + OP_KEYS.map((k) => OP_LABELS[k]).join(' | ') + ' | summed path | reps |\n');
+process.stdout.write('| Tree shape | Tips | ' + OP_KEYS.map((k) => OP_LABELS[k]).join(' | ') + ' | summed path (Σ stage medians) | per-sweep range (min–max) | samples |\n');
 process.stdout.write(
-  '|---|---|' + OP_KEYS.map(() => '--:|').join('') + '--:|--:|\n'
+  '|---|---|' + OP_KEYS.map(() => '--:|').join('') + '--:|--:|--:|\n'
 );
 for (const row of CASES) {
   const cells = OP_KEYS.map((k) => {
     const m = cellMedian(row.shape, row.n, k);
     return Number.isFinite(m) ? fmt(m) : 'FAILED';
   });
-  // The summed recompute path is printed alongside the per-stage figures rather
-  // than added up by hand elsewhere, so the total and the stages cannot disagree.
-  // The bracketed range is the same path summed once per ROUND, which is where the
-  // run-to-run spread comes from.
+  // The summed path is the sum of the per-stage MEDIANs printed to its left. The
+  // bracketed range is NOT that quantity: it sums one complete sweep (one round at
+  // one realization), so it carries both run-to-run and tree-to-tree spread. These
+  // are two different statistics and are labelled as such so a reader cannot read
+  // the median-of-sums off a column of sums-of-medians, or the reverse.
   const rounds = Math.max(...OP_KEYS.map((k) => cellRounds(row.shape, row.n, k)), 1);
   const perRound = new Array(rounds).fill(0);
   let summed = 0;
@@ -364,7 +386,7 @@ for (const row of CASES) {
   const lo = Math.min(...perRound);
   const hi = Math.max(...perRound);
   process.stdout.write(
-    `| ${row.shape} | ${row.n} | ${cells.join(' | ')} | ${fmt(summed)} (${fmt(lo)}–${fmt(hi)}) | ${repsFor(row.n)} |\n`
+    `| ${row.shape} | ${row.n} | ${cells.join(' | ')} | ${fmt(summed)} | ${fmt(lo)}–${fmt(hi)} | ${rounds} |\n`
   );
 }
 

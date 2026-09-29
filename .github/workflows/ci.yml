@@ -13,7 +13,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          # Pinned to 20 rather than to the `engines` floor of 18: the scaling
+          # measurements this repository carries (scripts/bench_tips.mjs) were
+          # taken on Node.js v20.20.2, and running the pipeline on another major
+          # would put the gate and those numbers on two runtimes. typecheck, the
+          # test suite and the production build pass identically on 20.
+          node-version: 20
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
