@@ -961,16 +961,32 @@ mod tests {
     #[test]
     fn path_rule_table_matches_the_client() {
         // (path, accepted_by_the_syntactic_rules, note)
+        //
+        // `Path::is_absolute()` is platform-aware in both directions, and the POSIX
+        // rows are affected: on Windows a drive-less `/home/u/tree.nwk` is
+        // root-relative, not absolute, so the authoritative Rust rule rejects a shape
+        // the cheap client pre-check lets through. That divergence is deliberate and
+        // fails closed — the client never grants access, Rust decides — so the table
+        // records what each host actually does rather than one ideal.
+        let posix_absolute = !cfg!(windows);
         let mut cases: Vec<(&str, bool, &str)> = vec![
             ("", false, "empty"),
             ("   ", false, "whitespace only"),
             ("tree.nwk", false, "relative"),
             ("./tree.nwk", false, "relative with leading dot"),
             ("../tree.nwk", false, "relative traversal"),
-            ("/home/u/tree.nwk", true, "absolute POSIX"),
+            (
+                "/home/u/tree.nwk",
+                posix_absolute,
+                "absolute POSIX; root-relative, so not absolute, on Windows",
+            ),
             ("/home/u/../etc/passwd", false, "absolute with traversal"),
             ("/etc/../etc/passwd", false, "system path with traversal"),
-            ("/home/u/./tree.nwk", true, "dot component is normalised, not rejected"),
+            (
+                "/home/u/./tree.nwk",
+                posix_absolute,
+                "dot component is normalised, not rejected",
+            ),
         ];
         // `Path::is_absolute()` is platform-aware: a drive-letter or UNC path is
         // absolute only on Windows. The client accepts Windows syntax everywhere

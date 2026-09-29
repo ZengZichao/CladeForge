@@ -8,9 +8,14 @@ import { assertNativePath } from './native';
  * on the other, with the client silent about it.
  *
  * This table is mirrored by `path_rule_table_matches_the_client` in lib.rs, so a
- * rule change on one side shows up as a failure on the other. The Windows-shaped
- * cases are asserted there only when the test binary runs on Windows, because
- * `Path::is_absolute()` — unlike this cheap client pre-check — is platform-aware.
+ * rule change on one side shows up as a failure on the other. The mirror is not
+ * one-to-one, and cannot be: this pre-check is the same code on every platform,
+ * while `Path::is_absolute()` is platform-aware. On Windows the Rust side is
+ * therefore stricter in two ways — it rejects the drive-less `/home/u/...` rows
+ * below (root-relative, not absolute, there) and it rejects nothing extra among the
+ * Windows-shaped rows. Both divergences fail closed: the client only ever declines
+ * to vouch for a path, and Rust is what decides. The Windows-shaped cases are
+ * asserted on the Rust side only when the test binary runs on Windows.
  *
  * Scope: what the CLIENT rejects. The Rust side additionally canonicalises,
  * resolves symlinks and enforces the root allow-list, none of which is reachable
@@ -22,6 +27,8 @@ const CASES: Array<{ path: string; accept: boolean; note: string }> = [
   { path: 'tree.nwk', accept: false, note: 'relative' },
   { path: './tree.nwk', accept: false, note: 'relative with leading dot' },
   { path: '../tree.nwk', accept: false, note: 'relative traversal' },
+  // Accepted here on every platform; the Rust rule accepts these only off Windows,
+  // where a drive-less `/…` is root-relative rather than absolute.
   { path: '/home/u/tree.nwk', accept: true, note: 'absolute POSIX' },
   { path: '/home/u/../etc/passwd', accept: false, note: 'absolute with traversal' },
   { path: '/etc/../etc/passwd', accept: false, note: 'system path with traversal' },
