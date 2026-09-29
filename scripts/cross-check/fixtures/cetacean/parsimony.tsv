@@ -1,0 +1,17 @@
+character	node_key	chosen_state_index	tie_state_indexes	mp_state_indexes	change_on_branch
+sample-char:cetacean-habitat	N:Ambulocetus+Mysticeti+Odontoceti+Pakicetus|8	0	0,1	0,1	0
+sample-char:cetacean-habitat	N:Ambulocetus+Mysticeti+Odontoceti|6	1	1	1	1
+sample-char:cetacean-habitat	T:Pakicetus	0	0	0	0
+sample-char:cetacean-habitat	T:Ambulocetus	1	1	1	0
+sample-char:cetacean-habitat	N:Mysticeti+Odontoceti|4	1	1,2	1,2	0
+sample-char:cetacean-habitat	N:Mysticeti+Odontoceti|3	2	2	2	1
+sample-char:cetacean-habitat	T:Mysticeti	2	2	2	0
+sample-char:cetacean-habitat	T:Odontoceti	2	2	2	0
+sample-char:cetacean-locomotion	N:Ambulocetus+Mysticeti+Odontoceti+Pakicetus|8	0	0	0	0
+sample-char:cetacean-locomotion	N:Ambulocetus+Mysticeti+Odontoceti|6	1	1	1	1
+sample-char:cetacean-locomotion	T:Pakicetus	0	0	0	0
+sample-char:cetacean-locomotion	T:Ambulocetus	1	1	1	0
+sample-char:cetacean-locomotion	N:Mysticeti+Odontoceti|4	1	1,2	1,2	0
+sample-char:cetacean-locomotion	N:Mysticeti+Odontoceti|3	2	2	2	1
+sample-char:cetacean-locomotion	T:Mysticeti	2	2	2	0
+sample-char:cetacean-locomotion	T:Odontoceti	2	2	2	0

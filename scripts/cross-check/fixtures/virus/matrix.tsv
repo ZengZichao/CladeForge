@@ -1,0 +1,43 @@
+character	tip	state_label
+sample-char:virus-genome	Tobacco mosaic virus	RNA
+sample-char:virus-genome	Influenza A	RNA
+sample-char:virus-genome	Rotavirus	RNA
+sample-char:virus-genome	Reovirus	RNA
+sample-char:virus-genome	HIV-1	RNA
+sample-char:virus-genome	HTLV-1	RNA
+sample-char:virus-genome	Adenovirus	DNA
+sample-char:virus-genome	Papillomavirus	DNA
+sample-char:virus-genome	Parvovirus	DNA
+sample-char:virus-genome	Mimivirus	DNA
+sample-char:virus-genome	Poliovirus	RNA
+sample-char:virus-genome	Foot-and-mouth	RNA
+sample-char:virus-genome	SARS-CoV-2	RNA
+sample-char:virus-genome	MERS-CoV	RNA
+sample-char:virus-genome	Measles virus	RNA
+sample-char:virus-genome	Ebola virus	RNA
+sample-char:virus-genome	Rhabdovirus	RNA
+sample-char:virus-genome	HSV-1	DNA
+sample-char:virus-genome	Varicella-zoster	DNA
+sample-char:virus-genome	Lambda phage	DNA
+sample-char:virus-genome	T4 phage	DNA
+sample-char:virus-host	Tobacco mosaic virus	植物
+sample-char:virus-host	Influenza A	动物
+sample-char:virus-host	Rotavirus	动物
+sample-char:virus-host	Reovirus	动物
+sample-char:virus-host	HIV-1	动物
+sample-char:virus-host	HTLV-1	动物
+sample-char:virus-host	Adenovirus	动物
+sample-char:virus-host	Papillomavirus	动物
+sample-char:virus-host	Parvovirus	动物
+sample-char:virus-host	Mimivirus	原生生物（阿米巴）
+sample-char:virus-host	Poliovirus	动物
+sample-char:virus-host	Foot-and-mouth	动物
+sample-char:virus-host	SARS-CoV-2	动物
+sample-char:virus-host	MERS-CoV	动物
+sample-char:virus-host	Measles virus	动物
+sample-char:virus-host	Ebola virus	动物
+sample-char:virus-host	Rhabdovirus	动物
+sample-char:virus-host	HSV-1	动物
+sample-char:virus-host	Varicella-zoster	动物
+sample-char:virus-host	Lambda phage	细菌
+sample-char:virus-host	T4 phage	细菌

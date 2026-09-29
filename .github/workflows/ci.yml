@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # `npm run build` is what `tauri build` runs, so the PRODUCTION bundle is
+      # built here too: a type-check plus unit tests would let a bundle that only
+      # breaks in the production build pass CI.
+      - run: npm run build
+
+  # The Rust side carries the app's actual security boundary — the path allow-list
+  # in src-tauri/src/lib.rs — and no web job can reach it, so it is compiled and
+  # tested on every platform the app ships to.
+  desktop:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            deps: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+          - os: macos-latest
+            deps: ''
+          - os: windows-latest
+            deps: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.deps }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # The action installs a toolchain WITHOUT clippy unless it is asked for
+          # as a component, and `cargo clippy` then fails with "no such command:
+          # clippy" — a green job would have silently skipped the lint gate.
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # No `npm ci && npm run build` here: `tauri::generate_context!` embeds
+      # `frontendDist` only for a release/`custom-protocol` build, and `cargo test`
+      # does not take that path, so src-tauri compiles and its tests run without a
+      # frontend build. Bundling, which does need the built frontend, is out of
+      # scope for this gate.
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings

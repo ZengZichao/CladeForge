@@ -1,0 +1,7 @@
+character	character_name	type	state_index	state_label	color
+sample-char:archaea-energy	能量代谢	discrete	0	产甲烷	#7c3aed
+sample-char:archaea-energy	能量代谢	discrete	1	嗜盐光能	#0ea5e9
+sample-char:archaea-energy	能量代谢	discrete	2	硫氧化	#f59e0b
+sample-char:archaea-temperature	温度适应性	discrete	0	超嗜热	#dc2626
+sample-char:archaea-temperature	温度适应性	discrete	1	嗜热	#f97316
+sample-char:archaea-temperature	温度适应性	discrete	2	中温	#22c55e

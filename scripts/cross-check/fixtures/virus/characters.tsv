@@ -1,0 +1,7 @@
+character	character_name	type	state_index	state_label	color
+sample-char:virus-genome	基因组类型	discrete	0	RNA	#3b82f6
+sample-char:virus-genome	基因组类型	discrete	1	DNA	#dc2626
+sample-char:virus-host	宿主类型	discrete	0	动物	#8b5cf6
+sample-char:virus-host	宿主类型	discrete	1	细菌	#f59e0b
+sample-char:virus-host	宿主类型	discrete	2	植物	#22c55e
+sample-char:virus-host	宿主类型	discrete	3	原生生物（阿米巴）	#14b8a6

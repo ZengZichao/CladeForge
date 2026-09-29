@@ -1,0 +1,9 @@
+node_key	label	parent_key	branch_length	rescaled_length	is_tip	tips_below
+N:Ambulocetus+Mysticeti+Odontoceti+Pakicetus|8	Cetacea		0	0	0	4
+N:Ambulocetus+Mysticeti+Odontoceti|6	Pelagiceti	N:Ambulocetus+Mysticeti+Odontoceti+Pakicetus|8	1	0.06999999999999999	0	3
+T:Pakicetus	Pakicetus	N:Ambulocetus+Mysticeti+Odontoceti+Pakicetus|8	5	0.35	1	1
+T:Ambulocetus	Ambulocetus	N:Ambulocetus+Mysticeti+Odontoceti|6	7	0.49	1	1
+N:Mysticeti+Odontoceti|4	Basilosauridae	N:Ambulocetus+Mysticeti+Odontoceti|6	11	0.7699999999999999	0	2
+N:Mysticeti+Odontoceti|3	Neoceti	N:Mysticeti+Odontoceti|4	6	0.42	0	2
+T:Mysticeti	Mysticeti	N:Mysticeti+Odontoceti|3	35	2.4499999999999997	1	1
+T:Odontoceti	Odontoceti	N:Mysticeti+Odontoceti|3	35	2.4499999999999997	1	1

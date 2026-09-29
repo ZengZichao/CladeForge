@@ -1,0 +1,33 @@
+[package]
+name = "cladeforge"
+version = "0.1.0"
+description = "CladeForge - local interactive phylogenetic tree editor"
+authors = ["曾子超 <zengzichao@sjtu.edu.cn>"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+# The desktop entry point lives in the library so the same code can back a
+# mobile entry point if ever needed.
+name = "cladeforge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+# There are no doctests in this crate, but `cargo test` still spawns rustdoc to
+# look for them. Where rustdoc is not installed that makes the WHOLE command exit
+# 101 even though every unit test passed — a red signal for contributors who broke
+# nothing, so doctest discovery is switched off for the crate.
+doctest = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+# Used for one thing: the `tauri::fs::Scope` state it manages is the record the
+# dialog plugin's Rust side writes when a person picks a file, and `validate_path`
+# in src/lib.rs consults that record instead of whitelisting all of $HOME. NO
+# `fs:` permission is granted in capabilities/default.json, so none of this
+# plugin's commands are reachable from the webview.
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

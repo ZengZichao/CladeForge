@@ -1,0 +1,34 @@
+project	character	leg	compared	agreed	detail
+archaea	sample-char:archaea-energy	step-count(phangorn::parsimony)	0	0	EXCLUDED: character carries missing (?) codings; phyDat would drop the site
+archaea	sample-char:archaea-energy	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: 3 of 11 tips carry a missing (?) coding
+archaea	sample-char:archaea-temperature	step-count(phangorn::parsimony)	0	0	EXCLUDED: character carries missing (?) codings; phyDat would drop the site
+archaea	sample-char:archaea-temperature	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: 3 of 11 tips carry a missing (?) coding
+bacteria	sample-char:bacteria-gram	step-count(phangorn::parsimony)	1	1	CladeForge 2 vs phangorn 2 (Fitch, unit costs, all tips scored)
+bacteria	sample-char:bacteria-gram	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+bacteria	sample-char:bacteria-oxygen	step-count(phangorn::parsimony)	1	1	CladeForge 5 vs phangorn 5 (Fitch, unit costs, all tips scored)
+bacteria	sample-char:bacteria-oxygen	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+virus	sample-char:virus-genome	step-count(phangorn::parsimony)	1	1	CladeForge 1 vs phangorn 1 (Fitch, unit costs, all tips scored)
+virus	sample-char:virus-genome	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+virus	sample-char:virus-host	step-count(phangorn::parsimony)	1	1	CladeForge 3 vs phangorn 3 (Fitch, unit costs, all tips scored)
+virus	sample-char:virus-host	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+cetacean	sample-char:cetacean-habitat	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+cetacean	sample-char:cetacean-locomotion	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+plant	sample-char:plant-habitat	step-count(phangorn::parsimony)	1	1	CladeForge 3 vs phangorn 3 (Fitch, unit costs, all tips scored)
+plant	sample-char:plant-habitat	ER-marginals(ape::ace)	0	0	MEASURED, NOT GATED (ape fits its rate, CladeForge fixes 1/mean = 0.004806): 39/81 fixture rows covered by $lik.anc; max |diff| = 0.2109, mean = 0.0209, 35 within 0.05; argmax state matches on 6/13 internal nodes; ape rate(s): 0.1000
+plant	sample-char:plant-vasc	step-count(phangorn::parsimony)	1	1	CladeForge 1 vs phangorn 1 (Fitch, unit costs, all tips scored)
+plant	sample-char:plant-vasc	ER-marginals(ape::ace)	0	0	MEASURED, NOT GATED (ape fits its rate, CladeForge fixes 1/mean = 0.004806): 26/54 fixture rows covered by $lik.anc; max |diff| = 0.2716, mean = 0.0930, 8 within 0.05; argmax state matches on 5/13 internal nodes; ape rate(s): 0.1000
+plant	sample-char:plant-seed	step-count(phangorn::parsimony)	1	1	CladeForge 1 vs phangorn 1 (Fitch, unit costs, all tips scored)
+plant	sample-char:plant-seed	ER-marginals(ape::ace)	0	0	MEASURED, NOT GATED (ape fits its rate, CladeForge fixes 1/mean = 0.004806): 26/54 fixture rows covered by $lik.anc; max |diff| = 0.2681, mean = 0.0580, 16 within 0.05; argmax state matches on 10/13 internal nodes; ape rate(s): 0.1000
+animal	sample-char:animal-habitat	step-count(phangorn::parsimony)	1	1	CladeForge 6 vs phangorn 6 (Fitch, unit costs, all tips scored)
+animal	sample-char:animal-habitat	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+animal	sample-char:animal-limb	step-count(phangorn::parsimony)	1	1	CladeForge 2 vs phangorn 2 (Fitch, unit costs, all tips scored)
+animal	sample-char:animal-limb	ER-marginals(ape::ace)	0	0	NOT-COMPARABLE: ape::ace needs a rooted fully dichotomous tree; this project has stem lineages
+er-control	erControlChar	step-count(phangorn::parsimony)	1	1	CladeForge 3 vs phangorn 3 (Fitch, unit costs, all tips scored)
+er-control	erControlChar	ER-marginals(ape::ace)	0	0	MEASURED, NOT GATED (ape fits its rate, CladeForge fixes 1/mean = 2.642): 14/30 fixture rows covered by $lik.anc; max |diff| = 0.1413, mean = 0.0508, 8 within 0.05; argmax state matches on 6/7 internal nodes; ape rate(s): 15.1913
+archaea	-	exported-R-script-Sankoff	2	2	app [2, 2] vs exported script [2, 2]
+bacteria	-	exported-R-script-Sankoff	2	2	app [2, 5] vs exported script [2, 5]
+virus	-	exported-R-script-Sankoff	2	2	app [1, 3] vs exported script [1, 3]
+cetacean	-	exported-R-script-Sankoff	2	2	app [3, 3] vs exported script [3, 3]
+plant	-	exported-R-script-Sankoff	3	3	app [3, 1, 1] vs exported script [3, 1, 1]
+animal	-	exported-R-script-Sankoff	2	2	app [6, 2] vs exported script [6, 2]
+er-control	-	exported-R-script-Sankoff	1	1	app [3] vs exported script [3]

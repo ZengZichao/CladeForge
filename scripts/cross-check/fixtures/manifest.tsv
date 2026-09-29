@@ -1,0 +1,15 @@
+project	character	states	tips	internals	mean_branch_length	rate_1_over_mean	sankoff_min_cost	sankoff_matrix
+archaea	sample-char:archaea-energy	3	11	8	1472.222222	0.0006792452830	2	uniform
+archaea	sample-char:archaea-temperature	3	11	8	1472.222222	0.0006792452830	2	uniform
+bacteria	sample-char:bacteria-gram	2	12	12	1521.739130	0.0006571428571	2	uniform
+bacteria	sample-char:bacteria-oxygen	3	12	12	1521.739130	0.0006571428571	5	uniform
+virus	sample-char:virus-genome	2	21	15	1645.714286	0.0006076388889	1	uniform
+virus	sample-char:virus-host	4	21	15	1645.714286	0.0006076388889	3	uniform
+cetacean	sample-char:cetacean-habitat	3	4	4	14.28571429	0.07000000000	3	Sankoff
+cetacean	sample-char:cetacean-locomotion	3	4	4	14.28571429	0.07000000000	3	Sankoff
+plant	sample-char:plant-habitat	3	14	13	208.0769231	0.004805914972	3	uniform
+plant	sample-char:plant-vasc	2	14	13	208.0769231	0.004805914972	1	uniform
+plant	sample-char:plant-seed	2	14	13	208.0769231	0.004805914972	1	uniform
+animal	sample-char:animal-habitat	4	20	18	154.5945946	0.006468531469	6	uniform
+animal	sample-char:animal-limb	3	20	18	154.5945946	0.006468531469	2	uniform
+er-control	erControlChar	2	8	7	0.3785714286	2.641509434	3	uniform

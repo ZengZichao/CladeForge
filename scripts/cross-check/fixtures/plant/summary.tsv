@@ -1,0 +1,4 @@
+character	mean_branch_length	rate_1_over_mean	sankoff_min_cost	has_step_matrix
+sample-char:plant-habitat	208.0769231	0.004805914972	3	0
+sample-char:plant-vasc	208.0769231	0.004805914972	1	0
+sample-char:plant-seed	208.0769231	0.004805914972	1	0

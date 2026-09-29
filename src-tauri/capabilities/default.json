@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Capabilities for the main CladeForge window: native open/save dialogs only. File IO goes through the app commands (read_text_file / write_text_file / write_binary_file), which validate every path against a narrow allow-list - the user's Documents, Desktop and Downloads folders, the per-user temporary directory, and folders chosen in a native dialog - rejecting relative paths, '..' traversal and symlink escapes. No broad filesystem capability is granted: tauri-plugin-fs is initialised only to own the dialog-approval record (Tauri's filesystem scope), and no fs:* permission is listed here, so none of its commands are reachable from the webview.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

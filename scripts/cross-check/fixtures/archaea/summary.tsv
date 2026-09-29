@@ -1,0 +1,3 @@
+character	mean_branch_length	rate_1_over_mean	sankoff_min_cost	has_step_matrix
+sample-char:archaea-energy	1472.222222	0.0006792452830	2	0
+sample-char:archaea-temperature	1472.222222	0.0006792452830	2	0

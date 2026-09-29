@@ -1,0 +1,9 @@
+character	tip	state_label
+sample-char:cetacean-habitat	Pakicetus	陆生
+sample-char:cetacean-habitat	Ambulocetus	半水生
+sample-char:cetacean-habitat	Mysticeti	水生
+sample-char:cetacean-habitat	Odontoceti	水生
+sample-char:cetacean-locomotion	Pakicetus	跖行
+sample-char:cetacean-locomotion	Ambulocetus	划水游动
+sample-char:cetacean-locomotion	Mysticeti	摆尾游动
+sample-char:cetacean-locomotion	Odontoceti	摆尾游动

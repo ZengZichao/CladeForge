@@ -1,0 +1,25 @@
+node_key	label	parent_key	branch_length	rescaled_length	is_tip	tips_below
+N:Bacillus+Bacteroides+Clostridium+Escherichia+Mycobacterium+Prochlorococcus+Pseudomonas+Rhizobium+Rickettsia+Streptomyces+Synechocystis+Treponema|24	Terrabacteria		0	0	0	12
+N:Bacteroides+Escherichia+Pseudomonas+Rhizobium+Rickettsia+Treponema|12	Gracilicutes (GN)	N:Bacillus+Bacteroides+Clostridium+Escherichia+Mycobacterium+Prochlorococcus+Pseudomonas+Rhizobium+Rickettsia+Streptomyces+Synechocystis+Treponema|24	100	0.06571428571428573	0	6
+N:Bacillus+Clostridium|5	Firmicutes (GP)	N:Bacillus+Bacteroides+Clostridium+Escherichia+Mycobacterium+Prochlorococcus+Pseudomonas+Rhizobium+Rickettsia+Streptomyces+Synechocystis+Treponema|24	200	0.13142857142857145	0	2
+N:Mycobacterium+Streptomyces|3	Actinobacteria	N:Bacillus+Bacteroides+Clostridium+Escherichia+Mycobacterium+Prochlorococcus+Pseudomonas+Rhizobium+Rickettsia+Streptomyces+Synechocystis+Treponema|24	300	0.19714285714285715	0	2
+N:Prochlorococcus+Synechocystis|3	Cyanobacteria	N:Bacillus+Bacteroides+Clostridium+Escherichia+Mycobacterium+Prochlorococcus+Pseudomonas+Rhizobium+Rickettsia+Streptomyces+Synechocystis+Treponema|24	400	0.2628571428571429	0	2
+N:Escherichia+Pseudomonas+Rhizobium+Rickettsia|7	Proteobacteria	N:Bacteroides+Escherichia+Pseudomonas+Rhizobium+Rickettsia+Treponema|12	700	0.46	0	4
+N:Bacteroides|2	Bacteroidetes	N:Bacteroides+Escherichia+Pseudomonas+Rhizobium+Rickettsia+Treponema|12	800	0.5257142857142858	0	1
+N:Treponema|2	Spirochaetes	N:Bacteroides+Escherichia+Pseudomonas+Rhizobium+Rickettsia+Treponema|12	900	0.5914285714285714	0	1
+N:Clostridium|2	Clostridiales	N:Bacillus+Clostridium|5	900	0.5914285714285714	0	1
+N:Bacillus|2	Bacillales	N:Bacillus+Clostridium|5	1000	0.6571428571428571	0	1
+T:Streptomyces	Streptomyces	N:Mycobacterium+Streptomyces|3	3000	1.9714285714285715	1	1
+T:Mycobacterium	Mycobacterium	N:Mycobacterium+Streptomyces|3	3000	1.9714285714285715	1	1
+T:Synechocystis	Synechocystis	N:Prochlorococcus+Synechocystis|3	2900	1.905714285714286	1	1
+T:Prochlorococcus	Prochlorococcus	N:Prochlorococcus+Synechocystis|3	2900	1.905714285714286	1	1
+N:Rhizobium+Rickettsia|3	Alphaproteobacteria	N:Escherichia+Pseudomonas+Rhizobium+Rickettsia|7	500	0.32857142857142857	0	2
+N:Escherichia+Pseudomonas|3	Gammaproteobacteria	N:Escherichia+Pseudomonas+Rhizobium+Rickettsia|7	600	0.3942857142857143	0	2
+T:Bacteroides	Bacteroides	N:Bacteroides|2	2400	1.5771428571428572	1	1
+T:Treponema	Treponema	N:Treponema|2	2300	1.5114285714285716	1	1
+T:Clostridium	Clostridium	N:Clostridium|2	2200	1.4457142857142857	1	1
+T:Bacillus	Bacillus	N:Bacillus|2	2100	1.3800000000000001	1	1
+T:Rhizobium	Rhizobium	N:Rhizobium+Rickettsia|3	2000	1.3142857142857143	1	1
+T:Rickettsia	Rickettsia	N:Rhizobium+Rickettsia|3	2000	1.3142857142857143	1	1
+T:Escherichia	Escherichia	N:Escherichia+Pseudomonas|3	1900	1.2485714285714287	1	1
+T:Pseudomonas	Pseudomonas	N:Escherichia+Pseudomonas|3	1900	1.2485714285714287	1	1

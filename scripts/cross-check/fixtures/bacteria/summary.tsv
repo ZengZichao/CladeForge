@@ -1,0 +1,3 @@
+character	mean_branch_length	rate_1_over_mean	sankoff_min_cost	has_step_matrix
+sample-char:bacteria-gram	1521.739130	0.0006571428571	2	0
+sample-char:bacteria-oxygen	1521.739130	0.0006571428571	5	0

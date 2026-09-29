@@ -1,0 +1,7 @@
+character	character_name	type	state_index	state_label	color
+sample-char:cetacean-habitat	栖息地	discrete	0	陆生	#9ca3af
+sample-char:cetacean-habitat	栖息地	discrete	1	半水生	#3b82f6
+sample-char:cetacean-habitat	栖息地	discrete	2	水生	#1e3a5f
+sample-char:cetacean-locomotion	运动方式	discrete	0	跖行	#b45309
+sample-char:cetacean-locomotion	运动方式	discrete	1	划水游动	#0ea5e9
+sample-char:cetacean-locomotion	运动方式	discrete	2	摆尾游动	#1e3a8a

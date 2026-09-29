@@ -1,0 +1,8 @@
+character	character_name	type	state_index	state_label	color
+sample-char:plant-habitat	生境	discrete	0	水生	#0ea5e9
+sample-char:plant-habitat	生境	discrete	1	湿生	#3b82f6
+sample-char:plant-habitat	生境	discrete	2	陆生	#22c55e
+sample-char:plant-vasc	维管组织	discrete	0	无	#9ca3af
+sample-char:plant-vasc	维管组织	discrete	1	有	#7c3aed
+sample-char:plant-seed	种子	discrete	0	无（孢子繁殖）	#9ca3af
+sample-char:plant-seed	种子	discrete	1	有	#dc2626

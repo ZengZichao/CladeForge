@@ -1,0 +1,20 @@
+node_key	label	parent_key	branch_length	rescaled_length	is_tip	tips_below
+N:Halobacterium+Korarchaeota+Metallosphaera+Methanobrevibacter+Methanosarcina+Nanoarchaeota+Natronomonas+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|19	Asgard		0	0	0	11
+N:Halobacterium+Methanobrevibacter+Methanosarcina+Natronomonas|7	Euryarchaeota	N:Halobacterium+Korarchaeota+Metallosphaera+Methanobrevibacter+Methanosarcina+Nanoarchaeota+Natronomonas+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|19	500	0.339622641509434	0	4
+N:Korarchaeota+Metallosphaera+Nanoarchaeota+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|11	Tetrarchaeota	N:Halobacterium+Korarchaeota+Metallosphaera+Methanobrevibacter+Methanosarcina+Nanoarchaeota+Natronomonas+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|19	600	0.4075471698113208	0	7
+N:Methanobrevibacter+Methanosarcina|3	Methanobacteriales	N:Halobacterium+Methanobrevibacter+Methanosarcina+Natronomonas|7	700	0.47547169811320755	0	2
+N:Halobacterium+Natronomonas|3	Halobacteriales	N:Halobacterium+Methanobrevibacter+Methanosarcina+Natronomonas|7	800	0.5433962264150943	0	2
+N:Metallosphaera+Pyrobaculum+Sulfolobus+Thermoproteus|7	Crenarchaeota	N:Korarchaeota+Metallosphaera+Nanoarchaeota+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|11	200	0.13584905660377358	0	4
+T:Thaumarchaeota	Thaumarchaeota	N:Korarchaeota+Metallosphaera+Nanoarchaeota+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|11	300	0.2037735849056604	1	1
+T:Korarchaeota	Korarchaeota	N:Korarchaeota+Metallosphaera+Nanoarchaeota+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|11	400	0.27169811320754716	1	1
+T:Nanoarchaeota	Nanoarchaeota	N:Korarchaeota+Metallosphaera+Nanoarchaeota+Pyrobaculum+Sulfolobus+Thaumarchaeota+Thermoproteus|11	500	0.339622641509434	1	1
+T:Methanosarcina	Methanosarcina	N:Methanobrevibacter+Methanosarcina|3	2800	1.9018867924528302	1	1
+T:Methanobrevibacter	Methanobrevibacter	N:Methanobrevibacter+Methanosarcina|3	2800	1.9018867924528302	1	1
+T:Halobacterium	Halobacterium	N:Halobacterium+Natronomonas|3	2700	1.8339622641509434	1	1
+T:Natronomonas	Natronomonas	N:Halobacterium+Natronomonas|3	2700	1.8339622641509434	1	1
+N:Pyrobaculum+Thermoproteus|3	Thermoproteales	N:Metallosphaera+Pyrobaculum+Sulfolobus+Thermoproteus|7	600	0.4075471698113208	0	2
+N:Metallosphaera+Sulfolobus|3	Sulfolobales	N:Metallosphaera+Pyrobaculum+Sulfolobus+Thermoproteus|7	700	0.47547169811320755	0	2
+T:Thermoproteus	Thermoproteus	N:Pyrobaculum+Thermoproteus|3	2600	1.7660377358490567	1	1
+T:Pyrobaculum	Pyrobaculum	N:Pyrobaculum+Thermoproteus|3	2600	1.7660377358490567	1	1
+T:Sulfolobus	Sulfolobus	N:Metallosphaera+Sulfolobus|3	2500	1.6981132075471699	1	1
+T:Metallosphaera	Metallosphaera	N:Metallosphaera+Sulfolobus|3	2500	1.6981132075471699	1	1

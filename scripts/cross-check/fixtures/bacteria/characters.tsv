@@ -1,0 +1,6 @@
+character	character_name	type	state_index	state_label	color
+sample-char:bacteria-gram	革兰氏反应	discrete	0	革兰氏阳性	#7c3aed
+sample-char:bacteria-gram	革兰氏反应	discrete	1	革兰氏阴性	#0ea5e9
+sample-char:bacteria-oxygen	氧需求	discrete	0	好氧	#22c55e
+sample-char:bacteria-oxygen	氧需求	discrete	1	厌氧	#71717a
+sample-char:bacteria-oxygen	氧需求	discrete	2	兼性	#f59e0b

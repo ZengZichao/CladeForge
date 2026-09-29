@@ -1,0 +1,16 @@
+character	node_key	chosen_state_index	tie_state_indexes	mp_state_indexes	change_on_branch
+erControlChar	N:t1+t2+t3+t4+t5+t6+t7+t8|15	0	0	0	0
+erControlChar	N:t1+t2+t3+t4|7	0	0	0	0
+erControlChar	N:t5+t6+t7+t8|7	0	0	0	0
+erControlChar	N:t1+t2|3	0	0	0	0
+erControlChar	N:t3+t4|3	0	0	0	0
+erControlChar	N:t5+t6|3	0	0	0	0
+erControlChar	N:t7+t8|3	0	0	0	0
+erControlChar	T:t1	0	0	0	0
+erControlChar	T:t2	1	1	1	1
+erControlChar	T:t3	1	1	1	1
+erControlChar	T:t4	0	0	0	0
+erControlChar	T:t5	0	0	0	0
+erControlChar	T:t6	1	1	1	1
+erControlChar	T:t7	0	0	0	0
+erControlChar	T:t8	0	0	0	0

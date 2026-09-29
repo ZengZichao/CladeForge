@@ -1,0 +1,8 @@
+character	character_name	type	state_index	state_label	color
+sample-char:animal-habitat	生境	discrete	0	水生	#0ea5e9
+sample-char:animal-habitat	生境	discrete	1	半水生	#3b82f6
+sample-char:animal-habitat	生境	discrete	2	陆生	#22c55e
+sample-char:animal-habitat	生境	discrete	3	飞行	#8b5cf6
+sample-char:animal-limb	附肢类型	discrete	0	鳍	#0284c7
+sample-char:animal-limb	附肢类型	discrete	1	趾型	#b45309
+sample-char:animal-limb	附肢类型	discrete	2	翼	#8b5cf6

@@ -1,0 +1,73 @@
+character	node_key	chosen_state_index	tie_state_indexes	mp_state_indexes	change_on_branch
+sample-char:virus-genome	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	0	0,1	0,1	0
+sample-char:virus-genome	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	0	0	0	0
+sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	1	1	1	1
+sample-char:virus-genome	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	0	0	0	0
+sample-char:virus-genome	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	0	0	0	0
+sample-char:virus-genome	N:Reovirus+Rotavirus|3	0	0	0	0
+sample-char:virus-genome	N:HIV-1+HTLV-1|3	0	0	0	0
+sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	1	1	1	0
+sample-char:virus-genome	N:Papillomavirus+Parvovirus|3	1	1	1	0
+sample-char:virus-genome	N:Mimivirus|2	1	1	1	0
+sample-char:virus-genome	N:Foot-and-mouth+Poliovirus|3	0	0	0	0
+sample-char:virus-genome	N:MERS-CoV+SARS-CoV-2|3	0	0	0	0
+sample-char:virus-genome	T:Tobacco mosaic virus	0	0	0	0
+sample-char:virus-genome	N:Ebola virus+Measles virus+Rhabdovirus|4	0	0	0	0
+sample-char:virus-genome	T:Influenza A	0	0	0	0
+sample-char:virus-genome	T:Rotavirus	0	0	0	0
+sample-char:virus-genome	T:Reovirus	0	0	0	0
+sample-char:virus-genome	T:HIV-1	0	0	0	0
+sample-char:virus-genome	T:HTLV-1	0	0	0	0
+sample-char:virus-genome	N:HSV-1+Varicella-zoster|3	1	1	1	0
+sample-char:virus-genome	N:Lambda phage+T4 phage|3	1	1	1	0
+sample-char:virus-genome	T:Adenovirus	1	1	1	0
+sample-char:virus-genome	T:Papillomavirus	1	1	1	0
+sample-char:virus-genome	T:Parvovirus	1	1	1	0
+sample-char:virus-genome	T:Mimivirus	1	1	1	0
+sample-char:virus-genome	T:Poliovirus	0	0	0	0
+sample-char:virus-genome	T:Foot-and-mouth	0	0	0	0
+sample-char:virus-genome	T:SARS-CoV-2	0	0	0	0
+sample-char:virus-genome	T:MERS-CoV	0	0	0	0
+sample-char:virus-genome	T:Measles virus	0	0	0	0
+sample-char:virus-genome	T:Ebola virus	0	0	0	0
+sample-char:virus-genome	T:Rhabdovirus	0	0	0	0
+sample-char:virus-genome	T:HSV-1	1	1	1	0
+sample-char:virus-genome	T:Varicella-zoster	1	1	1	0
+sample-char:virus-genome	T:Lambda phage	1	1	1	0
+sample-char:virus-genome	T:T4 phage	1	1	1	0
+sample-char:virus-host	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	0	0	0	0
+sample-char:virus-host	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	0	0	0	0
+sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	0	0	0	0
+sample-char:virus-host	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	0	0	0	0
+sample-char:virus-host	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	0	0	0	0
+sample-char:virus-host	N:Reovirus+Rotavirus|3	0	0	0	0
+sample-char:virus-host	N:HIV-1+HTLV-1|3	0	0	0	0
+sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	0	0	0	0
+sample-char:virus-host	N:Papillomavirus+Parvovirus|3	0	0	0	0
+sample-char:virus-host	N:Mimivirus|2	0	0,3	0,3	0
+sample-char:virus-host	N:Foot-and-mouth+Poliovirus|3	0	0	0	0
+sample-char:virus-host	N:MERS-CoV+SARS-CoV-2|3	0	0	0	0
+sample-char:virus-host	T:Tobacco mosaic virus	2	2	2	1
+sample-char:virus-host	N:Ebola virus+Measles virus+Rhabdovirus|4	0	0	0	0
+sample-char:virus-host	T:Influenza A	0	0	0	0
+sample-char:virus-host	T:Rotavirus	0	0	0	0
+sample-char:virus-host	T:Reovirus	0	0	0	0
+sample-char:virus-host	T:HIV-1	0	0	0	0
+sample-char:virus-host	T:HTLV-1	0	0	0	0
+sample-char:virus-host	N:HSV-1+Varicella-zoster|3	0	0	0	0
+sample-char:virus-host	N:Lambda phage+T4 phage|3	1	1	1	1
+sample-char:virus-host	T:Adenovirus	0	0	0	0
+sample-char:virus-host	T:Papillomavirus	0	0	0	0
+sample-char:virus-host	T:Parvovirus	0	0	0	0
+sample-char:virus-host	T:Mimivirus	3	3	3	1
+sample-char:virus-host	T:Poliovirus	0	0	0	0
+sample-char:virus-host	T:Foot-and-mouth	0	0	0	0
+sample-char:virus-host	T:SARS-CoV-2	0	0	0	0
+sample-char:virus-host	T:MERS-CoV	0	0	0	0
+sample-char:virus-host	T:Measles virus	0	0	0	0
+sample-char:virus-host	T:Ebola virus	0	0	0	0
+sample-char:virus-host	T:Rhabdovirus	0	0	0	0
+sample-char:virus-host	T:HSV-1	0	0	0	0
+sample-char:virus-host	T:Varicella-zoster	0	0	0	0
+sample-char:virus-host	T:Lambda phage	1	1	1	0
+sample-char:virus-host	T:T4 phage	1	1	1	0

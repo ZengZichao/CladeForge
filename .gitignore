@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Drawing output of an exported R script — regenerable by re-running it
+cladeforge_reconstruction.pdf
+
+# Rust / Tauri
+src-tauri/target
+
+# Copied app bundle at the project root (build artifact)
+/CladeForge.app
+
+# Tauri generated schemas (auto-generated on build)
+src-tauri/gen/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
