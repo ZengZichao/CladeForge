@@ -18,7 +18,7 @@
 ## 1. 导出算例数据（仅需 Node，不引入新依赖）
 
 ```sh
-cd cladeforge
+cd CladeForge
 node scripts/cross-check/dump-fixtures.mjs                  # → scripts/cross-check/fixtures/
 node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit directory
 ```

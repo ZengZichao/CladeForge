@@ -49,11 +49,11 @@ The application ships no browser engine of its own, but it renders into the oper
 - Windows: `.msi` (x64)
 - Linux: `.deb` or AppImage
 
-**Build from source** — clone the repository, replacing `<owner>` with the GitHub account that hosts it:
+**Build from source** — clone the repository:
 
 ```bash
-git clone https://github.com/<owner>/cladeforge.git
-cd cladeforge
+git clone https://github.com/ZengZichao/CladeForge.git
+cd CladeForge
 npm install
 npm run dev            # web dev server (no Rust toolchain needed)
 npm run tauri dev      # desktop dev build

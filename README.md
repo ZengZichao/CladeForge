@@ -53,8 +53,8 @@ the primary installation path and produces the same installers.
 ### Build from source
 
 ```bash
-git clone https://github.com/<owner>/cladeforge.git
-cd cladeforge
+git clone https://github.com/ZengZichao/CladeForge.git
+cd CladeForge
 npm install
 npm run dev            # web dev server (no Rust needed)
 npm run tauri dev      # desktop dev build (requires Rust)
@@ -63,8 +63,6 @@ npm run typecheck      # TypeScript strict check
 npm test               # run the Vitest suite
 npm run tauri build    # build the packaged .app / installer
 ```
-
-Replace `<owner>` with the GitHub account or organization that hosts this repository.
 
 **Prerequisites for source build:** Node.js ≥ 18, Rust toolchain ≥ 1.70, npm.
 

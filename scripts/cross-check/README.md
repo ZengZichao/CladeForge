@@ -23,7 +23,7 @@ of evidence:
 ## 1. Dump the fixtures (Node only, no new dependencies)
 
 ```sh
-cd cladeforge
+cd CladeForge
 node scripts/cross-check/dump-fixtures.mjs                  # → scripts/cross-check/fixtures/
 node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit directory
 ```

@@ -49,11 +49,11 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 - Windows：`.msi`（x64）
 - Linux：`.deb` 或 AppImage
 
-**从源码构建** — 克隆仓库，把命令中的 `<owner>` 替换为托管该仓库的 GitHub 账号：
+**从源码构建** — 克隆仓库：
 
 ```bash
-git clone https://github.com/<owner>/cladeforge.git
-cd cladeforge
+git clone https://github.com/ZengZichao/CladeForge.git
+cd CladeForge
 npm install
 npm run dev            # Web 开发服务器（无需 Rust 工具链）
 npm run tauri dev      # 桌面开发构建

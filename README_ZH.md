@@ -53,8 +53,8 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 ### 从源码构建
 
 ```bash
-git clone https://github.com/<owner>/cladeforge.git
-cd cladeforge
+git clone https://github.com/ZengZichao/CladeForge.git
+cd CladeForge
 npm install
 npm run dev            # Web 开发服务器（无需 Rust）
 npm run tauri dev      # 桌面开发构建（需要 Rust）
@@ -63,8 +63,6 @@ npm run typecheck      # TypeScript 严格检查
 npm test               # 运行 Vitest 测试套件
 npm run tauri build    # 构建打包的 .app / 安装包
 ```
-
-请把 `<owner>` 替换为托管本仓库的 GitHub 账号或组织名。
 
 **源码构建前置条件：** Node.js ≥ 18，Rust 工具链 ≥ 1.70，npm。
 
