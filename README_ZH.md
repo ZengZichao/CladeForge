@@ -2,6 +2,8 @@
 
 **面向演化场景构建与假说生成的交互式系统发育树编辑器**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23053393.svg)](https://doi.org/10.5281/zenodo.23053393)
+
 ---
 
 [English README](./README.md) | [中文说明](./README_ZH.md)
@@ -99,7 +101,16 @@ CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0
 
 ## 引用
 
-目前没有可引用的论文条目。如果在工作中使用 CladeForge，请引用本仓库并注明所使用的版本。
+每一个打标签的发布版本都会归档到 Zenodo，并拥有各自可引用的 DOI。请引用你实际使用的版本；concept DOI
+始终解析到最新的归档版本。
+
+- **Concept DOI（全部版本）：** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
+- **v0.1.0（本次发布）：** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+
+> 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.1.0) [计算机软件]. Zenodo.
+> https://doi.org/10.5281/zenodo.23053394
+
+目前尚无可引用的论文条目。机器可读的引用信息见 [`CITATION.cff`](./CITATION.cff)。
 
 ## 资助
 

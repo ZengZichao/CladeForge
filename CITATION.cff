@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+type: software
+message: "If you use CladeForge, please cite it as below. The DOI resolves to the latest archived release."
+title: "CladeForge"
+authors:
+  - given-names: Zichao
+    family-names: Zeng
+    orcid: "https://orcid.org/0000-0001-6553-970X"
+    affiliation: "Shanghai Jiao Tong University"
+version: "v0.1.0"
+date-released: "2026-09-30"
+doi: "10.5281/zenodo.23053393"
+license: MIT
+repository-code: "https://github.com/ZengZichao/CladeForge"
+url: "https://zenodo.org/records/23053393"
+abstract: "CladeForge is a local-first, cross-platform desktop application for building, annotating, and exporting phylogenetic trees with an integrated evolutionary semantic layer. It reframes the phylogenetic tree as a hypothesis scaffold for constructing, comparing, and refining evolutionary scenarios."
+keywords:
+  - phylogenetics
+  - evolutionary biology
+  - tree editor
+  - ancestral state reconstruction
+  - hypothesis generation
+  - desktop application

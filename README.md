@@ -2,6 +2,8 @@
 
 **An Interactive Phylogenetic Tree Editor for Evolutionary Scenario Construction and Hypothesis Generation**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23053393.svg)](https://doi.org/10.5281/zenodo.23053393)
+
 ---
 
 [English](./README.md) | [中文说明](./README_ZH.md)
@@ -99,8 +101,16 @@ Released under the [MIT License](./LICENSE).
 
 ## Citation
 
-No publication citation is available yet. If you use CladeForge in your work, please cite this
-repository together with the version you ran.
+Every tagged release is archived on Zenodo with its own citable DOI. Cite the version you ran; the
+concept DOI always resolves to the newest archived version.
+
+- **Concept DOI (all versions):** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
+- **v0.1.0 (this release):** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+
+> Zeng, Z. (2026). *CladeForge* (Version v0.1.0) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23053394
+
+No journal citation is available yet. The machine-readable form is in [`CITATION.cff`](./CITATION.cff).
 
 ## Funding
 
