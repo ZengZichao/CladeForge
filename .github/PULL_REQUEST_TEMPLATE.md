@@ -12,6 +12,8 @@ What changed and why.
 - [ ] `npm run build` passes (this is what `tauri build` runs)
 - [ ] Docs updated if needed — user-facing text provided in both English and 中文
 - [ ] Rust side compiled and tested if touched: `cargo test --manifest-path src-tauri/Cargo.toml`
+- [ ] Rust side lint-clean if touched: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+      (CI runs clippy with `-D warnings`, so a warning fails the build — this is not optional)
 
 ## Generative AI
 State whether a generative-AI tool produced any part of this change, and for what (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
@@ -34,6 +36,8 @@ State whether a generative-AI tool produced any part of this change, and for wha
 - [ ] `npm run build` 通过（`tauri build` 走的正是它）
 - [ ] 如需要，已同步更新文档——面向用户的文案须同时提供英文与中文
 - [ ] 若改动了 Rust 侧，已通过 `cargo test --manifest-path src-tauri/Cargo.toml`
+- [ ] 若改动了 Rust 侧，已通过 `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+      （CI 用 `-D warnings` 运行 clippy，出现警告即构建失败——此项不是可选项）
 
 ## 生成式 AI
 请说明本次变更是否有生成式 AI 工具参与、参与了哪些部分（见 [CONTRIBUTING_ZH.md](../CONTRIBUTING_ZH.md)）。

@@ -6,7 +6,7 @@
 
 ## 开发环境
 
-- **Node.js ≥ 18** 和 **Rust 工具链**（桌面外壳需要）。
+- **Node.js ≥ 20.19** 和 **Rust 工具链**（桌面外壳需要）。该下限即 CI 实际使用的版本；`vite 8` 在 20.19 以下无法运行。
 - 安装依赖：`npm install`
 - 开始开发：`npm run dev`（Web 版）或 `npm run tauri dev`（桌面版）。
 
@@ -23,8 +23,34 @@
 
 1. 从 `main` 分支 fork 并创建分支。
 2. 保持改动聚焦；如适用请在描述中引用相关 issue。
-3. 提交 PR 前，确保 `npm run typecheck` 和 `npm test` 全部通过。
+3. 提交 PR 前，在本地跑完 CI 的完整序列——见下。
 4. 较大的设计改动请先开 issue 讨论方案。
+
+### CI 实际执行什么，以及如何复现
+
+CI 跑两个互不依赖的 job：Web 侧失败不会再导致 Rust 侧被跳过。推送前请两边都本地复现：
+
+```bash
+# web job
+npm ci
+npm run typecheck
+npm test
+npm run build
+
+# desktop job —— 只要改动了 src-tauri/ 下的任何内容就必须跑
+cargo test  --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```
+
+`cargo clippy` 这一行不是可选项。CI 用 `-D warnings` 运行 clippy，因此 lint 在那里是硬失败，
+尽管看起来只是建议性检查。若 `cargo clippy` 报 `no such command: clippy`，说明工具链缺少该组件：
+
+```bash
+rustup component add clippy
+```
+
+`npm run build` 与 `npm run typecheck` 需分开执行：前者产出生产构建包，而类型检查加单元测试
+无法发现仅在构建阶段出现的问题。
 
 ## 生成式 AI 的使用说明
 

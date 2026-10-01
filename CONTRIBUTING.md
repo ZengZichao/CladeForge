@@ -6,7 +6,8 @@ Thanks for your interest in contributing. This document covers setup and the con
 
 ## Development setup
 
-- **Node.js >= 18** and the **Rust toolchain** (for the desktop shell).
+- **Node.js >= 20.19** and the **Rust toolchain** (for the desktop shell). The Node floor is the
+  one CI builds with; `vite 8` will not run on anything below 20.19.
 - Install dependencies: `npm install`
 - Start developing: `npm run dev` (web) or `npm run tauri dev` (desktop).
 
@@ -23,8 +24,36 @@ Thanks for your interest in contributing. This document covers setup and the con
 
 1. Fork and branch from `main`.
 2. Keep changes focused; reference the relevant issue when applicable.
-3. Ensure `npm run typecheck` and `npm test` pass before opening a PR.
+3. Run the full CI sequence locally before opening a PR — see below.
 4. For large design changes, open an issue first to discuss the approach.
+
+### What CI actually runs, and how to reproduce it
+
+CI runs two independent jobs. Neither depends on the other, so a failure on the web side no
+longer skips the Rust side. Reproduce both before you push:
+
+```bash
+# web job
+npm ci
+npm run typecheck
+npm test
+npm run build
+
+# desktop job — needed if you touched anything under src-tauri/
+cargo test  --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```
+
+The `cargo clippy` line is not optional. CI runs clippy with `-D warnings`, so a lint is a hard
+failure there even though it looks advisory. If `cargo clippy` reports `no such command:
+clippy`, the toolchain is missing the component:
+
+```bash
+rustup component add clippy
+```
+
+`npm run build` matters separately from `npm run typecheck`: it is the production bundle, and a
+type-check plus unit tests will not catch a build-only failure.
 
 ## Use of generative AI
 
