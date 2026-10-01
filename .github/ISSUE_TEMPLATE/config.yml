@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ZengZichao/CladeForge/security/advisories/new
+    about: >
+      Do not open a public issue for a security problem. Use GitHub's private
+      vulnerability reporting instead — see SECURITY.md in the repository root.
+  - name: Security policy and known limitations
+    url: https://github.com/ZengZichao/CladeForge/blob/main/SECURITY.md
+    about: Supported versions, reporting process, and which paths are in scope.

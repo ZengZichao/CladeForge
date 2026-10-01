@@ -5,20 +5,48 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Weekly, so the RustSec sweep in the `audit` job below has something to run
+  # on. A schedule is a property of the workflow trigger, not a separate
+  # top-level block.
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+# Least privilege. Nothing in this workflow writes to the repository, pushes,
+# or publishes anything, so the default token can be narrowed to reading code.
+# Without this block the token inherits the repository's default permissions,
+# which is broader than any step here needs.
+permissions:
+  contents: read
+
+# A superseded run is wasted runner time, and the desktop job alone is a
+# three-platform matrix. Cancelling in-progress runs for the same ref keeps a
+# force-push or a rapid series of pushes from stacking redundant matrices.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   web:
     runs-on: ubuntu-latest
+    # Default is 360. A hung dev server or a stuck vitest worker should fail
+    # in minutes, not burn a six-hour slot.
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          # Pinned to 20 rather than to the `engines` floor of 18: the scaling
-          # measurements this repository carries (scripts/bench_tips.mjs) were
-          # taken on Node.js v20.20.2, and running the pipeline on another major
-          # would put the gate and those numbers on two runtimes. typecheck, the
-          # test suite and the production build pass identically on 20.
+          # Pinned to 20 rather than to a newer major. Two independent reasons
+          # to keep it here: the scaling measurements this repository carries
+          # (scripts/bench_tips.mjs) were taken on Node.js v20.20.2, so the gate
+          # and those numbers belong to one runtime; and vite 8 requires
+          # `^20.19.0 || >=22.12.0` while vitest 5 requires Node >=22.12, so 20
+          # is the newest runtime that still admits the current test runner.
+          # `engines.node` is `>=20.19` to match, so the declared floor is a
+          # floor CI actually exercises. Moving to 22+ is a deliberate change
+          # that should re-baseline the benchmark numbers with it.
           node-version: 20
+          cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -31,20 +59,37 @@ jobs:
   # in src-tauri/src/lib.rs — and no web job can reach it, so it is compiled and
   # tested on every platform the app ships to.
   desktop:
-    needs: web
+    # Deliberately NO `needs: web`. It used to be `needs: web`, which meant a
+    # plain TypeScript error in the job above marked this whole job `skipped` —
+    # so the one test suite that can reach the path allow-list silently stopped
+    # running whenever the frontend had a typo. The two sides share nothing
+    # except the repository, so there is no ordering to express.
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Each entry carries an explicit `name`. Without one, GitHub builds the
+          # check name from every value in the include, so the Linux job reports
+          # as `desktop (ubuntu-latest, libwebkit2gtk-4.1-dev build-essential
+          # curl wget file libxdo-dev libssl-dev ...)` — the apt list and all.
+          # Branch protection has to name required checks exactly, and a context
+          # string that long is both unreadable and one dependency edit away from
+          # a name that no longer matches anything.
           - os: ubuntu-latest
+            name: desktop (linux)
             deps: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
           - os: macos-latest
+            name: desktop (macos)
             deps: ''
           - os: windows-latest
+            name: desktop (windows)
             deps: ''
     runs-on: ${{ matrix.os }}
+    # Compiling Tauri and its GTK/WebKit dependency tree on a cold Linux runner
+    # is the slowest thing here, so this is more generous than `web`.
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -66,3 +111,23 @@ jobs:
       # scope for this gate.
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  # RustSec advisories, on a schedule rather than on every push. Dependabot
+  # tracks Cargo.toml versions, but it does not open PRs for advisories against
+  # a version you already have — a crate can sit on a vulnerable release
+  # indefinitely while Dependabot reports nothing. This is the only gate that
+  # covers that case.
+  #
+  # Gated to the scheduled and manual events, not per-PR, on purpose:
+  # `cargo audit` fetches the advisory database over the network, and a network
+  # hiccup on a third-party mirror must not block an unrelated pull request.
+  # The weekly run is still allowed to go red on its own.
+  audit:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: rustsec/audit-check@v2
+        with:
+          path: src-tauri/Cargo.lock

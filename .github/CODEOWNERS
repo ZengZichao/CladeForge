@@ -1,0 +1,27 @@
+# Owners for everything in the repository.
+#
+# The effect of this file is limited, and it is worth being precise about how:
+# CODEOWNERS only *requests* a review. It does not block a merge. On a
+# single-maintainer repository the practical value is not "a second person must
+# approve" — there is no second person. It is that the request is attached to
+# the pull request, so the areas that carry security weight are visibly flagged
+# as needing a deliberate look rather than a skim.
+#
+# The paths below are the ones where a careless merge has consequences beyond
+# "the build went red": the Rust path allow-list is the application's security
+# boundary, the capability set and CSP decide what the webview may reach, and the
+# two workflow files decide what runs automatically and with what permissions.
+#
+# To make these reviews mandatory, branch protection has to require them; that
+# is a repository setting rather than a file, and it lives outside this file.
+
+* @ZengZichao
+
+# The application security boundary, and the WebView's reach.
+src-tauri/src/lib.rs              @ZengZichao
+src-tauri/capabilities/           @ZengZichao
+src-tauri/tauri.conf.json         @ZengZichao
+
+# What runs automatically, and with which permissions.
+.github/workflows/               @ZengZichao
+.github/dependabot.yml            @ZengZichao

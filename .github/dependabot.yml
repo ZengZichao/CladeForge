@@ -7,13 +7,30 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
     groups:
       all-npm-bumps:
         patterns:
           - "*"
+    # No blanket `ignore: semver-major` here any more. That rule was added to
+    # silence a burst of major PRs, but it also made every security fix that
+    # only exists in a newer major structurally unreachable: jspdf's critical
+    # Local-File-Inclusion and HTML-injection advisories (GHSA-f8cm-6447-x5h2,
+    # GHSA-wfv2-pwc8-crg5) are fixed in 4.x and nothing below it, and vite's
+    # `server.fs.deny` Windows bypass (GHSA-fx2h-pf6j-xcff) is fixed in 8.x.
+    # `npm audit` is a gate, not a suggestion — a fix that Dependabot may not
+    # deliver is a fix that stays unapplied forever.
+    ignore:
+      # Tauri majors must move in lockstep across BOTH ecosystems: the npm
+      # packages and the Rust crates are pinned to the same release, and
+      # Dependabot updates each ecosystem independently. Letting a v3 npm PR
+      # land while Cargo.toml is still on v2 breaks the desktop build in a way
+      # that is slow to diagnose. Bump them together by hand instead.
+      - dependency-name: "@tauri-apps/api"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@tauri-apps/cli"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@tauri-apps/plugin-dialog"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
@@ -22,22 +39,52 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
     groups:
       all-cargo-bumps:
         patterns:
           - "*"
+    # Same reason as the npm block above, on the Rust side: tauri and
+    # tauri-build are version-locked to each other AND to the npm packages,
+    # so a Dependabot-driven tauri major is a broken build. The grouped
+    # `all-cargo-bumps` PR keeps the four tauri crates in step with each
+    # other; it cannot keep them in step with package.json, which is why
+    # these majors stay manual.
+    ignore:
+      - dependency-name: "tauri"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tauri-build"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tauri-plugin-dialog"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tauri-plugin-fs"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(ci)"
-    # 屏蔽 major 升级：action 跨大版本会更换 Node 运行时
-    # （如 actions/checkout 4→7 从 Node 20 跳到 Node 24），
-    # 未经人工验证直接合并会破坏 CI 流水线。
+    groups:
+      all-actions-bumps:
+        patterns:
+          - "*"
+    # Action majors are still manual, and the reason is narrower than it was.
+    # It used to be "a major might break the pipeline", which was true but not
+    # specific; the concrete cost was that the rule also froze the repository
+    # on a DEPRECATED runtime. GitHub deprecated the Node 20 action runtime and
+    # was force-running actions/checkout@v4 and actions/setup-node@v4 on
+    # Node 24, emitting a warning on every single run:
+    #
+    #   Node.js 20 is deprecated. The following actions target Node.js 20 but
+    #   are being forced to run on Node.js 24
+    #
+    # The ignore rule meant Dependabot could never propose the upgrade that
+    # resolves it. ci.yml is now on checkout@v7 / setup-node@v7, which target a
+    # supported runtime; keep this ignore so the next runtime migration is
+    # still done deliberately, in the same commit as the workflow edit, rather
+    # than as an unreviewed bump.
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
