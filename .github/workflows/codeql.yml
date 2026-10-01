@@ -1,0 +1,53 @@
+name: CodeQL
+
+# Static security analysis over the two halves of the attack surface: the
+# TypeScript frontend and the Rust backend that carries the path allow-list.
+# Complements what the other gates see — Dependabot tracks dependency
+# versions, cargo audit tracks advisories, clippy tracks style-level bugs;
+# none of them reason about data flow inside this repository's own code.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Offset from ci.yml's Monday 06:23 run so the two schedules do not queue
+  # against each other on the same runner pools.
+  schedule:
+    - cron: "47 6 * * 1"
+  workflow_dispatch:
+
+# Least privilege. The one thing this workflow publishes is analysis results,
+# so the analysis job alone carries `security-events: write`; the workflow
+# default stays at read.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Both languages run with build-mode none: the frontend needs no
+          # build for extraction, and Rust is extracted without compiling, so
+          # no tauri/GTK dependency install is required here.
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          # Required to tell the two matrix legs' result uploads apart.
+          category: "/language:${{ matrix.language }}"
