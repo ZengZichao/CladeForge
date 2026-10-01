@@ -8,7 +8,21 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      # `update-types` is load-bearing, not decoration. Without it this group is
+      # a catch-all over every update type, so the moment majors were allowed
+      # through again, a breaking major got bundled in with unrelated minors:
+      # the first pull request this produced was "all-npm-bumps with 11
+      # updates", one of which was immer 10 -> 11. If immer 11 does not
+      # compile, the ten routine bumps ride along and are blocked with it, and
+      # reverting one dependency inside a bundled pull request is a mess.
+      #
+      # So: minors and patches batch here, because that is where the noise is
+      # and where batching is safe. A major arrives as its own pull request —
+      # one breaking change, one review, one revert.
       all-npm-bumps:
+        update-types:
+          - minor
+          - patch
         patterns:
           - "*"
     # No blanket `ignore: semver-major` here any more. That rule was added to
@@ -40,7 +54,15 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      # Same reasoning as the npm group above: batch the routine bumps, let a
+      # major stand alone. The named `ignore` entries further down cover the
+      # crates whose majors are the ones that must move by hand, but any other
+      # crate that goes major is a real review, not something to slip in
+      # alongside a serde patch.
       all-cargo-bumps:
+        update-types:
+          - minor
+          - patch
         patterns:
           - "*"
     # Same reason as the npm block above, on the Rust side: tauri and
@@ -67,7 +89,14 @@ updates:
     commit-message:
       prefix: "chore(ci)"
     groups:
+      # Majors are ignored entirely in this ecosystem (see below), so this
+      # group only ever sees minors and patches. The `update-types` is stated
+      # anyway so that if the ignore below is ever narrowed, a major does not
+      # silently start riding along with the routine bumps.
       all-actions-bumps:
+        update-types:
+          - minor
+          - patch
         patterns:
           - "*"
     # Action majors are still manual, and the reason is narrower than it was.
