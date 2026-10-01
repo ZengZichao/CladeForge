@@ -43,7 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: cargo test --manifest-path src-tauri/Cargo.toml
@@ -110,7 +110,19 @@ jobs:
           targets: ${{ matrix.rust-target }}
 
       - name: Build bundle
-        uses: tauri-apps/tauri-action@v0
+        # v1, not v0, and not a floating `@v0`. tauri-action 1.0.0 has been out
+        # since 2026-06-29; `@v0` would have pinned this release pipeline to a
+        # major line that is three months stale, while still floating inside it
+        # so the exact code used could shift without any PR. `@v1` matches how
+        # the rest of this repository refers to its actions (checkout@v7,
+        # setup-node@v7) and is the line that gets fixes.
+        #
+        # The inputs below — tagName, releaseName, releaseDraft, releaseBody,
+        # args, and GITHUB_TOKEN from env — are unchanged across the v0 to v1
+        # line. The inputs have NOT been exercised by a real tag push, because
+        # that is what this workflow exists to do; verify on the first tag
+        # before trusting an artifact from it.
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
