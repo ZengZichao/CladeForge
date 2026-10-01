@@ -77,6 +77,21 @@ jobs:
     # If you add a platform to the matrix, add its check name to
     # `required_status_checks` on main as well — a new leg is not gated until
     # the protection rule names it.
+    #
+    # EXCEPTION, and it is deliberate: `desktop (macos)` is NOT a required
+    # check, even though it runs on every push like the other two. macOS runner
+    # capacity on this account is scarce enough that a required macOS leg
+    # deadlocks the repository — a pull request sits at `mergeStateStatus:
+    # BLOCKED` indefinitely waiting for a runner, with no way to merge past it
+    # and no signal that the code is fine. Three platforms' worth of CI queued
+    # behind one unavailable pool is not a gate, it is an outage.
+    #
+    # So macOS still runs, still reports, and still goes red in the Checks tab
+    # where it is visible on every pull request — it just does not block the
+    # merge. The cost is real and worth stating: a macOS-only regression can
+    # reach `main` without anyone being stopped by CI. Read the macOS result
+    # before merging. If runner capacity improves, put it back in
+    # `required_status_checks` and delete this paragraph.
     name: desktop (${{ matrix.platform }})
     strategy:
       fail-fast: false
