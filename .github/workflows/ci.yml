@@ -64,25 +64,32 @@ jobs:
     # so the one test suite that can reach the path allow-list silently stopped
     # running whenever the frontend had a typo. The two sides share nothing
     # except the repository, so there is no ordering to express.
+    #
+    # The name is set HERE, at job level, not inside `matrix.include`. A `name:`
+    # inside an include entry does not replace the check name — GitHub still
+    # builds the display name from the job id plus every include value, so the
+    # Linux job came out as
+    #   desktop (ubuntu-latest, linux, libwebkit2gtk-4.1-dev build-essential ...)
+    # with the whole apt list in it. Branch protection has to name required
+    # checks character-for-character, so a name like that is unreadable and one
+    # dependency edit away from matching nothing.
+    #
+    # If you add a platform to the matrix, add its check name to
+    # `required_status_checks` on main as well — a new leg is not gated until
+    # the protection rule names it.
+    name: desktop (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Each entry carries an explicit `name`. Without one, GitHub builds the
-          # check name from every value in the include, so the Linux job reports
-          # as `desktop (ubuntu-latest, libwebkit2gtk-4.1-dev build-essential
-          # curl wget file libxdo-dev libssl-dev ...)` — the apt list and all.
-          # Branch protection has to name required checks exactly, and a context
-          # string that long is both unreadable and one dependency edit away from
-          # a name that no longer matches anything.
-          - os: ubuntu-latest
-            name: desktop (linux)
+          - platform: linux
+            os: ubuntu-latest
             deps: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-          - os: macos-latest
-            name: desktop (macos)
+          - platform: macos
+            os: macos-latest
             deps: ''
-          - os: windows-latest
-            name: desktop (windows)
+          - platform: windows
+            os: windows-latest
             deps: ''
     runs-on: ${{ matrix.os }}
     # Compiling Tauri and its GTK/WebKit dependency tree on a cold Linux runner
