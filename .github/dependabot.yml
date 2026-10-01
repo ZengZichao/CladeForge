@@ -25,15 +25,31 @@ updates:
           - patch
         patterns:
           - "*"
-    # No blanket `ignore: semver-major` here any more. That rule was added to
-    # silence a burst of major PRs, but it also made every security fix that
-    # only exists in a newer major structurally unreachable: jspdf's critical
-    # Local-File-Inclusion and HTML-injection advisories (GHSA-f8cm-6447-x5h2,
-    # GHSA-wfv2-pwc8-crg5) are fixed in 4.x and nothing below it, and vite's
-    # `server.fs.deny` Windows bypass (GHSA-fx2h-pf6j-xcff) is fixed in 8.x.
-    # `npm audit` is a gate, not a suggestion — a fix that Dependabot may not
-    # deliver is a fix that stays unapplied forever.
+    # Majors are ignored on purpose. This repository is a local-first desktop
+    # app on a pinned Node 20 runtime; the majors sitting behind this rule
+    # (jsdom 25->30, react 18->19, zustand 4->5, @types/node 20->26) are churn,
+    # not fixes, and adopting them is a code change with regression risk in
+    # exchange for nothing. `@types/node` in particular must stay on 20: the
+    # runtime is Node 20, and Node 26 type definitions would let `tsc` accept
+    # APIs that do not exist at run time.
+    #
+    # This rule used to be a hole, and it was worth removing: with only this
+    # file in play, a fix that existed only in a major was unreachable — jsPDF's
+    # critical Local-File-Inclusion and HTML-injection advisories
+    # (GHSA-f8cm-6447-x5h2, GHSA-wfv2-pwc8-crg5) land in 4.x and nothing below,
+    # and vite's `server.fs.deny` Windows bypass (GHSA-fx2h-pf6j-xcff) in 8.x.
+    # Removing the rule delivered them, and that was correct.
+    #
+    # It is safe to put back now because the judgement moved to a channel that
+    # respects SemVer. `dependabot_security_updates` is enabled for this
+    # repository, and it opens a pull request only when an advisory actually
+    # requires it — including across a major, which is exactly the case this
+    # rule used to block. So: versions stay where they are, and the one thing
+    # that cannot wait still arrives without being asked. If that setting is
+    # ever turned off, remove this ignore in the same commit.
     ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       # Tauri majors must move in lockstep across BOTH ecosystems: the npm
       # packages and the Rust crates are pinned to the same release, and
       # Dependabot updates each ecosystem independently. Letting a v3 npm PR
@@ -65,13 +81,17 @@ updates:
           - patch
         patterns:
           - "*"
-    # Same reason as the npm block above, on the Rust side: tauri and
-    # tauri-build are version-locked to each other AND to the npm packages,
-    # so a Dependabot-driven tauri major is a broken build. The grouped
-    # `all-cargo-bumps` PR keeps the four tauri crates in step with each
-    # other; it cannot keep them in step with package.json, which is why
-    # these majors stay manual.
+    # Same reasoning as the npm block above, on the Rust side: majors are not
+    # fixes here, and the version bump is not where the judgement belongs. The
+    # one open RustSec advisory in this tree (RUSTSEC-2024-0429, glib) needs
+    # glib >= 0.20, which is a tauri major away — so it is a deliberate
+    # migration, not a pull request to accept. The `all-cargo-bumps` group keeps
+    # the four tauri crates in step with each other, and the named entries
+    # below say the same thing the blanket entry does for npm, in case it is
+    # ever narrowed to named crates only.
     ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "tauri"
         update-types: ["version-update:semver-major"]
       - dependency-name: "tauri-build"
