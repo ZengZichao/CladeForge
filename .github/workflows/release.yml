@@ -1,0 +1,141 @@
+name: Release
+
+# Tag-driven only. Pushing a `v*` tag is the single trigger; nothing here runs
+# on ordinary pushes or on pull requests.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# A release job has to create a release and upload assets, so it needs write
+# access to contents. This is the one workflow in the repository that does.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Never let two releases for the same tag build at once.
+  cancel-in-progress: false
+
+jobs:
+  # The gate. The CI workflow does not trigger on tags, so a tag could
+  # otherwise point at a commit that never passed the test suite — and that
+  # commit's binaries would be the ones people download. This job re-runs the
+  # same checks as `ci.yml` against the tagged commit, and the platform builds
+  # are blocked on it. It costs a few minutes and is the only thing standing
+  # between a bad commit and a published installer.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Must match `ci.yml` exactly, or the artifact is built against a
+          # runtime the gate never exercised.
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  # One job per platform, all blocked on `verify`.
+  #
+  # tauri-action creates the release if it does not exist and appends this
+  # platform's assets if it does, so the three jobs compose into a single
+  # release rather than racing three separate ones.
+  #
+  # `releaseDraft: true` is deliberate. These artifacts are what people install,
+  # and they are built by a workflow rather than reviewed by a human, so the
+  # release is staged and publishing it is a separate, conscious step. Change
+  # this to `false` if you would rather a tag publish on its own.
+  build:
+    needs: verify
+    strategy:
+      # All three must finish: a partial release is worse than a failed one.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rust-target: x86_64-unknown-linux-gnu
+            args: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+            args: ""
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+            args: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust-target: x86_64-pc-windows-msvc
+            args: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # The cross-compiled targets need their std explicitly, or
+          # `tauri build --target` fails with "can't find crate for `core`".
+          # The macOS x86_64 job is a cross build: macos-latest is arm64.
+          targets: ${{ matrix.rust-target }}
+
+      - name: Build bundle
+        # v1, not v0, and not a floating `@v0`. tauri-action 1.0.0 has been out
+        # since 2026-06-29; `@v0` would have pinned this release pipeline to a
+        # major line that is three months stale, while still floating inside it
+        # so the exact code used could shift without any PR. `@v1` matches how
+        # the rest of this repository refers to its actions (checkout@v7,
+        # setup-node@v7) and is the line that gets fixes.
+        #
+        # The inputs below — tagName, releaseName, releaseDraft, releaseBody,
+        # args, and GITHUB_TOKEN from env — are unchanged across the v0 to v1
+        # line. The inputs have NOT been exercised by a real tag push, because
+        # that is what this workflow exists to do; verify on the first tag
+        # before trusting an artifact from it.
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: CladeForge ${{ github.ref_name }}
+          releaseDraft: true
+          releaseBody: |
+            Automated build for `${{ github.ref_name }}`, produced by
+            `.github/workflows/release.yml` on commit `${{ github.sha }}`.
+
+            This release is a **draft**. Artifacts were built and attached
+            automatically after the test suite passed on the tagged commit;
+            publishing is a separate manual step.
+
+            Binaries are unsigned. macOS will gatekeep them on first open.
+          args: --target ${{ matrix.target }} ${{ matrix.args }}

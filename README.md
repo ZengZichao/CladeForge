@@ -3,6 +3,7 @@
 **An Interactive Phylogenetic Tree Editor for Evolutionary Scenario Construction and Hypothesis Generation**
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23053393.svg)](https://doi.org/10.5281/zenodo.23053393)
+[![CI](https://github.com/ZengZichao/CladeForge/actions/workflows/ci.yml/badge.svg)](https://github.com/ZengZichao/CladeForge/actions/workflows/ci.yml)
 
 ---
 
@@ -43,14 +44,33 @@ be present on the host; no other runtime (Java, Python, or Node.js) is needed to
 
 ### Pre-built binaries
 
-Pre-built installers are attached to GitHub Releases once a release has been published:
+What is actually attached to a release varies by version, so this is stated per release rather
+than promised for all of them. Check the [Releases page](https://github.com/ZengZichao/CladeForge/releases)
+for what a given tag carries.
 
-- **macOS**: `.dmg` (both Apple Silicon and Intel)
-- **Windows**: `.msi` (x64)
-- **Linux**: `.deb` or AppImage
+- **v0.1.0** — one artifact only: `CladeForge_0.1.0_aarch64.dmg` (macOS, Apple Silicon).
+  No Intel, Windows or Linux build was produced for this version, and it was built by hand
+  rather than by the release pipeline described below.
+- **Builds produced by `.github/workflows/release.yml`** (any tag pushed from this commit
+  onward) — `.dmg` for macOS on both Apple Silicon and Intel, `.msi` for Windows x64, and
+  `.deb` plus an AppImage for Linux x86_64.
 
-If the Releases page carries no build for your platform yet, use the source build below: it is
-the primary installation path and produces the same installers.
+These artifacts are **unsigned**. macOS Gatekeeper will refuse to open them on first launch;
+see the note below.
+
+If the Releases page carries no build for your platform, use the source build below: it is a
+supported path and produces the same installers locally.
+
+<details>
+<summary>macOS: opening an unsigned build</summary>
+
+Right-click the `.dmg` → **Open** → confirm. Or, to trust it for this machine only:
+
+```bash
+xattr -d com.apple.quarantine CladeForge.app   # after copying it out of the dmg
+```
+
+</details>
 
 ### Build from source
 
@@ -66,7 +86,9 @@ npm test               # run the Vitest suite
 npm run tauri build    # build the packaged .app / installer
 ```
 
-**Prerequisites for source build:** Node.js ≥ 18, Rust toolchain ≥ 1.70, npm.
+**Prerequisites for source build:** Node.js ≥ 20.19, Rust toolchain, npm. The Node floor is
+`>=20.19` in `package.json` and is the same version CI builds with — see the note in
+`ci.yml` on why it is 20 rather than a newer major.
 
 ## Quick Start
 

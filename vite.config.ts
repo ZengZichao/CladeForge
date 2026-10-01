@@ -15,7 +15,12 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: 'esbuild',
+    // 'oxc', not 'esbuild': Vite 8 builds on Rolldown and no longer ships
+    // esbuild as a dependency, so asking for the esbuild minifier fails the
+    // build outright with "Failed to load `transformWithEsbuild`" — the option
+    // is still in the types, which is what makes it a trap. oxc is the
+    // minifier Rolldown is built around, so it needs no extra install.
+    minify: 'oxc',
     sourcemap: true,
     rollupOptions: {
       output: {

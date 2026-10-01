@@ -3,6 +3,7 @@
 **面向演化场景构建与假说生成的交互式系统发育树编辑器**
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23053393.svg)](https://doi.org/10.5281/zenodo.23053393)
+[![CI](https://github.com/ZengZichao/CladeForge/actions/workflows/ci.yml/badge.svg)](https://github.com/ZengZichao/CladeForge/actions/workflows/ci.yml)
 
 ---
 
@@ -43,14 +44,30 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 
 ### 预构建二进制包
 
-预构建安装包随 GitHub Releases 发布（以该页面实际是否存在对应构建为准）：
+某个版本实际附带了哪些产物，逐个版本说明，不做笼统承诺。请查看
+[Releases 页面](https://github.com/ZengZichao/CladeForge/releases)确认某个 tag 实际带有什么。
 
-- **macOS**：`.dmg`（同时支持 Apple Silicon 和 Intel）
-- **Windows**：`.msi`（x64）
-- **Linux**：`.deb` 或 AppImage
+- **v0.1.0** —— 只有一个产物：`CladeForge_0.1.0_aarch64.dmg`（macOS，Apple Silicon）。
+  该版本没有产出 Intel、Windows 或 Linux 构建，且由手工打包而非下述发布流水线产出。
+- **由 `.github/workflows/release.yml` 产出的构建**（从本 commit 起推送的任意 tag）——
+  macOS 的 Apple Silicon 与 Intel 双架构 `.dmg`、Windows x64 的 `.msi`、
+  Linux x86_64 的 `.deb` 与 AppImage。
 
-若发布页上还没有你所在平台的构建，请改用下面的源码构建——它是主要的安装路径，
+这些产物**未签名**。macOS 首次打开时会被 Gatekeeper 拦截，办法见下方。
+
+若发布页上没有你所在平台的构建，请改用下面的源码构建——它是受支持的路径，
 本地打包会得到同样的安装包。
+
+<details>
+<summary>macOS：如何打开未签名的构建</summary>
+
+右键 `.dmg` → **打开** → 确认即可。若要为这台机器永久放行：
+
+```bash
+xattr -d com.apple.quarantine CladeForge.app   # 先从 dmg 中把 app 拖出来
+```
+
+</details>
 
 ### 从源码构建
 
@@ -66,7 +83,8 @@ npm test               # 运行 Vitest 测试套件
 npm run tauri build    # 构建打包的 .app / 安装包
 ```
 
-**源码构建前置条件：** Node.js ≥ 18，Rust 工具链 ≥ 1.70，npm。
+**源码构建前置条件：** Node.js ≥ 20.19，Rust 工具链，npm。该下限在 `package.json` 中写为
+`>=20.19`，与 CI 实际构建所用的版本一致——为何是 20 而非更新的主版本，见 `ci.yml` 中的说明。
 
 ## 快速开始
 
