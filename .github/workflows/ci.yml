@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Pinned to 20 rather than to the `engines` floor of 18: the scaling
           # measurements this repository carries (scripts/bench_tips.mjs) were
