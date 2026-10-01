@@ -10,7 +10,7 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           # Pinned to 20 rather than to the `engines` floor of 18: the scaling
@@ -44,7 +44,7 @@ jobs:
             deps: ''
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
