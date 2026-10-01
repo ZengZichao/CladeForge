@@ -148,8 +148,28 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The action reports its findings by annotating the check run, which the
+    # workflow-level `contents: read` token cannot do. `checks: write` is the
+    # narrowest grant that lets it publish, and only this job has it.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
+      # Three things about this action, all learned by running it:
+      #
+      # 1. `token` is REQUIRED. Omitting it fails the job immediately with
+      #    "Input required and not supplied: token" — no scan happens at all.
+      # 2. The input is `working-directory`, and it takes a DIRECTORY, not a
+      #    lockfile path. Passing `path: src-tauri/Cargo.lock` is silently
+      #    ignored — unknown inputs do not error — and the scan then looks for a
+      #    Cargo.toml in the repository root, where there is none.
+      # 3. The action itself declares `using: node20`, so it still runs on the
+      #    Node runtime GitHub has deprecated and is force-running on Node 24.
+      #    Every run of this job carries that warning until the action's author
+      #    moves off node20. It is not fixable from here; it is why the warning
+      #    is written down instead of being ignored.
       - uses: rustsec/audit-check@v2
         with:
-          path: src-tauri/Cargo.lock
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
