@@ -13,18 +13,22 @@ import { escapeName } from './newick';
 /**
  * Make a string safe to drop into the Markdown document.
  *
- * Only the two characters that actually break the output are handled: `|` splits
- * a table row into extra columns, and a line break ends the row (or the heading)
- * wherever it appears. Deliberately NOT `escapeName()`: that wraps any label
+ * Only the characters that actually break the output are handled: `\` is doubled
+ * first, because a literal backslash changes what every later escape means
+ * (`T4\|phage` must come out as `T4\\\|phage`, or the renderer reads an escaped
+ * backslash glued to a live cell separator); `|` splits a table row into extra
+ * columns; and a line break ends the row (or the heading) wherever it appears.
+ * Deliberately NOT `escapeName()`: that wraps any label
  * containing a space in double quotes, which is correct Newick and wrong here —
  * a report titled `Reconciliation report — "My Project"`, and a table cell
  * reading “"T4 phage"”, are both quoting bugs wearing a label.
  */
 function esc(s: string): string {
-  // `<` and `>` first, then the line break, then the pipe LAST: the pipe escape
-  // introduces a backslash of its own, so any rule that doubles backslashes would
-  // have to run before it or it would turn `T4\|phage` into `T4\\|phage`.
+  // Backslash doubling runs FIRST — the pipe rule inserts a backslash of its own,
+  // and the doubling rule must not see it — then `<` and `>`, then the line break,
+  // then the pipe LAST.
   return s
+    .replace(/\\/g, '\\\\')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/[\r\n]+/g, ' ')
