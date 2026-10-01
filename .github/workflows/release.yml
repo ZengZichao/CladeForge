@@ -30,6 +30,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: Install Linux system dependencies
+        # The Rust test suite links against the GTK/WebKit system libraries,
+        # exactly as it does in ci.yml's desktop matrix — but this list was
+        # missing here, and the first real run of this workflow failed with
+        # "Package glib-2.0 was not found in the pkg-config search path"
+        # inside `cargo test`. Same packages as the ci.yml Linux leg.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - uses: actions/setup-node@v7
         with:
           # Must match `ci.yml` exactly, or the artifact is built against a
