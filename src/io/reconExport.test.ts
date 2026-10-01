@@ -110,6 +110,19 @@ describe('buildReconciliationReport — Markdown safety', () => {
     expect([...widths]).toEqual([5]);
   });
 
+  it('doubles a literal backslash before any later escape uses one', () => {
+    // `\|` inside a label: the backslash must come out doubled, or `T4\\|phage`
+    // renders as a literal backslash glued to a live cell separator and the
+    // row silently gains a column.
+    const md = buildReconciliationReport(
+      scenario({ geneLabels: ['T4\\|phage', 'ok'], geneName: 'a\\b' }),
+    );
+    // `T4\|phage` in, `T4\\\|phage` out (escaped backslash, then escaped pipe).
+    expect(md).toContain('T4\\\\\\|phage');
+    expect(md).toContain('## a\\\\b');
+    expect(new Set(tableLines(md).map(cells))).toEqual(new Set([5]));
+  });
+
   it('does not put Newick quoting into a Markdown title', () => {
     // A report heading is prose, not a Newick label: `— "My Project"` would be a
     // label-quoting convention escaping into the title.
