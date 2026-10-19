@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge — User Manual (English)
 
 **Applies to CladeForge v0.1.0**
@@ -36,16 +38,29 @@ This manual covers every feature of the application, organised by workflow stage
 
 | Platform | Minimum OS | Architecture | Disk | RAM |
 |----------|-----------|-------------|------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
+| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
 | Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
+
+¹ 11.0 (Big Sur) is the supported floor and is declared in `src-tauri/tauri.conf.json`
+(`bundle.macOS.minimumSystemVersion`), so a packaged build writes it into the bundle's
+`LSMinimumSystemVersion`. The v0.1.0 bundle predates that key and still carries Tauri's
+default `10.13`, which is the linker/deployment baseline rather than a tested minimum; no
+macOS release older than 11.0 has been tested.
+
+² The only macOS artifact produced for v0.1.0 is `CladeForge_0.1.0_aarch64.dmg`, whose
+executable `lipo -info` reports as a non-fat arm64 binary. x86_64 and universal macOS builds
+have not been produced or tested; building a universal `.dmg` is a documented but untested
+option (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`, then
+`npm run tauri build -- --target universal-apple-darwin`, which needs `lipo`).
 
 The application ships no browser engine of its own, but it renders into the operating system's own web view (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), which must therefore be present on the host; no other runtime (Java, Python, or Node.js) is needed to run the app.
 
 ### Installation
 
 **Pre-built binaries** — Download the release build for your platform from the project release page:
-- macOS: `.dmg` (universal — Apple Silicon and Intel)
+- macOS: `.dmg` — arm64 (Apple Silicon) only; v0.1.0 ships `CladeForge_0.1.0_aarch64.dmg`.
+  No Intel-only or universal macOS installer has been released (see note ² above).
 - Windows: `.msi` (x64)
 - Linux: `.deb` or AppImage
 

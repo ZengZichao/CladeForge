@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Context-sensitive inspector (right column). Shows node styling, custom-edge
 // styling or multi-selection batch styling for the current selection. When
 // nothing is selected it shows a short hint. Uses an Accordion (collapsible
@@ -35,13 +36,17 @@ import {
   resolveBranchStyle,
   resolveNodeStyle,
   type BranchShape,
+  type BranchStyle,
+  type CalibrationPoint,
   type Character,
   type Confidence,
   type CustomEdge,
+  type DashStyle,
   type HypothesisMeta,
   type LabelPosition,
   type NodeId,
   type NodeShape,
+  type NodeStyle,
   type Project,
   type TreeNode,
 } from '../model/types';
@@ -240,6 +245,122 @@ function LabelPositionController({
   );
 }
 
+// --- Collapsed-section value previews ---------------------------------------
+// A folded inspector group used to show only "5 ITEMS": the count says how much
+// is hidden, never WHAT. Each of the four collapsible groups below now supplies
+// a one-line, read-only preview of its most meaningful current values (the
+// `summary` prop of `Section`), so the folded state stays informative and the
+// fields only need expanding when the user actually wants to edit. Everything
+// is translated/formatted at render time: a module-level `tr(...)` would freeze
+// the language at import time (see localeFreeze.test.ts).
+
+/** Small filled swatch for a colour-valued summary. */
+function SummaryDot({ color }: { color: string }) {
+  return <span className="summary-dot" style={{ background: color }} aria-hidden="true" />;
+}
+
+/** Short line sample carrying colour + thickness + dash pattern of a branch. */
+function SummaryLine({
+  color,
+  width,
+  dash,
+}: {
+  color: string;
+  width: number;
+  dash: DashStyle;
+}) {
+  return (
+    <span
+      className="summary-line"
+      aria-hidden="true"
+      style={{
+        borderTopColor: color,
+        // 1–3px so a 0.5px hairline stays visible and a 12px bar does not bloat
+        // the 2-line collapsed header.
+        borderTopWidth: Math.max(1, Math.min(3, width)),
+        borderTopStyle: dash === 'dashed' ? 'dashed' : dash === 'dotted' ? 'dotted' : 'solid',
+      }}
+    />
+  );
+}
+
+function dashLabel(dash: DashStyle): string {
+  if (dash === 'dashed') return S.dash.dashed;
+  if (dash === 'dotted') return S.dash.dotted;
+  return S.dash.solid;
+}
+
+function shapeLabel(shape: NodeShape): string {
+  switch (shape) {
+    case 'square':
+      return S.node.shapeSquare;
+    case 'diamond':
+      return S.node.shapeDiamond;
+    case 'none':
+      return S.node.shapeNone;
+    default:
+      return S.node.shapeCircle;
+  }
+}
+
+/** NODE STYLE preview: fill swatch + shape + size + stroke width. */
+function NodeStyleSummary({ style }: { style: NodeStyle }) {
+  return (
+    <>
+      <SummaryDot color={style.fill} />
+      <span className="summary-em">{shapeLabel(style.shape)}</span>
+      <span className="summary-sep">·</span>
+      <span>{style.size}px</span>
+      <span className="summary-sep">·</span>
+      <span>{style.strokeWidth}px</span>
+    </>
+  );
+}
+
+/** LABEL preview: label-colour swatch + font size + bold/italic/hidden flags. */
+function LabelSummary({ style, weight }: { style: NodeStyle; weight: number }) {
+  return (
+    <>
+      <SummaryDot color={style.labelColor} />
+      <span className="summary-em">{style.fontSize}px</span>
+      {weight >= 600 && <span className="summary-chip">{tr('粗', 'B')}</span>}
+      {style.fontStyle === 'italic' && <span className="summary-chip">I</span>}
+      {!style.showLabel && <span className="summary-em">{tr('已隐藏', 'Hidden')}</span>}
+    </>
+  );
+}
+
+/** INCOMING BRANCH STYLE preview: colour/width/dash line sample + values. */
+function BranchStyleSummary({ branch }: { branch: BranchStyle }) {
+  return (
+    <>
+      <SummaryLine color={branch.color} width={branch.width} dash={branch.dash} />
+      <span className="summary-em">{branch.width}px</span>
+      <span className="summary-sep">·</span>
+      <span>{dashLabel(branch.dash)}</span>
+    </>
+  );
+}
+
+/** TIME CONSTRAINT preview: the calibrated range, or the inherited state. */
+function TimeConstraintSummary({
+  calibration,
+  unit,
+}: {
+  calibration: CalibrationPoint | undefined;
+  unit: string;
+}) {
+  if (!calibration) return <span>{S.inspector.inherited}</span>;
+  return (
+    <>
+      <span className="summary-em">
+        {calibration.minAge}–{calibration.maxAge}
+      </span>
+      <span>{unit}</span>
+    </>
+  );
+}
+
 function NodePanel({
   node,
   project,
@@ -266,6 +387,9 @@ function NodePanel({
   // point directly, and editing the node's scalar age stays within the
   // [minAge, maxAge] constraint.
   const calibration = getCalibrationForNode(project, id);
+  // Project-wide time unit ("Ma" by default). All ages and the calibration
+  // range render with it as a visible suffix instead of a vanishing placeholder.
+  const timeUnit = project.layout.timeUnit ?? 'Ma';
 
   // Override-relationship badge: once the user touches any
   // per-node style, this node "overrides" the global default.
@@ -328,6 +452,11 @@ function NodePanel({
             allowEmpty
             min={0}
             step={0.1}
+            unit="s/s"
+            unitTitle={tr(
+              '每位点替换数（substitutions per site，subst./site）',
+              'substitutions per site (subst./site)',
+            )}
             onCommit={(v) => apply((d) => setBranchLength(d, id, v))}
           />
         </Field>
@@ -336,7 +465,14 @@ function NodePanel({
             value={node.support}
             allowEmpty
             min={0}
-            unit={tr("0–1 或 0–100", "0–1 or 0–100")}
+            // Support is commonly 0–1 OR 0–100. A permanent "%" would mislabel
+            // a 0.95 value; show it only once the value is clearly a percentage.
+            unit={node.support !== undefined && node.support > 1 ? '%' : undefined}
+            unitTitle={tr(
+              '支持率：可填 0–1 或 0–100（百分数），不做自动换算',
+              'Support: enter 0–1 or 0–100 (percentage) — no automatic conversion',
+            )}
+            hint={tr('0–1 或 0–100', '0–1 or 0–100')}
             onCommit={(v) =>
               apply((d) => {
                 const n = d.nodes[id];
@@ -352,7 +488,11 @@ function NodePanel({
             step={0.1}
             min={calibration?.minAge}
             max={calibration?.maxAge}
-            unit={project.layout.timeUnit ?? 'Ma'}
+            unit={timeUnit}
+            unitTitle={tr(
+              `百万年前（${timeUnit} = Mya）`,
+              `million years ago (${timeUnit} = Mya)`,
+            )}
             onCommit={(v) => apply((d) => setNodeAge(d, id, v))}
           />
         </Field>
@@ -366,6 +506,18 @@ function NodePanel({
         favoritable
         defaultOpen={false}
         keywords={NODE_SECTION_KEYWORDS.timeConstraintSection}
+        summary={<TimeConstraintSummary calibration={calibration} unit={timeUnit} />}
+        summaryTitle={
+          calibration
+            ? tr(
+                `校准区间：${calibration.minAge}–${calibration.maxAge} ${timeUnit}`,
+                `Calibrated range: ${calibration.minAge}–${calibration.maxAge} ${timeUnit}`,
+              )
+            : tr(
+                '此节点未绑定校准区间，沿用全局时间设置',
+                'No node time constraint — the global time setting applies',
+              )
+        }
       >
         {calibration ? (
           <>
@@ -374,6 +526,11 @@ function NodePanel({
                 value={calibration.minAge}
                 step={0.1}
                 min={0}
+                unit={timeUnit}
+                unitTitle={tr(
+                  `百万年前（${timeUnit} = Mya）`,
+                  `million years ago (${timeUnit} = Mya)`,
+                )}
                 onCommit={(v) =>
                   v !== undefined &&
                   apply((d) => {
@@ -388,6 +545,11 @@ function NodePanel({
                 value={calibration.maxAge}
                 step={0.1}
                 min={0}
+                unit={timeUnit}
+                unitTitle={tr(
+                  `百万年前（${timeUnit} = Mya）`,
+                  `million years ago (${timeUnit} = Mya)`,
+                )}
                 onCommit={(v) =>
                   v !== undefined &&
                   apply((d) => {
@@ -399,7 +561,7 @@ function NodePanel({
             </Field>
             <div className="hint">
               {tr('此节点已绑定校准区间', 'This node has a calibration range')}
-              {calibration.minAge}–{calibration.maxAge} {project.layout.timeUnit ?? 'Ma'}
+              {calibration.minAge}–{calibration.maxAge} {timeUnit}
             </div>
             <div className="field row-actions">
               <button
@@ -460,8 +622,9 @@ function NodePanel({
         defaultOpen={false}
         searchQuery={search}
         favoritable
-        count={5}
         keywords={NODE_SECTION_KEYWORDS.styleSection}
+        summary={<NodeStyleSummary style={style} />}
+        summaryTitle={`${S.node.fill} ${style.fill} · ${S.node.shape} ${shapeLabel(style.shape)} · ${S.node.size} ${style.size}px · ${S.node.strokeWidth} ${style.strokeWidth}px`}
       >
         <Field label={S.node.shape}>
           <select value={style.shape} onChange={(e) => ns({ shape: e.target.value as NodeShape })}>
@@ -472,7 +635,13 @@ function NodePanel({
           </select>
         </Field>
         <Field label={S.node.size}>
-          <NumberField value={style.size} min={1} max={40} onCommit={(v) => ns({ size: v })} />
+          <NumberField
+            value={style.size}
+            min={1}
+            max={40}
+            unit="px"
+            onCommit={(v) => ns({ size: v })}
+          />
         </Field>
         <Field label={S.node.fill}>
           <ColorField value={style.fill} onChange={(v) => ns({ fill: v })} />
@@ -486,6 +655,7 @@ function NodePanel({
             min={0}
             max={10}
             step={0.5}
+            unit="px"
             onCommit={(v) => ns({ strokeWidth: v })}
           />
         </Field>
@@ -496,8 +666,13 @@ function NodePanel({
         defaultOpen={false}
         searchQuery={search}
         favoritable
-        count={7}
         keywords={NODE_SECTION_KEYWORDS.labelSection}
+        summary={<LabelSummary style={style} weight={weight} />}
+        summaryTitle={`${S.node.fontSize} ${style.fontSize}px · ${S.node.labelColor} ${style.labelColor}${
+          weight >= 600 ? ` · ${S.node.bold}` : ''
+        }${style.fontStyle === 'italic' ? ` · ${S.node.italic}` : ''}${
+          !style.showLabel ? ` · ${tr('已隐藏', 'Hidden')}` : ''
+        }`}
       >
         <CheckboxField
           label={S.node.showLabel}
@@ -512,6 +687,7 @@ function NodePanel({
             value={style.fontSize}
             min={6}
             max={48}
+            unit="px"
             onCommit={(v) => ns({ fontSize: v })}
           />
         </Field>
@@ -524,6 +700,7 @@ function NodePanel({
             min={-180}
             max={180}
             step={5}
+            unit="°"
             onCommit={(v) => v !== undefined && ns({ labelRotation: v })}
           />
         </Field>
@@ -547,6 +724,7 @@ function NodePanel({
           <NumberField
             value={style.labelOffsetX ?? 0}
             step={1}
+            unit="px"
             onCommit={(v) => ns({ labelOffsetX: v })}
           />
         </Field>
@@ -554,6 +732,7 @@ function NodePanel({
           <NumberField
             value={style.labelOffsetY ?? 0}
             step={1}
+            unit="px"
             onCommit={(v) => ns({ labelOffsetY: v })}
           />
         </Field>
@@ -564,8 +743,9 @@ function NodePanel({
         defaultOpen={false}
         searchQuery={search}
         favoritable
-        count={4}
         keywords={NODE_SECTION_KEYWORDS.branchSection}
+        summary={<BranchStyleSummary branch={branch} />}
+        summaryTitle={`${S.node.color} ${branch.color} · ${S.node.width} ${branch.width}px · ${S.node.dash} ${dashLabel(branch.dash)}`}
       >
         <Field label={S.node.branchShape}>
           <BranchShapeSelect value={branch.shape} onChange={setNodeBranchShape} />
@@ -579,6 +759,7 @@ function NodePanel({
             min={0.5}
             max={40}
             step={0.5}
+            unit="px"
             onCommit={(v) => bs({ width: v })}
           />
         </Field>
@@ -675,7 +856,13 @@ function MultiPanel({
           <ColorField value={style.stroke} onChange={(v) => nsAll({ stroke: v })} />
         </Field>
         <Field label={S.multi.nodeSize}>
-          <NumberField value={style.size} min={1} max={40} onCommit={(v) => nsAll({ size: v })} />
+          <NumberField
+            value={style.size}
+            min={1}
+            max={40}
+            unit="px"
+            onCommit={(v) => nsAll({ size: v })}
+          />
         </Field>
         <Field label={S.multi.labelColor}>
           <ColorField value={style.labelColor} onChange={(v) => nsAll({ labelColor: v })} />
@@ -685,6 +872,7 @@ function MultiPanel({
             value={style.fontSize}
             min={6}
             max={48}
+            unit="px"
             onCommit={(v) => nsAll({ fontSize: v })}
           />
         </Field>
@@ -742,6 +930,7 @@ function EdgePanel({ edge, apply, search }: { edge: CustomEdge; apply: Apply; se
           min={0.5}
           max={10}
           step={0.5}
+          unit="px"
           onCommit={(v) => es({ width: v })}
         />
       </Field>
@@ -941,18 +1130,45 @@ export function PropertiesPanel() {
   // After rendering, detect whether any Section survived the keyword filter;
   // if not, show a "no matching property" hint with a pointer to the global
   // defaults in the left "样式" module.
+  //
+  // Filterable Sections are the primary hits. A few inspector blocks are plain
+  // `.panel-section`s that the query does not filter (the evolutionary-event
+  // editor is one): counting them unconditionally would permanently suppress
+  // the hint — and with it the "⌘K searches all modules" pointer — for every
+  // node in a project with characters. They count as a hit only when their own
+  // text contains the query, which is what the user can actually see.
   useEffect(() => {
-    if (search.trim() === '' || !hasSelection) {
+    const root = contentRef.current;
+    const q = search.trim().toLowerCase();
+    if (q === '' || !hasSelection || !root) {
       setShowNoResults(false);
       return;
     }
-    setShowNoResults(!contentRef.current?.querySelector('.panel-section'));
+    const sectionHit = Boolean(root.querySelector('.panel-section .section-toggle'));
+    const unfilteredHit = [...root.querySelectorAll('.panel-section')]
+      .filter((el) => !el.querySelector('.section-toggle'))
+      .some((el) => (el.textContent ?? '').toLowerCase().includes(q));
+    setShowNoResults(!sectionHit && !unfilteredHit);
   }, [search, hasSelection, content]);
 
   const hasNoResults = search.trim() !== '' && hasSelection && showNoResults;
 
   return (
     <>
+      {/* Save semantics, stated where the confusion happens. Every inspector
+          edit commits immediately (and the app auto-saves); the toolbar Save
+          writes the project FILE. A first-time user should not have to wonder
+          whether an edited Age needs a Save click. Hidden in reconciliation
+          mode, whose inspector is a different fixed form. */}
+      {!reconMode && (
+        <div className="inspector-autosave-hint" role="note">
+          {tr(
+            '属性修改即时生效并自动保存；工具栏 Save 按钮用于保存/导出项目文件。',
+            'Edits apply instantly and are auto-saved. The toolbar Save button saves/exports the project file.',
+          )}
+        </div>
+      )}
+
       {/* Inspector search: live-filters sections by title AND field keywords.
           Hidden in reconciliation mode — the DTL inspector is a fixed form. */}
       {!reconMode && (
@@ -975,6 +1191,12 @@ export function PropertiesPanel() {
         <div className="panel-section">
           <h3>{S.inspector.noResults}</h3>
           <div className="hint">{S.inspector.noResultsHint}</div>
+          <div className="hint hint-tip">
+            {tr(
+              '提示：按 ⌘K 可在全部模块与命令中搜索。',
+              'Tip: press ⌘K to search all modules and commands.',
+            )}
+          </div>
         </div>
       )}
     </>

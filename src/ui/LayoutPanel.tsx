@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left-hand global layout & style panel (展示 group).
 //
 // Everything here is VISUAL presentation: tree layout type & orientation,
@@ -30,6 +31,7 @@ import {
 } from './fields';
 import { S, tr } from './strings';
 import { notify } from './toast';
+import { enterTimeChartLayout } from './timeChartEras';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
@@ -99,6 +101,12 @@ export function LayoutPanel() {
                 d.layout.type = newType;
                 unpinAll(d);
               });
+              // BUG-7: this selector is one of the explicit time-chart entry
+              // points. On the first entry the era overlay is switched on once
+              // and a one-time hint says where the controls are; a remembered
+              // 「user unchecked the bands」opt-out is honoured. UI-only: no
+              // project edit, no extra undo step, no layout effect.
+              if (newType === 'time-calibrated') enterTimeChartLayout();
             }}
           >
             <option value="rectangular-cladogram">{S.layoutType.cladogram}</option>

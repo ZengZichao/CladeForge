@@ -1,15 +1,24 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+// GitHub Pages project sites are served from /<repo>/, not the domain root;
+// every asset URL in the built index.html must carry this prefix or the
+// deployed page 404s on its own JS/CSS.
+//
+// The Tauri desktop app, however, loads the SAME dist/ through its custom
+// protocol at the ROOT (tauri://localhost/index.html), so absolute
+// `/CladeForge/assets/...` URLs 404 there and the window renders BLANK. The
+// Tauri CLI exports TAURI_ENV_* to every hook it runs (beforeDevCommand /
+// beforeBuildCommand), so detecting that variable keeps the desktop bundle at
+// the root while the Pages build — run without it — keeps the project prefix.
+const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // GitHub Pages project sites are served from /<repo>/, not the domain root;
-  // every asset URL in the built index.html must carry this prefix or the
-  // deployed page 404s on its own JS/CSS. The Tauri desktop build is unaffected
-  // (its dev server and webview load from the root).
-  base: '/CladeForge/',
+  base: isTauriBuild ? '/' : '/CladeForge/',
   // Prevent Vite from clearing the screen so Tauri/Rust logs stay visible.
   clearScreen: false,
   envPrefix: ['VITE_', 'TAURI_'],

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Application shell: assembles the menu bar, toolbar, canvas and inspector,
 // and owns transient UI state (add-children dialog, context menu) plus global
 // keyboard shortcuts.
@@ -46,7 +47,8 @@ import { Toaster } from './ui/Toaster';
 import { BusyOverlay } from './ui/BusyOverlay';
 import { ConfirmDialog } from './ui/confirmDialog';
 import { ShortcutsDialog } from './ui/ShortcutsDialog';
-import { FirstRunTour } from './ui/FirstRunTour';
+import { FirstRunTour, type TourMode } from './ui/FirstRunTour';
+import { NarrowScreenHint } from './ui/NarrowScreenHint';
 import { ImportTreesDialog } from './ui/ImportTreesDialog';
 import { notify } from './ui/toast';
 import { S, skippedTabs } from './ui/strings';
@@ -213,6 +215,7 @@ function BottomTabBar({ active, onSelect }: { active: NavModule; onSelect: (m: N
           className={`bottom-tab${active === it.id ? ' active' : ''}`}
           onClick={() => onSelect(it.id)}
           aria-current={active === it.id ? 'page' : undefined}
+          data-nav={it.id}
         >
           {it.label}
         </button>
@@ -487,7 +490,9 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [tourOpen, setTourOpen] = useState(false);
+  // Which onboarding tour is open (null = none): 'basics' is the original
+  // canvas/inspector walk-through, 'workflow' the Traits → … → Export script.
+  const [tourMode, setTourMode] = useState<TourMode | null>(null);
 
   // The command palette memoises its ~35-command list on these callbacks. Passed
   // as inline arrows they would get a fresh identity on every App render — and
@@ -496,7 +501,7 @@ export function App() {
   // so an empty dep list is correct here.
   const openMatrixFromPalette = useCallback(() => { setPaletteOpen(false); setMatrixOpen(true); }, []);
   const openAnalysisFromPalette = useCallback(() => { setPaletteOpen(false); setAnalysisOpen(true); }, []);
-  const openTourFromPalette = useCallback(() => { setPaletteOpen(false); setTourOpen(true); }, []);
+  const openTourFromPalette = useCallback(() => { setPaletteOpen(false); setTourMode('basics'); }, []);
   const openShortcutsFromPalette = useCallback(() => { setPaletteOpen(false); setShortcutsOpen(true); }, []);
   const openAboutFromPalette = useCallback(() => { setPaletteOpen(false); setAboutOpen(true); }, []);
   const [multiTreeProjects, setMultiTreeProjects] = useState<Project[] | null>(null);
@@ -519,6 +524,20 @@ export function App() {
   const [leftOverlayOpen, setLeftOverlayOpen] = useState(false);
   const [rightOverlayOpen, setRightOverlayOpen] = useState(false);
   const isNarrow = windowWidth < NARROW_THRESHOLD;
+
+  /**
+   * Workflow tour navigation: each step presents one left-panel module, so the
+   * spotlight has to follow the module switch. On narrow screens the left panel
+   * is an overlay (display:none until opened), so the tour opens it too —
+   * otherwise the step would spotlight nothing at all.
+   */
+  const navigateForTour = useCallback((module: NavModule) => {
+    setNavModule(module);
+    if (window.innerWidth < NARROW_THRESHOLD) {
+      setLeftOverlayOpen(true);
+      setRightOverlayOpen(false);
+    }
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -711,7 +730,8 @@ export function App() {
       <div className="header-bar" data-tauri-drag-region>
         <MenuBar
           onOpenShortcuts={() => setShortcutsOpen(true)}
-          onOpenTour={() => setTourOpen(true)}
+          onOpenTour={() => setTourMode('basics')}
+          onOpenWorkflowTour={() => setTourMode('workflow')}
           onOpenAbout={() => setAboutOpen(true)}
         />
           <Toolbar onAddChildrenDialog={openAddForSelection} />
@@ -864,7 +884,7 @@ onNexusExport={() => setNexusExportOpen(true)}
         onClose={() => setShortcutsOpen(false)}
         onOpenTour={() => {
           setShortcutsOpen(false);
-          setTourOpen(true);
+          setTourMode('basics');
         }}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
@@ -905,7 +925,19 @@ onNexusExport={() => setNexusExportOpen(true)}
     }}
   />
 )}
-      <FirstRunTour open={tourOpen} onClose={() => setTourOpen(false)} />
+      {/* Phone-width advisory (BUG-9): says once that this is a desktop editor
+          and remembers "continue anyway" in localStorage. */}
+      <NarrowScreenHint />
+      <FirstRunTour
+        open={tourMode !== null}
+        mode={tourMode ?? 'basics'}
+        onNavigate={navigateForTour}
+        onOpenShortcuts={() => {
+          setTourMode(null);
+          setShortcutsOpen(true);
+        }}
+        onClose={() => setTourMode(null)}
+      />
     </div>
   );
 }

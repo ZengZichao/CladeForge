@@ -1,8 +1,17 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Renders evolutionary-event badges on nodes / branches plus the causal-chain
-// arrows between linked events. Anchors are derived from layout positions:
-// node events sit just below-right of the node, branch events above the branch
-// midpoint; events sharing an anchor are stacked. Clicking a badge selects its
-// node (which opens the event editor in the inspector).
+// arrows between linked events.
+//
+// Anchors are derived from layout positions: node events sit on the branch
+// entering the node, branch events on the branch midpoint; events sharing an
+// anchor stack along the branch. Because that natural position can land on a
+// neighbouring node's label (BUG-4: KI / AR sat on "Basilosauridae"), the
+// anchors go through `planEventAnchors()`, which moves a whole stack to the
+// nearest position that intersects no node label, node marker, time-axis text or
+// already-placed badge. Stacks pushed clearly off their branch get a thin leader
+// line back to the natural anchor so the badge still reads as belonging to its
+// node. Clicking a badge selects its node (which opens the event editor in the
+// inspector).
 
 import { memo, useMemo } from 'react';
 import type { EvolutionaryEvent, LayoutType, NodeId, Orientation, Point, TreeNode } from '../model/types';
@@ -13,7 +22,9 @@ import {
   eventColor,
   eventDisplayLabel,
 } from '../model/events';
-import { curvedPath, branchMidpointOn } from './paths';
+import { curvedPath } from './paths';
+import { getCanvasCollisionPlan, getLastCanvasCollisionPlan, planEventAnchors } from './eventBadgeLayout';
+import { useStore } from '../model/store';
 import { S } from '../ui/strings';
 
 interface EventLayerProps {
@@ -24,6 +35,10 @@ interface EventLayerProps {
   orientation: Orientation;
   layoutType: LayoutType;
 }
+
+/** Shared empty collections so the hooks below stay referentially stable. */
+const EMPTY_NUDGES: ReadonlyMap<NodeId, number> = new Map();
+const EMPTY_BOXES = [] as const;
 
 /**
  * Confidence label for a node/branch annotation.
@@ -45,72 +60,40 @@ export const EventLayer = memo(function EventLayer({
   orientation,
   layoutType,
 }: EventLayerProps) {
-  const anchors = useMemo(() => {
-    const map = new Map<string, Point>();
-    const groupIndex = new Map<string, number>();
-    for (const e of events) {
-      if (!culled.has(e.nodeId)) continue;
-      const p = positions.get(e.nodeId);
-      if (!p) continue;
-      const key = `${e.nodeId}:${e.target}`;
-      const idx = groupIndex.get(key) ?? 0;
-      groupIndex.set(key, idx + 1);
-      if (e.target === 'branch') {
-        // Anchor the badge ON the branch segment (branchMidpointOn) so it
-        // reads as attached to the branch instead of floating beside it.
-        // Multiple badges on the same branch stack ALONG the segment
-        // (horizontal layouts: along x; vertical: along y; circular: along
-        // the radius) so stacked badges stay on the branch line too.
-        const parentId = nodes[e.nodeId]?.parentId ?? null;
-        const pp = parentId ? positions.get(parentId) : undefined;
-        const b = pp ? branchMidpointOn(pp, p, orientation, layoutType) : p;
-        if (layoutType === 'circular' && pp) {
-          const rc = Math.hypot(p.x, p.y) || 1;
-          const ux = p.x / rc;
-          const uy = p.y / rc;
-          map.set(e.id, { x: b.x + ux * idx * 16, y: b.y + uy * idx * 16 });
-        } else {
-          const horizontal = orientation === 'LR' || orientation === 'RL';
-          map.set(
-            e.id,
-            horizontal
-              ? { x: b.x + idx * 16, y: b.y }
-              : { x: b.x, y: b.y + idx * 16 },
-          );
-        }
-      } else {
-        // target === 'node'. Anchor the badge ON the branch entering the
-        // node, OFFSET ALONG the branch toward the node — never off the line.
-        // The old perpendicular offset made e.g. the "adaptive radiation" dot
-        // beside the Vertebrata branch float in empty space, unattached to any
-        // branch, which was confusing to read.
-        const parentId = nodes[e.nodeId]?.parentId ?? null;
-        const pp = parentId ? positions.get(parentId) : undefined;
-        if (pp) {
-          const m = branchMidpointOn(pp, p, orientation, layoutType);
-          if (layoutType === 'circular') {
-            const rc = Math.hypot(p.x, p.y) || 1;
-            const ux = p.x / rc;
-            const uy = p.y / rc;
-            map.set(e.id, { x: m.x + ux * (18 + idx * 16), y: m.y + uy * (18 + idx * 16) });
-          } else {
-            const horizontal = orientation === 'LR' || orientation === 'RL';
-            const dir = horizontal ? Math.sign(p.x - m.x) || 1 : Math.sign(p.y - m.y) || 1;
-            map.set(
-              e.id,
-              horizontal
-                ? { x: m.x + dir * (18 + idx * 16), y: m.y }
-                : { x: m.x, y: m.y + dir * (18 + idx * 16) },
-            );
-          }
-        } else {
-          // Root node has no parent — keep the simple near-node offset.
-          map.set(e.id, { x: p.x + 14 + idx * 16, y: p.y + 16 });
-        }
-      }
-    }
-    return map;
-  }, [events, positions, nodes, culled, orientation, layoutType]);
+  // The collision plan needs the document styles (label font sizes / placement),
+  // the time-axis options and the layout itself, none of which TreeCanvas passes
+  // down — read them from the store. The plan is computed once per project
+  // revision and shared with every NodeView (see eventBadgeLayout).
+  const project = useStore((s) => s.project);
+  const showEras = useStore((s) => s.showEras);
+  const eraLevel = useStore((s) => s.eraLevel);
+  const interacting = useStore((s) => s.interactionBase !== null);
+
+  const collisionPlan = useMemo(() => {
+    const opts = { showEras, eraLevel };
+    // While a drag is open TreeCanvas overlays live positions instead of
+    // re-laying-out; reuse the last plan so a pointermove frame does not trigger
+    // a full computeLayout() through every NodeView.
+    return (interacting ? getLastCanvasCollisionPlan(opts) : null) ?? getCanvasCollisionPlan(project, opts);
+  }, [project, showEras, eraLevel, interacting]);
+
+  const anchorPlan = useMemo(
+    () =>
+      planEventAnchors({
+        project,
+        events,
+        positions,
+        nodes,
+        culled,
+        orientation,
+        layoutType,
+        labelNudges: collisionPlan?.nudges ?? EMPTY_NUDGES,
+        axisBoxes: collisionPlan?.axisBoxes ?? EMPTY_BOXES,
+      }),
+    [project, events, positions, nodes, culled, orientation, layoutType, collisionPlan],
+  );
+
+  const { anchors, leaders } = anchorPlan;
 
   const links = useMemo(() => {
     const out: { id: string; from: Point; to: Point; color: string }[] = [];
@@ -155,6 +138,24 @@ export const EventLayer = memo(function EventLayer({
           markerEnd="url(#cf-causal-arrow)"
           opacity={0.85}
         />
+      ))}
+
+      {/* Leader lines for stacks displaced off their branch: a thin solid link
+          plus a dot on the branch point keeps the badge readable as belonging to
+          that node/branch even when a label forced it a line away. */}
+      {leaders.map((l, i) => (
+        <g key={`leader-${i}`} pointerEvents="none">
+          <line
+            x1={l.from.x}
+            y1={l.from.y}
+            x2={l.to.x}
+            y2={l.to.y}
+            stroke="var(--muted)"
+            strokeWidth={1}
+            opacity={0.7}
+          />
+          <circle cx={l.to.x} cy={l.to.y} r={1.6} fill="var(--muted)" />
+        </g>
       ))}
 
       {events.map((e) => {

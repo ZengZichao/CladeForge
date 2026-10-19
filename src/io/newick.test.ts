@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { parseNewick, parseNewickMulti, parseNewickTrees, serializeNewick } from './newick';
 import { serializeNexus } from './nexus';
@@ -94,7 +95,37 @@ describe('newick', () => {
   });
 
   it('rejects a string with no terminating semicolon', () => {
+    // Rejected because the group it opens is never closed — the explicit stack
+    // still holds a pending parent (see the unbalanced "(" test below).
     expect(() => parseNewick('(A,B')).toThrow();
+  });
+
+  it('rejects an unbalanced "(" instead of returning a truncated tree', () => {
+    // '((A,B),C' closes its inner group but never the root group, so the stack
+    // is non-empty when the token run ends. Handing back the half-built tree
+    // would put a topology on the canvas that silently differs from the file.
+    expect(() => parseNewick('((A,B),C;')).toThrow(/Unbalanced "\("/);
+    expect(() => parseNewickTrees('((A,B),C)R;((A,B),C;')).toThrow(/Unbalanced "\("/);
+  });
+
+  it('rejects an unbalanced ")" instead of popping past the root', () => {
+    // '(A,B))' pops the one group it opened and then pops again on an empty
+    // stack; re-parenting onto a non-existent ancestor must throw, not produce
+    // a tree whose root is the wrong node.
+    expect(() => parseNewick('(A,B));')).toThrow(/Unbalanced '\)'/);
+    expect(() => parseNewick('((A,B),C));')).toThrow(/Unbalanced '\)'/);
+    // A stray comma outside any group is the same class of defect.
+    expect(() => parseNewick('A,B;')).toThrow(/Unexpected ','/);
+  });
+
+  it('accepts a complete tree that lacks its terminating semicolon', () => {
+    // Only an UNFINISHED tree is rejected above; a tree whose brackets close is
+    // parsed even with no ';' — the trailing token run still becomes a segment.
+    // Pinned here because "missing semicolons are rejected" is not a property
+    // of this parser.
+    const project = parseNewick('((A,B),C)R');
+    expect(Object.values(project.nodes).map((n) => n.label)).toContain('R');
+    expect(serializeNewick(project)).toBe('((A,B),C)R;');
   });
 
   it('rejects a stray "]" instead of looping forever', () => {

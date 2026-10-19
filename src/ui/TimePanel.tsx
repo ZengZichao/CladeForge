@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left "时间 Time" module: everything about TIME DATA — units, geological-era
 // overlay toggle, age estimation, environmental-context events and fossil
 // calibration points. These are document data, not styling, which is why they
@@ -27,7 +28,7 @@ import {
   newId,
   unpinAll,
 } from '../model/treeOps';
-import type { LayoutType, Project } from '../model/types';
+import type { Project } from '../model/types';
 import type { EstimateAgesResult } from '../model/treeOps';
 import { estimateAgesText } from './treeEditNotices';
 import type { EraLevel } from '../layout/timescale';
@@ -42,22 +43,10 @@ import {
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { notify } from './toast';
-
-/** Human-readable name for a layout type, locale-aware. */
-function layoutTypeName(type: LayoutType): string {
-  switch (type) {
-    case 'rectangular-cladogram':
-      return S.layoutType.cladogram;
-    case 'rectangular-phylogram':
-      return S.layoutType.phylogram;
-    case 'time-calibrated':
-      return S.layoutType.timeCalibrated;
-    case 'circular':
-      return S.layoutType.circular;
-    default:
-      return type;
-  }
-}
+// Shared, never-empty layout display name (BUG-5 defense: an unknown or blank
+// `layout.type` must never render as 「current layout is “”」).
+import { layoutTypeName } from './layoutTypeName';
+import { enterTimeChartLayout, rememberErasToggle } from './timeChartEras';
 
 /** Build a comma-separated list of missing-age node names (max 5, then "…N more"). */
 function missingAgeNames(names: string[]): string {
@@ -108,15 +97,29 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
           </div>
           <div className="env-row">
             <label>{S.layoutPanel.envFrom}</label>
+            {/* BUG-8 unit pass: an age is meaningless without its unit. The
+                environmental-event intervals are read on the same time axis as
+                the node ages, so they show the project's own time unit (Ma by
+                default) rather than a hard-coded label. */}
             <NumberField
               value={e.from}
               step={0.1}
+              unit={project.layout.timeUnit ?? 'Ma'}
+              unitTitle={tr(
+                '与节点年代相同的时间单位（可在本模块「时间单位」中修改）',
+                'The same time unit as the node ages (change it under “Time unit” in this module)',
+              )}
               onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { from: v }))}
             />
             <label>{S.layoutPanel.envTo}</label>
             <NumberField
               value={e.to}
               step={0.1}
+              unit={project.layout.timeUnit ?? 'Ma'}
+              unitTitle={tr(
+                '与节点年代相同的时间单位（可在本模块「时间单位」中修改）',
+                'The same time unit as the node ages (change it under “Time unit” in this module)',
+              )}
               onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { to: v }))}
             />
           </div>
@@ -270,6 +273,11 @@ export function TimePanel() {
                 });
                 if (missing > 0) notify.info(S.notify.missingAgesToast(missing));
                 requestFit();
+                // BUG-7: entering the time chart through this button is one of the
+                // explicit switch entry points, so it gets the same first-entry
+                // behaviour as the 样式 selector (auto-enable era bands once + the
+                // one-time hint; a remembered opt-out is honoured).
+                enterTimeChartLayout();
                 // The toast wording for this button is the clicked variant, not
                 // 「已自动切换」: the layout changes because it was clicked, never on
                 // its own.
@@ -322,6 +330,12 @@ export function TimePanel() {
           checked={showEras}
           disabled={!timeReady}
           onChange={(v) => {
+            // An EXPLICIT choice is remembered across sessions: once the user
+            // unchecks the bands themselves, switching layouts must never turn
+            // them back on behind their back (BUG-7 follow-up); re-checking
+            // opts back in. Only this handler records a choice — the automatic
+            // first-entry enable does not.
+            rememberErasToggle(v);
             setShowEras(v);
             // The era labels stack above the band edge; refit so the newly
             // revealed label rows are inside the viewport.

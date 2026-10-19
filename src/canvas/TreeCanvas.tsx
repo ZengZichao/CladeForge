@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // The interactive SVG canvas (view layer). Pointer gestures live in
 // useCanvasGestures (./useDrag); this component owns layout, pan/zoom wheel,
 // viewport fitting, keyboard shortcuts and the layered SVG rendering:
@@ -18,7 +19,7 @@ import {
   topologicalNeighbour,
   unpinAll,
 } from '../model/treeOps';
-import { resolveBranchStyle, resolveNodeStyle, branchColorFor, DEFAULT_CANVAS, DEFAULT_BRANCH_STYLE, type LayoutType, type NodeId, type Point } from '../model/types';
+import { resolveBranchStyle, resolveNodeStyle, branchColorFor, DEFAULT_CANVAS, DEFAULT_BRANCH_STYLE, type NodeId, type Point } from '../model/types';
 import {
   continuousRange,
   detectTransitions,
@@ -49,22 +50,14 @@ import { isImeComposing } from '../ui/imeGuard';
 import { modalIsOpen } from '../ui/useDialogFocus';
 import { notify } from '../ui/toast';
 import { S, tr } from '../ui/strings';
-
-/** Human-readable name for a layout type, locale-aware (mirrors TimePanel's). */
-function layoutTypeName(type: LayoutType): string {
-  switch (type) {
-    case 'rectangular-cladogram':
-      return S.layoutType.cladogram;
-    case 'rectangular-phylogram':
-      return S.layoutType.phylogram;
-    case 'time-calibrated':
-      return S.layoutType.timeCalibrated;
-    case 'circular':
-      return S.layoutType.circular;
-    default:
-      return type;
-  }
-}
+// Shared, never-empty layout display name (BUG-5): the proposal below quotes
+// the current layout, and that name must never be an empty string even when a
+// loaded document carries a blank/unknown `layout.type`.
+import { layoutTypeName } from '../ui/layoutTypeName';
+// BUG-7: accepting this proposal is one of the explicit time-chart switch entry
+// points, so it gets the same first-entry era-band behaviour as the 样式
+// selector and the 时间 panel's switch button.
+import { enterTimeChartLayout } from '../ui/timeChartEras';
 
 /**
  * Documents for which the time-chart switch has already been PROPOSED.
@@ -135,6 +128,10 @@ export function TreeCanvas() {
     });
     if (missing > 0) notify.info(S.notify.missingAgesToast(missing));
     requestFit();
+    // BUG-7: an explicit entry into the time chart — apply the first-entry era
+    // band rule (auto-enable once + one-time hint, honouring a remembered
+    // opt-out). UI-only, so it adds no undo step to the layout change above.
+    enterTimeChartLayout();
     notify.success(tr('已切换到「地质时间图」布局', 'Switched to the geological time chart layout'));
   }, [apply, requestFit]);
 

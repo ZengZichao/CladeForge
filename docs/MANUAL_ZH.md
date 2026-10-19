@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge 用户手册（中文）
 
 **适用版本 CladeForge v0.1.0**
@@ -36,16 +38,27 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 
 | 平台 | 最低系统 | 架构 | 磁盘 | 内存 |
 |------|---------|------|------|------|
-| macOS | 11.0 (Big Sur) | arm64、x86_64 | 实测 12.4 MiB（v0.1.0，arm64 应用包；安装镜像 4.6 MiB） | 512 MB |
+| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 实测 12.4 MiB（v0.1.0，arm64 应用包；安装镜像 4.6 MiB） | 512 MB |
 | Windows | 10 (64位) | x86_64 | 尚未实测——本版本未产出 Windows 构建 | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | 尚未实测——本版本未产出 Linux 构建 | 512 MB |
+
+¹ 11.0 (Big Sur) 是支持下限，并已在 `src-tauri/tauri.conf.json` 中声明
+（`bundle.macOS.minimumSystemVersion`），因此打包构建会把它写入应用包的
+`LSMinimumSystemVersion`。v0.1.0 的应用包早于该键的设置，仍带着 Tauri 的默认值 `10.13`，
+那只是链接器/部署基线，并非经过实测的最低版本；11.0 以下的 macOS 未做过测试。
+
+² v0.1.0 产出的唯一 macOS 构件是 `CladeForge_0.1.0_aarch64.dmg`，对其可执行文件运行
+`lipo -info` 报告为非胖 arm64 二进制。x86_64 与 universal 的 macOS 构建均未产出、未测试；
+构建通用 `.dmg` 只是有文档、未验证的选项（先 `rustup target add aarch64-apple-darwin
+x86_64-apple-darwin`，再 `npm run tauri build -- --target universal-apple-darwin`，需要 `lipo`）。
 
 应用自身不捆绑浏览器引擎，但它会渲染进操作系统自带的 web 视图（macOS 上为 WKWebView、Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提供对应的 web 视图；运行本应用不需要任何其他运行时（Java、Python 或 Node.js）。
 
 ### 安装
 
 **预构建二进制包** — 从项目发布页下载对应平台的发布版本：
-- macOS：`.dmg`（同时支持 Apple Silicon 和 Intel）
+- macOS：`.dmg`——仅有 arm64（Apple Silicon）；v0.1.0 发布的是 `CladeForge_0.1.0_aarch64.dmg`，
+  未发布过 Intel 单架构或 universal 的 macOS 安装包（见上方注²）。
 - Windows：`.msi`（x64）
 - Linux：`.deb` 或 AppImage
 

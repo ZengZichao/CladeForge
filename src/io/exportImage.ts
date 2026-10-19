@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Export the current project to publication-ready formats.
 // The SVG is generated from scratch (not by cloning the live DOM) so it is
 // tightly cropped, free of editing chrome, and reuses the exact same path /
@@ -15,7 +16,14 @@ import {
 } from '../layout/timescale';
 import { curveMidpoint, circularPath, curvedPath, elbowPath, straightPath } from '../canvas/paths';
 import { labelAngleOf, labelPlacement } from '../canvas/labels';
-import { labelAngleFor, labelBoxes, estimateLabelWidth, type Box } from '../canvas/labelBounds';
+import { labelAngleFor, labelBoxForNode, estimateLabelWidth, type Box } from '../canvas/labelBounds';
+import {
+  MAX_COLLISION_PLAN_NODES,
+  planEventAnchors,
+  planLabelNudges,
+  timeAxisTextBoxes,
+  translateBox,
+} from '../canvas/eventBadgeLayout';
 import { markerPath } from '../canvas/markerGeometry';
 import {
   branchCaps,
@@ -123,22 +131,67 @@ export interface BuiltSVG {
   height: number;
 }
 
+/**
+ * Union of every labelled node's box AT ITS DRAWN (staggered) position. The
+ * viewBox grows from this rather than from the un-staggered union, so a label
+ * pushed up/down by the collision planner is still inside the cropped figure.
+ */
+function staggeredLabelBoxes(
+  project: Project,
+  positions: Map<NodeId, Point>,
+  visible: Set<NodeId>,
+  nudges: ReadonlyMap<NodeId, number>,
+): Box | null {
+  let box: Box | null = null;
+  const add = (b: Box) => {
+    if (!box) {
+      box = { ...b };
+      return;
+    }
+    box.minX = Math.min(box.minX, b.minX);
+    box.minY = Math.min(box.minY, b.minY);
+    box.maxX = Math.max(box.maxX, b.maxX);
+    box.maxY = Math.max(box.maxY, b.maxY);
+  };
+  for (const id of visible) {
+    const node = project.nodes[id];
+    if (!node) continue;
+    const b = labelBoxForNode(project, positions, node);
+    if (!b) continue;
+    add(translateBox(b, 0, nudges.get(id) ?? 0));
+  }
+  return box;
+}
+
 
 export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
-  const { positions, visible, bounds, depths, maxDepth, timeAxis } = computeLayout(project, {
-    showEras: !!opts.showEras,
-    eraLevel: opts.eraLevel ?? 'both',
-  });
+  const axisOverlay = { showEras: !!opts.showEras, eraLevel: opts.eraLevel ?? 'both' };
+  // Keep the whole layout: the annotation planner also needs `visible`,
+  // `positions`, `bounds` and `timeAxis` to place badges/labels exactly like the
+  // canvas does.
+  const layout = computeLayout(project, axisOverlay);
+  const { positions, visible, bounds, depths, maxDepth, timeAxis } = layout;
   const orientation = project.layout.orientation;
   const activeCharacter = findCharacter(project, opts.activeCharacterId);
   const charRange =
     activeCharacter?.type === 'continuous' ? continuousRange(project, activeCharacter) : undefined;
 
   const pad = 48;
+  // Labels use the same collision-aware stagger as the on-screen NodeView, so a
+  // short phylogram / time-calibrated branch cannot overlap the child's label in
+  // the figure while the screen separates them (WYSIWYG). Above the canvas size
+  // gate the canvas deliberately keeps the old placement (a second layout pass
+  // would cost tens of ms on 10k-tip trees), so the export mirrors that too.
+  const canPlan = Object.keys(project.nodes).length <= MAX_COLLISION_PLAN_NODES;
+  const axisBoxes = canPlan ? timeAxisTextBoxes(project, layout, axisOverlay) : [];
+  const labelNudges = canPlan
+    ? planLabelNudges(project, positions, visible, axisBoxes)
+    : new Map<NodeId, number>();
   // `pad` is measured around the node coordinates, so a long taxon name running
   // past the outermost node would fall outside the viewBox and be cropped — in
-  // SVG, PNG and PDF alike. Grow the canvas by whatever the labels actually need.
-  const boxes = labelBoxes(project, positions, visible);
+  // SVG, PNG and PDF alike. Grow the canvas by whatever the labels actually need
+  // AT THEIR DRAWN POSITION (a nudged top-row label must not be cut either).
+  const boxes = staggeredLabelBoxes(project, positions, visible, labelNudges);
   const roomLeft = boxes ? Math.max(0, bounds.minX - boxes.minX) : 0;
   const roomRight = boxes ? Math.max(0, boxes.maxX - bounds.maxX) : 0;
   const roomTop = boxes ? Math.max(0, bounds.minY - boxes.minY) : 0;
@@ -432,7 +485,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         labelAngleFor(project, positions, node),
       );
       const lx = pos.x + place.dx;
-      const ly = pos.y + place.dy;
+      // Same vertical stagger as the canvas; the rotation ORIGIN moves with the
+      // label, otherwise a rotated label would swing around its old position.
+      const ly = pos.y + place.dy + (labelNudges.get(id) ?? 0);
       const rot = style.labelRotation ? ` transform="rotate(${num(style.labelRotation, 0)} ${lx} ${ly})"` : '';
       parts.push(
         `<text x="${lx}" y="${ly}" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" font-size="${num(style.fontSize, 12)}" font-style="${style.fontStyle === 'italic' ? 'italic' : 'normal'}" font-weight="${num(Number(style.fontWeight), 400)}"${rot} font-family="${FONT_FAMILY}" fill="${safeColour(style.labelColor)}">${escXml(node.label)}</text>`,
@@ -441,44 +496,33 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   }
 
   // --- event badges + causal-chain arrows ------------------------------------
+  // Same planner as the canvas (BUG-4): badges avoid every label bbox, node
+  // marker, time-axis text and already-placed badge, and a displaced stack gets
+  // the same thin leader line back to its branch. Keeps the figure WYSIWYG.
   if (opts.showEvents && project.events.length) {
-    const anchors = new Map<string, Point>();
-    const groupIdx = new Map<string, number>();
-    for (const e of project.events) {
-      const p = positions.get(e.nodeId);
-      if (!p) continue;
-      const key = `${e.nodeId}:${e.target}`;
-      const idx = groupIdx.get(key) ?? 0;
-      groupIdx.set(key, idx + 1);
-      if (e.target === 'branch') {
-        const pid = project.nodes[e.nodeId]?.parentId ?? null;
-        const pp = pid ? positions.get(pid) : undefined;
-        const bx = pp ? (pp.x + p.x) / 2 : p.x;
-        const by = pp ? (pp.y + p.y) / 2 : p.y;
-        anchors.set(e.id, { x: bx, y: by - 16 - idx * 16 });
-      } else {
-        // target === 'node': mirror the canvas anchor (EventLayer) — sit on the
-        // branch entering the node, offset perpendicular so it stays inside the
-        // tree instead of floating beside an internal node's elbow corner.
-        const pid = project.nodes[e.nodeId]?.parentId ?? null;
-        const pp = pid ? positions.get(pid) : undefined;
-        if (pp) {
-          const bx = (pp.x + p.x) / 2;
-          const by = (pp.y + p.y) / 2;
-          const horizontal = orientation === 'LR' || orientation === 'RL';
-          const tx = bx + (p.x - bx) * 0.6;
-          const ty = by + (p.y - by) * 0.6;
-          if (horizontal) anchors.set(e.id, { x: tx, y: ty + 13 + idx * 4 });
-          else anchors.set(e.id, { x: tx + 13 + idx * 4, y: ty });
-        } else {
-          anchors.set(e.id, { x: p.x + 14 + idx * 16, y: p.y + 16 });
-        }
-      }
-    }
+    const anchorPlan = planEventAnchors({
+      project,
+      events: project.events,
+      positions,
+      nodes: project.nodes,
+      culled: visible,
+      orientation,
+      layoutType: project.layout.type,
+      labelNudges,
+      axisBoxes,
+    });
+    const anchors = anchorPlan.anchors;
     if (project.events.some((e) => e.triggers.length)) {
       defs.push(
         `<marker id="ex-causal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 0 0 L 10 5 L 0 10 z" fill="${FIG_CAUSAL}"/></marker>`,
       );
+    }
+    // Leader lines first, under the arrows/badges (matches the canvas z-order).
+    for (const l of anchorPlan.leaders) {
+      parts.push(
+        `<line x1="${l.from.x}" y1="${l.from.y}" x2="${l.to.x}" y2="${l.to.y}" stroke="${FIG_CAUSAL}" stroke-width="1" opacity="0.7"/>`,
+      );
+      parts.push(`<circle cx="${l.to.x}" cy="${l.to.y}" r="1.6" fill="${FIG_CAUSAL}"/>`);
     }
     for (const e of project.events) {
       const a = anchors.get(e.id);

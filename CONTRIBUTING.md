@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # Contributing to CladeForge
 
 > 中文版：[CONTRIBUTING_ZH.md](./CONTRIBUTING_ZH.md)
@@ -60,9 +62,18 @@ type-check plus unit tests will not catch a build-only failure.
 Generative-AI assistants were used in two ways while developing this software: (1) assisting
 code writing, modification and refactoring, and (2) language polishing of the documentation
 and of this repository's own text. Every generated patch was reviewed, executed against the
-test suite and is owned by the maintainers, who take full responsibility for the result. The
-assistants used were mainstream commercial code and text models; since those models are
-updated continuously, no pinned version list is kept here.
+test suite and is owned by the maintainers, who take full responsibility for the result.
+
+**Tool names, versions and per-file scope are recorded in
+[`docs/AI_PROVENANCE.md`](./docs/AI_PROVENANCE.md)**, one row per release. Where a file's
+history cannot be attributed, that record says so instead of guessing. Two rules follow from it:
+
+- A file listed there as AI-assisted carries a one-line marker in its module header
+  (`// AI-PROVENANCE: …` in TypeScript/Rust, `<!-- AI-PROVENANCE: … -->` in Markdown). Strict
+  JSON such as `src-tauri/tauri.conf.json` takes no marker — it has no comment syntax — so its
+  record lives in the table alone.
+- When a change is AI-assisted, add or update the corresponding row in `docs/AI_PROVENANCE.md`
+  in the same pull request, together with the tool name and version actually used.
 
 No generative AI runs inside CladeForge. Every computation the application performs —
 Sankoff parsimony, Mk/ER ancestral-state reconstruction, DTL reconciliation, consensus
@@ -72,10 +83,33 @@ trees, layout and export — is deterministic local code in `src/model`, `src/la
 Contributors are asked to state, in the PR description, whether a generative-AI tool
 produced any part of the change, and for what.
 
+## Releasing
+
+The tagged commit is what gets archived and cited, so it has to be self-contained. Before
+tagging a release, check all of the following on the commit that will carry the tag — not on
+`main` afterwards:
+
+1. `npm run typecheck` and `npm test` pass; record the exact summary line (test files and test
+   count) in the release notes, and pin any manuscript or README figure to the **tag**, since a
+   later commit on `main` can change the count.
+2. `CITATION.cff` exists **at the tagged commit** and its `version` / `doi` / `date-released`
+   match the release being tagged. `CITATION.cff` was added after `v0.1.0`, so the archived
+   `v0.1.0` tree does not contain it; that must not be repeated for a new release, because the
+   archive is a machine-generated snapshot of the tag.
+3. `docs/AI_PROVENANCE.md` gains a row for the release, with the tool name and version and the
+   list of AI-assisted files, and each listed file carries its module-header marker.
+4. `src-tauri/tauri.conf.json` `version`, `README.md` / `README_ZH.md` and
+   `docs/MANUAL_EN.md` / `docs/MANUAL_ZH.md` state the same platform support floor and the same
+   architectures as the artifacts actually produced for the release — a documented capability
+   that has not been built is labelled as such (see the macOS arm64 / universal note in the
+   README).
+5. The Zenodo concept and version DOIs resolve, and the version DOI added to `CITATION.cff`,
+   `README.md` and `README_ZH.md` is the one minted for this tag.
+
 ## Scope note
 
 The **reconciliation** module is complete and shipped with this version, but it remains the part of CladeForge whose interaction design has not settled yet (see the "Reconciliation polish" item under Roadmap in [README.md](./README.md)). Please open an issue before changing that module, so that effort is not spent on a design that is still moving.
 
 ## User documentation
 
-The feature-by-feature reference lives in the [User Manual (English)](./docs/MANUAL_EN.md) and the [用户手册（中文）](./docs/MANUAL_ZH.md).
+The feature-by-feature reference lives in the [User Manual (English)](./docs/MANUAL_EN.md) and the [用户手册（中文）](./docs/MANUAL_ZH.md). The per-release record of AI-assisted files is [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md).

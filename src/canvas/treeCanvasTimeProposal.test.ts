@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 /**
  * The app PROPOSES the geological time chart; it never imposes it.
  *
@@ -22,6 +23,7 @@ import { TreeCanvas } from './TreeCanvas';
 import { useStore } from '../model/store';
 import { useToasts } from '../ui/toast';
 import { S } from '../ui/strings';
+import { layoutTypeName } from '../ui/layoutTypeName';
 import { parseNewick } from '../io/newick';
 import type { Project } from '../model/types';
 
@@ -142,6 +144,26 @@ describe('the time-chart layout is proposed, never imposed', () => {
     // Same document, layout back to the non-time one: no second proposal.
     act(() => root!.render(createElement(TreeCanvas)));
     expect(proposalToast()).toBeUndefined();
+  });
+
+  it('the proposal names a blank / legacy layout id instead of “” (BUG-5 defense)', () => {
+    // A hand-edited or foreign document can reach the store with an empty or
+    // unknown `layout.type` (projectIO only backfills the other layout fields);
+    // the renderer falls back to the cladogram, but the message quoting it must
+    // never render an empty pair of quotes.
+    for (const weird of ['', 'timechart'] as const) {
+      const project = datedCladogram(`c2-blank-${weird}`);
+      (project.layout as { type: string }).type = weird;
+      useStore.getState().loadProject(project);
+      mountCanvas();
+      const toast = proposalToast();
+      expect(toast, JSON.stringify(weird)).toBeDefined();
+      expect(toast!.message, JSON.stringify(weird)).not.toContain('“”');
+      expect(toast!.message, JSON.stringify(weird)).not.toContain('""');
+      expect(toast!.message, JSON.stringify(weird)).toContain(layoutTypeName(weird));
+      cleanup();
+      useToasts.setState({ toasts: [] });
+    }
   });
 
   it('a different document gets its own proposal', () => {

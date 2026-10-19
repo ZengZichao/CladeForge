@@ -1,12 +1,16 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Newick format parser + serialiser.
 // Grammar (simplified): subtree ";"  where
 //   subtree  := "(" subtree ("," subtree)* ")" name? (":" length)? | name? (":" length)?
 //
 // The parser works on a token stream whose scanner keeps square-bracket
-// comments as first-class tokens instead of discarding them: a comment
+// comments as first-class tokens instead of discarding them: every comment
 // attaches to the node whose name / branch-length immediately precedes it and
-// is preserved in `node.meta.comment`, so metadata such as `[&NHX:...]`
-// survives a round-trip. Underscores in unquoted names become spaces
+// is appended, oldest first, to the ordered array `node.meta.comments` — NOT
+// overwritten, so a node carrying `[&U]` and a note keeps both (`node.meta.comment`,
+// a single string, is still read for documents saved before comments were
+// accumulated). Metadata such as `[&NHX:...]` therefore survives a round-trip
+// in full. Underscores in unquoted names become spaces
 // (standard Newick convention); quoted names are kept verbatim.
 //
 // A numeric label on an *internal* node is interpreted as a branch-support
@@ -29,9 +33,9 @@
 // explicit `[&R]` / `[&U]` comment on the root is consumed into
 // `root.meta.rooted`, and a trifurcate root with no declaration is recorded as
 // unrooted (the shape IQ-TREE / RAxML / MrBayes emit). Exporters read that flag
-// — `serializeNexus` writes `[&U]`, and `serializeNewick(…, {rootedMarker: true})`
-// appends `[&U]` — so an unrooted import can no longer come back out as a
-// rooted tree.
+// — `serializeNexus` writes `[&R]` or `[&U]`, and `serializeNewick(…, {rootedMarker: true})`
+// appends `[&U]` but deliberately never `[&R]` (see `NewickSerializeOptions`) —
+// so an unrooted import can no longer come back out as a rooted tree.
 
 import { createEmptyProject } from '../model/sampleTree';
 import { newId } from '../model/treeOps';
