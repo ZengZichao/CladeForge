@@ -1,0 +1,53 @@
+# Deploys the plain-browser build of CladeForge to GitHub Pages.
+#
+# The web frontend is fully client-side (tree parsing, layout, inference and
+# export all run in the visitor's browser), so the static `dist/` output of
+# `vite build` is the entire deployable artifact — no server is involved and
+# user files never leave the browser. The Tauri/Rust desktop build is not part
+# of this pipeline and keeps its own release flow.
+#
+# Repo Settings → Pages must have Source set to "GitHub Actions"; enabling it
+# programmatically (build_type=workflow) is a one-time admin step.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # `npm run build` = tsc --noEmit (type gate) + vite build. TypeScript is
+      # part of the deploy gate so a type regression cannot ship to the site.
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

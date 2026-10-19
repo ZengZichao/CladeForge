@@ -5,6 +5,11 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // GitHub Pages project sites are served from /<repo>/, not the domain root;
+  // every asset URL in the built index.html must carry this prefix or the
+  // deployed page 404s on its own JS/CSS. The Tauri desktop build is unaffected
+  // (its dev server and webview load from the root).
+  base: '/CladeForge/',
   // Prevent Vite from clearing the screen so Tauri/Rust logs stay visible.
   clearScreen: false,
   envPrefix: ['VITE_', 'TAURI_'],
