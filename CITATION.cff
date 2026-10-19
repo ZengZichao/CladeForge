@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 type: software
-message: "If you use CladeForge, please cite it as below. The DOI resolves to the latest archived release."
+message: "If you use CladeForge, please cite it as below. The DOI below is the version DOI for v0.1.0; the concept DOI in identifiers[] always resolves to the latest release."
 title: "CladeForge"
 authors:
   - given-names: Zichao
@@ -9,10 +9,14 @@ authors:
     affiliation: "Shanghai Jiao Tong University"
 version: "v0.1.0"
 date-released: "2026-09-30"
-doi: "10.5281/zenodo.23053393"
+doi: "10.5281/zenodo.23053394"
 license: MIT
 repository-code: "https://github.com/ZengZichao/CladeForge"
-url: "https://zenodo.org/records/23053393"
+url: "https://zenodo.org/records/23053394"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23053393"
+    description: "Concept DOI; always resolves to the latest archived release."
 abstract: "CladeForge is a local-first, cross-platform desktop application for building, annotating, and exporting phylogenetic trees with an integrated evolutionary semantic layer. It reframes the phylogenetic tree as a hypothesis scaffold for constructing, comparing, and refining evolutionary scenarios."
 keywords:
   - phylogenetics

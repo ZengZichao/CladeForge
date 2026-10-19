@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // A `Section` that filters itself out must still run the same Hooks as one that
 // renders. An early `if (q && !matchesSearch) return null;` placed BEFORE the
 // `useEffect` makes the render that hides a section call fewer Hooks than the
@@ -85,5 +86,67 @@ describe('Section — search filtering keeps the Hook sequence stable', () => {
       ),
     );
     expect(text()).toContain('Time scale');
+  });
+});
+
+// The collapsed inspector groups preview their current values in the header
+// (`summary`) instead of only an "N items" count. The preview must never leak
+// into the expanded state (where the actual fields are shown), must stay
+// optional for every other panel that reuses Section, and must not disturb the
+// search/pin force-open logic tested above.
+describe('Section — optional collapsed summary', () => {
+  function panelWithSummary(props: { query?: string; summary?: ReactNode; defaultOpen?: boolean }) {
+    return createElement(
+      'div',
+      null,
+      createElement(Section, {
+        id: 'sec-sum',
+        title: 'Node style',
+        defaultOpen: props.defaultOpen ?? false,
+        searchQuery: props.query ?? '',
+        summary: props.summary,
+        children: 'STYLE-BODY',
+      }),
+    );
+  }
+
+  it('shows the summary while collapsed and hides it once expanded', () => {
+    mount(
+      panelWithSummary({
+        summary: createElement('span', { className: 'test-preview' }, 'Circle · 7px'),
+      }),
+    );
+    expect(text()).toContain('Circle · 7px');
+    expect(text()).not.toContain('STYLE-BODY');
+    expect(host.querySelector('.section-toggle')!.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => (host.querySelector('.section-toggle') as HTMLButtonElement).click());
+    // Expanded: the fields themselves carry the values, the preview is gone.
+    expect(text()).not.toContain('Circle · 7px');
+    expect(text()).toContain('STYLE-BODY');
+  });
+
+  it('renders exactly as before when no summary is passed', () => {
+    mount(panelWithSummary({}));
+    expect(host.querySelector('.section-summary')).toBeNull();
+    expect(host.querySelector('.section-toggle')!.classList.contains('has-summary')).toBe(false);
+  });
+
+  it('hides the summary when a search query forces the section open', () => {
+    mount(panelWithSummary({ query: 'style', summary: 'SHOULD-NOT-RENDER' }));
+    expect(text()).toContain('STYLE-BODY');
+    expect(text()).not.toContain('SHOULD-NOT-RENDER');
+  });
+
+  it('survives toggling and query changes with the Hook order intact', () => {
+    mount(panelWithSummary({ summary: 'PREVIEW' }));
+    expect(() =>
+      act(() => {
+        (host.querySelector('.section-toggle') as HTMLButtonElement).click();
+      }),
+    ).not.toThrow();
+    expect(() => act(() => root.render(panelWithSummary({ query: 'zzz' })))).not.toThrow();
+    expect(() => act(() => root.render(panelWithSummary({ query: '' })))).not.toThrow();
+    expect(text()).toContain('Node style');
   });
 });

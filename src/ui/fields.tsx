@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Shared inspector form controls.
 //
 // These small buffered inputs are used by both the left-hand LayoutPanel
@@ -237,6 +238,15 @@ export function TextField({
 // Numeric field with inline range validation: values outside [min,max]
 // show an inline error and are NOT committed, so illegal data (negative ages,
 // out-of-range support values) can't silently enter the document.
+//
+// `unit` is a VISIBLE decoration next to the input, not a placeholder: the
+// inspector used to rely on `placeholder="Ma"`, which vanishes the moment the
+// field has a value — i.e. exactly when the user is reading the number. The
+// decoration is optional (callers that pass nothing get the previous layout),
+// can sit before or after the input, and carries a tooltip/spoken description
+// (`unitTitle`) for units whose symbol is not self-explanatory ("Ma = Mya").
+// A pasted "35 Ma" / "0.5 %" is reduced to its numeric part: the unit lives in
+// the decoration, so it must not be able to reject a copy-paste.
 export function NumberField({
   value,
   onCommit,
@@ -245,6 +255,9 @@ export function NumberField({
   step = 1,
   allowEmpty = false,
   unit,
+  unitTitle,
+  unitSide = 'suffix',
+  hint,
   ariaLabel,
 }: {
   value: number | undefined;
@@ -253,14 +266,23 @@ export function NumberField({
   max?: number;
   step?: number;
   allowEmpty?: boolean;
-  /** Optional unit suffix shown as a placeholder hint (e.g. "0–1"). */
+  /** Visible unit decoration (e.g. "Ma", "px", "s/s"). Optional. */
   unit?: string;
+  /** Hover/spoken expansion of the unit (e.g. "million years ago (Ma = Mya)"). */
+  unitTitle?: string;
+  /** Which side of the input the unit decoration is rendered on. */
+  unitSide?: 'prefix' | 'suffix';
+  /** Placeholder shown only while the field is empty (e.g. "0–1 or 0–100"). */
+  hint?: string;
   /** Accessible name; `Field` supplies the row label automatically. */
   ariaLabel?: string;
 }) {
   const [v, setV] = useState(value === undefined ? '' : String(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setV(value === undefined ? '' : String(value)), [value]);
+  // Described-by target for the visible unit, so a screen reader announces
+  // "Age, 35, Ma" instead of dropping the decoration as decoration-only.
+  const unitId = useId();
 
   const commit = () => {
     if (v === '') {
@@ -285,27 +307,49 @@ export function NumberField({
     onCommit(n);
   };
 
+  const unitNode = unit ? (
+    <span className="number-unit" id={unitId} title={unitTitle ?? unit}>
+      {unit}
+    </span>
+  ) : null;
+
   return (
     <div className="number-wrap">
-      <input
-        type="number"
-        aria-label={ariaLabel}
-        value={v}
-        min={min}
-        max={max}
-        step={step}
-        aria-invalid={error ? true : undefined}
-        placeholder={unit}
-        className={error ? 'has-error' : undefined}
-        onChange={(e) => {
-          setV(e.target.value);
-          if (error) setError(null);
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement).blur();
-        }}
-      />
+      <div className={`number-input-row${unitSide === 'prefix' ? ' unit-prefix' : ''}`}>
+        {unitSide === 'prefix' && unitNode}
+        <input
+          type="number"
+          aria-label={ariaLabel}
+          aria-describedby={unit ? unitId : undefined}
+          title={unitTitle}
+          value={v}
+          min={min}
+          max={max}
+          step={step}
+          aria-invalid={error ? true : undefined}
+          placeholder={hint}
+          className={error ? 'has-error' : undefined}
+          onChange={(e) => {
+            setV(e.target.value);
+            if (error) setError(null);
+          }}
+          onPaste={(e) => {
+            // "35 Ma", "0.5 %", "12px" → the numeric part only; a number input
+            // would otherwise reject the whole paste and silently clear it.
+            const text = e.clipboardData?.getData('text') ?? '';
+            const m = /^\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*(?:[A-Za-z%°µ][\w./²³ ]*)?\s*$/.exec(text);
+            if (!m) return;
+            e.preventDefault();
+            setV(m[1]);
+            setError(null);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement).blur();
+          }}
+        />
+        {unitSide !== 'prefix' && unitNode}
+      </div>
       {error && <span className="field-error">{error}</span>}
     </div>
   );

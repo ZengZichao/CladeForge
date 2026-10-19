@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Shared label geometry for the canvas and the exporters.
 //
 // Both need to know how much world-space a node's LABEL occupies, not just where
@@ -13,6 +14,76 @@ export interface Box {
   minY: number;
   maxX: number;
   maxY: number;
+}
+
+/**
+ * Numeric knobs for {@link labelBoxForNode}. The canvas and the exporters want
+ * the *conservative* box (safety margins on both axes), while the collision
+ * planner needs a box that matches the glyphs it is actually trying to keep
+ * apart — a label that is "conservatively" 28px tall would demand a 30px nudge
+ * to clear a neighbour it visually clears after 18px.
+ */
+export interface LabelBoxOptions {
+  /** Multiplier on the estimated glyph width. Default 1.05 (fit safety). */
+  widthFactor?: number;
+  /** Half line-height as a multiple of font-size. Default 1 (fit safety). */
+  heightFactor?: number;
+}
+
+/**
+ * World-space box of ONE node's label text, or null when the node draws no
+ * label (hidden / empty / no position). This is the single-node form of
+ * {@link labelBoxes}: the collision planner needs per-node boxes, so both paths
+ * share the same placement + glyph-width rules and cannot drift apart.
+ */
+export function labelBoxForNode(
+  project: Project,
+  positions: Map<NodeId, Point>,
+  node: TreeNode,
+  options: LabelBoxOptions = {},
+): Box | null {
+  const pos = positions.get(node.id);
+  if (!node.label || !pos) return null;
+  const style = resolveNodeStyle(node, project);
+  if (!style.showLabel) return null;
+  const place = labelPlacement(
+    project.layout.orientation,
+    node.childrenIds.length === 0,
+    style.size,
+    style.labelPosition,
+    style.labelOffsetX,
+    style.labelOffsetY,
+    labelAngleFor(project, positions, node),
+  );
+  // Italic / bold are wider than the average advance, hence the 1.05 factor.
+  // Deliberately generous: too much margin costs whitespace, too little cuts a
+  // taxon name off.
+  const widthFactor = options.widthFactor ?? 1.05;
+  const heightFactor = options.heightFactor ?? 1;
+  const w = estimateLabelWidth(node.label, style.fontSize) * widthFactor;
+  const x = pos.x + place.dx;
+  const y = pos.y + place.dy;
+  let x0 = x;
+  let x1 = x + w;
+  if (place.anchor === 'end') {
+    x0 = x - w;
+    x1 = x;
+  } else if (place.anchor === 'middle') {
+    x0 = x - w / 2;
+    x1 = x + w / 2;
+  }
+  const half = style.fontSize * heightFactor;
+  let y0 = y - half;
+  let y1 = y + half;
+  if (style.labelRotation) {
+    // A rotated label sweeps the larger of width / height in every direction.
+    const r = Math.max(w, half) + Math.hypot(x - pos.x, y - pos.y);
+    x0 = pos.x - r;
+    x1 = pos.x + r;
+    y0 = pos.y - r;
+    y1 = pos.y + r;
+  }
+  return { minX: x0, minY: y0, maxX: x1, maxY: y1 };
 }
 
 /**
@@ -72,46 +143,10 @@ export function labelBoxes(
   };
   for (const id of visible) {
     const node = project.nodes[id];
-    const pos = positions.get(id);
-    if (!node?.label || !pos) continue;
-    const style = resolveNodeStyle(node, project);
-    if (!style.showLabel) continue;
-    const place = labelPlacement(
-      project.layout.orientation,
-      node.childrenIds.length === 0,
-      style.size,
-      style.labelPosition,
-      style.labelOffsetX,
-      style.labelOffsetY,
-      labelAngleFor(project, positions, node),
-    );
-    // Italic / bold are wider than the average advance, hence the 1.05 factor.
-    // Deliberately generous: too much margin costs whitespace, too little cuts a
-    // taxon name off.
-    const w = estimateLabelWidth(node.label, style.fontSize) * 1.05;
-    const x = pos.x + place.dx;
-    const y = pos.y + place.dy;
-    let x0 = x;
-    let x1 = x + w;
-    if (place.anchor === 'end') {
-      x0 = x - w;
-      x1 = x;
-    } else if (place.anchor === 'middle') {
-      x0 = x - w / 2;
-      x1 = x + w / 2;
-    }
-    const half = style.fontSize;
-    let y0 = y - half;
-    let y1 = y + half;
-    if (style.labelRotation) {
-      // A rotated label sweeps the larger of width / height in every direction.
-      const r = Math.max(w, half) + Math.hypot(x - pos.x, y - pos.y);
-      x0 = pos.x - r;
-      x1 = pos.x + r;
-      y0 = pos.y - r;
-      y1 = pos.y + r;
-    }
-    add(x0, x1, y0, y1);
+    if (!node) continue;
+    const b = labelBoxForNode(project, positions, node);
+    if (!b) continue;
+    add(b.minX, b.maxX, b.minY, b.maxY);
   }
   return box;
 }

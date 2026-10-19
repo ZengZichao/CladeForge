@@ -1,10 +1,17 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { buildSVG, exportSVGString } from './exportImage';
 import { createSampleProject } from '../model/sampleTree';
 import { serializeProject, parseProject } from './projectIO';
 import { parseNewick } from './newick';
 import { computeLayout } from '../layout/autoLayout';
-import type { Project } from '../model/types';
+import { EVENT_BADGE_RADIUS } from '../model/events';
+import {
+  planEventAnchors,
+  planLabelNudges,
+  timeAxisTextBoxes,
+} from '../canvas/eventBadgeLayout';
+import type { LayoutType, Project } from '../model/types';
 
 describe('exportImage', () => {
   it('builds a self-contained SVG with positive dimensions', () => {
@@ -286,5 +293,139 @@ describe('the figure and the interface agree on one font stack', () => {
     for (const family of named) {
       expect(SYSTEM.test(family), `named family ${family} must be a system font`).toBe(true);
     }
+  });
+});
+
+// --- BUG-4 follow-up: exports share the canvas annotation planner ------------
+// The screen resolves the KI/AR × "Basilosauridae" collision (and the
+// Basilosauridae × Neoceti label collision) with `eventBadgeLayout`. The exporter
+// must make the same choices or the figure (SVG/PNG/PDF) would disagree with what
+// the user saw. These tests parse the emitted SVG and assert the geometry rather
+// than trusting the code path.
+
+interface ParsedText {
+  text: string;
+  x: number;
+  y: number;
+  anchor: string;
+  fontSize: number;
+}
+
+/** Node labels: `<text ... dominant-baseline>` excludes legend/axis/transition text. */
+function parseLabelTexts(svg: string): ParsedText[] {
+  const re =
+    /<text x="(-?[\d.]+)" y="(-?[\d.]+)" text-anchor="(start|middle|end)" dominant-baseline="(?:central|hanging|auto)" font-size="([\d.]+)"[^>]*>([^<]*)<\/text>/g;
+  const out: ParsedText[] = [];
+  for (const m of svg.matchAll(re)) {
+    out.push({ text: m[5], x: Number(m[1]), y: Number(m[2]), anchor: m[3], fontSize: Number(m[4]) });
+  }
+  return out;
+}
+
+/** Event badge circles: r == EVENT_BADGE_RADIUS and a white fill. */
+function parseBadgeCircles(svg: string): { x: number; y: number }[] {
+  const re = new RegExp(
+    `<circle cx="(-?[\\d.]+(?:e[-+]?\\d+)?)" cy="(-?[\\d.]+(?:e[-+]?\\d+)?)" r="${EVENT_BADGE_RADIUS}" fill="#ffffff"`,
+    'g',
+  );
+  return [...svg.matchAll(re)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+}
+
+/** CJK-aware glyph estimate, independent of the exporter's own 1.05 factor. */
+function estimateWidth(text: string, fontSize: number): number {
+  let w = 0;
+  for (const ch of text) w += ch.charCodeAt(0) > 0x2e7f ? fontSize : fontSize * 0.62;
+  return w;
+}
+
+/** Box the text glyphs actually occupy (14px text is ≈17px tall, half ≈0.68em). */
+function textBox(t: ParsedText): { minX: number; minY: number; maxX: number; maxY: number } {
+  const w = estimateWidth(t.text, t.fontSize);
+  const half = t.fontSize * 0.68;
+  const x0 = t.anchor === 'end' ? t.x - w : t.anchor === 'middle' ? t.x - w / 2 : t.x;
+  return { minX: x0, minY: t.y - half, maxX: x0 + w, maxY: t.y + half };
+}
+
+function intersects(
+  a: { minX: number; minY: number; maxX: number; maxY: number },
+  b: { minX: number; minY: number; maxX: number; maxY: number },
+): boolean {
+  return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+}
+
+function projectWithLayout(type: LayoutType): Project {
+  const p = createSampleProject();
+  p.layout.type = type;
+  return p;
+}
+
+describe('exportImage — event badges reuse the canvas collision planner (BUG-4)', () => {
+  const LAYOUTS: LayoutType[] = [
+    'rectangular-cladogram',
+    'rectangular-phylogram',
+    'time-calibrated',
+    'circular',
+  ];
+
+  for (const type of LAYOUTS) {
+    it(`${type}: badge circles do not intersect label text`, () => {
+      const svg = buildSVG(projectWithLayout(type), { showEvents: true }).svg;
+      const labels = parseLabelTexts(svg);
+      const badges = parseBadgeCircles(svg);
+      expect(labels.length).toBeGreaterThan(5);
+      expect(badges.length).toBe(2); // KI + AR on Neoceti
+      const half = EVENT_BADGE_RADIUS + 1.5;
+      for (const b of badges) {
+        const badgeBox = { minX: b.x - half, minY: b.y - half, maxX: b.x + half, maxY: b.y + half };
+        for (const t of labels) {
+          expect(intersects(badgeBox, textBox(t)), `${t.text} × badge at ${b.x},${b.y}`).toBe(false);
+        }
+      }
+    });
+  }
+
+  it('phylogram: the staggered parent/child labels no longer overlap', () => {
+    for (const type of ['rectangular-phylogram', 'time-calibrated'] as LayoutType[]) {
+      const svg = buildSVG(projectWithLayout(type), { showEvents: true }).svg;
+      const labels = parseLabelTexts(svg);
+      const basilo = labels.find((t) => t.text === 'Basilosauridae')!;
+      const neoceti = labels.find((t) => t.text === 'Neoceti')!;
+      expect(intersects(textBox(basilo), textBox(neoceti)), `${type}: still overlapping`).toBe(false);
+      // The child yields (moves up one stagger step); the parent keeps its row.
+      expect(neoceti.y).toBeLessThan(basilo.y);
+    }
+  });
+
+  it('ships the leader line and branch anchor dot for a displaced stack', () => {
+    const svg = buildSVG(projectWithLayout('rectangular-cladogram'), { showEvents: true }).svg;
+    expect(svg).toContain('stroke-width="1" opacity="0.7"'); // thin leader
+    expect(svg).toContain('r="1.6"'); // dot on the natural branch anchor
+  });
+
+  it('emits exactly the anchors planEventAnchors computes', () => {
+    const project = projectWithLayout('rectangular-phylogram');
+    const opts = { showEras: false, eraLevel: 'both' as const };
+    const layout = computeLayout(project, opts);
+    const axisBoxes = timeAxisTextBoxes(project, layout, opts);
+    const labelNudges = planLabelNudges(project, layout.positions, layout.visible, axisBoxes);
+    const plan = planEventAnchors({
+      project,
+      events: project.events,
+      positions: layout.positions,
+      nodes: project.nodes,
+      culled: layout.visible,
+      orientation: project.layout.orientation,
+      layoutType: project.layout.type,
+      labelNudges,
+      axisBoxes,
+    });
+    const svg = buildSVG(project, { showEvents: true }).svg;
+    expect(plan.anchors.size).toBe(2);
+    for (const a of plan.anchors.values()) {
+      expect(svg).toContain(`<circle cx="${a.x}" cy="${a.y}" r="${EVENT_BADGE_RADIUS}" fill="#ffffff"`);
+    }
+    // And the badges really did move off the branch line (not the old anchors).
+    const natural = plan.anchors.get(project.events[0].id)!;
+    expect(natural.y).not.toBe(layout.positions.get(project.events[0].nodeId)!.y);
   });
 });

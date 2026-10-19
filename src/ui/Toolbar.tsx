@@ -1,12 +1,16 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Secondary toolbar. Left segment = primary editing actions (add children,
 // undo / redo — moved here from the dissolved tool shelf); right segment =
-// global chrome (project name, save, language, theme). The header stays
+// global chrome (project name, save, preferences). The header stays
 // window-draggable between the segments.
+//
+// The old language (中/EN) and theme (light/dark/system) segmented controls are
+// now one Preferences dropdown (see PreferencesMenu.tsx): BUG-10 caps the header
+// at ten clickable targets and those five segments were low-frequency chrome.
 
 import { PlusIcon, ResetIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
-import { ThemeToggle } from './ThemeToggle';
-import { LanguageToggle } from './LanguageToggle';
+import { PreferencesMenu } from './PreferencesMenu';
 import * as file from '../io/fileActions';
 import { S, tr } from './strings';
 import { notify } from './toast';
@@ -102,8 +106,7 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
       >
         {S.menu.save}
       </button>
-      <LanguageToggle />
-      <ThemeToggle />
+      <PreferencesMenu />
     </div>
   );
 }

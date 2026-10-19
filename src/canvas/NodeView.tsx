@@ -1,14 +1,16 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Renders one tree node: marker shape, label, selection/collapse indicators,
 // an inline rename editor, and a connection "port" handle for starting custom
 // edges. Interaction (select / drag / connect) is handled centrally by
 // TreeCanvas via event delegation; this component only manages its own hover
 // and rename-editing local state.
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { renameNode } from '../model/treeOps';
 import { DEFAULT_NODE_STYLE, type NodeStyle, type Orientation, type Point, type TreeNode } from '../model/types';
 import { labelPlacement } from './labels';
+import { getCanvasCollisionPlan, getLastCanvasCollisionPlan } from './eventBadgeLayout';
 import { isImeComposing } from '../ui/imeGuard';
 import { markerPath } from './markerGeometry';
 import { S, tr } from '../ui/strings';
@@ -78,6 +80,15 @@ export const NodeView = memo(function NodeView({
 }: NodeViewProps) {
   const selected = useStore((s) => s.selection.includes(node.id));
   const apply = useStore((s) => s.apply);
+  // Label stagger (see eventBadgeLayout): the collision planner needs the whole
+  // document + layout, and NodeView only receives its own position, so read the
+  // shared cached plan from the store. During a live drag the plan is reused
+  // (the gesture keeps its pre-drag stagger; recomputing the layout on every
+  // pointermove would undo TreeCanvas's drag-time caching).
+  const project = useStore((s) => s.project);
+  const showEras = useStore((s) => s.showEras);
+  const eraLevel = useStore((s) => s.eraLevel);
+  const interacting = useStore((s) => s.interactionBase !== null);
 
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -109,6 +120,17 @@ export const NodeView = memo(function NodeView({
   );
   const showPort = hovered || selected;
   const showLabel = style.showLabel && (node.label !== '' || editing);
+  const labelNudge = useMemo(() => {
+    if (!showLabel) return 0;
+    const opts = { showEras, eraLevel };
+    const plan =
+      (interacting ? getLastCanvasCollisionPlan(opts) : null) ?? getCanvasCollisionPlan(project, opts);
+    return plan?.nudges.get(node.id) ?? 0;
+  }, [node.id, showLabel, project, showEras, eraLevel, interacting]);
+  // Labels keep the renderer's natural offset unless the stagger moved them to
+  // clear a neighbour (a short phylogram/time-calibrated branch can otherwise put
+  // a parent's label straight through its child's label).
+  const labelY = place.dy + labelNudge;
 
   // Accessible name: label + support + leaf/internal, for the tree role.
   const ariaLabel = [
@@ -141,6 +163,19 @@ export const NodeView = memo(function NodeView({
       }}
       style={{ cursor: 'pointer' }}
     >
+      {/* Transparent hit target (BUG-6): the visible marker is only ~11px wide,
+          which is a poor click target. This circle extends the node's hit area
+          7px past the marker on every side without changing the drawing; it sits
+          at the bottom of the group so the marker, label and port keep their own
+          (smaller) hit testing on top. */}
+      <circle
+        r={style.size + 8}
+        fill="transparent"
+        pointerEvents="all"
+        data-role="node"
+        data-node-id={node.id}
+        data-hit="node"
+      />
       {/* Double-layer selection highlight (Sketch/Figma/XD style):
           Outer halo: wide, very translucent (glow).
           Inner ring: narrower, more opaque (focus ring).
@@ -175,7 +210,7 @@ export const NodeView = memo(function NodeView({
       {showLabel && !editing && (
         <text
           x={place.dx}
-          y={place.dy}
+          y={labelY}
           textAnchor={place.anchor}
           dominantBaseline={place.baseline}
           fontSize={style.fontSize}
@@ -189,7 +224,7 @@ export const NodeView = memo(function NodeView({
               : style.labelColor
           }
           transform={
-            style.labelRotation ? `rotate(${style.labelRotation} ${place.dx} ${place.dy})` : undefined
+            style.labelRotation ? `rotate(${style.labelRotation} ${place.dx} ${labelY})` : undefined
           }
           data-role="node"
           data-node-id={node.id}
@@ -240,19 +275,34 @@ export const NodeView = memo(function NodeView({
       )}
 
       {showPort && (
-        <circle
-          cx={style.size + 11}
-          cy={-(style.size + 11)}
-          r={5}
-          fill={C_SELECT}
-          stroke="var(--surface)"
-          strokeWidth={1.5}
-          data-role="port"
-          data-node-id={node.id}
-          style={{ cursor: 'crosshair' }}
-        >
-          <title>{S.node.portTitle}</title>
-        </circle>
+        <>
+          {/* Enlarged transparent hit area for the connection port (BUG-6); it
+              stays clear of the node's own hit circle so a click near the node
+              still selects/drags. */}
+          <circle
+            cx={style.size + 11}
+            cy={-(style.size + 11)}
+            r={9}
+            fill="transparent"
+            pointerEvents="all"
+            data-role="port"
+            data-node-id={node.id}
+            data-hit="port"
+          />
+          <circle
+            cx={style.size + 11}
+            cy={-(style.size + 11)}
+            r={5}
+            fill={C_SELECT}
+            stroke="var(--surface)"
+            strokeWidth={1.5}
+            data-role="port"
+            data-node-id={node.id}
+            style={{ cursor: 'crosshair' }}
+          >
+            <title>{S.node.portTitle}</title>
+          </circle>
+        </>
       )}
     </g>
   );

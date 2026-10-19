@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left navigation rail: module switcher organised as three labelled groups
 // (展示 View / 内容 Content / 输出 Output). 展示 comes first because the
 // presentation decision (how the tree is drawn) precedes content editing
@@ -56,6 +57,7 @@ function RailButton({ item, active, onSelect }: { item: RailItem; active: boolea
       aria-label={item.label}
       aria-pressed={active}
       title={item.hint}
+      data-nav={item.id}
     >
       <span className="nav-rail-icon">{item.icon}</span>
       <span className="nav-rail-label">{item.label}</span>

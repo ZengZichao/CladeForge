@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Collapsible panel section with localStorage persistence, visual
 // open/closed state differentiation, search filtering, favorites and a
 // "pin open" toggle.
@@ -20,6 +21,14 @@
 //   - `pinable`: when true, a pushpin button appears next to the title.
 //     Pinned sections stay expanded — clicking the header does not collapse
 //     them (「固定展开 / 取消固定折叠」).
+//   - `summary`: optional live value preview rendered INSIDE the header while
+//     the section is collapsed (a colour dot, the current stroke width, the
+//     inheriting-or-calibrated time constraint…). It answers "what is in
+//     there?" without spending a click to expand, which is the point of a
+//     collapsed inspector group. Optional and purely presentational: a section
+//     that does not pass it renders exactly as before, and the value is hidden
+//     as soon as the body is open (the fields themselves already show it).
+//     `summaryTitle` is the optional hover/tooltip text for that preview.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -109,6 +118,8 @@ export function Section({
   pinable = false,
   keywords,
   count,
+  summary,
+  summaryTitle,
 }: {
   /** Stable identifier for persistence (language-independent). Falls back to the
    *  catalogue path of `title`, so the state survives a 中/EN switch. Pass an
@@ -127,6 +138,11 @@ export function Section({
   keywords?: string[];
   /** When given, shows a "N 项" badge next to the title (incl. when collapsed). */
   count?: number;
+  /** Live value preview shown in the header while collapsed. Omit for the
+   *  pre-existing header-only rendering. */
+  summary?: ReactNode;
+  /** Tooltip for the collapsed header summary (e.g. the full unit name). */
+  summaryTitle?: string;
 }) {
   // Keys are derived from the catalogue PATH of the title, not from the
   // translated text, so switching 中文/English does not silently reset every
@@ -151,6 +167,12 @@ export function Section({
 
   // When searching OR pinned, force the section open.
   const effectiveOpen = q || pin ? true : open;
+
+  // Collapsed-only value preview. Hidden while the body is already open (the
+  // fields themselves show the values), during a search hit (sections are
+  // forced open) and when pinned (ditto). Purely presentational — it adds no
+  // Hook, so the hidden-section Hook-count contract below still holds.
+  const showSummary = !effectiveOpen && summary !== undefined && summary !== null;
 
   // Reveal the section body when the query matches but the section was closed.
   useEffect(() => {
@@ -198,13 +220,18 @@ export function Section({
       <div className="section-header-row">
         <button
           type="button"
-          className={`section-toggle${effectiveOpen ? ' open' : ''}`}
+          className={`section-toggle${effectiveOpen ? ' open' : ''}${showSummary ? ' has-summary' : ''}`}
           aria-expanded={effectiveOpen}
           onClick={toggle}
         >
-          {title}
+          <span className="section-title">{title}</span>
           {count !== undefined && !effectiveOpen && (
             <span className="section-count">{count} {S.section.items}</span>
+          )}
+          {showSummary && (
+            <span className="section-summary" title={summaryTitle}>
+              {summary}
+            </span>
           )}
         </button>
         {pinable && (

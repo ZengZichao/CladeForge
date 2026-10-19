@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Centralised UI string catalogue (i18n resource module).
 //
 // Every user-facing string lives here instead of being scattered inline across
@@ -134,7 +135,10 @@ const zh = {
     hintButton: '操作提示',
     hintButtonTitle: '查看全部画布手势与快捷键（⌘?）',
     mrcaHint: '已选 2 个节点 · 最近共祖已标橙环',
-    saved: '已保存',
+    // "已自动保存", not "已保存": every attribute edit is applied (and undoable)
+    // immediately and persisted by the autosave; the Save button writes a project
+    // FILE. The old wording made users ask whether they still had to press Save.
+    saved: '已自动保存',
     saving: '保存中…',
     // The indicator is driven by the real write result, not by a timer, so a
     // quota-full or blocked localStorage never reads "已保存".
@@ -395,6 +399,13 @@ const zh = {
   },
   addDialog: {
     title: '添加多叉分支',
+    // The dialog must say WHICH node the children land on: the toolbar button
+    // used to silently target the selection, or the root when nothing was
+    // selected, with no way for the user to see the target.
+    targetLabel: '将子节点添加到',
+    rootFallback: (rootName: string) =>
+      `未选中节点 — 子节点将添加到根节点（${rootName}）`,
+    targetMissing: '目标节点已不存在，未添加任何子节点',
     countLabel: '子节点数量',
     polytomyType: '多分叉类型',
     hardPolytomy: '硬多分叉（同时分化）',
@@ -1018,7 +1029,8 @@ const en: Strings = {
     hintButton: 'Gestures',
     hintButtonTitle: 'See all canvas gestures and shortcuts (⌘?)',
     mrcaHint: '2 nodes selected · MRCA ring highlighted',
-    saved: 'Saved',
+    // See the ZH note: attribute edits are auto-saved, Save writes a file.
+    saved: 'Auto-saved',
     saving: 'Saving…',
     // The indicator is driven by the real write result, not by a timer, so a
     // quota-full or blocked localStorage never reads "Saved".
@@ -1279,6 +1291,10 @@ const en: Strings = {
   },
   addDialog: {
     title: 'Add a polytomy',
+    targetLabel: 'Add children to',
+    rootFallback: (rootName: string) =>
+      `No node selected — children will be added to the root (${rootName})`,
+    targetMissing: 'The target node no longer exists — nothing was added',
     countLabel: 'Number of children',
     polytomyType: 'Polytomy type',
     hardPolytomy: 'Hard polytomy (simultaneous split)',

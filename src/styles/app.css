@@ -329,19 +329,25 @@ body {
   margin: 0 4px;
 }
 
-/* Help actions swap their labels for icons below 1440px. With labels the two
-   header segments want ~1620px in English, so at the default 1280px window the
-   toolbar was already overflowing — and the view-mode segment (Standard /
-   Reconciliation) was the item that gave way. `.btn svg` further down also
-   matches these icons, hence the `.btn` prefix for specificity. */
-.btn.menubar-help svg {
-  display: none;
+/* Help menu: ONE "?" trigger (shortcuts / both tours / About) instead of three
+   labelled buttons — BUG-10 caps the header at ten clickable targets.
+   Above 1440px the trigger also carries the word 帮助 / Help; below that width
+   the label and the caret drop away, keeping the same responsive behaviour the
+   three separate help buttons used to have while costing one target. */
+.btn.menubar-help-btn {
+  gap: 5px;
+}
+.btn.menubar-help-btn .menubar-help-label {
+  font-weight: 600;
+}
+.btn.menubar-help-btn .menubar-help-caret {
+  opacity: 0.6;
+  width: 12px;
+  height: 12px;
 }
 @media (max-width: 1439px) {
-  .btn.menubar-help svg {
-    display: inline-block;
-  }
-  .btn.menubar-help .menubar-help-label {
+  .btn.menubar-help-btn .menubar-help-label,
+  .btn.menubar-help-btn .menubar-help-caret {
     display: none;
   }
 }
@@ -363,6 +369,49 @@ body {
   background: var(--accent);
   transform: rotate(45deg);
   box-shadow: 0 0 8px rgba(45, 125, 95, 0.3);
+}
+
+/* === Responsive header (BUG-9) ===
+   The app is a desktop-first editor, but the chrome must never widen the
+   document below 1024px either — the JS narrow mode (App.tsx isNarrow) already
+   turns the side panels into overlays and the module rail into a bottom tab bar.
+   These rules only drop non-essential header text; every action stays reachable
+   (the toolbar scrolls horizontally when its row does not fit). */
+@media (max-width: 900px) {
+  /* Project name is context, not a control — the tab title already carries it. */
+  .hint.project-name,
+  .project-name {
+    display: none;
+  }
+}
+/* Narrow mode (<1024 matches App.tsx's NARROW_THRESHOLD): the panel-toggle
+   buttons sit at the canvas top corners, so the legend moves clear of the left
+   one instead of being covered by it. `.app` prefix outranks the base
+   `.legend-toggle` rule that is defined later in this file. */
+@media (max-width: 1023px) {
+  .app .legend-toggle,
+  .app .legend-card {
+    left: 48px;
+  }
+}
+@media (max-width: 640px) {
+  /* Wordmark → dot only: the menu bar must fit a phone-width viewport so the
+     document (not just the toolbar) has no horizontal overflow. */
+  .brand-name {
+    display: none;
+  }
+  .menubar {
+    padding: 7px 8px;
+    gap: 4px;
+  }
+  .toolbar {
+    padding: 7px 8px;
+    gap: 6px;
+  }
+  .prefs-trigger-label,
+  .prefs-caret {
+    display: none;
+  }
 }
 
 /* === Toolbar === */
@@ -608,11 +657,73 @@ body {
   margin: 4px 2px;
 }
 
+/* === Preferences dropdown (language + theme, BUG-10) === */
+/* One trigger replaces the 2-button language toggle and the 3-button theme
+   toggle, which together cost five of the header's ten-target budget. */
+.prefs-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.prefs-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+.prefs-trigger .prefs-caret {
+  opacity: 0.6;
+  width: 12px;
+  height: 12px;
+}
+.prefs-trigger-label {
+  font-weight: 600;
+}
+.prefs-panel {
+  max-height: min(420px, calc(100vh - 80px));
+  overflow-y: auto;
+}
+.menu-section-label {
+  padding: 6px 10px 3px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.prefs-item {
+  justify-content: flex-start;
+  padding: 6px 10px;
+}
+.prefs-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.prefs-check {
+  width: 12px;
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 700;
+}
+.prefs-item-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+.prefs-item-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* === Body & Canvas === */
 .body {
   flex: 1;
   display: flex;
   min-height: 0;
+  /* Containing block for the narrow-screen overlay panels and the panel-toggle
+     buttons: both belong to the canvas row (between the header and the bottom
+     tab bar), not to the viewport. */
+  position: relative;
 }
 .canvas-host {
   position: relative;
@@ -760,10 +871,16 @@ body {
 .panel-right {
   border-left: 1px solid var(--border);
 }
+/* Narrow-screen overlay panels sit BETWEEN the header and the bottom chrome.
+   They are positioned against `.body` (the canvas row) rather than the viewport:
+   the old `position: fixed; top: 70px; bottom: 28px` predicted neither the
+   header's real height (43–58px, the toolbar grows a scrollbar when it
+   overflows) nor the bottom module tab bar, so the inspector covered the
+   header's lower edge and the right end of the bottom tabs. */
 .panel.overlay {
-  position: fixed;
-  top: 70px;
-  bottom: 28px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
   z-index: 30;
   box-shadow: var(--shadow-lg);
   background: var(--surface);
@@ -829,6 +946,19 @@ body {
   z-index: 5;
   transition: background var(--ease-fast);
 }
+/* BUG-6: the visible separator stays 5px, but the interactive strip is widened
+   to 13px (5px bar + 4px into each neighbour) with a transparent pseudo-element.
+   A wider flex-basis would change the saved panel split, and hit testing on a
+   pseudo-element still targets its originating element, so pointerdown anywhere
+   in the extra 4px reaches the .resizer handler. */
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
 .resizer::before {
   content: '';
   position: absolute;
@@ -838,9 +968,14 @@ body {
   width: 1px;
   background: var(--border);
   transition: background var(--ease-fast);
+  /* Keep the divider line above the ::after hover tint. */
+  z-index: 1;
 }
 .resizer:hover { background: var(--accent-weak); }
-.resizer:hover::before { background: var(--border-strong); }
+/* Tint the whole 13px hit strip, not just the 5px gap, and thicken/darken the
+   divider line so the drag affordance is actually visible. */
+.resizer:hover::after { background: var(--accent-weak); }
+.resizer:hover::before { background: var(--accent); width: 2px; }
 
 /* During panel drag we disable ALL transitions so width changes are instant
    and the browser doesn't animate every pointermove frame (janky dragging). */
@@ -2817,6 +2952,47 @@ pointer-events: auto;
   white-space: nowrap;
 }
 
+/* === Narrow-screen advisory (BUG-9) ===
+   Shown once at ≤640px until "continue anyway" is acknowledged; sits above the
+   app but is dismissible with Escape or the single primary action. */
+.narrow-hint {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.narrow-hint-card {
+  width: min(380px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: 22px 24px;
+}
+.narrow-hint-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.narrow-hint-desc {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 18px;
+}
+.narrow-hint-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* === First-run tour === */
 .tour-backdrop {
   position: fixed;
@@ -2841,6 +3017,7 @@ pointer-events: auto;
 .tour-card {
   position: absolute;
   width: 340px;
+  max-width: calc(100vw - 24px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -2872,6 +3049,10 @@ pointer-events: auto;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  /* The workflow finish card offers three actions (replay / shortcuts / done);
+     wrap instead of clipping when a translated label is long. */
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 /* === Confirm dialog === */
@@ -2936,7 +3117,7 @@ pointer-events: auto;
   white-space: nowrap;
 }
 
-/* === Number field inline validation === */
+/* === Number field inline validation + visible unit decoration === */
 .number-wrap {
   display: flex;
   flex-direction: column;
@@ -2944,10 +3125,40 @@ pointer-events: auto;
   min-width: 0;
   gap: 2px;
 }
-.number-wrap > input[type='number'] {
+.number-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.number-input-row > input[type='number'] {
+  flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   height: 30px;
   box-sizing: border-box;
+}
+/* The unit is a readable suffix, not a placeholder: it stays visible while a
+   value is present (whichever side it is placed on). Muted chip styling keeps
+   it secondary to the number and stops a long unit from stealing input width. */
+.number-unit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+.number-input-row.unit-prefix > .number-unit {
+  order: -1;
 }
 .field-error {
   font-size: var(--text-2xs);
@@ -3003,6 +3214,98 @@ input.has-error {
   padding: 0 7px;
   margin-left: 4px;
   flex-shrink: 0;
+}
+
+/* === Collapsed-section value preview (Section `summary`) ===
+   A folded inspector group shows its current values on a second header line —
+   a colour dot, a line sample or a short value list — instead of only an opaque
+   "N items" count. The preview renders only while collapsed, so it never
+   duplicates the fields of the open body. */
+.section-toggle.has-summary {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+.section-title {
+  min-width: 0;
+}
+.section-summary {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  /* Line up under the title text, past the ::before state bar (3px + gap). */
+  margin-left: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  /* The header title is uppercase + tracked-out; the value line is not. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+.summary-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+.summary-line {
+  width: 18px;
+  border-top: 2px solid var(--muted);
+  flex-shrink: 0;
+}
+.summary-em {
+  color: var(--text);
+  font-weight: 600;
+}
+.summary-sep {
+  color: var(--muted-2);
+}
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Inspector save-semantics note: inspector edits apply live and auto-save; the
+   toolbar Save writes the project FILE. Muted and non-interactive so it reads
+   as panel guidance, not as a control. */
+.inspector-autosave-hint {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+.inspector-autosave-hint::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--c-success);
+}
+.hint-tip {
+  margin-top: 6px;
 }
 
 /* === Status bar MRCA hint === */
@@ -3233,6 +3536,15 @@ input.has-error {
    shrinking view-mode segment slid the Reconciliation button out of the box
    and left only "Standard view" — wrapped onto two lines — on screen. */
 .toolbar > .seg {
+  flex-shrink: 0;
+}
+/* The undo/redo pair and the Save / Preferences controls follow the same
+   "never shrink, scroll instead" rule. Without it the undo group was squeezed
+   to two wrapped rows on a 768px window, which stretched the whole header from
+   48px to 82px tall. */
+.toolbar > .actions-group,
+.toolbar > .dropdown,
+.toolbar > .header-save {
   flex-shrink: 0;
 }
 .seg-btn {

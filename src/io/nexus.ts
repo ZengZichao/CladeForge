@@ -1,10 +1,13 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // NEXUS support. Reads EVERY `TREE` statement from the TREES block (honouring an
 // optional TRANSLATE table) and writes a TAXA + TREES block, plus optional
 // CHARACTERS / ASSUMPTIONS / MrBayes / BEAST blocks.
 //
 // Parsing is defensive but NOT lossy where it matters: comments are masked
 // rather than deleted, so a `[&NHX:…]` / `[&date=…]` node annotation inside the
-// TREES block survives into `node.meta.comment` exactly as it does on the plain
+// TREES block survives into the ordered array `node.meta.comments` — every
+// comment on the node, oldest first, never just the last one (the single-string
+// `node.meta.comment` is read only for legacy documents) — exactly as it does on the plain
 // Newick path. The masking keeps the string length identical, so
 // statement boundaries (`;`, `BEGIN … END;`) are located on the masked copy —
 // immune to a `;` or `,` inside a comment or a quoted label — while the text
