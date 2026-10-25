@@ -13,7 +13,7 @@ describe('buildRScript', () => {
     expect(script).toContain('tip.label = c(');
     expect(script).toContain('Nnode = ');
     expect(script).not.toContain('read.tree');
-    expect(script).toContain('Pakicetus');
+    expect(script).toContain('Taxon_G');
     // Character + state labels present (app language defaults to Chinese)
     expect(script).toContain('栖息地');
     expect(script).toContain('陆生');
@@ -31,7 +31,7 @@ describe('buildRScript', () => {
     );
     expect(script).not.toContain('cost = NULL'); // the character does declare one
     // Named tip assignment (R syntax)
-    expect(script).toMatch(/"Pakicetus" = "陆生"/);
+    expect(script).toMatch(/"Taxon_G" = "陆生"/);
   });
 
   it('only depends on ape and defines the parsimony + Mk ASR functions', () => {
@@ -200,8 +200,8 @@ describe('buildRScript', () => {
     const p = createSampleProject();
     const tips = Object.values(p.nodes).filter((n) => n.childrenIds.length === 0);
     const char = p.characters.find((x) => x.type === 'discrete' && x.states.length > 0)!;
-    tips[0].label = 'Escherichia';
-    tips[1].label = 'Escherichia'; // deliberate collision
+    tips[0].label = 'Taxon_A';
+    tips[1].label = 'Taxon_A'; // deliberate collision
     tips[2].label = ''; // deliberate blank
     for (const t of tips) t.charStates = { ...t.charStates, [char.id]: char.states[0].id };
     const script = buildRScript(p);
@@ -215,6 +215,6 @@ describe('buildRScript', () => {
         .filter(Boolean),
     );
     for (const n of names) expect(stateKeys).toContain(n);
-    expect(names).toContain('Escherichia_2');
+    expect(names).toContain('Taxon_A_2');
   });
 });

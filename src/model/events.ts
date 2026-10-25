@@ -6,7 +6,7 @@
 // event may carry a confidence level and supporting / opposing evidence.
 // Nothing here is inferred — events are asserted by the user.
 
-import type { EvolutionaryEvent, EventId, NodeId, Project } from './types';
+import type { EventMarkerShape, EvolutionaryEvent, EventId, NodeId, Project } from './types';
 import { newId } from './treeOps';
 import { tr } from '../ui/strings';
 
@@ -42,6 +42,82 @@ export interface EventTypeDef {
 export const EVENT_BADGE_RADIUS = 8;
 /** Two uppercase letters need a smaller size than a single pictograph did. */
 export const EVENT_CODE_FONT_SIZE = 7.5;
+
+/**
+ * Badge shapes the event editor offers, with display labels. `circle` is the
+ * default (the historical look); the rest exist so neighbouring events stay
+ * distinguishable — including in greyscale print, where shape outlives colour.
+ */
+export const EVENT_MARKER_SHAPES: { id: EventMarkerShape; label: string; labelEn: string }[] = [
+  { id: 'circle', label: '圆形', labelEn: 'Circle' },
+  { id: 'square', label: '方形', labelEn: 'Square' },
+  { id: 'diamond', label: '菱形', labelEn: 'Diamond' },
+  { id: 'triangle', label: '三角形', labelEn: 'Triangle' },
+  { id: 'star', label: '星形', labelEn: 'Star' },
+  { id: 'hexagon', label: '六边形', labelEn: 'Hexagon' },
+];
+
+/** Bounds of the per-event size override; the editor clamps to the same range. */
+export const EVENT_MARKER_SIZE_MIN = 5;
+export const EVENT_MARKER_SIZE_MAX = 24;
+
+/** Clamp a user-entered badge size into the usable range. */
+export function clampEventMarkerSize(size: number): number {
+  if (!Number.isFinite(size)) return EVENT_BADGE_RADIUS;
+  return Math.min(EVENT_MARKER_SIZE_MAX, Math.max(EVENT_MARKER_SIZE_MIN, size));
+}
+
+/** The badge outline shape; an absent/unknown override falls back to a circle. */
+export function eventMarkerShape(event: EvolutionaryEvent): EventMarkerShape {
+  return EVENT_MARKER_SHAPES.some((s) => s.id === event.markerShape)
+    ? (event.markerShape as EventMarkerShape)
+    : 'circle';
+}
+
+/** The badge radius, with the size override clamped on use. */
+export function eventMarkerSize(event: EvolutionaryEvent): number {
+  return event.markerSize === undefined ? EVENT_BADGE_RADIUS : clampEventMarkerSize(event.markerSize);
+}
+
+/** The badge outline colour: the per-event override, else the type colour. */
+export function eventMarkerColor(event: EvolutionaryEvent): string {
+  return event.markerColor || eventColor(event);
+}
+
+/**
+ * The text drawn inside the badge: the per-event override, else the type's
+ * catalogue code. Long overrides are truncated to 4 characters — the badge is
+ * a marker, not a label, and the collision planner sizes boxes off the radius.
+ */
+export function eventBadgeText(event: EvolutionaryEvent): string {
+  const text = event.markerText?.trim();
+  if (text) return text.slice(0, 4);
+  return eventCode(event);
+}
+
+/** Font size for the inner badge text, scaled with the badge radius. */
+export function eventBadgeFontSize(event: EvolutionaryEvent): number {
+  const r = eventMarkerSize(event);
+  return Math.min(11, Math.max(5.5, r * (eventBadgeText(event).length > 2 ? 0.42 : 0.94)));
+}
+
+/**
+ * Largest distance the badge's outline reaches from its centre — the radius for
+ * shapes drawn inside it, and a shape factor beyond it for triangle / diamond
+ * (whose vertices overshoot). This is what collision planning must clear, so
+ * canvas and exporter stay in agreement about how much room a badge takes.
+ */
+export function eventBadgeExtent(event: EvolutionaryEvent): number {
+  const r = eventMarkerSize(event);
+  switch (eventMarkerShape(event)) {
+    case 'triangle':
+      return r * 1.18;
+    case 'diamond':
+      return r * 1.12;
+    default:
+      return r;
+  }
+}
 
 export const EVENT_TYPES: EventTypeDef[] = [
   // 物种形成

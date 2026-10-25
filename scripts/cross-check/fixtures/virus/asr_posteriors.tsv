@@ -1,217 +1,247 @@
 character	node_key	state_index	state_label	posterior
-sample-char:virus-genome	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	0	RNA	0.5147171476
-sample-char:virus-genome	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	1	DNA	0.4852828524
-sample-char:virus-genome	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	0	RNA	0.5302530302
-sample-char:virus-genome	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	1	DNA	0.4697469698
-sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	0	RNA	0.4853960846
-sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	1	DNA	0.5146039154
-sample-char:virus-genome	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	0	RNA	0.5667886327
-sample-char:virus-genome	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	1	DNA	0.4332113673
-sample-char:virus-genome	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	0	RNA	0.5585275765
-sample-char:virus-genome	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	1	DNA	0.4414724235
-sample-char:virus-genome	N:Reovirus+Rotavirus|3	0	RNA	0.5384605833
-sample-char:virus-genome	N:Reovirus+Rotavirus|3	1	DNA	0.4615394167
-sample-char:virus-genome	N:HIV-1+HTLV-1|3	0	RNA	0.5421428441
-sample-char:virus-genome	N:HIV-1+HTLV-1|3	1	DNA	0.4578571559
-sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	0	RNA	0.3891282463
-sample-char:virus-genome	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	1	DNA	0.6108717537
-sample-char:virus-genome	N:Papillomavirus+Parvovirus|3	0	RNA	0.4451855069
-sample-char:virus-genome	N:Papillomavirus+Parvovirus|3	1	DNA	0.5548144931
-sample-char:virus-genome	N:Mimivirus|2	0	RNA	0.4678905958
-sample-char:virus-genome	N:Mimivirus|2	1	DNA	0.5321094042
-sample-char:virus-genome	N:Foot-and-mouth+Poliovirus|3	0	RNA	0.6634785147
-sample-char:virus-genome	N:Foot-and-mouth+Poliovirus|3	1	DNA	0.3365214853
-sample-char:virus-genome	N:MERS-CoV+SARS-CoV-2|3	0	RNA	0.6817681211
-sample-char:virus-genome	N:MERS-CoV+SARS-CoV-2|3	1	DNA	0.3182318789
-sample-char:virus-genome	T:Tobacco mosaic virus	0	RNA	1.000000000
-sample-char:virus-genome	T:Tobacco mosaic virus	1	DNA	0.000000000
-sample-char:virus-genome	N:Ebola virus+Measles virus+Rhabdovirus|4	0	RNA	0.7798514708
-sample-char:virus-genome	N:Ebola virus+Measles virus+Rhabdovirus|4	1	DNA	0.2201485292
-sample-char:virus-genome	T:Influenza A	0	RNA	1.000000000
-sample-char:virus-genome	T:Influenza A	1	DNA	0.000000000
-sample-char:virus-genome	T:Rotavirus	0	RNA	1.000000000
-sample-char:virus-genome	T:Rotavirus	1	DNA	0.000000000
-sample-char:virus-genome	T:Reovirus	0	RNA	1.000000000
-sample-char:virus-genome	T:Reovirus	1	DNA	0.000000000
-sample-char:virus-genome	T:HIV-1	0	RNA	1.000000000
-sample-char:virus-genome	T:HIV-1	1	DNA	0.000000000
-sample-char:virus-genome	T:HTLV-1	0	RNA	1.000000000
-sample-char:virus-genome	T:HTLV-1	1	DNA	0.000000000
-sample-char:virus-genome	N:HSV-1+Varicella-zoster|3	0	RNA	0.2683779296
-sample-char:virus-genome	N:HSV-1+Varicella-zoster|3	1	DNA	0.7316220704
-sample-char:virus-genome	N:Lambda phage+T4 phage|3	0	RNA	0.2450600056
-sample-char:virus-genome	N:Lambda phage+T4 phage|3	1	DNA	0.7549399944
-sample-char:virus-genome	T:Adenovirus	0	RNA	0.000000000
-sample-char:virus-genome	T:Adenovirus	1	DNA	1.000000000
-sample-char:virus-genome	T:Papillomavirus	0	RNA	0.000000000
-sample-char:virus-genome	T:Papillomavirus	1	DNA	1.000000000
-sample-char:virus-genome	T:Parvovirus	0	RNA	0.000000000
-sample-char:virus-genome	T:Parvovirus	1	DNA	1.000000000
-sample-char:virus-genome	T:Mimivirus	0	RNA	0.000000000
-sample-char:virus-genome	T:Mimivirus	1	DNA	1.000000000
-sample-char:virus-genome	T:Poliovirus	0	RNA	1.000000000
-sample-char:virus-genome	T:Poliovirus	1	DNA	0.000000000
-sample-char:virus-genome	T:Foot-and-mouth	0	RNA	1.000000000
-sample-char:virus-genome	T:Foot-and-mouth	1	DNA	0.000000000
-sample-char:virus-genome	T:SARS-CoV-2	0	RNA	1.000000000
-sample-char:virus-genome	T:SARS-CoV-2	1	DNA	0.000000000
-sample-char:virus-genome	T:MERS-CoV	0	RNA	1.000000000
-sample-char:virus-genome	T:MERS-CoV	1	DNA	0.000000000
-sample-char:virus-genome	T:Measles virus	0	RNA	1.000000000
-sample-char:virus-genome	T:Measles virus	1	DNA	0.000000000
-sample-char:virus-genome	T:Ebola virus	0	RNA	1.000000000
-sample-char:virus-genome	T:Ebola virus	1	DNA	0.000000000
-sample-char:virus-genome	T:Rhabdovirus	0	RNA	1.000000000
-sample-char:virus-genome	T:Rhabdovirus	1	DNA	0.000000000
-sample-char:virus-genome	T:HSV-1	0	RNA	0.000000000
-sample-char:virus-genome	T:HSV-1	1	DNA	1.000000000
-sample-char:virus-genome	T:Varicella-zoster	0	RNA	0.000000000
-sample-char:virus-genome	T:Varicella-zoster	1	DNA	1.000000000
-sample-char:virus-genome	T:Lambda phage	0	RNA	0.000000000
-sample-char:virus-genome	T:Lambda phage	1	DNA	1.000000000
-sample-char:virus-genome	T:T4 phage	0	RNA	0.000000000
-sample-char:virus-genome	T:T4 phage	1	DNA	1.000000000
-sample-char:virus-host	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	0	动物	0.2504443436
-sample-char:virus-host	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	1	细菌	0.2498787630
-sample-char:virus-host	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	2	植物	0.2498384024
-sample-char:virus-host	N:Adenovirus+Ebola virus+Foot-and-mouth+HIV-1+HSV-1+HTLV-1+Influenza A+Lambda phage+MERS-CoV+Measles virus+Mimivirus+Papillomavirus+Parvovirus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+T4 phage+Tobacco mosaic virus+Varicella-zoster|36	3	原生生物（阿米巴）	0.2498384909
-sample-char:virus-host	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	0	动物	0.2506089551
-sample-char:virus-host	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	1	细菌	0.2498011579
-sample-char:virus-host	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	2	植物	0.2498134893
-sample-char:virus-host	N:Ebola virus+Foot-and-mouth+HIV-1+HTLV-1+Influenza A+MERS-CoV+Measles virus+Poliovirus+Reovirus+Rhabdovirus+Rotavirus+SARS-CoV-2+Tobacco mosaic virus|21	3	原生生物（阿米巴）	0.2497763976
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	0	动物	0.2504224308
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	1	细菌	0.2499580206
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	2	植物	0.2497680324
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+Mimivirus+Papillomavirus+Parvovirus+T4 phage+Varicella-zoster|14	3	原生生物（阿米巴）	0.2498515162
-sample-char:virus-host	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	0	动物	0.2519691082
-sample-char:virus-host	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	1	细菌	0.2491193257
-sample-char:virus-host	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	2	植物	0.2497944121
-sample-char:virus-host	N:Foot-and-mouth+MERS-CoV+Poliovirus+SARS-CoV-2+Tobacco mosaic virus|8	3	原生生物（阿米巴）	0.2491171540
-sample-char:virus-host	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	0	动物	0.2527777862
-sample-char:virus-host	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	1	细菌	0.2490743562
-sample-char:virus-host	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	2	植物	0.2490752042
-sample-char:virus-host	N:Ebola virus+Influenza A+Measles virus+Rhabdovirus|6	3	原生生物（阿米巴）	0.2490726535
-sample-char:virus-host	N:Reovirus+Rotavirus|3	0	动物	0.2516914408
-sample-char:virus-host	N:Reovirus+Rotavirus|3	1	细菌	0.2494364101
-sample-char:virus-host	N:Reovirus+Rotavirus|3	2	植物	0.2494370760
-sample-char:virus-host	N:Reovirus+Rotavirus|3	3	原生生物（阿米巴）	0.2494350731
-sample-char:virus-host	N:HIV-1+HTLV-1|3	0	动物	0.2521436456
-sample-char:virus-host	N:HIV-1+HTLV-1|3	1	细菌	0.2492856268
-sample-char:virus-host	N:HIV-1+HTLV-1|3	2	植物	0.2492861487
-sample-char:virus-host	N:HIV-1+HTLV-1|3	3	原生生物（阿米巴）	0.2492845789
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	0	动物	0.2541215451
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	1	细菌	0.2518287957
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	2	植物	0.2470230784
-sample-char:virus-host	N:Adenovirus+HSV-1+Lambda phage+T4 phage+Varicella-zoster|8	3	原生生物（阿米巴）	0.2470265808
-sample-char:virus-host	N:Papillomavirus+Parvovirus|3	0	动物	0.2544144815
-sample-char:virus-host	N:Papillomavirus+Parvovirus|3	1	细菌	0.2485317767
-sample-char:virus-host	N:Papillomavirus+Parvovirus|3	2	植物	0.2485254896
-sample-char:virus-host	N:Papillomavirus+Parvovirus|3	3	原生生物（阿米巴）	0.2485282523
-sample-char:virus-host	N:Mimivirus|2	0	动物	0.2490781421
-sample-char:virus-host	N:Mimivirus|2	1	细菌	0.2490660652
-sample-char:virus-host	N:Mimivirus|2	2	植物	0.2490611246
-sample-char:virus-host	N:Mimivirus|2	3	原生生物（阿米巴）	0.2527946680
-sample-char:virus-host	N:Foot-and-mouth+Poliovirus|3	0	动物	0.2901157181
-sample-char:virus-host	N:Foot-and-mouth+Poliovirus|3	1	细菌	0.2366225449
-sample-char:virus-host	N:Foot-and-mouth+Poliovirus|3	2	植物	0.2366392459
-sample-char:virus-host	N:Foot-and-mouth+Poliovirus|3	3	原生生物（阿米巴）	0.2366224911
-sample-char:virus-host	N:MERS-CoV+SARS-CoV-2|3	0	动物	0.3014326330
-sample-char:virus-host	N:MERS-CoV+SARS-CoV-2|3	1	细菌	0.2328515066
-sample-char:virus-host	N:MERS-CoV+SARS-CoV-2|3	2	植物	0.2328643952
-sample-char:virus-host	N:MERS-CoV+SARS-CoV-2|3	3	原生生物（阿米巴）	0.2328514651
-sample-char:virus-host	T:Tobacco mosaic virus	0	动物	0.000000000
-sample-char:virus-host	T:Tobacco mosaic virus	1	细菌	0.000000000
-sample-char:virus-host	T:Tobacco mosaic virus	2	植物	1.000000000
-sample-char:virus-host	T:Tobacco mosaic virus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	N:Ebola virus+Measles virus+Rhabdovirus|4	0	动物	0.3523020851
-sample-char:virus-host	N:Ebola virus+Measles virus+Rhabdovirus|4	1	细菌	0.2158993100
-sample-char:virus-host	N:Ebola virus+Measles virus+Rhabdovirus|4	2	植物	0.2158993250
-sample-char:virus-host	N:Ebola virus+Measles virus+Rhabdovirus|4	3	原生生物（阿米巴）	0.2158992798
-sample-char:virus-host	T:Influenza A	0	动物	1.000000000
-sample-char:virus-host	T:Influenza A	1	细菌	0.000000000
-sample-char:virus-host	T:Influenza A	2	植物	0.000000000
-sample-char:virus-host	T:Influenza A	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Rotavirus	0	动物	1.000000000
-sample-char:virus-host	T:Rotavirus	1	细菌	0.000000000
-sample-char:virus-host	T:Rotavirus	2	植物	0.000000000
-sample-char:virus-host	T:Rotavirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Reovirus	0	动物	1.000000000
-sample-char:virus-host	T:Reovirus	1	细菌	0.000000000
-sample-char:virus-host	T:Reovirus	2	植物	0.000000000
-sample-char:virus-host	T:Reovirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:HIV-1	0	动物	1.000000000
-sample-char:virus-host	T:HIV-1	1	细菌	0.000000000
-sample-char:virus-host	T:HIV-1	2	植物	0.000000000
-sample-char:virus-host	T:HIV-1	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:HTLV-1	0	动物	1.000000000
-sample-char:virus-host	T:HTLV-1	1	细菌	0.000000000
-sample-char:virus-host	T:HTLV-1	2	植物	0.000000000
-sample-char:virus-host	T:HTLV-1	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	N:HSV-1+Varicella-zoster|3	0	动物	0.3348440500
-sample-char:virus-host	N:HSV-1+Varicella-zoster|3	1	细菌	0.2218397732
-sample-char:virus-host	N:HSV-1+Varicella-zoster|3	2	植物	0.2216580222
-sample-char:virus-host	N:HSV-1+Varicella-zoster|3	3	原生生物（阿米巴）	0.2216581547
-sample-char:virus-host	N:Lambda phage+T4 phage|3	0	动物	0.2137969351
-sample-char:virus-host	N:Lambda phage+T4 phage|3	1	细菌	0.3590148196
-sample-char:virus-host	N:Lambda phage+T4 phage|3	2	植物	0.2135940726
-sample-char:virus-host	N:Lambda phage+T4 phage|3	3	原生生物（阿米巴）	0.2135941727
-sample-char:virus-host	T:Adenovirus	0	动物	1.000000000
-sample-char:virus-host	T:Adenovirus	1	细菌	0.000000000
-sample-char:virus-host	T:Adenovirus	2	植物	0.000000000
-sample-char:virus-host	T:Adenovirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Papillomavirus	0	动物	1.000000000
-sample-char:virus-host	T:Papillomavirus	1	细菌	0.000000000
-sample-char:virus-host	T:Papillomavirus	2	植物	0.000000000
-sample-char:virus-host	T:Papillomavirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Parvovirus	0	动物	1.000000000
-sample-char:virus-host	T:Parvovirus	1	细菌	0.000000000
-sample-char:virus-host	T:Parvovirus	2	植物	0.000000000
-sample-char:virus-host	T:Parvovirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Mimivirus	0	动物	0.000000000
-sample-char:virus-host	T:Mimivirus	1	细菌	0.000000000
-sample-char:virus-host	T:Mimivirus	2	植物	0.000000000
-sample-char:virus-host	T:Mimivirus	3	原生生物（阿米巴）	1.000000000
-sample-char:virus-host	T:Poliovirus	0	动物	1.000000000
-sample-char:virus-host	T:Poliovirus	1	细菌	0.000000000
-sample-char:virus-host	T:Poliovirus	2	植物	0.000000000
-sample-char:virus-host	T:Poliovirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Foot-and-mouth	0	动物	1.000000000
-sample-char:virus-host	T:Foot-and-mouth	1	细菌	0.000000000
-sample-char:virus-host	T:Foot-and-mouth	2	植物	0.000000000
-sample-char:virus-host	T:Foot-and-mouth	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:SARS-CoV-2	0	动物	1.000000000
-sample-char:virus-host	T:SARS-CoV-2	1	细菌	0.000000000
-sample-char:virus-host	T:SARS-CoV-2	2	植物	0.000000000
-sample-char:virus-host	T:SARS-CoV-2	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:MERS-CoV	0	动物	1.000000000
-sample-char:virus-host	T:MERS-CoV	1	细菌	0.000000000
-sample-char:virus-host	T:MERS-CoV	2	植物	0.000000000
-sample-char:virus-host	T:MERS-CoV	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Measles virus	0	动物	1.000000000
-sample-char:virus-host	T:Measles virus	1	细菌	0.000000000
-sample-char:virus-host	T:Measles virus	2	植物	0.000000000
-sample-char:virus-host	T:Measles virus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Ebola virus	0	动物	1.000000000
-sample-char:virus-host	T:Ebola virus	1	细菌	0.000000000
-sample-char:virus-host	T:Ebola virus	2	植物	0.000000000
-sample-char:virus-host	T:Ebola virus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Rhabdovirus	0	动物	1.000000000
-sample-char:virus-host	T:Rhabdovirus	1	细菌	0.000000000
-sample-char:virus-host	T:Rhabdovirus	2	植物	0.000000000
-sample-char:virus-host	T:Rhabdovirus	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:HSV-1	0	动物	1.000000000
-sample-char:virus-host	T:HSV-1	1	细菌	0.000000000
-sample-char:virus-host	T:HSV-1	2	植物	0.000000000
-sample-char:virus-host	T:HSV-1	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Varicella-zoster	0	动物	1.000000000
-sample-char:virus-host	T:Varicella-zoster	1	细菌	0.000000000
-sample-char:virus-host	T:Varicella-zoster	2	植物	0.000000000
-sample-char:virus-host	T:Varicella-zoster	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:Lambda phage	0	动物	0.000000000
-sample-char:virus-host	T:Lambda phage	1	细菌	1.000000000
-sample-char:virus-host	T:Lambda phage	2	植物	0.000000000
-sample-char:virus-host	T:Lambda phage	3	原生生物（阿米巴）	0.000000000
-sample-char:virus-host	T:T4 phage	0	动物	0.000000000
-sample-char:virus-host	T:T4 phage	1	细菌	1.000000000
-sample-char:virus-host	T:T4 phage	2	植物	0.000000000
-sample-char:virus-host	T:T4 phage	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-genome	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	0	RNA	0.5043988658
+sample-char:virus-genome	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	1	DNA	0.4956011342
+sample-char:virus-genome	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	0	RNA	0.5090338036
+sample-char:virus-genome	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	1	DNA	0.4909661964
+sample-char:virus-genome	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	0	RNA	0.4960072902
+sample-char:virus-genome	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	1	DNA	0.5039927098
+sample-char:virus-genome	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	0	RNA	0.5377699373
+sample-char:virus-genome	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	1	DNA	0.4622300627
+sample-char:virus-genome	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	0	RNA	0.5245198993
+sample-char:virus-genome	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	1	DNA	0.4754801007
+sample-char:virus-genome	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	0	RNA	0.4632384421
+sample-char:virus-genome	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	1	DNA	0.5367615579
+sample-char:virus-genome	N:Taxon_AM+Taxon_AN+Taxon_AO|5	0	RNA	0.4669359972
+sample-char:virus-genome	N:Taxon_AM+Taxon_AN+Taxon_AO|5	1	DNA	0.5330640028
+sample-char:virus-genome	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	0	RNA	0.5382049684
+sample-char:virus-genome	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	1	DNA	0.4617950316
+sample-char:virus-genome	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	0	RNA	0.5377864618
+sample-char:virus-genome	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	1	DNA	0.4622135382
+sample-char:virus-genome	N:Taxon_X+Taxon_Y|3	0	RNA	0.5245282198
+sample-char:virus-genome	N:Taxon_X+Taxon_Y|3	1	DNA	0.4754717802
+sample-char:virus-genome	N:Taxon_AA+Taxon_Z|3	0	RNA	0.5249913398
+sample-char:virus-genome	N:Taxon_AA+Taxon_Z|3	1	DNA	0.4750086602
+sample-char:virus-genome	T:Taxon_AD	0	RNA	0.4992491864
+sample-char:virus-genome	T:Taxon_AD	1	DNA	0.5007508136
+sample-char:virus-genome	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	0	RNA	0.2419678548
+sample-char:virus-genome	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	1	DNA	0.7580321452
+sample-char:virus-genome	N:Taxon_AM+Taxon_AN|3	0	RNA	0.4659772588
+sample-char:virus-genome	N:Taxon_AM+Taxon_AN|3	1	DNA	0.5340227412
+sample-char:virus-genome	T:Taxon_AO	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AO	1	DNA	1.000000000
+sample-char:virus-genome	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	0	RNA	0.6736975231
+sample-char:virus-genome	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	1	DNA	0.3263024769
+sample-char:virus-genome	T:Taxon_K	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_K	1	DNA	0.000000000
+sample-char:virus-genome	N:Taxon_S+Taxon_T+Taxon_U|5	0	RNA	0.6907619047
+sample-char:virus-genome	N:Taxon_S+Taxon_T+Taxon_U|5	1	DNA	0.3092380953
+sample-char:virus-genome	T:Taxon_R	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_R	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_X	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_X	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_Y	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_Y	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_Z	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_Z	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_AA	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_AA	1	DNA	0.000000000
+sample-char:virus-genome	N:Taxon_AH+Taxon_AI|3	0	RNA	0.2410998279
+sample-char:virus-genome	N:Taxon_AH+Taxon_AI|3	1	DNA	0.7589001721
+sample-char:virus-genome	N:Taxon_AJ+Taxon_AK|3	0	RNA	0.2351580892
+sample-char:virus-genome	N:Taxon_AJ+Taxon_AK|3	1	DNA	0.7648419108
+sample-char:virus-genome	T:Taxon_AM	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AM	1	DNA	1.000000000
+sample-char:virus-genome	T:Taxon_AN	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AN	1	DNA	1.000000000
+sample-char:virus-genome	N:Taxon_L+Taxon_M|3	0	RNA	0.6740913647
+sample-char:virus-genome	N:Taxon_L+Taxon_M|3	1	DNA	0.3259086353
+sample-char:virus-genome	N:Taxon_N+Taxon_O|3	0	RNA	0.6779154422
+sample-char:virus-genome	N:Taxon_N+Taxon_O|3	1	DNA	0.3220845578
+sample-char:virus-genome	N:Taxon_T+Taxon_U|3	0	RNA	0.6959795397
+sample-char:virus-genome	N:Taxon_T+Taxon_U|3	1	DNA	0.3040204603
+sample-char:virus-genome	T:Taxon_S	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_S	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_AH	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AH	1	DNA	1.000000000
+sample-char:virus-genome	T:Taxon_AI	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AI	1	DNA	1.000000000
+sample-char:virus-genome	T:Taxon_AJ	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AJ	1	DNA	1.000000000
+sample-char:virus-genome	T:Taxon_AK	0	RNA	0.000000000
+sample-char:virus-genome	T:Taxon_AK	1	DNA	1.000000000
+sample-char:virus-genome	T:Taxon_L	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_L	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_M	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_M	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_N	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_N	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_O	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_O	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_T	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_T	1	DNA	0.000000000
+sample-char:virus-genome	T:Taxon_U	0	RNA	1.000000000
+sample-char:virus-genome	T:Taxon_U	1	DNA	0.000000000
+sample-char:virus-host	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	0	动物	0.2500233819
+sample-char:virus-host	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	1	细菌	0.2499935732
+sample-char:virus-host	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	2	植物	0.2499915228
+sample-char:virus-host	N:Taxon_AA+Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|41	3	原生生物（阿米巴）	0.2499915221
+sample-char:virus-host	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	0	动物	0.2500373706
+sample-char:virus-host	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	1	细菌	0.2499873486
+sample-char:virus-host	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	2	植物	0.2499890326
+sample-char:virus-host	N:Taxon_AA+Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U+Taxon_X+Taxon_Y+Taxon_Z|25	3	原生生物（阿米巴）	0.2499862481
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	0	动物	0.2500216286
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	1	细菌	0.2499997668
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	2	植物	0.2499859622
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK+Taxon_AM+Taxon_AN+Taxon_AO|15	3	原生生物（阿米巴）	0.2499926424
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	0	动物	0.2504456180
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	1	细菌	0.2498264384
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	2	植物	0.2499015623
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O+Taxon_R+Taxon_S+Taxon_T+Taxon_U|17	3	原生生物（阿米巴）	0.2498263813
+sample-char:virus-host	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	0	动物	0.2504218707
+sample-char:virus-host	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	1	细菌	0.2498593710
+sample-char:virus-host	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	2	植物	0.2498594180
+sample-char:virus-host	N:Taxon_AA+Taxon_X+Taxon_Y+Taxon_Z|7	3	原生生物（阿米巴）	0.2498593404
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	0	动物	0.2504079057
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	1	细菌	0.2504135245
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	2	植物	0.2495892266
+sample-char:virus-host	N:Taxon_AD+Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|9	3	原生生物（阿米巴）	0.2495893432
+sample-char:virus-host	N:Taxon_AM+Taxon_AN+Taxon_AO|5	0	动物	0.2506095952
+sample-char:virus-host	N:Taxon_AM+Taxon_AN+Taxon_AO|5	1	细菌	0.2496346394
+sample-char:virus-host	N:Taxon_AM+Taxon_AN+Taxon_AO|5	2	植物	0.2496344331
+sample-char:virus-host	N:Taxon_AM+Taxon_AN+Taxon_AO|5	3	原生生物（阿米巴）	0.2501213323
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	0	动物	0.2504479715
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	1	细菌	0.2498214207
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	2	植物	0.2499092360
+sample-char:virus-host	N:Taxon_K+Taxon_L+Taxon_M+Taxon_N+Taxon_O|9	3	原生生物（阿米巴）	0.2498213718
+sample-char:virus-host	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	0	动物	0.2505038096
+sample-char:virus-host	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	1	细菌	0.2498163793
+sample-char:virus-host	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	2	植物	0.2498634677
+sample-char:virus-host	N:Taxon_R+Taxon_S+Taxon_T+Taxon_U|7	3	原生生物（阿米巴）	0.2498163434
+sample-char:virus-host	N:Taxon_X+Taxon_Y|3	0	动物	0.2504268756
+sample-char:virus-host	N:Taxon_X+Taxon_Y|3	1	细菌	0.2498577035
+sample-char:virus-host	N:Taxon_X+Taxon_Y|3	2	植物	0.2498577436
+sample-char:virus-host	N:Taxon_X+Taxon_Y|3	3	原生生物（阿米巴）	0.2498576772
+sample-char:virus-host	N:Taxon_AA+Taxon_Z|3	0	动物	0.2504683472
+sample-char:virus-host	N:Taxon_AA+Taxon_Z|3	1	细菌	0.2498438809
+sample-char:virus-host	N:Taxon_AA+Taxon_Z|3	2	植物	0.2498439103
+sample-char:virus-host	N:Taxon_AA+Taxon_Z|3	3	原生生物（阿米巴）	0.2498438616
+sample-char:virus-host	T:Taxon_AD	0	动物	0.2500001702
+sample-char:virus-host	T:Taxon_AD	1	细菌	0.2500001725
+sample-char:virus-host	T:Taxon_AD	2	植物	0.2499998287
+sample-char:virus-host	T:Taxon_AD	3	原生生物（阿米巴）	0.2499998287
+sample-char:virus-host	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	0	动物	0.2699595784
+sample-char:virus-host	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	1	细菌	0.2702535082
+sample-char:virus-host	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	2	植物	0.2298934556
+sample-char:virus-host	N:Taxon_AH+Taxon_AI+Taxon_AJ+Taxon_AK|7	3	原生生物（阿米巴）	0.2298934578
+sample-char:virus-host	N:Taxon_AM+Taxon_AN|3	0	动物	0.2507503193
+sample-char:virus-host	N:Taxon_AM+Taxon_AN|3	1	细菌	0.2496111273
+sample-char:virus-host	N:Taxon_AM+Taxon_AN|3	2	植物	0.2496109508
+sample-char:virus-host	N:Taxon_AM+Taxon_AN|3	3	原生生物（阿米巴）	0.2500276025
+sample-char:virus-host	T:Taxon_AO	0	动物	0.000000000
+sample-char:virus-host	T:Taxon_AO	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AO	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AO	3	原生生物（阿米巴）	1.000000000
+sample-char:virus-host	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	0	动物	0.2747174050
+sample-char:virus-host	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	1	细菌	0.2417605548
+sample-char:virus-host	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	2	植物	0.2417614858
+sample-char:virus-host	N:Taxon_L+Taxon_M+Taxon_N+Taxon_O|7	3	原生生物（阿米巴）	0.2417605543
+sample-char:virus-host	T:Taxon_K	0	动物	0.000000000
+sample-char:virus-host	T:Taxon_K	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_K	2	植物	1.000000000
+sample-char:virus-host	T:Taxon_K	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	N:Taxon_S+Taxon_T+Taxon_U|5	0	动物	0.2906921646
+sample-char:virus-host	N:Taxon_S+Taxon_T+Taxon_U|5	1	细菌	0.2364358432
+sample-char:virus-host	N:Taxon_S+Taxon_T+Taxon_U|5	2	植物	0.2364361493
+sample-char:virus-host	N:Taxon_S+Taxon_T+Taxon_U|5	3	原生生物（阿米巴）	0.2364358430
+sample-char:virus-host	T:Taxon_R	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_R	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_R	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_R	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_X	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_X	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_X	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_X	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_Y	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_Y	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_Y	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_Y	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_Z	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_Z	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_Z	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_Z	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AA	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_AA	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AA	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AA	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	N:Taxon_AH+Taxon_AI|3	0	动物	0.2767599572
+sample-char:virus-host	N:Taxon_AH+Taxon_AI|3	1	细菌	0.2639395581
+sample-char:virus-host	N:Taxon_AH+Taxon_AI|3	2	植物	0.2296502414
+sample-char:virus-host	N:Taxon_AH+Taxon_AI|3	3	原生生物（阿米巴）	0.2296502433
+sample-char:virus-host	N:Taxon_AJ+Taxon_AK|3	0	动物	0.2519908190
+sample-char:virus-host	N:Taxon_AJ+Taxon_AK|3	1	细菌	0.2929524650
+sample-char:virus-host	N:Taxon_AJ+Taxon_AK|3	2	植物	0.2275283573
+sample-char:virus-host	N:Taxon_AJ+Taxon_AK|3	3	原生生物（阿米巴）	0.2275283587
+sample-char:virus-host	T:Taxon_AM	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_AM	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AM	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AM	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AN	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_AN	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AN	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AN	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	N:Taxon_L+Taxon_M|3	0	动物	0.2750062853
+sample-char:virus-host	N:Taxon_L+Taxon_M|3	1	细菌	0.2416643069
+sample-char:virus-host	N:Taxon_L+Taxon_M|3	2	植物	0.2416651014
+sample-char:virus-host	N:Taxon_L+Taxon_M|3	3	原生生物（阿米巴）	0.2416643064
+sample-char:virus-host	N:Taxon_N+Taxon_O|3	0	动物	0.2774349767
+sample-char:virus-host	N:Taxon_N+Taxon_O|3	1	细菌	0.2408548152
+sample-char:virus-host	N:Taxon_N+Taxon_O|3	2	植物	0.2408553932
+sample-char:virus-host	N:Taxon_N+Taxon_O|3	3	原生生物（阿米巴）	0.2408548149
+sample-char:virus-host	N:Taxon_T+Taxon_U|3	0	动物	0.2932976845
+sample-char:virus-host	N:Taxon_T+Taxon_U|3	1	细菌	0.2355673518
+sample-char:virus-host	N:Taxon_T+Taxon_U|3	2	植物	0.2355676121
+sample-char:virus-host	N:Taxon_T+Taxon_U|3	3	原生生物（阿米巴）	0.2355673516
+sample-char:virus-host	T:Taxon_S	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_S	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_S	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_S	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AH	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_AH	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AH	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AH	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AI	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_AI	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_AI	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AI	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AJ	0	动物	0.000000000
+sample-char:virus-host	T:Taxon_AJ	1	细菌	1.000000000
+sample-char:virus-host	T:Taxon_AJ	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AJ	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_AK	0	动物	0.000000000
+sample-char:virus-host	T:Taxon_AK	1	细菌	1.000000000
+sample-char:virus-host	T:Taxon_AK	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_AK	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_L	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_L	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_L	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_L	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_M	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_M	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_M	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_M	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_N	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_N	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_N	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_N	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_O	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_O	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_O	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_O	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_T	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_T	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_T	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_T	3	原生生物（阿米巴）	0.000000000
+sample-char:virus-host	T:Taxon_U	0	动物	1.000000000
+sample-char:virus-host	T:Taxon_U	1	细菌	0.000000000
+sample-char:virus-host	T:Taxon_U	2	植物	0.000000000
+sample-char:virus-host	T:Taxon_U	3	原生生物（阿米巴）	0.000000000

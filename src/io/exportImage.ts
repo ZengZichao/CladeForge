@@ -39,12 +39,14 @@ import {
 } from '../model/types';
 import { continuousRange, detectTransitions, findCharacter, nodeCharacterColor } from '../model/characters';
 import {
-  EVENT_BADGE_RADIUS,
-  EVENT_CODE_FONT_SIZE,
-  eventCode,
-  eventColor,
+  eventBadgeFontSize,
+  eventBadgeText,
+  eventMarkerColor,
+  eventMarkerShape,
+  eventMarkerSize,
   findEventType,
 } from '../model/events';
+import { eventMarkerPath } from '../canvas/markerGeometry';
 import type { AsrResult } from '../model/asr';
 import {
   C_UNKNOWN,
@@ -539,14 +541,22 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     for (const e of project.events) {
       const a = anchors.get(e.id);
       if (!a) continue;
-      const color = eventColor(e);
+      // Same per-event style resolution as the canvas EventLayer (shape / size /
+      // colour / inner text with catalogue defaults), so exported figures cannot
+      // disagree with the screen about how a badge is drawn.
+      const r = eventMarkerSize(e);
+      const color = eventMarkerColor(e);
       const sw = e.confidence === 'high' ? 2.5 : 2;
       const cdash = e.confidence === 'low' ? ' stroke-dasharray="2 2"' : '';
+      const join = ' stroke-linejoin="round"';
       parts.push(
-        `<circle cx="${a.x}" cy="${a.y}" r="${EVENT_BADGE_RADIUS}" fill="#ffffff" stroke="${safeColour(color)}" stroke-width="${sw}"${cdash}/>`,
+        `<path d="${eventMarkerPath(eventMarkerShape(e), a.x, a.y, r)}" fill="#ffffff" stroke="${safeColour(color)}" stroke-width="${sw}"${cdash}${join}/>`,
       );
+      // The canvas centres text with dominant-baseline; plain SVG text has no
+      // such attribute in every renderer, so shift the baseline by ~0.34 em.
+      const fs = eventBadgeFontSize(e);
       parts.push(
-        `<text x="${a.x}" y="${a.y + 2.7}" text-anchor="middle" font-size="${EVENT_CODE_FONT_SIZE}" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(eventCode(e))}</text>`,
+        `<text x="${a.x}" y="${(a.y + fs * 0.34).toFixed(2)}" text-anchor="middle" font-size="${fs.toFixed(2)}" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(eventBadgeText(e))}</text>`,
       );
     }
   }

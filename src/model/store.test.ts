@@ -3,14 +3,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { useStore, isReconActive } from './store';
 import { IDENTITY_VIEW } from './types';
-import { createEmptyProject, createArchaeaSample } from './sampleTree';
+import { createEmptyProject, createDeepDomainSample } from './sampleTree';
 import { addChildren, deleteNode, moveNode } from './treeOps';
 
 const s = () => useStore.getState();
 
 describe('relocalizeSamples (locale switch)', () => {
   it('rebuilds a PRISTINE sample document, keeping its sample identity', () => {
-    useStore.getState().openInNewTab(createArchaeaSample());
+    useStore.getState().openInNewTab(createDeepDomainSample());
     expect(s().project.sampleId).toBe('archaea');
     const before = s().project;
 
@@ -23,7 +23,7 @@ describe('relocalizeSamples (locale switch)', () => {
   });
 
   it('leaves an EDITED sample document alone (user data is not thrown away)', () => {
-    useStore.getState().openInNewTab(createArchaeaSample());
+    useStore.getState().openInNewTab(createDeepDomainSample());
     s().apply((d) => {
       addChildren(d, d.rootId, 1);
     });

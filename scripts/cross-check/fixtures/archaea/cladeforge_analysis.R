@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 古菌域演化
+# Project : 虚拟类群 · 深域辐射
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -25,11 +25,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(12, 13, 12, 14, 13, 15, 13, 16, 14, 17, 14, 1, 14, 2, 14, 3, 15, 4, 15, 5, 16, 6, 16, 7, 17, 18, 17, 19, 18, 8, 18, 9, 19, 10, 19, 11), ncol = 2, byrow = TRUE),
-    edge.length = c(500, 600, 700, 800, 200, 300, 400, 500, 2800, 2800, 2700, 2700, 600, 700, 2600, 2600, 2500, 2500),
-    Nnode = 8L,
-    tip.label = c("Thaumarchaeota", "Korarchaeota", "Nanoarchaeota", "Methanosarcina", "Methanobrevibacter", "Halobacterium", "Natronomonas", "Thermoproteus", "Pyrobaculum", "Sulfolobus", "Metallosphaera"),
-    node.label = c("Asgard", "Euryarchaeota", "Tetrarchaeota", "Methanobacteriales", "Halobacteriales", "Crenarchaeota", "Thermoproteales", "Sulfolobales")
+    edge = matrix(c(12, 13, 12, 14, 13, 15, 13, 16, 14, 17, 14, 18, 15, 1, 15, 2, 16, 3, 16, 4, 17, 19, 17, 5, 18, 6, 18, 7, 19, 20, 19, 21, 20, 8, 20, 9, 21, 10, 21, 11), ncol = 2, byrow = TRUE),
+    edge.length = c(500, 600, 700, 800, 150, 350, 2800, 2800, 2700, 2700, 50, 150, 50, 150, 600, 700, 2600, 2600, 2500, 2500),
+    Nnode = 10L,
+    tip.label = c("Taxon_N", "Taxon_O", "Taxon_P", "Taxon_Q", "Taxon_F", "Taxon_H", "Taxon_I", "Taxon_R", "Taxon_S", "Taxon_T", "Taxon_U"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_J", "Taxon_K", "Taxon_D", "Taxon_G", "Taxon_E", "Taxon_L", "Taxon_M")
   ),
   class = "phylo"
 )
@@ -62,7 +62,7 @@ characters <- list(
     states = c("产甲烷", "嗜盐光能", "硫氧化"),
     colors = c("#7c3aed", "#0ea5e9", "#f59e0b"),
     cost = NULL,
-    tips = c("Methanosarcina" = "产甲烷", "Methanobrevibacter" = "产甲烷", "Halobacterium" = "嗜盐光能", "Natronomonas" = "嗜盐光能", "Thermoproteus" = "硫氧化", "Pyrobaculum" = "硫氧化", "Sulfolobus" = "硫氧化", "Metallosphaera" = "硫氧化")
+    tips = c("Taxon_N" = "产甲烷", "Taxon_O" = "产甲烷", "Taxon_P" = "嗜盐光能", "Taxon_Q" = "嗜盐光能", "Taxon_R" = "硫氧化", "Taxon_S" = "硫氧化", "Taxon_T" = "硫氧化", "Taxon_U" = "硫氧化")
   ),
   list(
     name = "温度适应性",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("超嗜热", "嗜热", "中温"),
     colors = c("#dc2626", "#f97316", "#22c55e"),
     cost = NULL,
-    tips = c("Methanosarcina" = "中温", "Methanobrevibacter" = "中温", "Halobacterium" = "中温", "Natronomonas" = "中温", "Thermoproteus" = "超嗜热", "Pyrobaculum" = "超嗜热", "Sulfolobus" = "嗜热", "Metallosphaera" = "嗜热")
+    tips = c("Taxon_N" = "中温", "Taxon_O" = "中温", "Taxon_P" = "中温", "Taxon_Q" = "中温", "Taxon_R" = "超嗜热", "Taxon_S" = "超嗜热", "Taxon_T" = "嗜热", "Taxon_U" = "嗜热")
   )
 )
 
@@ -234,7 +234,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "古菌域演化", cex.main = 1.0)
+title(main = "虚拟类群 · 深域辐射", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

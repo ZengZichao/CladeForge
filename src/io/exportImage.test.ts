@@ -26,8 +26,8 @@ describe('exportImage', () => {
 
   it('renders taxon labels into the SVG', () => {
     const svg = exportSVGString(createSampleProject());
-    expect(svg).toContain('Pakicetus');
-    expect(svg).toContain('Pelagiceti');
+    expect(svg).toContain('Taxon_G');
+    expect(svg).toContain('Taxon_B');
   });
 
   it('adds character colouring, legend and event badges under export options', () => {
@@ -161,13 +161,15 @@ describe('exportImage — the auto-generated legend is inside the viewBox', () =
 // A fixed margin around the NODE COORDINATES alone cannot cover a long taxon name
 // running past the outermost node: it would fall outside the viewBox and be
 // cropped — in SVG, PNG and PDF alike, because both raster formats are derived
-// from this same string. `toContain('Pakicetus')` (above) cannot see a crop, so
+// from this same string. `toContain('Taxon_G')` (above) cannot see a crop, so
 // these tests measure the emitted label against the emitted viewBox.
 
-const LONG = 'Ambulocetusnatanslonggenericepithetonfortestingcropping';
+const LONG = 'Taxon_G_with_a_deliberately_long_label_for_cropping_tests';
 
 function treeWithLongLabel(orientation: 'LR' | 'RL'): Project {
-  const p = parseNewick(`((${LONG},ShortLabel),(Third,Fourth));`, 'crop');
+  // The long name is quoted: Newick reads a bare `_` as a space, and this test
+  // needs the label to round-trip verbatim (underscores intact).
+  const p = parseNewick(`(("${LONG}",ShortLabel),(Third,Fourth));`, 'crop');
   p.layout.orientation = orientation;
   return p;
 }
@@ -297,8 +299,8 @@ describe('the figure and the interface agree on one font stack', () => {
 });
 
 // --- BUG-4 follow-up: exports share the canvas annotation planner ------------
-// The screen resolves the KI/AR × "Basilosauridae" collision (and the
-// Basilosauridae × Neoceti label collision) with `eventBadgeLayout`. The exporter
+// The screen resolves the KI/AR × label collision (and the
+// squeezed-label collision) with `eventBadgeLayout`. The exporter
 // must make the same choices or the figure (SVG/PNG/PDF) would disagree with what
 // the user saw. These tests parse the emitted SVG and assert the geometry rather
 // than trusting the code path.
@@ -322,13 +324,22 @@ function parseLabelTexts(svg: string): ParsedText[] {
   return out;
 }
 
-/** Event badge circles: r == EVENT_BADGE_RADIUS and a white fill. */
+/**
+ * Event badges. Badges draw as `eventMarkerPath` outlines, not `<circle>`
+ * elements, so this parses the default circle path (radius == EVENT_BADGE_RADIUS,
+ * white fill) and recovers its centre from the two arc endpoints:
+ * `M x1 y A r r … x2 y A r r … x1 y Z`.
+ */
 function parseBadgeCircles(svg: string): { x: number; y: number }[] {
+  const r = EVENT_BADGE_RADIUS;
   const re = new RegExp(
-    `<circle cx="(-?[\\d.]+(?:e[-+]?\\d+)?)" cy="(-?[\\d.]+(?:e[-+]?\\d+)?)" r="${EVENT_BADGE_RADIUS}" fill="#ffffff"`,
+    `<path d="M (-?[\\d.]+(?:e[-+]?\\d+)?) (-?[\\d.]+(?:e[-+]?\\d+)?) A ${r} ${r} 0 1 0 (-?[\\d.]+(?:e[-+]?\\d+)?) -?[\\d.]+(?:e[-+]?\\d+)? A ${r} ${r} 0 1 0 \\1 \\2 Z" fill="#ffffff"`,
     'g',
   );
-  return [...svg.matchAll(re)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+  return [...svg.matchAll(re)].map((m) => ({
+    x: (Number(m[1]) + Number(m[3])) / 2,
+    y: Number(m[2]),
+  }));
 }
 
 /** CJK-aware glyph estimate, independent of the exporter's own 1.05 factor. */
@@ -368,12 +379,12 @@ describe('exportImage — event badges reuse the canvas collision planner (BUG-4
   ];
 
   for (const type of LAYOUTS) {
-    it(`${type}: badge circles do not intersect label text`, () => {
+    it(`${type}: badge outlines do not intersect label text`, () => {
       const svg = buildSVG(projectWithLayout(type), { showEvents: true }).svg;
       const labels = parseLabelTexts(svg);
       const badges = parseBadgeCircles(svg);
       expect(labels.length).toBeGreaterThan(5);
-      expect(badges.length).toBe(2); // KI + AR on Neoceti
+      expect(badges.length).toBe(2); // KI + AR on Taxon_D
       const half = EVENT_BADGE_RADIUS + 1.5;
       for (const b of badges) {
         const badgeBox = { minX: b.x - half, minY: b.y - half, maxX: b.x + half, maxY: b.y + half };
@@ -384,20 +395,41 @@ describe('exportImage — event badges reuse the canvas collision planner (BUG-4
     });
   }
 
-  it('phylogram: the staggered parent/child labels no longer overlap', () => {
+  /**
+   * Hand-built strictly-binary squeezed tree (long outer branch + very short
+   * inner branch) — the geometry the balanced shipped samples no longer contain,
+   * used here to prove the exporter applies the same stagger / leader plan as
+   * the canvas when labels DO collide.
+   */
+  function squeezedExportProject(type: LayoutType, withEvents: boolean): Project {
+    const p = parseNewick('("Taxon_A":10,("Taxon_B":0.05,"Taxon_C":0.05)"Taxon_D":0.2)"Taxon_R";');
+    p.layout.type = type;
+    if (withEvents) {
+      const d = Object.values(p.nodes).find((n) => n.label === 'Taxon_D')!;
+      p.events.push(
+        { id: 'ev-ki', typeId: 'key-innovation', target: 'branch', nodeId: d.id, triggers: [] },
+        { id: 'ev-ar', typeId: 'adaptive-radiation', target: 'node', nodeId: d.id, triggers: [] },
+      );
+    }
+    return p;
+  }
+
+  it('phylogram: staggered squeezed parent/child labels no longer overlap', () => {
     for (const type of ['rectangular-phylogram', 'time-calibrated'] as LayoutType[]) {
-      const svg = buildSVG(projectWithLayout(type), { showEvents: true }).svg;
+      const svg = buildSVG(squeezedExportProject(type, false), { showEvents: false }).svg;
       const labels = parseLabelTexts(svg);
-      const basilo = labels.find((t) => t.text === 'Basilosauridae')!;
-      const neoceti = labels.find((t) => t.text === 'Neoceti')!;
-      expect(intersects(textBox(basilo), textBox(neoceti)), `${type}: still overlapping`).toBe(false);
-      // The child yields (moves up one stagger step); the parent keeps its row.
-      expect(neoceti.y).toBeLessThan(basilo.y);
+      const parent = labels.find((t) => t.text === 'Taxon_D')!;
+      const child = labels.find((t) => t.text === 'Taxon_B')!;
+      expect(parent && child, `${type}: squeezed labels present`).toBeTruthy();
+      expect(intersects(textBox(parent), textBox(child)), `${type}: still overlapping`).toBe(false);
     }
   });
 
   it('ships the leader line and branch anchor dot for a displaced stack', () => {
-    const svg = buildSVG(projectWithLayout('rectangular-cladogram'), { showEvents: true }).svg;
+    // Same squeezed phylogram the canvas leader test uses: the branch-scale
+    // squeeze forces the badge stack off its branch, and the figure must ship
+    // the same leader + anchor dot the canvas draws.
+    const svg = buildSVG(squeezedExportProject('rectangular-phylogram', true), { showEvents: true }).svg;
     expect(svg).toContain('stroke-width="1" opacity="0.7"'); // thin leader
     expect(svg).toContain('r="1.6"'); // dot on the natural branch anchor
   });
@@ -422,7 +454,11 @@ describe('exportImage — event badges reuse the canvas collision planner (BUG-4
     const svg = buildSVG(project, { showEvents: true }).svg;
     expect(plan.anchors.size).toBe(2);
     for (const a of plan.anchors.values()) {
-      expect(svg).toContain(`<circle cx="${a.x}" cy="${a.y}" r="${EVENT_BADGE_RADIUS}" fill="#ffffff"`);
+      // Default badges draw as the radius-8 circle path of eventMarkerPath;
+      // the exported d must start exactly at the planned anchor's centre.
+      expect(svg).toContain(
+        `M ${a.x - EVENT_BADGE_RADIUS} ${a.y} A ${EVENT_BADGE_RADIUS} ${EVENT_BADGE_RADIUS} 0 1 0 ${a.x + EVENT_BADGE_RADIUS} ${a.y}`,
+      );
     }
     // And the badges really did move off the branch line (not the old anchors).
     const natural = plan.anchors.get(project.events[0].id)!;

@@ -155,8 +155,8 @@ function applyLabel(node: TreeNode, label: string, quoted = false): void {
 export function escapeName(label: string): string {
   if (label === '') return '';
   // `_` must NOT survive unquoted: the Newick convention reads it as a space, and
-  // the tokenizer here does exactly that. Writing `Pakicetus_2` bare therefore
-  // reads back as `Pakicetus 2` — a label drift that silently orphans every
+  // the tokenizer here does exactly that. Writing `Taxon_A_2` bare therefore
+  // reads back as `Taxon A 2` — a label drift that silently orphans every
   // character state keyed on the original name. Quote such labels instead.
   if (/^[A-Za-z0-9.\-+]+$/.test(label)) return label;
   // Control characters (newline / tab / etc.) are invalid inside a Newick label

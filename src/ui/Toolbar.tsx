@@ -90,15 +90,22 @@ function UndoRedo() {
 export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => void }) {
   const projectName = useStore((s) => s.project.name);
 
+  // Tauri's drag region fires only when the mousedown TARGET itself carries
+  // `data-tauri-drag-region` — an attribute on the parent `.header-bar` does
+  // nothing once a child (`.toolbar`, the flex spacer, the project name) is the
+  // actual hit element. Every non-interactive blank stretch of the bar therefore
+  // needs the attribute on its own element; buttons stay children without it and
+  // keep working. (The `-webkit-app-region` rules in app.css are Electron-only
+  // and are ignored by the Tauri webview.)
   return (
-    <div className="toolbar">
+    <div className="toolbar" data-tauri-drag-region>
       <button className="btn primary" onClick={onAddChildrenDialog} title={S.toolbar.addMultiTitle}>
         <PlusIcon /> {S.toolbar.addChildren}
       </button>
       <UndoRedo />
       <ViewModeSegment />
-      <div className="spacer" />
-      <div className="hint project-name">{projectName}</div>
+      <div className="spacer" data-tauri-drag-region />
+      <div className="hint project-name" data-tauri-drag-region>{projectName}</div>
       <button
         className="btn primary header-save"
         onClick={() => void file.actionSaveProject()}

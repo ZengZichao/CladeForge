@@ -55,7 +55,7 @@ function freshProject(): string {
   act(() => {
     useStore.getState().apply((d) => {
       rootId = d.rootId;
-      d.nodes[d.rootId].label = 'Cetacea';
+      d.nodes[d.rootId].label = 'Taxon_A';
     });
   });
   return rootId;
@@ -108,7 +108,7 @@ function nodeCount(): number {
 describe('AddChildrenDialog — target is always stated (BUG-3)', () => {
   it('names the selected target node', () => {
     const targetId = freshProject();
-    const childId = addNamedChild('Neoceti');
+    const childId = addNamedChild('Taxon_B');
     expect(childId).not.toBe(targetId);
     mount(
       createElement(AddChildrenDialog, {
@@ -118,7 +118,7 @@ describe('AddChildrenDialog — target is always stated (BUG-3)', () => {
       }),
     );
     expect(dialogEl().textContent).toContain('Add children to');
-    expect(dialogEl().textContent).toContain('Neoceti');
+    expect(dialogEl().textContent).toContain('Taxon_B');
   });
 
   it('spells out the root fallback when nothing is selected', () => {
@@ -131,12 +131,12 @@ describe('AddChildrenDialog — target is always stated (BUG-3)', () => {
       }),
     );
     expect(dialogEl().textContent).toContain('No node selected');
-    expect(dialogEl().textContent).toContain('Cetacea');
+    expect(dialogEl().textContent).toContain('Taxon_A');
   });
 
   it('warns and disables Add when the target disappeared while open', () => {
     freshProject();
-    const childId = addNamedChild('Neoceti');
+    const childId = addNamedChild('Taxon_B');
     let cancelled = 0;
     mount(
       createElement(AddChildrenDialog, {
@@ -170,7 +170,7 @@ describe('AddChildrenDialog — target is always stated (BUG-3)', () => {
 describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => {
   it('Enter prevents its default action, adds the children and closes', () => {
     freshProject();
-    const childId = addNamedChild('Neoceti');
+    const childId = addNamedChild('Taxon_B');
     let cancelled = 0;
     mount(
       createElement(AddChildrenDialog, {
@@ -191,7 +191,7 @@ describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => 
 
   it('clicking Add produces the same result as Enter', () => {
     freshProject();
-    const childId = addNamedChild('Neoceti');
+    const childId = addNamedChild('Taxon_B');
     let cancelled = 0;
     mount(
       createElement(AddChildrenDialog, {
@@ -215,7 +215,7 @@ describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => 
 describe('AddChildrenDialog — Escape cancels without side effects (BUG-2)', () => {
   it('closes, does not add nodes, and stops the event', () => {
     freshProject();
-    const childId = addNamedChild('Neoceti');
+    const childId = addNamedChild('Taxon_B');
     let cancelled = 0;
     mount(
       createElement(AddChildrenDialog, {

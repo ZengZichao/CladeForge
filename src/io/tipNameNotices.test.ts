@@ -24,14 +24,14 @@ describe('tip name notices', () => {
   });
 
   it('reports each label the export had to change', () => {
-    const p = projectWith(['Escherichia', 'Escherichia', '  ']);
+    const p = projectWith(['Taxon_A', 'Taxon_A', '  ']);
     const names = [...tipNames(p).values()];
-    expect(names[0]).toBe('Escherichia');
-    expect(names[1]).toBe('Escherichia_2');
+    expect(names[0]).toBe('Taxon_A');
+    expect(names[1]).toBe('Taxon_A_2');
     expect(names[2]).toBeTruthy(); // the blank label falls back to its node id
     // Only the names the file could not carry verbatim are reported: the second
-    // 'Escherichia' and the blank one, which falls back to its node id.
-    expect(tipNameNotices(p)).toEqual(['Escherichia_2', names[2]]);
+    // 'Taxon_A' and the blank one, which falls back to its node id.
+    expect(tipNameNotices(p)).toEqual(['Taxon_A_2', names[2]]);
   });
 
   it('reports a padded label because the file will not carry the padding', () => {

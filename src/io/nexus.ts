@@ -311,7 +311,7 @@ function nexusComment(text: string): string {
  * by PAUP, and TAXLABELS disagreeing with the tree is worse.
  *
  * Exported because the R-script exporter needs the SAME mapping: its `tips`
- * vector is keyed on the tip label, so two tips called `Escherichia` collapse
+ * vector is keyed on the tip label, so two tips called `Taxon_A` collapse
  * into one entry there too, and the second one's states are silently lost.
  *
  * The renaming is reported rather than hidden: `tipNameNotices` lists every tip

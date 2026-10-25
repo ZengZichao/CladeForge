@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { ListBulletIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { findCharacter } from '../model/characters';
-import { eventCode, eventColor, eventDisplayLabel } from '../model/events';
+import { eventBadgeText, eventMarkerColor, eventDisplayLabel } from '../model/events';
 import { S } from './strings';
 
 type SwatchKind =
@@ -248,16 +248,23 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
     return true;
   });
 
-  // Concrete event-type entries so users can read what each badge code means
-  // without hovering every badge on the canvas.
+  // Concrete event entries so users can read what each badge means without
+  // hovering every badge on the canvas. Events that override their marker
+  // (colour / text / shape / size) get their OWN row keyed by the visual
+  // identity — two badges of the same type drawn differently must be listed
+  // differently, or the legend would promise a look the canvas doesn't have.
   const eventLegendItems = useMemo(() => {
-    if (!showEvents || projectEvents.length === 0) return [] as { id: string; color: string; code: string; label: string }[];
+    if (!showEvents || projectEvents.length === 0)
+      return [] as { id: string; color: string; code: string; label: string }[];
     const seen = new Set<string>();
     const out: { id: string; color: string; code: string; label: string }[] = [];
     for (const e of projectEvents) {
-      if (seen.has(e.typeId)) continue;
-      seen.add(e.typeId);
-      out.push({ id: e.typeId, color: eventColor(e), code: eventCode(e), label: eventDisplayLabel(e) });
+      const color = eventMarkerColor(e);
+      const code = eventBadgeText(e);
+      const id = `${e.typeId}|${color}|${code}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, color, code, label: eventDisplayLabel(e) });
     }
     return out;
   }, [showEvents, projectEvents]);

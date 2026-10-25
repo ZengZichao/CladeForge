@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 鲸类水生适应
+# Project : 虚拟类群 · 水生适应
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -25,11 +25,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(5, 6, 5, 1, 6, 2, 6, 7, 7, 8, 8, 3, 8, 4), ncol = 2, byrow = TRUE),
-    edge.length = c(1, 5, 7, 11, 6, 35, 35),
-    Nnode = 4L,
-    tip.label = c("Pakicetus", "Ambulocetus", "Mysticeti", "Odontoceti"),
-    node.label = c("Cetacea", "Pelagiceti", "Basilosauridae", "Neoceti")
+    edge = matrix(c(5, 6, 5, 1, 6, 2, 6, 7, 7, 3, 7, 4), ncol = 2, byrow = TRUE),
+    edge.length = c(1, 5, 7, 11, 41, 41),
+    Nnode = 3L,
+    tip.label = c("Taxon_G", "Taxon_C", "Taxon_E", "Taxon_F"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_D")
   ),
   class = "phylo"
 )
@@ -62,7 +62,7 @@ characters <- list(
     states = c("陆生", "半水生", "水生"),
     colors = c("#9ca3af", "#3b82f6", "#1e3a5f"),
     cost = matrix(c(0, 2, 3, 2, 0, 1, 3, 1, 0), nrow = 3, byrow = TRUE),
-    tips = c("Pakicetus" = "陆生", "Ambulocetus" = "半水生", "Mysticeti" = "水生", "Odontoceti" = "水生")
+    tips = c("Taxon_C" = "半水生", "Taxon_E" = "水生", "Taxon_F" = "水生", "Taxon_G" = "陆生")
   ),
   list(
     name = "运动方式",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("跖行", "划水游动", "摆尾游动"),
     colors = c("#b45309", "#0ea5e9", "#1e3a8a"),
     cost = matrix(c(0, 2, 3, 5, 0, 1, 5, 5, 0), nrow = 3, byrow = TRUE),
-    tips = c("Pakicetus" = "跖行", "Ambulocetus" = "划水游动", "Mysticeti" = "摆尾游动", "Odontoceti" = "摆尾游动")
+    tips = c("Taxon_C" = "划水游动", "Taxon_E" = "摆尾游动", "Taxon_F" = "摆尾游动", "Taxon_G" = "跖行")
   )
 )
 
@@ -234,7 +234,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "鲸类水生适应", cex.main = 1.0)
+title(main = "虚拟类群 · 水生适应", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

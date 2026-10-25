@@ -166,8 +166,12 @@ export function MenuBar({
   ];
 
   return (
-    <div className="menubar">
-      <div className="brand">
+    // data-tauri-drag-region: Tauri only starts a window drag when the mousedown
+    // TARGET itself carries the attribute, so the menubar's own blank stretches
+    // (brand row, gaps between groups) drag the window while the Dropdown /
+    // HelpMenu buttons — children without the attribute — keep opening menus.
+    <div className="menubar" data-tauri-drag-region>
+      <div className="brand" data-tauri-drag-region>
         <span className="dot" />
         <span className="brand-name">{S.app.name}</span>
       </div>

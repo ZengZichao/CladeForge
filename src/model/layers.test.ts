@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEmptyProject, createCetaceanSample } from './sampleTree';
+import { createEmptyProject, createAquaticSample } from './sampleTree';
 import { addCharacter, addChildren, removeCharacter, setNodeState } from './treeOps';
 import { newCharacter } from './characters';
 import { addBlankLayer, duplicateActiveLayer, pruneLayerStore, switchLayer } from './layers';
@@ -55,7 +55,7 @@ describe('layer switching after a character deletion', () => {
     // non-active layers alike: a stale copy would reappear on the next
     // `switchLayer` — then go out through `hypothesisExport` as evidence for a
     // trait the document does not have.
-    const p = createCetaceanSample();
+    const p = createAquaticSample();
     expect(p.layers).toHaveLength(2);
     const habitat = p.characters.find((c) => c.costMatrix)!;
     expect(p.nodes[p.rootId].charStates?.[habitat.id]).toBeDefined();

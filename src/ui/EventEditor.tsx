@@ -13,8 +13,15 @@ import {
   updateEvent,
 } from '../model/treeOps';
 import {
+  EVENT_MARKER_SHAPES,
+  EVENT_MARKER_SIZE_MAX,
+  EVENT_MARKER_SIZE_MIN,
   EVENT_TYPES,
-  eventCode,
+  clampEventMarkerSize,
+  eventBadgeText,
+  eventMarkerColor,
+  eventMarkerShape,
+  eventMarkerSize,
   eventDisplayLabel,
   eventTypeGroup,
   eventTypeLabel,
@@ -23,8 +30,8 @@ import {
   newEvent,
 } from '../model/events';
 import type { Confidence, EvolutionaryEvent, Project, TreeNode } from '../model/types';
-import { Field, TextField } from './fields';
-import { S } from './strings';
+import { ColorField, Field, NumberField, TextField } from './fields';
+import { S, tr } from './strings';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
@@ -66,8 +73,18 @@ function OneEvent({
   return (
     <div className="event-item">
       <div className="event-row">
-        <span className="event-badge" title={findEventType(event.typeId) ? eventTypeLabel(findEventType(event.typeId)!) : undefined}>
-          {eventCode(event)}
+        {/* Live marker preview: the same shape / colour / text the canvas draws. */}
+        <span
+          className="event-badge"
+          title={findEventType(event.typeId) ? eventTypeLabel(findEventType(event.typeId)!) : undefined}
+          style={{
+            borderColor: eventMarkerColor(event),
+            width: eventMarkerSize(event) * 2,
+            height: eventMarkerSize(event) * 2,
+            fontSize: Math.min(11, Math.max(6, eventMarkerSize(event) * 0.94)),
+          }}
+        >
+          {eventBadgeText(event)}
         </span>
         <span className="event-title" title={eventDisplayLabel(event)}>
           {eventDisplayLabel(event)}
@@ -105,6 +122,65 @@ function OneEvent({
           <Field label={S.event.note}>
             <TextField value={event.note ?? ''} onCommit={(v) => up({ note: v })} />
           </Field>
+
+          {/* Marker-style subsection. It must NOT be wrapped in `.field` — that
+              class is a horizontal label+control ROW, so wrapping the whole
+              block in it crushed the title into a vertical one-character
+              column and squeezed every nested control unreadably narrow. */}
+          <div className="event-marker-style">
+            <div className="event-marker-style-title">{S.event.markerSection}</div>
+            <Field label={S.event.markerShape}>
+              <select
+                value={eventMarkerShape(event)}
+                onChange={(e) => up({ markerShape: e.target.value as EvolutionaryEvent['markerShape'] })}
+              >
+                {EVENT_MARKER_SHAPES.map((sh) => (
+                  <option key={sh.id} value={sh.id}>
+                    {tr(sh.label, sh.labelEn)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={S.event.markerSize}>
+              <NumberField
+                value={event.markerSize ?? 8}
+                min={EVENT_MARKER_SIZE_MIN}
+                max={EVENT_MARKER_SIZE_MAX}
+                step={1}
+                unit="px"
+                onCommit={(v) =>
+                  up({ markerSize: v === undefined ? undefined : clampEventMarkerSize(v) })
+                }
+              />
+            </Field>
+            <Field label={S.event.markerColor}>
+              <ColorField
+                value={eventMarkerColor(event)}
+                ariaLabel={S.event.markerColor}
+                onChange={(v) => up({ markerColor: v })}
+              />
+            </Field>
+            <Field label={S.event.markerText}>
+              <TextField
+                value={event.markerText ?? ''}
+                placeholder={S.event.markerTextPlaceholder}
+                onCommit={(v) => up({ markerText: v.slice(0, 4) })}
+              />
+            </Field>
+            {(event.markerShape || event.markerSize !== undefined || event.markerColor || event.markerText) && (
+              <div className="row-actions">
+                <button
+                  className="btn"
+                  onClick={() =>
+                    up({ markerShape: undefined, markerSize: undefined, markerColor: undefined, markerText: undefined })
+                  }
+                >
+                  {S.event.markerReset}
+                </button>
+              </div>
+            )}
+          </div>
+
           <Field label={S.confidence.label}>
             <select
               value={event.confidence ?? ''}
@@ -136,7 +212,7 @@ function OneEvent({
                     onChange={() => apply((d) => toggleEventTrigger(d, id, o.id))}
                   />
                   <span>
-                    {eventCode(o)} · {eventDisplayLabel(o)}
+                    {eventBadgeText(o)} · {eventDisplayLabel(o)}
                     {project.nodes[o.nodeId]?.label ? ` (${project.nodes[o.nodeId].label})` : ''}
                   </span>
                 </label>

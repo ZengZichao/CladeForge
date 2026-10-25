@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 植物陆地登陆演化
+# Project : 虚拟类群 · 陆地植物化
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -28,8 +28,8 @@ tree <- structure(
     edge = matrix(c(15, 16, 15, 17, 16, 1, 16, 2, 17, 18, 17, 19, 18, 3, 18, 4, 19, 20, 19, 21, 20, 5, 20, 6, 21, 22, 21, 23, 22, 7, 22, 8, 23, 24, 23, 25, 24, 9, 24, 10, 25, 26, 25, 27, 26, 11, 26, 12, 27, 13, 27, 14), ncol = 2, byrow = TRUE),
     edge.length = c(20, 50, 500, 500, 20, 40, 450, 450, 20, 30, 410, 410, 20, 30, 380, 380, 20, 30, 350, 350, 200, 210, 140, 140, 130, 130),
     Nnode = 13L,
-    tip.label = c("Chara", "Coleochaete", "Marchantia", "Sphagnum", "Lycopodium", "Selaginella", "Pteridium", "Equisetum", "Pinus", "Ginkgo", "Oryza", "Zea", "Arabidopsis", "Rosa"),
-    node.label = c("Streptophyta", "Charophyceae", "Embryophyta", "Bryophyta", "Tracheophyta", "Lycopodiopsida", "Euphyllophyta", "Monilophyta", "Spermatophyta", "Gymnospermae", "Angiospermae", "Monocots", "Eudicots")
+    tip.label = c("Taxon_N", "Taxon_O", "Taxon_P", "Taxon_Q", "Taxon_R", "Taxon_S", "Taxon_T", "Taxon_U", "Taxon_V", "Taxon_W", "Taxon_X", "Taxon_Y", "Taxon_Z", "Taxon_AA"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_D", "Taxon_E", "Taxon_F", "Taxon_G", "Taxon_H", "Taxon_I", "Taxon_J", "Taxon_K", "Taxon_L", "Taxon_M")
   ),
   class = "phylo"
 )
@@ -62,7 +62,7 @@ characters <- list(
     states = c("水生", "湿生", "陆生"),
     colors = c("#0ea5e9", "#3b82f6", "#22c55e"),
     cost = NULL,
-    tips = c("Chara" = "水生", "Coleochaete" = "水生", "Marchantia" = "湿生", "Sphagnum" = "湿生", "Lycopodium" = "陆生", "Selaginella" = "陆生", "Pteridium" = "陆生", "Equisetum" = "陆生", "Pinus" = "陆生", "Ginkgo" = "陆生", "Oryza" = "湿生", "Zea" = "陆生", "Arabidopsis" = "陆生", "Rosa" = "陆生")
+    tips = c("Taxon_N" = "水生", "Taxon_O" = "水生", "Taxon_P" = "湿生", "Taxon_Q" = "湿生", "Taxon_R" = "陆生", "Taxon_S" = "陆生", "Taxon_T" = "陆生", "Taxon_U" = "陆生", "Taxon_V" = "陆生", "Taxon_W" = "陆生", "Taxon_X" = "湿生", "Taxon_Y" = "陆生", "Taxon_Z" = "陆生", "Taxon_AA" = "陆生")
   ),
   list(
     name = "维管组织",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("无", "有"),
     colors = c("#9ca3af", "#7c3aed"),
     cost = NULL,
-    tips = c("Chara" = "无", "Coleochaete" = "无", "Marchantia" = "无", "Sphagnum" = "无", "Lycopodium" = "有", "Selaginella" = "有", "Pteridium" = "有", "Equisetum" = "有", "Pinus" = "有", "Ginkgo" = "有", "Oryza" = "有", "Zea" = "有", "Arabidopsis" = "有", "Rosa" = "有")
+    tips = c("Taxon_N" = "无", "Taxon_O" = "无", "Taxon_P" = "无", "Taxon_Q" = "无", "Taxon_R" = "有", "Taxon_S" = "有", "Taxon_T" = "有", "Taxon_U" = "有", "Taxon_V" = "有", "Taxon_W" = "有", "Taxon_X" = "有", "Taxon_Y" = "有", "Taxon_Z" = "有", "Taxon_AA" = "有")
   ),
   list(
     name = "种子",
@@ -78,7 +78,7 @@ characters <- list(
     states = c("无（孢子繁殖）", "有"),
     colors = c("#9ca3af", "#dc2626"),
     cost = NULL,
-    tips = c("Chara" = "无（孢子繁殖）", "Coleochaete" = "无（孢子繁殖）", "Marchantia" = "无（孢子繁殖）", "Sphagnum" = "无（孢子繁殖）", "Lycopodium" = "无（孢子繁殖）", "Selaginella" = "无（孢子繁殖）", "Pteridium" = "无（孢子繁殖）", "Equisetum" = "无（孢子繁殖）", "Pinus" = "有", "Ginkgo" = "有", "Oryza" = "有", "Zea" = "有", "Arabidopsis" = "有", "Rosa" = "有")
+    tips = c("Taxon_N" = "无（孢子繁殖）", "Taxon_O" = "无（孢子繁殖）", "Taxon_P" = "无（孢子繁殖）", "Taxon_Q" = "无（孢子繁殖）", "Taxon_R" = "无（孢子繁殖）", "Taxon_S" = "无（孢子繁殖）", "Taxon_T" = "无（孢子繁殖）", "Taxon_U" = "无（孢子繁殖）", "Taxon_V" = "有", "Taxon_W" = "有", "Taxon_X" = "有", "Taxon_Y" = "有", "Taxon_Z" = "有", "Taxon_AA" = "有")
   )
 )
 
@@ -242,7 +242,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "植物陆地登陆演化", cex.main = 1.0)
+title(main = "虚拟类群 · 陆地植物化", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

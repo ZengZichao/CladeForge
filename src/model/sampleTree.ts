@@ -1,4 +1,18 @@
 // Factory helpers for new / sample projects.
+//
+// ALL sample projects ship FICTIONAL taxa with NEUTRAL CODE NAMES: every node
+// is labelled `Taxon_A`, `Taxon_B`, … (Excel-column style suffixes: A…Z, then
+// AA, AB, …). The names deliberately carry no imagery that could be mistaken
+// for a real organism — the documents exist to exercise the editor's features
+// (time calibration, characters, hypothesis layers, events, calibrations), not
+// to assert biology.
+//
+// Every sample tree is STRICTLY BINARY: each internal node has exactly two
+// children (no polytomies, no single-child chains). The builder helpers below
+// verify the document as it is assembled: `mkNode` enforces the branch-length /
+// node-age identity on every edge, `assertBinary` re-checks the finished tree,
+// and `assignStateAt` / `hypothesiseStateAt` resolve nodes by the ids returned
+// from `mkNode`, so a rename can never silently orphan a state assignment.
 
 import {
   DEFAULT_CANVAS,
@@ -65,35 +79,49 @@ export interface SampleDescriptor {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-// These documents are hard-coded *scientific data*, so the helpers verify it
-// instead of quietly accepting whatever was typed: every edge has to satisfy the
-// branch-length / node-age identity, every label lookup has to resolve to exactly
-// one node, and every declared state has to be carried by at least one tip.
+// These documents are hard-coded demo data, so the helpers verify them instead
+// of quietly accepting whatever was typed: every edge has to satisfy the
+// branch-length / node-age identity, every label has to be unique, and every
+// declared state has to be carried by at least one tip.
 
 /**
- * Look a sample node up by label, LOUDLY. `find((n) => n.label === label)` behind
- * an `if (node) …` lets a renamed or duplicated label silently drop the state it
- * was meant to address, so every lookup must resolve exactly one node or throw.
+ * Neutral code name for a sample node: `Taxon_A` … `Taxon_Z`, then
+ * `Taxon_AA`, `Taxon_AB`, … (the same roll-over Excel column letters use).
  */
-function nodeByLabel(project: Project, label: string): TreeNode {
-  const matches = Object.values(project.nodes).filter((n) => n.label === label);
-  if (matches.length === 0) throw new Error(`sampleTree: no node labelled "${label}"`);
-  if (matches.length > 1) {
-    throw new Error(`sampleTree: ${matches.length} nodes share the label "${label}"`);
-  }
-  return matches[0];
+export function taxonLabel(seq: number): string {
+  if (!Number.isInteger(seq) || seq < 0) return 'Taxon_A';
+  let suffix = '';
+  let n = seq;
+  do {
+    suffix = String.fromCharCode(65 + (n % 26)) + suffix;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return `Taxon_${suffix}`;
 }
 
-/** Assign an observed state to a node, checking character, state and label. */
-function assignState(project: Project, label: string, characterId: string, stateId: string): void {
+/** A per-document name allocator: `const nextTaxon = taxonNamer();` */
+export function taxonNamer(): () => string {
+  let i = 0;
+  return () => taxonLabel(i++);
+}
+
+/** Look a node up by id, LOUDLY (sample ids are built in this same module). */
+function nodeAt(project: Project, nodeId: string): TreeNode {
+  const node = project.nodes[nodeId];
+  if (!node) throw new Error(`sampleTree: node "${nodeId}" does not exist`);
+  return node;
+}
+
+/** Assign an observed state to a node, checking character and state. */
+function assignStateAt(project: Project, nodeId: string, characterId: string, stateId: string): void {
   const character = project.characters.find((c) => c.id === characterId);
-  if (!character) throw new Error(`sampleTree: unknown character "${characterId}" for "${label}"`);
+  if (!character) throw new Error(`sampleTree: unknown character "${characterId}"`);
   if (!character.states.some((s) => s.id === stateId)) {
     throw new Error(
-      `sampleTree: state "${stateId}" is not declared by character "${character.name}" (assigning to "${label}")`,
+      `sampleTree: state "${stateId}" is not declared by character "${character.name}"`,
     );
   }
-  const node = nodeByLabel(project, label);
+  const node = nodeAt(project, nodeId);
   node.charStates = { ...node.charStates, [characterId]: stateId };
 }
 
@@ -101,16 +129,16 @@ function assignState(project: Project, label: string, characterId: string, state
  * Assert an internal node's hypothesised ancestral state together with the
  * evidence behind it (confidence + supporting character).
  */
-function hypothesiseState(
+function hypothesiseStateAt(
   project: Project,
-  label: string,
+  nodeId: string,
   characterId: string,
   stateId: string,
   confidence: 'high' | 'medium' | 'low',
   support: string,
 ): void {
-  assignState(project, label, characterId, stateId);
-  const node = nodeByLabel(project, label);
+  assignStateAt(project, nodeId, characterId, stateId);
+  const node = nodeAt(project, nodeId);
   node.charMeta = { ...node.charMeta, [characterId]: { confidence, support } };
 }
 
@@ -148,31 +176,50 @@ function mkNode(
   return id;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 1 — Cetacean aquatic transition (the default project on first run)
-// ════════════════════════════════════════════════════════════════════════════
-export function createSampleProject(): Project {
-  return createCetaceanSample();
+/**
+ * Every sample tree must be STRICTLY BINARY: each internal node carries exactly
+ * two children. Polytomies (≥3 children) and single-child chains both defeat the
+ * editor's tree model — an unresolved node is an unrooted tree drawn as rooted,
+ * and a unary edge carries no split at all. Called on the finished document so a
+ * structural slip fails loudly instead of shipping.
+ */
+function assertBinary(project: Project): void {
+  for (const node of Object.values(project.nodes)) {
+    const n = node.childrenIds.length;
+    if (n !== 0 && n !== 2) {
+      throw new Error(
+        `sampleTree: node "${node.label}" has ${n} children — sample trees must be strictly binary`,
+      );
+    }
+  }
 }
 
-export function createCetaceanSample(): Project {
-  const project = createEmptyProject(tr('鲸类水生适应', 'Cetacean aquatic transition'));
-  project.sampleId = 'cetacean';
-  const rootId = project.rootId;
-  project.nodes[rootId].label = 'Cetacea';
-  project.nodes[rootId].age = 53; // oldest node; inside the root calibration [52, 55] below
+// ════════════════════════════════════════════════════════════════════════════
+// SAMPLE 1 — Fictional aquatic transition (the default project on first run)
+// ════════════════════════════════════════════════════════════════════════════
+export function createSampleProject(): Project {
+  return createAquaticSample();
+}
 
-  // Time-tree identity on every edge: branchLength = parent.age − node.age, so the
-  // root's two children carry 1 and 5 (53 − 52, 53 − 48). Any other pair puts the
-  // phylogram and the time axis in disagreement about the same branch, which is
-  // what `mkNode` refuses to build.
-  const pelagiceti = mkNode(project, 'Pelagiceti', rootId, 52, 1);
-  const pakicetus = mkNode(project, 'Pakicetus', rootId, 48, 5);
-  const ambulocetus = mkNode(project, 'Ambulocetus', pelagiceti, 45, 7);
-  const basilosauridae = mkNode(project, 'Basilosauridae', pelagiceti, 41, 11);
-  const neoceti = mkNode(project, 'Neoceti', basilosauridae, 35, 6);
-  mkNode(project, 'Mysticeti', neoceti, 0, 35);
-  mkNode(project, 'Odontoceti', neoceti, 0, 35);
+export function createAquaticSample(): Project {
+  const project = createEmptyProject(tr('虚拟类群 · 水生适应', 'Virtual taxa · Aquatic transition'));
+  project.sampleId = 'cetacean';
+  const nextTaxon = taxonNamer();
+  const rootId = project.rootId;
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 53
+
+  // Strictly binary; every edge satisfies branchLength = parent.age − node.age,
+  // which `mkNode` verifies. The root's two children carry 1 and 5 (53 − 52,
+  // 53 − 48); any other pair puts the phylogram and the time axis in disagreement
+  // about the same branch.
+  const root = project.nodes[rootId];
+  root.age = 53; // oldest node; inside the root calibration [52, 55] below
+  const cladeB = mkNode(project, nextTaxon(), rootId, 52, 1);
+  const tipC = mkNode(project, nextTaxon(), cladeB, 45, 7);
+  const cladeD = mkNode(project, nextTaxon(), cladeB, 41, 11);
+  const tipE = mkNode(project, nextTaxon(), cladeD, 0, 41);
+  const tipF = mkNode(project, nextTaxon(), cladeD, 0, 41);
+  const tipG = mkNode(project, nextTaxon(), rootId, 48, 5);
 
   // --- characters ---
   const terId = newId();
@@ -188,23 +235,19 @@ export function createCetaceanSample(): Project {
       { id: aqId, label: tr('水生', 'Aquatic'), color: '#1e3a5f' },
     ],
     description: tr(
-      '陆生 → 半水生 → 水生的鲸类栖息地转变。',
-      'The terrestrial-to-aquatic habitat transition in cetaceans.',
+      '演示谱系中陆生 → 半水生 → 水生的栖息地转变（虚构类群）。',
+      'A terrestrial-to-semi-aquatic-to-aquatic habitat transition in the demo clade.',
     ),
     // Sankoff step matrix, rows/columns in `states` order (陆生/半水生/水生):
     // an ORDERED (additive, direction-symmetric) matrix over a linearly ordered
     // character — adjacent states cost 2 (陆↔半) and 1 (半↔水), and the direct
-    // 陆↔水 step costs exactly 3 = 2 + 1. That is the scientific statement this
-    // sample makes: reaching the fully aquatic habitus is a STEPWISE transition
-    // through the semi-aquatic stage, with no shortcut cheaper than going
-    // through it, while the reverse step is possible but costs as much as going
-    // forward. These are the weights the on-screen cost band and the parsimony
-    // baselines are computed with, and the same numbers `scriptExport.ts` embeds as
-    // an R `matrix(c(...))` literal: the exported R script, the NEXUS ASSUMPTIONS
-    // block and the cost band all read this one matrix, so they cannot disagree.
-    // *Locomotion* below is priced the other way on purpose — this project needs
-    // one character that is priced by a graded, reversible transition and one that
-    // is priced by an irreversible innovation.
+    // 陆↔水 step costs exactly 3 = 2 + 1. These are the weights the on-screen
+    // cost band and the parsimony baselines are computed with, and the same
+    // numbers `scriptExport.ts` embeds as an R `matrix(c(...))` literal: the
+    // exported R script, the NEXUS ASSUMPTIONS block and the cost band all read
+    // this one matrix, so they cannot disagree. *Locomotion* below is priced the
+    // other way on purpose — this project needs one character priced by a graded,
+    // reversible transition and one priced by an irreversible innovation.
     costMatrix: [
       [0, 2, 3],
       [2, 0, 1],
@@ -224,33 +267,16 @@ export function createCetaceanSample(): Project {
       { id: tailId, label: tr('摆尾游动', 'Tail-powered-swimming'), color: '#1e3a8a' },
     ],
     description: tr(
-      '跖行 → 四肢划水 → 尾鳍推进的运动方式转变；推进一旦交给脊柱就不可逆。',
-      'Walking to limb-paddling to tail-powered swimming; propulsion handed to the spine does not go back.',
+      '跖行 → 四肢划水 → 尾鳍推进的运动方式转变（演示：推进一旦交给脊柱即不可逆）。',
+      'Walking to limb-paddling to tail-powered swimming (demo: propulsion handed to the spine does not go back).',
     ),
-    // Sankoff step matrix, rows/columns in `states` order (跖行/划水/摆尾), i.e.
-    // walking / limb-powered paddling / tail-powered swimming. Unlike *Habitat*
-    // this one is genuinely DIRECTION-ASYMMETRIC, and the reading of each cell is
-    // a biological claim, not a styling choice:
-    //   walk → limb      2  — the paddling stroke is a re-orientation of an
-    //                          existing weight-bearing limb (elbow/ankle spools,
-    //                          a flattened hand); little new anatomy is needed.
-    //   limb → tail      1  — the cheapest step in the character: vertebral
-    //                          undulation simply takes over propulsion while the
-    //                          limb shrinks, and the limb is already streamlined.
-    //   walk → tail      3  — exactly 2 + 1: additive on the forward axis, so
-    //                          there is no shortcut past the limb-powered stage.
-    //   limb → walk      5  — the animal has to rebuild a weight-bearing limb.
-    //   tail → walk      5  — same argument one step further: the axial body plan
-    //                          does not hand locomotion back to the limbs, a
-    //                          Dollo-style irreversible innovation.
-    //   tail → limb      5  — and it does not revert to a paddling one either.
-    // Every reversal therefore costs more than any forward step, so a fully
-    // tail-powered cetacean cannot be "un-derived" cheaply. The character carries
-    // no internal-node hypotheses, so asymmetric pricing here cannot unbalance the
-    // worked example that *Habitat* carries (see the note on the alternative layer
-    // below), and since `scriptExport.ts`/`io/nexus.ts` emit both matrices per
-    // character, this literal is the single source of truth for the exported R
-    // script and the NEXUS ASSUMPTIONS block.
+    // Sankoff step matrix, rows/columns in `states` order. Unlike *Habitat* this
+    // one is genuinely DIRECTION-ASYMMETRIC: every reversal (5) costs more than
+    // any forward step (2 / 3 / 1), so a fully tail-powered taxon cannot be
+    // "un-derived" cheaply. The character carries no internal-node hypotheses,
+    // so asymmetric pricing here cannot unbalance the worked example that
+    // *Habitat* carries; `scriptExport.ts`/`io/nexus.ts` emit this literal as the
+    // single source of truth for the exported R script and NEXUS ASSUMPTIONS.
     costMatrix: [
       [0, 2, 3],
       [5, 0, 1],
@@ -259,31 +285,28 @@ export function createCetaceanSample(): Project {
   };
   project.characters = [habitat, locomotion];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  assign('Pakicetus', habitat.id, terId);
-  assign('Ambulocetus', habitat.id, semiId);
-  assign('Mysticeti', habitat.id, aqId);
-  assign('Odontoceti', habitat.id, aqId);
-  assign('Pakicetus', locomotion.id, walkId);
-  assign('Ambulocetus', locomotion.id, limbId);
-  assign('Mysticeti', locomotion.id, tailId);
-  assign('Odontoceti', locomotion.id, tailId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  assign(tipG, habitat.id, terId);
+  assign(tipC, habitat.id, semiId);
+  assign(tipE, habitat.id, aqId);
+  assign(tipF, habitat.id, aqId);
+  assign(tipG, locomotion.id, walkId);
+  assign(tipC, locomotion.id, limbId);
+  assign(tipE, locomotion.id, tailId);
+  assign(tipF, locomotion.id, tailId);
 
   project.layers[0].name = tr('陆生祖先', 'Terrestrial-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Cetacea', habitat.id, terId, 'high', tr('Pakicetus 踝骨形态', 'Pakicetus ankle morphology'));
-  hypothesise('Pelagiceti', habitat.id, terId, 'medium', tr('Ambulocetus 骨盆', 'Ambulocetus pelvis morphology'));
-  hypothesise('Basilosauridae', habitat.id, semiId, 'medium', tr('龙王鲸运动形态', 'Basilosaurus locomotor morphology'));
-  hypothesise('Neoceti', habitat.id, aqId, 'high', tr('颈部解剖', 'Cervical anatomy of stem neocetes'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, habitat.id, terId, 'high', tr('演示形态学证据', 'Demo morphological evidence'));
+  hypothesise(cladeB, habitat.id, terId, 'medium', tr('演示骨盆形态', 'Demo pelvis morphology'));
+  hypothesise(cladeD, habitat.id, semiId, 'medium', tr('演示运动形态', 'Demo locomotor morphology'));
 
   const innovationId = newId();
   const radiationId = newId();
@@ -292,22 +315,22 @@ export function createCetaceanSample(): Project {
       id: innovationId,
       typeId: 'key-innovation',
       target: 'branch' as const,
-      nodeId: neoceti,
+      nodeId: cladeD,
       label: tr('摆尾游动', 'Tail-powered swimming'),
       note: tr(
-        '椎骨衍生出的尾叶摆动推进，是通往全水生生活的关键创新。',
-        'Vertebral-undulation swimming, the key innovation enabling a fully aquatic life.',
+        '演示谱系中的关键创新：椎骨衍生的尾叶摆动推进，通往全水生生活。',
+        'Key innovation of the demo clade: vertebral-undulation swimming enabling a fully aquatic life.',
       ),
       confidence: 'high' as const,
-      support: tr('椎体形态学', 'Vertebral morphology'),
+      support: tr('演示形态学证据', 'Demo morphological evidence'),
       triggers: [radiationId],
     },
     {
       id: radiationId,
       typeId: 'adaptive-radiation',
       target: 'node' as const,
-      nodeId: neoceti,
-      label: tr('新鲸类多样化', 'Neoceti diversification'),
+      nodeId: cladeD,
+      label: tr('水生多样化', 'Aquatic diversification'),
       confidence: 'medium' as const,
       triggers: [],
     },
@@ -317,77 +340,64 @@ export function createCetaceanSample(): Project {
   const alternativeId = newId();
   // The competing layer is a genuine alternative ROOT state, and it is priced
   // consistently with it: under the ordered step matrix above, a semi-aquatic
-  // *Cetacea* pays 2 for the 半水生 → 陆生 step back to *Pakicetus* and 1 for the
-  // 半水生 → 水生 step to *Neoceti* — 3 step units over 2 changes, exactly the
-  // parsimony minimum. So this layer demonstrates "a different hypothesis that
-  // the checker cannot fault", while the active layer (which double-books the
-  // 陆生 → 半水生 step, costing 5) demonstrates what the excess-changes note is
-  // for. Making this matrix direction-asymmetric (a Dollo-style irreversibility)
-  // would flip that: the reversal would cost 5, the layer could never be
-  // parsimony-consistent, and the exported R script's matrix literal — which is
-  // pinned against this document — would change too. Asymmetric pricing is still
-  // demonstrated by this project, just where it belongs scientifically: on
-  // *Locomotion*, whose two layers are unassigned and so are never costed.
+  // root pays 2 for the 半水生 → 陆生 step to the terrestrial tip and 1 for the
+  // 半水生 → 水生 step into the aquatic clade — 3 step units over 2 changes,
+  // exactly the parsimony minimum. So this layer demonstrates "a different
+  // hypothesis that the checker cannot fault", while the active layer (which
+  // double-books the 陆生 → 半水生 step, costing 6 against a minimum of 3)
+  // demonstrates what the excess-changes note is for.
   project.layers.push({ id: alternativeId, name: tr('半水生祖先', 'Semi-aquatic-ancestor') });
   const altStates: Record<string, Record<string, string>> = {
     [rootId]: { [habitat.id]: semiId },
-    [pelagiceti]: { [habitat.id]: semiId },
-    [basilosauridae]: { [habitat.id]: semiId },
-    [neoceti]: { [habitat.id]: aqId },
+    [cladeB]: { [habitat.id]: semiId },
+    [cladeD]: { [habitat.id]: aqId },
   };
   project.layerStore[alternativeId] = {
     states: altStates,
     meta: {
       [rootId]: {
-        [habitat.id]: { confidence: 'low', support: tr('早期鲸类不确定', 'Uncertain early-cetacean record') },
+        [habitat.id]: { confidence: 'low', support: tr('演示：早期记录不确定', 'Demo: uncertain early record') },
       },
     },
     events: buildEvents(),
   };
 
   // Fossil calibration points. Each range has to cover the age of the node it
-  // calibrates — `validateTimeData` checks exactly that — so the node comments
-  // above describe bounds this document really carries, and no asserted age falls
-  // outside its own range.
+  // calibrates — `validateTimeData` checks exactly that — so the bounds below
+  // really carry the asserted ages, and no asserted age falls outside its own
+  // range.
   project.calibrationPoints = [
     {
       id: newId(),
       nodeId: rootId,
       minAge: 52,
       maxAge: 55,
-      label: tr('鲸类冠群下限（古生/分子界）', 'Cetacea crown bound'),
+      label: tr('演示：冠群下限', 'Demo: crown-group bound'),
     },
     {
       id: newId(),
-      nodeId: pakicetus,
+      nodeId: tipG,
       minAge: 47,
       maxAge: 50,
-      label: tr('Pakicetus 化石', 'Pakicetus fossil'),
+      label: tr('演示：化石下限', 'Demo: fossil bound'),
     },
     {
       id: newId(),
-      nodeId: ambulocetus,
-      // The type material of Ambulocetus natans comes from the same
-      // Kuldana Formation beds as the pakicetids, whose mammal-bearing horizons
-      // are dated late Ypresian – early Lutetian, ≈50–45 Ma (Cooper, Thewissen &
-      // Hussain 2009, doi:10.1671/039.029.0423; Gingerich 2003, doi:10.1671/2409;
-      // Cooper et al. 2014, doi:10.1371/journal.pone.0109232), and Gingerich 2003
-      // states explicitly that the interval between the sampled levels is too
-      // short for the difference to be a real age difference. A window ending at
-      // 46 Ma would therefore sit BELOW every published age for the unit AND would
-      // not overlap the Pakicetus window above, which the stratigraphy requires.
-      // 45–49 brackets the asserted node age (45.0, fixed by the time-tree
-      // identity) and overlaps 47–50 as it must.
+      nodeId: tipC,
+      // The two early demo "horizons" (47–50 and 45–49) overlap, as the
+      // stratigraphy of this fictional world requires, and the asserted node age
+      // (45.0, fixed by the time-tree identity) sits inside its own window.
+      // `validateTimeData` checks both.
       minAge: 45,
       maxAge: 49,
-      label: tr('Ambulocetus 化石', 'Ambulocetus fossil'),
+      label: tr('演示：化石下限', 'Demo: fossil bound'),
     },
     {
       id: newId(),
-      nodeId: basilosauridae,
+      nodeId: cladeD,
       minAge: 34,
       maxAge: 41,
-      label: tr('龙王鲸科下限', 'Basilosauridae minimum'),
+      label: tr('演示：分支下限', 'Demo: clade minimum'),
     },
   ];
 
@@ -416,49 +426,52 @@ export function createCetaceanSample(): Project {
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 2 — Archaeal domain evolution
+// SAMPLE 2 — Fictional deep-domain radiation
 // ════════════════════════════════════════════════════════════════════════════
-export function createArchaeaSample(): Project {
-  const project = createEmptyProject(tr('古菌域演化', 'Archaeal domain evolution'));
+export function createDeepDomainSample(): Project {
+  const project = createEmptyProject(tr('虚拟类群 · 深域辐射', 'Virtual taxa · Deep-domain radiation'));
   project.sampleId = 'archaea';
+  const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = 'Asgard';
-  project.nodes[rootId].age = 4000; // oldest node; inside the [4000, 4100] root calibration below
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 4000
 
-  // branchLength = parent.age − node.age on every edge, so the root's children are
-  // 500 and 600 (4000 − 3500, 4000 − 3400); `mkNode` rejects a length that says
-  // otherwise, because the phylogram and the time axis would then disagree.
-  const euryarch = mkNode(project, 'Euryarchaeota', rootId, 3500, 500);
-  const tetrarch = mkNode(project, 'Tetrarchaeota', rootId, 3400, 600);
-  const crenarch = mkNode(project, 'Crenarchaeota', tetrarch, 3200, 200);
-  const thaumarch = mkNode(project, 'Thaumarchaeota', tetrarch, 3100, 300);
-  const korarch = mkNode(project, 'Korarchaeota', tetrarch, 3000, 400);
-  const nanoarch = mkNode(project, 'Nanoarchaeota', tetrarch, 2900, 500);
-
-  // Euryarchaeota subclades
-  const methano = mkNode(project, 'Methanobacteriales', euryarch, 2800, 700);
-  const halophile = mkNode(project, 'Halobacteriales', euryarch, 2700, 800);
-  const thermopro = mkNode(project, 'Thermoproteales', crenarch, 2600, 600);
-  const sulfolob = mkNode(project, 'Sulfolobales', crenarch, 2500, 700);
-  mkNode(project, 'Methanosarcina', methano, 0, 2800);
-  mkNode(project, 'Methanobrevibacter', methano, 0, 2800);
-  mkNode(project, 'Halobacterium', halophile, 0, 2700);
-  mkNode(project, 'Natronomonas', halophile, 0, 2700);
-  mkNode(project, 'Thermoproteus', thermopro, 0, 2600);
-  mkNode(project, 'Pyrobaculum', thermopro, 0, 2600);
-  mkNode(project, 'Sulfolobus', sulfolob, 0, 2500);
-  mkNode(project, 'Metallosphaera', sulfolob, 0, 2500);
+  // Strictly binary; branchLength = parent.age − node.age on every edge. The old
+  // four-way split of the thermophilic branch is resolved into two balanced
+  // internal nodes at 3250 / 3050 Ma.
+  const root = project.nodes[rootId];
+  root.age = 4000; // oldest node; inside the [4000, 4100] root calibration below
+  const branchB = mkNode(project, nextTaxon(), rootId, 3500, 500);
+  const branchC = mkNode(project, nextTaxon(), rootId, 3400, 600);
+  const cladeD = mkNode(project, nextTaxon(), branchC, 3250, 150);
+  const cladeE = mkNode(project, nextTaxon(), cladeD, 3200, 50);
+  const cladeF = mkNode(project, nextTaxon(), cladeD, 3100, 150);
+  const cladeG = mkNode(project, nextTaxon(), branchC, 3050, 350);
+  const tipH = mkNode(project, nextTaxon(), cladeG, 3000, 50);
+  const tipI = mkNode(project, nextTaxon(), cladeG, 2900, 150);
+  const cladeJ = mkNode(project, nextTaxon(), branchB, 2800, 700);
+  const cladeK = mkNode(project, nextTaxon(), branchB, 2700, 800);
+  const cladeL = mkNode(project, nextTaxon(), cladeE, 2600, 600);
+  const cladeM = mkNode(project, nextTaxon(), cladeE, 2500, 700);
+  const tipsJ1 = mkNode(project, nextTaxon(), cladeJ, 0, 2800);
+  const tipsJ2 = mkNode(project, nextTaxon(), cladeJ, 0, 2800);
+  const tipsK1 = mkNode(project, nextTaxon(), cladeK, 0, 2700);
+  const tipsK2 = mkNode(project, nextTaxon(), cladeK, 0, 2700);
+  const tipsL1 = mkNode(project, nextTaxon(), cladeL, 0, 2600);
+  const tipsL2 = mkNode(project, nextTaxon(), cladeL, 0, 2600);
+  const tipsM1 = mkNode(project, nextTaxon(), cladeM, 0, 2500);
+  const tipsM2 = mkNode(project, nextTaxon(), cladeM, 0, 2500);
 
   // --- characters: metabolism ---
-  // Every state gets its own id constant and the assignments address states by id:
-  // indexing by POSITION (`energy.states[2].id`) means deleting or reordering a
-  // state silently re-labels taxa that looked perfectly reviewed. Every declared
-  // state is also carried by at least one tip, so the legend never shows a
-  // category nothing uses.
+  // Every state gets its own id constant and the assignments address states by
+  // id: indexing by POSITION (`energy.states[2].id`) means deleting or reordering
+  // a state silently re-labels taxa that looked perfectly reviewed. Every
+  // declared state is also carried by at least one tip, so the legend never
+  // shows a category nothing uses.
   const methanoId = newId();
   const haloId = newId();
   const sulfurId = newId();
@@ -472,8 +485,8 @@ export function createArchaeaSample(): Project {
       { id: sulfurId, label: tr('硫氧化', 'Sulfur oxidation'), color: '#f59e0b' },
     ],
     description: tr(
-      '古菌多样化的核心代谢途径演化。',
-      'Evolution of core metabolic pathways driving archaeal diversification.',
+      '演示谱系的核心代谢途径分化（虚构类群）。',
+      'Core metabolic pathway divergence across the fictional clades.',
     ),
   };
   const hyperId = newId();
@@ -491,51 +504,47 @@ export function createArchaeaSample(): Project {
   };
   project.characters = [energy, temperature];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  // Observed tip states
-  assign('Methanosarcina', energy.id, methanoId);
-  assign('Methanobrevibacter', energy.id, methanoId);
-  assign('Halobacterium', energy.id, haloId);
-  assign('Natronomonas', energy.id, haloId);
-  assign('Thermoproteus', energy.id, sulfurId);
-  assign('Pyrobaculum', energy.id, sulfurId);
-  assign('Sulfolobus', energy.id, sulfurId);
-  assign('Metallosphaera', energy.id, sulfurId);
-  assign('Methanosarcina', temperature.id, mesoId);
-  assign('Methanobrevibacter', temperature.id, mesoId);
-  assign('Halobacterium', temperature.id, mesoId);
-  assign('Natronomonas', temperature.id, mesoId);
-  assign('Thermoproteus', temperature.id, hyperId);
-  assign('Pyrobaculum', temperature.id, hyperId);
-  assign('Sulfolobus', temperature.id, thermoId);
-  assign('Metallosphaera', temperature.id, thermoId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  assign(tipsJ1, energy.id, methanoId);
+  assign(tipsJ2, energy.id, methanoId);
+  assign(tipsK1, energy.id, haloId);
+  assign(tipsK2, energy.id, haloId);
+  assign(tipsL1, energy.id, sulfurId);
+  assign(tipsL2, energy.id, sulfurId);
+  assign(tipsM1, energy.id, sulfurId);
+  assign(tipsM2, energy.id, sulfurId);
+  assign(tipsJ1, temperature.id, mesoId);
+  assign(tipsJ2, temperature.id, mesoId);
+  assign(tipsK1, temperature.id, mesoId);
+  assign(tipsK2, temperature.id, mesoId);
+  assign(tipsL1, temperature.id, hyperId);
+  assign(tipsL2, temperature.id, hyperId);
+  assign(tipsM1, temperature.id, thermoId);
+  assign(tipsM2, temperature.id, thermoId);
 
-  // Hypothesise internal states
   project.layers[0].name = tr('嗜热祖先', 'Thermophilic-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Asgard', temperature.id, hyperId, 'medium', tr('深部分支嗜热证据', 'Deep-branching thermophile evidence'));
-  hypothesise('Euryarchaeota', energy.id, methanoId, 'high', tr('产甲烷核心基因', 'Core methanogenesis genes'));
-  hypothesise('Crenarchaeota', energy.id, sulfurId, 'high', tr('硫代谢基因保守', 'Conserved sulfur metabolism genes'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, temperature.id, hyperId, 'medium', tr('演示：深部分支证据', 'Demo: deep-branch evidence'));
+  hypothesise(branchB, energy.id, methanoId, 'high', tr('演示：核心基因保守', 'Demo: conserved core genes'));
+  hypothesise(cladeE, energy.id, sulfurId, 'high', tr('演示：硫代谢基因保守', 'Demo: conserved sulfur-metabolism genes'));
 
-  // The 4000–4100 Ma range the root node comment claims exists as a calibration
-  // point here, so the document carries the bound it asserts and
-  // `validateTimeData` can check the root age against it.
+  // The 4000–4100 Ma range the root carries as a calibration bound, so the
+  // document carries what it asserts and `validateTimeData` can check the root
+  // age against it.
   project.calibrationPoints = [
     {
       id: newId(),
       nodeId: rootId,
       minAge: 4000,
       maxAge: 4100,
-      label: tr('古菌域根下限', 'Archaea root minimum bound'),
+      label: tr('演示：根年龄下限', 'Demo: root minimum bound'),
     },
   ];
 
@@ -545,19 +554,19 @@ export function createArchaeaSample(): Project {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: methano,
+      nodeId: cladeJ,
       label: tr('产甲烷途径', 'Methanogenesis pathway'),
-      note: tr('从CO₂+H₂产生甲烷的代谢创新，古菌独有的能量获取方式。', 'Metabolic innovation producing methane from CO₂+H₂, unique to archaea.'),
+      note: tr('演示谱系中的代谢创新：从CO₂+H₂产生甲烷。', 'Metabolic innovation of the demo clade: producing methane from CO₂+H₂.'),
       confidence: 'high',
-      support: tr('mcrABG 基因簇', 'mcrABG gene cluster'),
+      support: tr('演示基因组注释', 'Demo genome annotation'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'adaptive-radiation',
       target: 'node',
-      nodeId: halophile,
-      label: tr('嗜盐适应辐射', 'Halophilic radiation'),
+      nodeId: cladeK,
+      label: tr('高盐适应辐射', 'Halophilic radiation'),
       confidence: 'medium',
       triggers: [],
     },
@@ -581,65 +590,61 @@ export function createArchaeaSample(): Project {
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 3 — Bacterial domain evolution
+// SAMPLE 3 — Fictional wall-type & oxygen demo
 // ════════════════════════════════════════════════════════════════════════════
-export function createBacteriaSample(): Project {
-  const project = createEmptyProject(tr('细菌域演化', 'Bacterial domain evolution'));
+export function createWallTypeSample(): Project {
+  const project = createEmptyProject(tr('虚拟类群 · 壁型与氧需求', 'Virtual taxa · Wall type & oxygen'));
   project.sampleId = 'bacteria';
+  const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = 'Terrabacteria';
-  project.nodes[rootId].age = 3300; // oldest node; children range 2900–3200 Ma
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 3300
 
-  // branchLength = parent.age − node.age on every edge: 100 / 200 / 300 / 400 for
-  // children at 3200 / 3100 / 3000 / 2900 Ma under a 3300 Ma root. A constant
-  // offset added to those differences leaves the branch scale and the time axis
-  // describing two different trees.
-  const gracilicutes = mkNode(project, 'Gracilicutes (GN)', rootId, 3200, 100);
-  const firmicutes = mkNode(project, 'Firmicutes (GP)', rootId, 3100, 200);
-  const actinobact = mkNode(project, 'Actinobacteria', rootId, 3000, 300);
-  const cyanobact = mkNode(project, 'Cyanobacteria', rootId, 2900, 400);
+  // Strictly binary. The old four-way root split and the three-way thin-wall
+  // split are resolved with balanced internal nodes at 3250 / 3050 / 2450 Ma,
+  // and the former single-child chains are collapsed so their tips attach
+  // directly to a bifurcation.
+  const root = project.nodes[rootId];
+  root.age = 3300; // oldest node; children range 2900–3250 Ma
+  const cladeB = mkNode(project, nextTaxon(), rootId, 3250, 50);
+  const cladeC = mkNode(project, nextTaxon(), rootId, 3050, 250);
+  const cladeD = mkNode(project, nextTaxon(), cladeB, 3200, 50);
+  const cladeE = mkNode(project, nextTaxon(), cladeB, 3100, 150);
+  const cladeF = mkNode(project, nextTaxon(), cladeD, 2500, 700);
+  const cladeG = mkNode(project, nextTaxon(), cladeD, 2450, 750);
+  const tipH = mkNode(project, nextTaxon(), cladeG, 2400, 50);
+  const tipI = mkNode(project, nextTaxon(), cladeG, 2300, 150);
+  const cladeJ = mkNode(project, nextTaxon(), cladeF, 2000, 500);
+  const cladeK = mkNode(project, nextTaxon(), cladeF, 1900, 600);
+  const tipsJ1 = mkNode(project, nextTaxon(), cladeJ, 0, 2000);
+  const tipsJ2 = mkNode(project, nextTaxon(), cladeJ, 0, 2000);
+  const tipsK1 = mkNode(project, nextTaxon(), cladeK, 0, 1900);
+  const tipsK2 = mkNode(project, nextTaxon(), cladeK, 0, 1900);
+  const tipsE1 = mkNode(project, nextTaxon(), cladeE, 0, 3100);
+  const tipsE2 = mkNode(project, nextTaxon(), cladeE, 0, 3100);
+  const cladeL = mkNode(project, nextTaxon(), cladeC, 3000, 50);
+  const cladeM = mkNode(project, nextTaxon(), cladeC, 2900, 150);
+  const tipsL1 = mkNode(project, nextTaxon(), cladeL, 0, 3000);
+  const tipsL2 = mkNode(project, nextTaxon(), cladeL, 0, 3000);
+  const tipsM1 = mkNode(project, nextTaxon(), cladeM, 0, 2900);
+  const tipsM2 = mkNode(project, nextTaxon(), cladeM, 0, 2900);
 
-  // Gram-negative clades
-  const proteo = mkNode(project, 'Proteobacteria', gracilicutes, 2500, 700);
-  const bacteroid = mkNode(project, 'Bacteroidetes', gracilicutes, 2400, 800);
-  const spiroch = mkNode(project, 'Spirochaetes', gracilicutes, 2300, 900);
-
-  // Proteobacteria subclades
-  const alpha = mkNode(project, 'Alphaproteobacteria', proteo, 2000, 500);
-  const gamma = mkNode(project, 'Gammaproteobacteria', proteo, 1900, 600);
-  mkNode(project, 'Rhizobium', alpha, 0, 2000);
-  mkNode(project, 'Rickettsia', alpha, 0, 2000);
-  mkNode(project, 'Escherichia', gamma, 0, 1900);
-  mkNode(project, 'Pseudomonas', gamma, 0, 1900);
-  mkNode(project, 'Bacteroides', bacteroid, 0, 2400);
-  mkNode(project, 'Treponema', spiroch, 0, 2300);
-
-  // Firmicutes
-  const clostrid = mkNode(project, 'Clostridiales', firmicutes, 2200, 900);
-  const bacillales = mkNode(project, 'Bacillales', firmicutes, 2100, 1000);
-  mkNode(project, 'Clostridium', clostrid, 0, 2200);
-  mkNode(project, 'Bacillus', bacillales, 0, 2100);
-  mkNode(project, 'Streptomyces', actinobact, 0, 3000);
-  mkNode(project, 'Mycobacterium', actinobact, 0, 3000);
-  mkNode(project, 'Synechocystis', cyanobact, 0, 2900);
-  mkNode(project, 'Prochlorococcus', cyanobact, 0, 2900);
-
-  // --- characters: Gram stain + oxygen ---
-  const gramPosId = newId();
-  const gramNegId = newId();
-  const gram: Project['characters'][number] = {
-    id: sampleCharacterId('bacteria-gram'),
-    name: tr('革兰氏反应', 'Gram stain reaction'),
+  // --- characters: wall type + oxygen ---
+  const thickId = newId();
+  const thinId = newId();
+  const wall: Project['characters'][number] = {
+    id: sampleCharacterId('bacteria-wall'),
+    name: tr('细胞壁类型', 'Cell wall type'),
     type: 'discrete',
     states: [
-      { id: gramPosId, label: tr('革兰氏阳性', 'Gram-positive'), color: '#7c3aed' },
-      { id: gramNegId, label: tr('革兰氏阴性', 'Gram-negative'), color: '#0ea5e9' },
+      { id: thickId, label: tr('厚壁', 'Thick wall'), color: '#7c3aed' },
+      { id: thinId, label: tr('薄壁', 'Thin wall'), color: '#0ea5e9' },
     ],
-    description: tr('基于细胞壁结构的细菌分类。', 'Bacterial classification based on cell wall structure.'),
+    description: tr('演示谱系的细胞壁结构二态（虚构类群）。', 'A two-state demo cell-wall character across the fictional clades.'),
   };
   const aerId = newId();
   const anaId = newId();
@@ -654,69 +659,67 @@ export function createBacteriaSample(): Project {
       { id: facId, label: tr('兼性', 'Facultative'), color: '#f59e0b' },
     ],
   };
-  project.characters = [gram, oxygen];
+  project.characters = [wall, oxygen];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  assign('Escherichia', gram.id, gramNegId);
-  assign('Pseudomonas', gram.id, gramNegId);
-  assign('Rhizobium', gram.id, gramNegId);
-  assign('Rickettsia', gram.id, gramNegId);
-  assign('Bacteroides', gram.id, gramNegId);
-  assign('Treponema', gram.id, gramNegId);
-  assign('Clostridium', gram.id, gramPosId);
-  assign('Bacillus', gram.id, gramPosId);
-  assign('Streptomyces', gram.id, gramPosId);
-  assign('Mycobacterium', gram.id, gramPosId);
-  assign('Synechocystis', gram.id, gramNegId);
-  assign('Prochlorococcus', gram.id, gramNegId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  assign(tipsL1, wall.id, thinId);
+  assign(tipsL2, wall.id, thinId);
+  assign(tipsJ1, wall.id, thinId);
+  assign(tipsJ2, wall.id, thinId);
+  assign(tipsK1, wall.id, thinId);
+  assign(tipsK2, wall.id, thinId);
+  assign(tipH, wall.id, thinId);
+  assign(tipI, wall.id, thinId);
+  assign(tipsM1, wall.id, thinId);
+  assign(tipsM2, wall.id, thinId);
+  assign(tipsE1, wall.id, thickId);
+  assign(tipsE2, wall.id, thickId);
 
-  assign('Escherichia', oxygen.id, facId);
-  assign('Pseudomonas', oxygen.id, aerId);
-  assign('Rhizobium', oxygen.id, aerId);
-  assign('Rickettsia', oxygen.id, aerId);
-  assign('Bacteroides', oxygen.id, anaId);
-  assign('Treponema', oxygen.id, anaId);
-  assign('Clostridium', oxygen.id, anaId);
-  assign('Bacillus', oxygen.id, facId);
-  assign('Streptomyces', oxygen.id, aerId);
-  assign('Mycobacterium', oxygen.id, aerId);
-  assign('Synechocystis', oxygen.id, aerId);
-  assign('Prochlorococcus', oxygen.id, aerId);
+  assign(tipsL1, oxygen.id, facId);
+  assign(tipsL2, oxygen.id, aerId);
+  assign(tipsJ1, oxygen.id, aerId);
+  assign(tipsJ2, oxygen.id, aerId);
+  assign(tipsK1, oxygen.id, anaId);
+  assign(tipsK2, oxygen.id, anaId);
+  assign(tipH, oxygen.id, anaId);
+  assign(tipI, oxygen.id, anaId);
+  assign(tipsM1, oxygen.id, aerId);
+  assign(tipsM2, oxygen.id, aerId);
+  assign(tipsE1, oxygen.id, anaId);
+  assign(tipsE2, oxygen.id, facId);
 
-  project.layers[0].name = tr('革兰氏阴性祖先', 'Gram-negative-ancestor');
+  project.layers[0].name = tr('薄壁祖先', 'Thin-wall-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Terrabacteria', gram.id, gramPosId, 'low', tr('细胞壁保守性', 'Cell wall conservation'));
-  hypothesise('Gracilicutes (GN)', gram.id, gramNegId, 'high', tr('外膜双层结构', 'Outer membrane double-layer'));
-  hypothesise('Firmicutes (GP)', gram.id, gramPosId, 'high', tr('厚肽聚糖层', 'Thick peptidoglycan layer'));
-  hypothesise('Proteobacteria', oxygen.id, facId, 'medium', tr('代谢灵活性', 'Metabolic flexibility'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, wall.id, thickId, 'low', tr('演示：壁结构保守性', 'Demo: wall-structure conservation'));
+  hypothesise(cladeD, wall.id, thinId, 'high', tr('演示：双层结构证据', 'Demo: double-layer evidence'));
+  hypothesise(cladeE, wall.id, thickId, 'high', tr('演示：厚壁层证据', 'Demo: thick-wall layer evidence'));
+  hypothesise(cladeF, oxygen.id, facId, 'medium', tr('演示：代谢灵活性', 'Demo: metabolic flexibility'));
 
   project.events = [
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: cyanobact,
-      label: tr('产氧光合作用', 'Oxygenic photosynthesis'),
-      note: tr('利用水作为电子供体的光合系统II，引发了地球历史上最大的氧化事件。', 'Photosystem II using water as electron donor, triggering the largest oxidation event in Earth history.'),
+      nodeId: cladeM,
+      label: tr('产氧代谢', 'Oxygenic metabolism'),
+      note: tr('演示谱系中的关键创新：以水为电子供体的产氧代谢。', 'Key innovation of the demo clade: oxygenic metabolism with water as electron donor.'),
       confidence: 'high',
-      support: tr('psbA/psbD 基因', 'psbA/psbD genes'),
+      support: tr('演示基因组注释', 'Demo genome annotation'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'adaptive-radiation',
       target: 'node',
-      nodeId: proteo,
-      label: tr('变形菌纲辐射', 'Proteobacteria radiation'),
+      nodeId: cladeF,
+      label: tr('代谢辐射', 'Metabolic radiation'),
       confidence: 'medium',
       triggers: [],
     },
@@ -729,78 +732,70 @@ export function createBacteriaSample(): Project {
       from: 2400,
       to: 2400,
       color: '#ef4444',
-      note: tr('蓝细菌产氧光合作用导致大气氧积累', 'Cyanobacterial oxygenic photosynthesis led to atmospheric oxygen accumulation'),
+      note: tr('演示：产氧代谢导致大气氧积累', 'Demo: oxygenic metabolism led to atmospheric oxygen accumulation'),
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 4 — Viral evolution (RNA + DNA viruses)
+// SAMPLE 4 — Fictional viral evolution
 // ════════════════════════════════════════════════════════════════════════════
 export function createVirusSample(): Project {
-  const project = createEmptyProject(tr('病毒演化', 'Viral evolution'));
+  const project = createEmptyProject(tr('虚拟类群 · 病毒演化', 'Virtual taxa · Viral evolution'));
   project.sampleId = 'virus';
+  const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = 'Urvirus';
-  project.nodes[rootId].age = 4200; // oldest node; children are 3800–4000 Ma
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 4200
 
-  // branchLength = parent.age − node.age: the root's two children are 200 and 400
-  // because 4200 − 4000 and 4200 − 3800 say so. Values in the same ratio as the
-  // ages themselves (1000 / 1200) would stretch each branch far beyond the time
-  // it represents, and `mkNode` rejects them.
-  const rnaVirus = mkNode(project, 'RNA viruses', rootId, 4000, 200);
-  const dnaVirus = mkNode(project, 'DNA viruses', rootId, 3800, 400);
-
-  // RNA virus clades
-  const posStrand = mkNode(project, '+ssRNA viruses', rnaVirus, 3000, 1000);
-  const negStrand = mkNode(project, '-ssRNA viruses', rnaVirus, 2900, 1100);
-  const dsrna = mkNode(project, 'dsRNA viruses', rnaVirus, 2800, 1200);
-  const retro = mkNode(project, 'Retro-transcribing', rnaVirus, 2700, 1300);
-
-  // +ssRNA subclades
-  const picorna = mkNode(project, 'Picornavirales', posStrand, 1500, 1500);
-  const nidovir = mkNode(project, 'Nidovirales', posStrand, 1400, 1600);
-  mkNode(project, 'Poliovirus', picorna, 0, 1500);
-  mkNode(project, 'Foot-and-mouth', picorna, 0, 1500);
-  mkNode(project, 'SARS-CoV-2', nidovir, 0, 1400);
-  mkNode(project, 'MERS-CoV', nidovir, 0, 1400);
-  // A plant-infecting tobamovirus, unresolved below +ssRNA (the same treatment as
-  // Influenza A below -ssRNA). It is also the only tip carrying the host
-  // character's 植物 state, so the legend never shows a category nothing uses.
-  mkNode(project, 'Tobacco mosaic virus', posStrand, 0, 3000);
-
-  // -ssRNA
-  const mononeg = mkNode(project, 'Mononegavirales', negStrand, 1300, 1600);
-  mkNode(project, 'Influenza A', negStrand, 0, 2900);
-  mkNode(project, 'Measles virus', mononeg, 0, 1300);
-  mkNode(project, 'Ebola virus', mononeg, 0, 1300);
-  mkNode(project, 'Rhabdovirus', mononeg, 0, 1300);
-
-  // dsRNA
-  mkNode(project, 'Rotavirus', dsrna, 0, 2800);
-  mkNode(project, 'Reovirus', dsrna, 0, 2800);
-
-  // Retro
-  mkNode(project, 'HIV-1', retro, 0, 2700);
-  mkNode(project, 'HTLV-1', retro, 0, 2700);
-
-  // DNA viruses
-  const dsdna = mkNode(project, 'dsDNA viruses', dnaVirus, 2500, 1300);
-  const ssdna = mkNode(project, 'ssDNA viruses', dnaVirus, 2400, 1400);
-  const nucleo = mkNode(project, 'Nucleocytoplasmic', dnaVirus, 2300, 1500);
-
-  const herpes = mkNode(project, 'Herpesvirales', dsdna, 1200, 1300);
-  const caudov = mkNode(project, 'Caudovirales', dsdna, 1100, 1400);
-  mkNode(project, 'HSV-1', herpes, 0, 1200);
-  mkNode(project, 'Varicella-zoster', herpes, 0, 1200);
-  mkNode(project, 'Mimivirus', nucleo, 0, 2300);
-  mkNode(project, 'Adenovirus', dsdna, 0, 2500);
-  mkNode(project, 'Papillomavirus', ssdna, 0, 2400);
-  mkNode(project, 'Parvovirus', ssdna, 0, 2400);
-  mkNode(project, 'Lambda phage', caudov, 0, 1100);
-  mkNode(project, 'T4 phage', caudov, 0, 1100);
+  // Strictly binary. The old four-way RNA split becomes two balanced internal
+  // nodes (3050 / 2850 Ma); the three-way splits further down are resolved the
+  // same way, and the former single-child clades are collapsed so their single
+  // tip attaches to a bifurcation.
+  const root = project.nodes[rootId];
+  root.age = 4200; // oldest node; children are 3800–4000 Ma
+  const rnaClade = mkNode(project, nextTaxon(), rootId, 4000, 200);
+  const dnaClade = mkNode(project, nextTaxon(), rootId, 3800, 400);
+  const rnaUp = mkNode(project, nextTaxon(), rnaClade, 3050, 950);
+  const rnaDown = mkNode(project, nextTaxon(), rnaClade, 2850, 1150);
+  const posClade = mkNode(project, nextTaxon(), rnaUp, 3000, 50);
+  const negClade = mkNode(project, nextTaxon(), rnaUp, 2900, 150);
+  const posInner = mkNode(project, nextTaxon(), posClade, 1550, 1450);
+  const posPair = mkNode(project, nextTaxon(), posInner, 1500, 50);
+  const posPair2 = mkNode(project, nextTaxon(), posInner, 1400, 150);
+  const tipPlant = mkNode(project, nextTaxon(), posClade, 0, 3000);
+  const tipsPos11 = mkNode(project, nextTaxon(), posPair, 0, 1500);
+  const tipsPos12 = mkNode(project, nextTaxon(), posPair, 0, 1500);
+  const tipsPos21 = mkNode(project, nextTaxon(), posPair2, 0, 1400);
+  const tipsPos22 = mkNode(project, nextTaxon(), posPair2, 0, 1400);
+  const negInner = mkNode(project, nextTaxon(), negClade, 1300, 1600);
+  const negInner2 = mkNode(project, nextTaxon(), negInner, 1250, 50);
+  const tipNegSolo = mkNode(project, nextTaxon(), negClade, 0, 2900);
+  const tipNegSolo2 = mkNode(project, nextTaxon(), negInner, 0, 1300);
+  const tipsNeg11 = mkNode(project, nextTaxon(), negInner2, 0, 1250);
+  const tipsNeg12 = mkNode(project, nextTaxon(), negInner2, 0, 1250);
+  const dsRna = mkNode(project, nextTaxon(), rnaDown, 2800, 50);
+  const retroClade = mkNode(project, nextTaxon(), rnaDown, 2700, 150);
+  const tipsDs1 = mkNode(project, nextTaxon(), dsRna, 0, 2800);
+  const tipsDs2 = mkNode(project, nextTaxon(), dsRna, 0, 2800);
+  const tipsRetro1 = mkNode(project, nextTaxon(), retroClade, 0, 2700);
+  const tipsRetro2 = mkNode(project, nextTaxon(), retroClade, 0, 2700);
+  const duplivira = mkNode(project, nextTaxon(), dnaClade, 2500, 1300);
+  const dnaDown = mkNode(project, nextTaxon(), dnaClade, 2450, 1350);
+  const tipBig = mkNode(project, nextTaxon(), duplivira, 0, 2500);
+  const tailClade = mkNode(project, nextTaxon(), duplivira, 1250, 1250);
+  const latClade = mkNode(project, nextTaxon(), tailClade, 1200, 50);
+  const caudClade = mkNode(project, nextTaxon(), tailClade, 1100, 150);
+  const tipsLat1 = mkNode(project, nextTaxon(), latClade, 0, 1200);
+  const tipsLat2 = mkNode(project, nextTaxon(), latClade, 0, 1200);
+  const tipsCaud1 = mkNode(project, nextTaxon(), caudClade, 0, 1100);
+  const tipsCaud2 = mkNode(project, nextTaxon(), caudClade, 0, 1100);
+  const ssClade = mkNode(project, nextTaxon(), dnaDown, 2400, 50);
+  const tipsSs1 = mkNode(project, nextTaxon(), ssClade, 0, 2400);
+  const tipsSs2 = mkNode(project, nextTaxon(), ssClade, 0, 2400);
+  const tipGiant = mkNode(project, nextTaxon(), dnaDown, 0, 2450);
 
   // --- characters: genome type + host ---
   const rnaId = newId();
@@ -813,14 +808,14 @@ export function createVirusSample(): Project {
       { id: rnaId, label: 'RNA', color: '#3b82f6' },
       { id: dnaId, label: 'DNA', color: '#dc2626' },
     ],
-    description: tr('病毒遗传物质的核酸类型。', 'Nucleic acid type of the viral genetic material.'),
+    description: tr('演示谱系遗传物质的核酸类型（虚构类群）。', 'Nucleic acid type of the fictional demo genomes.'),
   };
   const animalId = newId();
   const plantId = newId();
   const bactId = newId();
-  // Mimivirus infects free-living amoebae, so its host state is 原生生物 rather than
-  // 细菌: a sample teaches whatever host association it encodes, and a wrong one here
-  // reads as a biological fact wherever the tree is shown.
+  // The giant-virus tip infects free-living amoebae in this fictional world, so
+  // its host state is 原生生物 rather than 细菌: a sample teaches whatever host
+  // association it encodes, and the assignment is kept internally consistent.
   const protistId = newId();
   const host: Project['characters'][number] = {
     id: sampleCharacterId('virus-host'),
@@ -835,144 +830,107 @@ export function createVirusSample(): Project {
   };
   project.characters = [genome, host];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  // RNA virus tips
-  assign('Poliovirus', genome.id, rnaId);
-  assign('Foot-and-mouth', genome.id, rnaId);
-  assign('SARS-CoV-2', genome.id, rnaId);
-  assign('MERS-CoV', genome.id, rnaId);
-  assign('Influenza A', genome.id, rnaId);
-  assign('Measles virus', genome.id, rnaId);
-  assign('Ebola virus', genome.id, rnaId);
-  assign('Rhabdovirus', genome.id, rnaId);
-  assign('Rotavirus', genome.id, rnaId);
-  assign('Reovirus', genome.id, rnaId);
-  assign('HIV-1', genome.id, rnaId);
-  assign('HTLV-1', genome.id, rnaId);
-  assign('Tobacco mosaic virus', genome.id, rnaId);
-  // DNA virus tips
-  assign('HSV-1', genome.id, dnaId);
-  assign('Varicella-zoster', genome.id, dnaId);
-  assign('Mimivirus', genome.id, dnaId);
-  assign('Adenovirus', genome.id, dnaId);
-  assign('Papillomavirus', genome.id, dnaId);
-  assign('Parvovirus', genome.id, dnaId);
-  assign('Lambda phage', genome.id, dnaId);
-  assign('T4 phage', genome.id, dnaId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  // RNA side
+  for (const tip of [tipsPos11, tipsPos12, tipsPos21, tipsPos22, tipPlant, tipNegSolo, tipNegSolo2, tipsNeg11, tipsNeg12, tipsDs1, tipsDs2, tipsRetro1, tipsRetro2]) {
+    assign(tip, genome.id, rnaId);
+  }
+  // DNA side
+  for (const tip of [tipsLat1, tipsLat2, tipsCaud1, tipsCaud2, tipsSs1, tipsSs2, tipGiant]) {
+    assign(tip, genome.id, dnaId);
+  }
 
   // Host assignments
-  assign('Poliovirus', host.id, animalId);
-  assign('Foot-and-mouth', host.id, animalId);
-  assign('SARS-CoV-2', host.id, animalId);
-  assign('MERS-CoV', host.id, animalId);
-  assign('Influenza A', host.id, animalId);
-  assign('Measles virus', host.id, animalId);
-  assign('Ebola virus', host.id, animalId);
-  assign('Rotavirus', host.id, animalId);
-  assign('Reovirus', host.id, animalId);
-  assign('HIV-1', host.id, animalId);
-  assign('HTLV-1', host.id, animalId);
-  assign('Rhabdovirus', host.id, animalId);
-  assign('HSV-1', host.id, animalId);
-  assign('Varicella-zoster', host.id, animalId);
-  assign('Adenovirus', host.id, animalId);
-  assign('Papillomavirus', host.id, animalId);
-  assign('Parvovirus', host.id, animalId);
-  assign('Lambda phage', host.id, bactId);
-  assign('T4 phage', host.id, bactId);
-  // Tobacco mosaic virus is the textbook plant virus; Mimivirus is a nucleocytoplasmic
-  // giant virus of free-living amoebae (a protist), NOT a bacteriophage.
-  assign('Tobacco mosaic virus', host.id, plantId);
-  assign('Mimivirus', host.id, protistId);
+  for (const tip of [tipsPos11, tipsPos12, tipsPos21, tipsPos22, tipNegSolo, tipNegSolo2, tipsNeg11, tipsNeg12, tipsDs1, tipsDs2, tipsRetro1, tipsRetro2, tipsLat1, tipsLat2, tipsSs1, tipsSs2]) {
+    assign(tip, host.id, animalId);
+  }
+  assign(tipsCaud1, host.id, bactId);
+  assign(tipsCaud2, host.id, bactId);
+  // The plant tip is the demo plant-infecting lineage; the giant-virus tip is
+  // the demo nucleocytoplasmic virus of amoebae, NOT a bacteriophage.
+  assign(tipPlant, host.id, plantId);
+  assign(tipGiant, host.id, protistId);
 
   project.layers[0].name = tr('RNA祖先', 'RNA-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Urvirus', genome.id, rnaId, 'low', tr('RNA世界假说', 'RNA world hypothesis'));
-  hypothesise('RNA viruses', genome.id, rnaId, 'high', tr('依赖RNA的RNA聚合酶', 'RNA-dependent RNA polymerase'));
-  hypothesise('DNA viruses', genome.id, dnaId, 'high', tr('DNA聚合酶同源', 'DNA polymerase homology'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, genome.id, rnaId, 'low', tr('演示：早期复制子假说', 'Demo: early replicator hypothesis'));
+  hypothesise(rnaClade, genome.id, rnaId, 'high', tr('演示：RNA依赖的复制酶', 'Demo: RNA-dependent replicase'));
+  hypothesise(dnaClade, genome.id, dnaId, 'high', tr('演示：DNA聚合酶同源', 'Demo: DNA polymerase homology'));
 
   project.events = [
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: retro,
+      nodeId: retroClade,
       label: tr('逆转录整合', 'Reverse transcription & integration'),
-      note: tr('逆转录酶使RNA基因组可整合入宿主DNA，是反转录病毒的关键创新。', 'Reverse transcriptase enabling RNA genome integration into host DNA, key innovation of retroviruses.'),
+      note: tr('演示谱系中的关键创新：逆转录酶使RNA基因组可整合入宿主DNA。', 'Key innovation of the demo clade: reverse transcriptase enabling RNA genome integration.'),
       confidence: 'high',
-      support: tr('pol 基因逆转录酶', 'pol gene reverse transcriptase'),
+      support: tr('演示基因组注释', 'Demo genome annotation'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'adaptive-radiation',
       target: 'node',
-      nodeId: posStrand,
-      label: tr('+ssRNA病毒辐射', '+ssRNA virus radiation'),
+      nodeId: posClade,
+      label: tr('阳性链辐射', 'Positive-sense radiation'),
       confidence: 'medium',
       triggers: [],
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 5 — Plant land colonization
+// SAMPLE 5 — Fictional plant terrestrialization
 // ════════════════════════════════════════════════════════════════════════════
 export function createPlantSample(): Project {
-  const project = createEmptyProject(tr('植物陆地登陆演化', 'Plant terrestrialization'));
+  const project = createEmptyProject(tr('虚拟类群 · 陆地植物化', 'Virtual taxa · Plant terrestrialization'));
   project.sampleId = 'plant';
+  const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = 'Streptophyta';
-  project.nodes[rootId].age = 520; // oldest node; children are 470–500 Ma
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 520
 
-  // branchLength = parent.age − node.age: the root's two daughters are 20 and 50
-  // (520 − 500, 520 − 470). Numbers closer to the node ages themselves — 450 and
-  // 30 — would draw the two daughters at nearly the same depth and make the algae
-  // branch read ~22× longer than the time axis says it is.
-  const algae = mkNode(project, 'Charophyceae', rootId, 500, 20);
-  const landPlants = mkNode(project, 'Embryophyta', rootId, 470, 50);
-
-  const bryophytes = mkNode(project, 'Bryophyta', landPlants, 450, 20);
-  const tracheophytes = mkNode(project, 'Tracheophyta', landPlants, 430, 40);
-
-  const lycopsids = mkNode(project, 'Lycopodiopsida', tracheophytes, 410, 20);
-  const euphyllo = mkNode(project, 'Euphyllophyta', tracheophytes, 400, 30);
-
-  const ferns = mkNode(project, 'Monilophyta', euphyllo, 380, 20);
-  const spermat = mkNode(project, 'Spermatophyta', euphyllo, 370, 30);
-
-  const gymno = mkNode(project, 'Gymnospermae', spermat, 350, 20);
-  const angio = mkNode(project, 'Angiospermae', spermat, 340, 30);
-
-  const monocots = mkNode(project, 'Monocots', angio, 140, 200);
-  const eudicots = mkNode(project, 'Eudicots', angio, 130, 210);
-
-  // Tips
-  mkNode(project, 'Chara', algae, 0, 500);
-  mkNode(project, 'Coleochaete', algae, 0, 500);
-  mkNode(project, 'Marchantia', bryophytes, 0, 450);
-  mkNode(project, 'Sphagnum', bryophytes, 0, 450);
-  mkNode(project, 'Lycopodium', lycopsids, 0, 410);
-  mkNode(project, 'Selaginella', lycopsids, 0, 410);
-  mkNode(project, 'Pteridium', ferns, 0, 380);
-  mkNode(project, 'Equisetum', ferns, 0, 380);
-  mkNode(project, 'Pinus', gymno, 0, 350);
-  mkNode(project, 'Ginkgo', gymno, 0, 350);
-  mkNode(project, 'Oryza', monocots, 0, 140);
-  mkNode(project, 'Zea', monocots, 0, 140);
-  mkNode(project, 'Arabidopsis', eudicots, 0, 130);
-  mkNode(project, 'Rosa', eudicots, 0, 130);
+  // Strictly binary; branchLength = parent.age − node.age: the root's two
+  // daughters are 20 and 50 (520 − 500, 520 − 470).
+  const root = project.nodes[rootId];
+  root.age = 520; // oldest node; children are 470–500 Ma
+  const algae = mkNode(project, nextTaxon(), rootId, 500, 20);
+  const landPlants = mkNode(project, nextTaxon(), rootId, 470, 50);
+  const bryia = mkNode(project, nextTaxon(), landPlants, 450, 20);
+  const trachea = mkNode(project, nextTaxon(), landPlants, 430, 40);
+  const lycopia = mkNode(project, nextTaxon(), trachea, 410, 20);
+  const euphyllo = mkNode(project, nextTaxon(), trachea, 400, 30);
+  const monilia = mkNode(project, nextTaxon(), euphyllo, 380, 20);
+  const sperma = mkNode(project, nextTaxon(), euphyllo, 370, 30);
+  const gymna = mkNode(project, nextTaxon(), sperma, 350, 20);
+  const angia = mkNode(project, nextTaxon(), sperma, 340, 30);
+  const mona = mkNode(project, nextTaxon(), angia, 140, 200);
+  const eudia = mkNode(project, nextTaxon(), angia, 130, 210);
+  const tipsA1 = mkNode(project, nextTaxon(), algae, 0, 500);
+  const tipsA2 = mkNode(project, nextTaxon(), algae, 0, 500);
+  const tipsB1 = mkNode(project, nextTaxon(), bryia, 0, 450);
+  const tipsB2 = mkNode(project, nextTaxon(), bryia, 0, 450);
+  const tipsC1 = mkNode(project, nextTaxon(), lycopia, 0, 410);
+  const tipsC2 = mkNode(project, nextTaxon(), lycopia, 0, 410);
+  const tipsD1 = mkNode(project, nextTaxon(), monilia, 0, 380);
+  const tipsD2 = mkNode(project, nextTaxon(), monilia, 0, 380);
+  const tipsE1 = mkNode(project, nextTaxon(), gymna, 0, 350);
+  const tipsE2 = mkNode(project, nextTaxon(), gymna, 0, 350);
+  const tipsF1 = mkNode(project, nextTaxon(), mona, 0, 140);
+  const tipsF2 = mkNode(project, nextTaxon(), mona, 0, 140);
+  const tipsG1 = mkNode(project, nextTaxon(), eudia, 0, 130);
+  const tipsG2 = mkNode(project, nextTaxon(), eudia, 0, 130);
 
   // --- characters ---
   const aqId = newId();
@@ -987,7 +945,7 @@ export function createPlantSample(): Project {
       { id: semiId, label: tr('湿生', 'Semi-aquatic'), color: '#3b82f6' },
       { id: terrId, label: tr('陆生', 'Terrestrial'), color: '#22c55e' },
     ],
-    description: tr('植物从水生到陆生的栖息地转变。', 'Plant habitat transition from aquatic to terrestrial.'),
+    description: tr('演示谱系从水生到陆生的栖息地转变（虚构类群）。', 'The demo clade\u2019s habitat transition from aquatic to terrestrial.'),
   };
   const noVascId = newId();
   const vascId = newId();
@@ -1013,69 +971,51 @@ export function createPlantSample(): Project {
   };
   project.characters = [habitat, vasc, seed];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  assign('Chara', habitat.id, aqId);
-  assign('Coleochaete', habitat.id, aqId);
-  assign('Marchantia', habitat.id, semiId);
-  assign('Sphagnum', habitat.id, semiId);
-  assign('Lycopodium', habitat.id, terrId);
-  assign('Selaginella', habitat.id, terrId);
-  assign('Pteridium', habitat.id, terrId);
-  assign('Equisetum', habitat.id, terrId);
-  assign('Pinus', habitat.id, terrId);
-  assign('Ginkgo', habitat.id, terrId);
-  assign('Oryza', habitat.id, semiId);
-  assign('Zea', habitat.id, terrId);
-  assign('Arabidopsis', habitat.id, terrId);
-  assign('Rosa', habitat.id, terrId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  assign(tipsA1, habitat.id, aqId);
+  assign(tipsA2, habitat.id, aqId);
+  assign(tipsB1, habitat.id, semiId);
+  assign(tipsB2, habitat.id, semiId);
+  assign(tipsC1, habitat.id, terrId);
+  assign(tipsC2, habitat.id, terrId);
+  assign(tipsD1, habitat.id, terrId);
+  assign(tipsD2, habitat.id, terrId);
+  assign(tipsE1, habitat.id, terrId);
+  assign(tipsE2, habitat.id, terrId);
+  assign(tipsF1, habitat.id, semiId);
+  assign(tipsF2, habitat.id, terrId);
+  assign(tipsG1, habitat.id, terrId);
+  assign(tipsG2, habitat.id, terrId);
 
-  assign('Chara', vasc.id, noVascId);
-  assign('Coleochaete', vasc.id, noVascId);
-  assign('Marchantia', vasc.id, noVascId);
-  assign('Sphagnum', vasc.id, noVascId);
-  assign('Lycopodium', vasc.id, vascId);
-  assign('Selaginella', vasc.id, vascId);
-  assign('Pteridium', vasc.id, vascId);
-  assign('Equisetum', vasc.id, vascId);
-  assign('Pinus', vasc.id, vascId);
-  assign('Ginkgo', vasc.id, vascId);
-  assign('Oryza', vasc.id, vascId);
-  assign('Zea', vasc.id, vascId);
-  assign('Arabidopsis', vasc.id, vascId);
-  assign('Rosa', vasc.id, vascId);
+  for (const tip of [tipsC1, tipsC2, tipsD1, tipsD2, tipsE1, tipsE2, tipsF1, tipsF2, tipsG1, tipsG2]) {
+    assign(tip, vasc.id, vascId);
+  }
+  for (const tip of [tipsA1, tipsA2, tipsB1, tipsB2]) {
+    assign(tip, vasc.id, noVascId);
+  }
 
-  assign('Chara', seed.id, noSeedId);
-  assign('Coleochaete', seed.id, noSeedId);
-  assign('Marchantia', seed.id, noSeedId);
-  assign('Sphagnum', seed.id, noSeedId);
-  assign('Lycopodium', seed.id, noSeedId);
-  assign('Selaginella', seed.id, noSeedId);
-  assign('Pteridium', seed.id, noSeedId);
-  assign('Equisetum', seed.id, noSeedId);
-  assign('Pinus', seed.id, seedId);
-  assign('Ginkgo', seed.id, seedId);
-  assign('Oryza', seed.id, seedId);
-  assign('Zea', seed.id, seedId);
-  assign('Arabidopsis', seed.id, seedId);
-  assign('Rosa', seed.id, seedId);
+  for (const tip of [tipsA1, tipsA2, tipsB1, tipsB2, tipsC1, tipsC2, tipsD1, tipsD2]) {
+    assign(tip, seed.id, noSeedId);
+  }
+  for (const tip of [tipsE1, tipsE2, tipsF1, tipsF2, tipsG1, tipsG2]) {
+    assign(tip, seed.id, seedId);
+  }
 
   project.layers[0].name = tr('水生祖先', 'Aquatic-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Streptophyta', habitat.id, aqId, 'high', tr('轮藻近亲', 'Charophyte relatives'));
-  hypothesise('Embryophyta', habitat.id, semiId, 'medium', tr('早期陆生植物化石', 'Early land plant fossils'));
-  hypothesise('Embryophyta', vasc.id, noVascId, 'high', tr('苔藓植物无维管', 'Bryophytes lack vascular tissue'));
-  hypothesise('Tracheophyta', vasc.id, vascId, 'high', tr('木质部/韧皮部', 'Xylem/phloem'));
-  hypothesise('Spermatophyta', seed.id, seedId, 'high', tr('种子结构', 'Seed structure'));
-  hypothesise('Euphyllophyta', vasc.id, vascId, 'high', tr('真叶植物维管', 'Euphyllophyte vasculature'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, habitat.id, aqId, 'high', tr('演示：近缘水生类群', 'Demo: closely related aquatic taxa'));
+  hypothesise(landPlants, habitat.id, semiId, 'medium', tr('演示：早期陆生记录', 'Demo: early land record'));
+  hypothesise(landPlants, vasc.id, noVascId, 'high', tr('演示：早期类群无维管', 'Demo: early taxa lack vasculature'));
+  hypothesise(trachea, vasc.id, vascId, 'high', tr('演示：输运组织证据', 'Demo: transport-tissue evidence'));
+  hypothesise(sperma, seed.id, seedId, 'high', tr('演示：种子结构证据', 'Demo: seed-structure evidence'));
+  hypothesise(euphyllo, vasc.id, vascId, 'high', tr('演示：大型叶证据', 'Demo: megaphyll evidence'));
 
   project.events = [
     {
@@ -1084,28 +1024,28 @@ export function createPlantSample(): Project {
       target: 'branch',
       nodeId: landPlants,
       label: tr('角质层与气孔', 'Cuticle & stomata'),
-      note: tr('防水角质层和可调节气孔是陆地植物的关键创新。', 'Waterproof cuticle and regulatable stomata are key innovations of land plants.'),
+      note: tr('演示谱系的关键创新：防水角质层和可调节气孔。', 'Key innovations of the demo clade: waterproof cuticle and regulatable stomata.'),
       confidence: 'high',
-      support: tr('化石角质层', 'Fossil cuticles'),
+      support: tr('演示：角质层记录', 'Demo: cuticle record'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: tracheophytes,
+      nodeId: trachea,
       label: tr('维管系统', 'Vascular system'),
-      note: tr('木质部与韧皮部运输系统，使植物体大型化成为可能。', 'Xylem and phloem transport system enabling plant body size increase.'),
+      note: tr('演示谱系的关键创新：输运系统使植物体大型化成为可能。', 'Key innovation of the demo clade: a transport system enabling large body size.'),
       confidence: 'high',
-      support: tr('管胞化石', 'Tracheid fossils'),
+      support: tr('演示：管胞记录', 'Demo: tracheid record'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'adaptive-radiation',
       target: 'node',
-      nodeId: angio,
-      label: tr('被子植物辐射', 'Angiosperm radiation'),
+      nodeId: angia,
+      label: tr('有花分支辐射', 'Flowering-clade radiation'),
       confidence: 'medium',
       triggers: [],
     },
@@ -1132,76 +1072,68 @@ export function createPlantSample(): Project {
       from: 66,
       to: 66,
       color: '#ef4444',
-      note: tr('被子植物在K-Pg后快速辐射', 'Angiosperms radiated rapidly after the K–Pg boundary'),
+      note: tr('演示：有花分支在K-Pg后快速辐射', 'Demo: the flowering clade radiated rapidly after the K–Pg boundary'),
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 6 — Animal (tetrapod) terrestrialization
+// SAMPLE 6 — Fictional land-invasion (tetrapod-style) demo
 // ════════════════════════════════════════════════════════════════════════════
 export function createAnimalSample(): Project {
-  const project = createEmptyProject(tr('四足动物陆地演化', 'Tetrapod terrestrialization'));
+  const project = createEmptyProject(tr('虚拟类群 · 四足登陆', 'Virtual taxa · Tetrapod land invasion'));
   project.sampleId = 'animal';
+  const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = 'Sarcopterygii';
-  project.nodes[rootId].age = 430; // oldest node; first child is 410 Ma
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 430
 
-  const tetrapodomorph = mkNode(project, 'Tetrapodomorpha', rootId, 410, 20);
-  // The root must be a genuine bifurcation: a unary root carries no split at all —
-  // it is an unrooted tree drawn as a rooted one — which drags treeSummary's
-  // resolution down and pushes the DTL solver through its unary special case.
-  // Latimeria (Actinistia, the extant coelacanths) is the real sister lineage of
-  // Tetrapodomorpha within Sarcopterygii once lungfish are left out of the summary,
-  // so this second child is both the biologically right split and the structurally
-  // required one.
-  mkNode(project, 'Latimeria', rootId, 0, 430);
-  const tetrapoda = mkNode(project, 'Tetrapoda', tetrapodomorph, 380, 30);
-
-  const amphibians = mkNode(project, 'Amphibia', tetrapoda, 340, 40);
-  const amniota = mkNode(project, 'Amniota', tetrapoda, 320, 60);
-
-  const sauropsids = mkNode(project, 'Sauropsida', amniota, 310, 10);
-  const synapsids = mkNode(project, 'Synapsida', amniota, 315, 5);
-
-  const lepidosaur = mkNode(project, 'Lepidosauria', sauropsids, 260, 50);
-  const archosaur = mkNode(project, 'Archosauria', sauropsids, 250, 60);
-  const testudines = mkNode(project, 'Testudines', sauropsids, 260, 50);
-
-  const dinosaurs = mkNode(project, 'Dinosauria', archosaur, 230, 20);
-  const crocodylia = mkNode(project, 'Crocodylia', archosaur, 220, 30);
-
-  const theropods = mkNode(project, 'Theropoda', dinosaurs, 200, 30);
-  const sauropodomorph = mkNode(project, 'Sauropodomorpha', dinosaurs, 200, 30);
-
-  const birds = mkNode(project, 'Aves', theropods, 150, 50);
-  const mammals = mkNode(project, 'Mammalia', synapsids, 200, 115);
-
-  const marsupial = mkNode(project, 'Marsupialia', mammals, 80, 120);
-  const placental = mkNode(project, 'Placentalia', mammals, 65, 135);
-
-  // Tips
-  mkNode(project, 'Eusthenopteron', tetrapodomorph, 0, 410);
-  mkNode(project, 'Tiktaalik', tetrapodomorph, 0, 410);
-  mkNode(project, 'Acanthostega', tetrapoda, 0, 380);
-  mkNode(project, 'Ichthyostega', tetrapoda, 0, 380);
-  mkNode(project, 'Ambystoma', amphibians, 0, 340);
-  mkNode(project, 'Rana', amphibians, 0, 340);
-  mkNode(project, 'Lacerta', lepidosaur, 0, 260);
-  mkNode(project, 'Python', lepidosaur, 0, 260);
-  mkNode(project, 'Testudo', testudines, 0, 260);
-  mkNode(project, 'Crocodylus', crocodylia, 0, 220);
-  mkNode(project, 'Brachiosaurus', sauropodomorph, 0, 200);
-  mkNode(project, 'Tyrannosaurus', theropods, 0, 200);
-  mkNode(project, 'Gallus', birds, 0, 150);
-  mkNode(project, 'Passer', birds, 0, 150);
-  mkNode(project, 'Ornithorhynchus', mammals, 0, 200);
-  mkNode(project, 'Didelphis', marsupial, 0, 80);
-  mkNode(project, 'Homo', placental, 0, 65);
-  mkNode(project, 'Mus', placental, 0, 65);
-  mkNode(project, 'Canis', placental, 0, 65);
+  // Strictly binary. The old three-way splits (lobe-finned branch, amniote
+  // branch, placental branch) are resolved with balanced internal nodes, and the
+  // former single-child chains (the crocodile / sauropod / monotreme sides) are
+  // collapsed so each remaining tip attaches to a bifurcation.
+  const root = project.nodes[rootId];
+  root.age = 430; // oldest node; first child is 410 Ma
+  const podomorpha = mkNode(project, nextTaxon(), rootId, 410, 20);
+  const tipMeria = mkNode(project, nextTaxon(), rootId, 0, 430);
+  const finPair = mkNode(project, nextTaxon(), podomorpha, 390, 20);
+  const tipFin1 = mkNode(project, nextTaxon(), finPair, 0, 390);
+  const tipFin2 = mkNode(project, nextTaxon(), finPair, 0, 390);
+  const tetra = mkNode(project, nextTaxon(), podomorpha, 380, 30);
+  const tetraUp = mkNode(project, nextTaxon(), tetra, 370, 10);
+  const amphibGroup = mkNode(project, nextTaxon(), tetraUp, 360, 10);
+  const stegaPair = mkNode(project, nextTaxon(), tetraUp, 355, 15);
+  const amnia = mkNode(project, nextTaxon(), tetra, 320, 60);
+  const tipStega1 = mkNode(project, nextTaxon(), stegaPair, 0, 355);
+  const tipStega2 = mkNode(project, nextTaxon(), stegaPair, 0, 355);
+  const tipAmph1 = mkNode(project, nextTaxon(), amphibGroup, 0, 360);
+  const tipAmph2 = mkNode(project, nextTaxon(), amphibGroup, 0, 360);
+  const herpia = mkNode(project, nextTaxon(), amnia, 310, 10);
+  const mammalia = mkNode(project, nextTaxon(), amnia, 200, 120);
+  const lepGroup = mkNode(project, nextTaxon(), herpia, 265, 45);
+  const archosa = mkNode(project, nextTaxon(), herpia, 250, 60);
+  const lepida = mkNode(project, nextTaxon(), lepGroup, 260, 5);
+  const tipTestudinis = mkNode(project, nextTaxon(), lepGroup, 0, 265);
+  const tipLacertis = mkNode(project, nextTaxon(), lepida, 0, 260);
+  const tipSerpentis = mkNode(project, nextTaxon(), lepida, 0, 260);
+  const magna = mkNode(project, nextTaxon(), archosa, 230, 20);
+  const tipCroci = mkNode(project, nextTaxon(), archosa, 0, 250);
+  const thera = mkNode(project, nextTaxon(), magna, 200, 30);
+  const tipBrachio = mkNode(project, nextTaxon(), magna, 0, 230);
+  const avia = mkNode(project, nextTaxon(), thera, 150, 50);
+  const tipTyranno = mkNode(project, nextTaxon(), thera, 0, 200);
+  const tipGalla = mkNode(project, nextTaxon(), avia, 0, 150);
+  const tipPassera = mkNode(project, nextTaxon(), avia, 0, 150);
+  const tipOrnitho = mkNode(project, nextTaxon(), mammalia, 0, 200);
+  const marsupialGroup = mkNode(project, nextTaxon(), mammalia, 80, 120);
+  const placenta = mkNode(project, nextTaxon(), marsupialGroup, 65, 15);
+  const tipDelphis = mkNode(project, nextTaxon(), marsupialGroup, 0, 80);
+  const primatesPair = mkNode(project, nextTaxon(), placenta, 30, 35);
+  const tipLupus = mkNode(project, nextTaxon(), placenta, 0, 65);
+  const tipPrimas = mkNode(project, nextTaxon(), primatesPair, 0, 30);
+  const tipMuris = mkNode(project, nextTaxon(), primatesPair, 0, 30);
 
   // --- characters: habitat + limbs ---
   const aqId = newId();
@@ -1218,7 +1150,7 @@ export function createAnimalSample(): Project {
       { id: terrId, label: tr('陆生', 'Terrestrial'), color: '#22c55e' },
       { id: flyId, label: tr('飞行', 'Aerial'), color: '#8b5cf6' },
     ],
-    description: tr('四足动物从水生到陆生的栖息地演化。', 'Tetrapod habitat evolution from aquatic to terrestrial.'),
+    description: tr('演示谱系从水生到陆生的栖息地演化（虚构类群）。', 'Habitat evolution from aquatic to terrestrial across the demo clade.'),
   };
   const finId = newId();
   const digId = newId();
@@ -1235,99 +1167,97 @@ export function createAnimalSample(): Project {
   };
   project.characters = [habitat, limb];
 
-  // Every lookup is checked (see `assignState`): a typo or a renamed label fails
-  // loudly instead of silently dropping a state.
-  const assign = (label: string, charId: string, stateId: string) =>
-    assignState(project, label, charId, stateId);
-  assign('Eusthenopteron', habitat.id, aqId);
-  assign('Tiktaalik', habitat.id, semiId);
-  assign('Acanthostega', habitat.id, semiId);
-  assign('Ichthyostega', habitat.id, semiId);
-  assign('Ambystoma', habitat.id, semiId);
-  assign('Rana', habitat.id, semiId);
-  assign('Lacerta', habitat.id, terrId);
-  assign('Python', habitat.id, terrId);
-  assign('Testudo', habitat.id, terrId);
-  assign('Crocodylus', habitat.id, semiId);
-  assign('Brachiosaurus', habitat.id, terrId);
-  assign('Tyrannosaurus', habitat.id, terrId);
-  assign('Gallus', habitat.id, flyId);
-  assign('Passer', habitat.id, flyId);
-  assign('Ornithorhynchus', habitat.id, semiId);
-  assign('Didelphis', habitat.id, terrId);
-  assign('Homo', habitat.id, terrId);
-  assign('Mus', habitat.id, terrId);
-  assign('Canis', habitat.id, terrId);
-  // Extant coelacanth: fully aquatic, fin-bearing.
-  assign('Latimeria', habitat.id, aqId);
+  const assign = (nodeId: string, charId: string, stateId: string) =>
+    assignStateAt(project, nodeId, charId, stateId);
+  assign(tipFin1, habitat.id, aqId);
+  assign(tipFin2, habitat.id, semiId);
+  assign(tipStega1, habitat.id, semiId);
+  assign(tipStega2, habitat.id, semiId);
+  assign(tipAmph1, habitat.id, semiId);
+  assign(tipAmph2, habitat.id, semiId);
+  assign(tipLacertis, habitat.id, terrId);
+  assign(tipSerpentis, habitat.id, terrId);
+  assign(tipTestudinis, habitat.id, terrId);
+  assign(tipCroci, habitat.id, semiId);
+  assign(tipBrachio, habitat.id, terrId);
+  assign(tipTyranno, habitat.id, terrId);
+  assign(tipGalla, habitat.id, flyId);
+  assign(tipPassera, habitat.id, flyId);
+  assign(tipOrnitho, habitat.id, semiId);
+  assign(tipDelphis, habitat.id, terrId);
+  assign(tipPrimas, habitat.id, terrId);
+  assign(tipMuris, habitat.id, terrId);
+  assign(tipLupus, habitat.id, terrId);
+  // Extant demo sister lineage: fully aquatic, fin-bearing.
+  assign(tipMeria, habitat.id, aqId);
 
-  assign('Eusthenopteron', limb.id, finId);
-  assign('Tiktaalik', limb.id, finId);
-  assign('Acanthostega', limb.id, digId);
-  assign('Ichthyostega', limb.id, digId);
-  assign('Ambystoma', limb.id, digId);
-  assign('Rana', limb.id, digId);
-  assign('Lacerta', limb.id, digId);
-  assign('Python', limb.id, digId);
-  assign('Testudo', limb.id, digId);
-  assign('Crocodylus', limb.id, digId);
-  assign('Brachiosaurus', limb.id, digId);
-  assign('Tyrannosaurus', limb.id, digId);
-  assign('Gallus', limb.id, wingId);
-  assign('Passer', limb.id, wingId);
-  assign('Ornithorhynchus', limb.id, digId);
-  assign('Didelphis', limb.id, digId);
-  assign('Homo', limb.id, digId);
-  assign('Mus', limb.id, digId);
-  assign('Canis', limb.id, digId);
-  assign('Latimeria', limb.id, finId);
+  assign(tipFin1, limb.id, finId);
+  assign(tipFin2, limb.id, finId);
+  assign(tipStega1, limb.id, digId);
+  assign(tipStega2, limb.id, digId);
+  assign(tipAmph1, limb.id, digId);
+  assign(tipAmph2, limb.id, digId);
+  assign(tipLacertis, limb.id, digId);
+  assign(tipSerpentis, limb.id, digId);
+  assign(tipTestudinis, limb.id, digId);
+  assign(tipCroci, limb.id, digId);
+  assign(tipBrachio, limb.id, digId);
+  assign(tipTyranno, limb.id, digId);
+  assign(tipGalla, limb.id, wingId);
+  assign(tipPassera, limb.id, wingId);
+  assign(tipOrnitho, limb.id, digId);
+  assign(tipDelphis, limb.id, digId);
+  assign(tipPrimas, limb.id, digId);
+  assign(tipMuris, limb.id, digId);
+  assign(tipLupus, limb.id, digId);
+  assign(tipMeria, limb.id, finId);
 
   project.layers[0].name = tr('水生祖先', 'Aquatic-ancestor');
   const hypothesise = (
-    label: string,
+    nodeId: string,
     charId: string,
     stateId: string,
     confidence: 'high' | 'medium' | 'low',
     support: string,
-  ) => hypothesiseState(project, label, charId, stateId, confidence, support);
-  hypothesise('Sarcopterygii', habitat.id, aqId, 'high', tr('肉鳍鱼类化石', 'Lobe-finned fish fossils'));
-  hypothesise('Tetrapoda', habitat.id, semiId, 'high', tr('Acanthostega 化石', 'Acanthostega fossils'));
-  hypothesise('Tetrapoda', limb.id, digId, 'high', tr('八趾足', 'Polydactylous limbs'));
-  hypothesise('Amniota', habitat.id, terrId, 'high', tr('羊膜卵', 'Amniotic egg'));
-  hypothesise('Theropoda', limb.id, digId, 'high', tr('兽脚类后肢', 'Theropod hindlimbs'));
+  ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
+  hypothesise(rootId, habitat.id, aqId, 'high', tr('演示：肉鳍状记录', 'Demo: lobe-fin-like record'));
+  hypothesise(tetra, habitat.id, semiId, 'high', tr('演示：过渡型记录', 'Demo: transitional record'));
+  hypothesise(tetra, limb.id, digId, 'high', tr('演示：多趾型记录', 'Demo: polydactylous record'));
+  hypothesise(amnia, habitat.id, terrId, 'high', tr('演示：羊膜卵记录', 'Demo: amniotic-egg record'));
+  hypothesise(thera, limb.id, digId, 'high', tr('演示：后肢记录', 'Demo: hindlimb record'));
 
   project.events = [
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: tetrapoda,
+      nodeId: tetra,
       label: tr('四肢与趾型', 'Limbs with digits'),
-      note: tr('从鳍到四肢的转变，使脊椎动物得以登陆。', 'Transition from fins to limbs enabling vertebrate terrestrialization.'),
+      note: tr('演示谱系的关键转变：从鳍到四肢，得以登陆。', 'The demo clade\u2019s key transition: from fins to limbs, enabling land invasion.'),
       confidence: 'high',
-      support: tr('Tiktaalik 过渡化石', 'Tiktaalik transitional fossil'),
+      support: tr('演示：过渡型化石记录', 'Demo: transitional-fossil record'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: amniota,
+      nodeId: amnia,
       label: tr('羊膜卵', 'Amniotic egg'),
-      note: tr('羊膜卵使脊椎动物完全脱离水生繁殖。', 'Amniotic egg freed vertebrates from aquatic reproduction.'),
+      note: tr('演示谱系的关键创新：羊膜卵使繁殖脱离水体。', 'Key innovation of the demo clade: the amniotic egg freeing reproduction from water.'),
       confidence: 'high',
-      support: tr('蛋壳化石', 'Eggshell fossils'),
+      support: tr('演示：蛋壳记录', 'Demo: eggshell record'),
       triggers: [],
     },
     {
       id: newId(),
       typeId: 'key-innovation',
       target: 'branch',
-      nodeId: birds,
+      nodeId: avia,
       label: tr('飞行', 'Powered flight'),
-      note: tr('鸟类飞行的起源，与羽毛演化密切相关。', 'Origin of powered flight, closely tied to feather evolution.'),
+      note: tr('演示谱系的关键创新：动力飞行的起源，与羽毛演化密切相关。', 'Key innovation of the demo clade: powered flight, tied to feather evolution.'),
       confidence: 'medium',
-      support: tr('始祖鸟化石', 'Archaeopteryx fossil'),
+      support: tr('演示：羽毛印痕记录', 'Demo: feather-impression record'),
       triggers: [],
     },
   ];
@@ -1354,10 +1284,11 @@ export function createAnimalSample(): Project {
       from: 66,
       to: 66,
       color: '#ef4444',
-      note: tr('非鸟类恐龙灭绝', 'Non-avian dinosaur extinction'),
+      note: tr('演示：大型陆生类群更替', 'Demo: turnover of large land taxa'),
     },
   ];
 
+  assertBinary(project);
   return project;
 }
 
@@ -1373,50 +1304,50 @@ export function sampleById(id: string): SampleDescriptor | undefined {
 export const SAMPLE_PROJECTS: SampleDescriptor[] = [
   {
     id: 'archaea',
-    label: '古菌域演化',
-    labelEn: 'Archaeal domain evolution',
-    desc: '古菌三大门类的代谢途径与温度适应性演化',
-    descEn: 'Metabolic pathways and temperature adaptation across archaeal phyla',
-    build: createArchaeaSample,
+    label: '虚拟类群 · 深域辐射',
+    labelEn: 'Virtual taxa · Deep-domain radiation',
+    desc: '虚拟类群两大分支的能量代谢与温度适应性演化',
+    descEn: 'Energy metabolism and temperature adaptation across fictional phyla',
+    build: createDeepDomainSample,
   },
   {
     id: 'bacteria',
-    label: '细菌域演化',
-    labelEn: 'Bacterial domain evolution',
-    desc: '细菌革兰氏反应、氧需求与蓝细菌产氧光合作用',
-    descEn: 'Gram stain, oxygen requirement, and cyanobacterial oxygenic photosynthesis',
-    build: createBacteriaSample,
+    label: '虚拟类群 · 壁型与氧需求',
+    labelEn: 'Virtual taxa · Wall type & oxygen',
+    desc: '虚拟类群的细胞壁类型、氧需求与产氧代谢创新',
+    descEn: 'Cell-wall type, oxygen requirement, and oxygenic-metabolism innovation in fictional lineages',
+    build: createWallTypeSample,
   },
   {
     id: 'virus',
-    label: '病毒演化',
-    labelEn: 'Viral evolution',
-    desc: 'RNA与DNA病毒基因组类型、宿主范围与逆转录创新',
-    descEn: 'RNA/DNA viral genome types, host range, and reverse transcription innovation',
+    label: '虚拟类群 · 病毒演化',
+    labelEn: 'Virtual taxa · Viral evolution',
+    desc: '虚拟病毒基因组类型、宿主范围与逆转录创新',
+    descEn: 'Genome types, host range, and reverse-transcription innovation of fictional viruses',
     build: createVirusSample,
   },
   {
     id: 'cetacean',
-    label: '鲸类水生适应',
-    labelEn: 'Cetacean aquatic transition',
-    desc: '鲸类从陆地到水生的栖息地与运动方式转变',
-    descEn: 'Cetacean terrestrial-to-aquatic habitat and locomotion transition',
-    build: createCetaceanSample,
+    label: '虚拟类群 · 水生适应',
+    labelEn: 'Virtual taxa · Aquatic transition',
+    desc: '虚拟类群从陆地到水生的栖息地与运动方式转变',
+    descEn: 'Terrestrial-to-aquatic habitat and locomotion transition of a fictional clade',
+    build: createAquaticSample,
   },
   {
     id: 'plant',
-    label: '植物陆地登陆演化',
-    labelEn: 'Plant terrestrialization',
-    desc: '维管组织、种子与花的演化，从轮藻到被子植物',
-    descEn: 'Vascular tissue, seed, and flower evolution from charophytes to angiosperms',
+    label: '虚拟类群 · 陆地植物化',
+    labelEn: 'Virtual taxa · Plant terrestrialization',
+    desc: '维管组织与种子的演化，从水生藻类到有花类群（虚构）',
+    descEn: 'Vascular tissue and seed evolution from aquatic algae to flowering taxa (fictional)',
     build: createPlantSample,
   },
   {
     id: 'animal',
-    label: '四足动物陆地演化',
-    labelEn: 'Tetrapod terrestrialization',
-    desc: '从肉鳍鱼到四肢、羊膜卵、飞行与哺乳动物的演化',
-    descEn: 'From lobe-finned fish to limbs, amniotic egg, flight, and mammals',
+    label: '虚拟类群 · 四足登陆',
+    labelEn: 'Virtual taxa · Tetrapod land invasion',
+    desc: '从鳍到四肢、羊膜卵与飞行的演化（虚构类群）',
+    descEn: 'From fins to limbs, amniotic egg, and flight (fictional taxa)',
     build: createAnimalSample,
   },
 ];

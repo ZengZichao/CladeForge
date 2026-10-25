@@ -139,6 +139,14 @@ export interface Character {
 
 export type Confidence = 'high' | 'medium' | 'low';
 
+/**
+ * Badge shapes an evolutionary event can be drawn with. The default is a circle
+ * (the historical look); the per-event override exists because events that sit
+ * close together must stay distinguishable, and shape is the strongest
+ * pre-colour channel for greyscale printing.
+ */
+export type EventMarkerShape = 'circle' | 'square' | 'diamond' | 'triangle' | 'star' | 'hexagon';
+
 /** Confidence + evidence attached to a hypothesis (an event or an ancestral state). */
 export interface HypothesisMeta {
   confidence?: Confidence;
@@ -150,6 +158,12 @@ export interface HypothesisMeta {
  * An annotated evolutionary event placed on a node or on the branch entering a
  * node. `typeId` keys into the event-type catalogue (see model/events.ts);
  * `triggers` lists downstream events for the causal-chain overlay.
+ *
+ * The four `marker*` fields are optional per-event style overrides. Absent
+ * fields fall back to the defaults: a circle of `EVENT_BADGE_RADIUS` in the
+ * event type's catalogue colour, carrying the type's two-letter code. They are
+ * user-set in the event editor (shape / size / colour / inner text) so events
+ * of the same type can be told apart and figures can match a journal's style.
  */
 export interface EvolutionaryEvent {
   id: EventId;
@@ -162,6 +176,14 @@ export interface EvolutionaryEvent {
   support?: string;
   against?: string;
   triggers: EventId[];
+  /** Badge outline shape; default 'circle'. */
+  markerShape?: EventMarkerShape;
+  /** Badge radius override in world px (clamped to [5, 24] on use). */
+  markerSize?: number;
+  /** Badge outline colour override; default = the event type's catalogue colour. */
+  markerColor?: string;
+  /** Text drawn inside the badge (e.g. "KI"); default = the type's two-letter code. */
+  markerText?: string;
 }
 
 /** A named alternative hypothesis over the shared topology (see model/layers.ts). */
