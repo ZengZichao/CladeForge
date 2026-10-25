@@ -34,7 +34,7 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 
 | Platform | Minimum OS | Architecture | Disk Space | RAM |
 |----------|-----------|-------------|-----------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.8 MiB measured (v0.2.0, arm64 bundle; installer image 4.8 MiB) | 512 MB |
 | Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
 
@@ -53,9 +53,11 @@ for what a given tag carries.
 - **v0.1.0** — one artifact only: `CladeForge_0.1.0_aarch64.dmg` (macOS, Apple Silicon).
   No Intel, Windows or Linux build was produced for this version, and it was built by hand
   rather than by the release pipeline described below.
-- **Builds produced by `.github/workflows/release.yml`** (any tag pushed from this commit
-  onward) — `.dmg` for macOS on both Apple Silicon and Intel, `.msi` for Windows x64, and
-  `.deb` plus an AppImage for Linux x86_64.
+- **v0.2.0** — produced by `.github/workflows/release.yml`: `.dmg` for macOS on both
+  Apple Silicon and Intel, `.msi` for Windows x64, and `.deb` plus an AppImage for
+  Linux x86_64. This version repairs the window-drag regions, rebuilds all sample
+  projects around strictly binary fictional taxa named `Taxon_*`, and adds per-event
+  marker customisation (shape / size / colour / inner text).
 
 These artifacts are **unsigned**. macOS Gatekeeper will refuse to open them on first launch;
 see the note below.
@@ -129,10 +131,12 @@ Every tagged release is archived on Zenodo with its own citable DOI. Cite the ve
 concept DOI always resolves to the newest archived version.
 
 - **Concept DOI (all versions):** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
-- **v0.1.0 (this release):** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+- **v0.1.0:** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+- **v0.2.0 (this release):** the version DOI is assigned by Zenodo when the release is
+  archived; until it appears there, cite via the concept DOI above.
 
-> Zeng, Z. (2026). *CladeForge* (Version v0.1.0) [Computer software]. Zenodo.
-> https://doi.org/10.5281/zenodo.23053394
+> Zeng, Z. (2026). *CladeForge* (Version v0.2.0) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23053393
 
 No journal citation is available yet. The machine-readable form is in [`CITATION.cff`](./CITATION.cff).
 
