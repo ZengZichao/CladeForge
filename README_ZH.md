@@ -32,7 +32,7 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 
 | 平台 | 最低系统 | 架构 | 磁盘空间 | 内存 |
 |------|---------|------|---------|------|
-| macOS | 11.0 (Big Sur) | arm64、x86_64 | 实测 12.4 MiB（v0.1.0，arm64 应用包；安装镜像 4.6 MiB） | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64、x86_64 | 实测 12.8 MiB（v0.2.0，arm64 应用包；安装镜像 4.8 MiB） | 512 MB |
 | Windows | 10 (64位) | x86_64 | 尚未实测——本版本未产出 Windows 构建 | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | 尚未实测——本版本未产出 Linux 构建 | 512 MB |
 
@@ -49,9 +49,10 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 
 - **v0.1.0** —— 只有一个产物：`CladeForge_0.1.0_aarch64.dmg`（macOS，Apple Silicon）。
   该版本没有产出 Intel、Windows 或 Linux 构建，且由手工打包而非下述发布流水线产出。
-- **由 `.github/workflows/release.yml` 产出的构建**（从本 commit 起推送的任意 tag）——
-  macOS 的 Apple Silicon 与 Intel 双架构 `.dmg`、Windows x64 的 `.msi`、
-  Linux x86_64 的 `.deb` 与 AppImage。
+- **v0.2.0** —— 由 `.github/workflows/release.yml` 产出：macOS 的 Apple Silicon 与
+  Intel 双架构 `.dmg`、Windows x64 的 `.msi`、Linux x86_64 的 `.deb` 与 AppImage。
+  本版本修复了顶栏窗口拖拽，全部示例重建为 `Taxon_*` 命名的严格二叉虚拟类群，
+  并新增事件标记自定义（形状 / 大小 / 颜色 / 文字）。
 
 这些产物**未签名**。macOS 首次打开时会被 Gatekeeper 拦截，办法见下方。
 
@@ -123,10 +124,12 @@ CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0
 始终解析到最新的归档版本。
 
 - **Concept DOI（全部版本）：** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
-- **v0.1.0（本次发布）：** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+- **v0.1.0：** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
+- **v0.2.0（本次发布）：** 版本 DOI 由 Zenodo 在归档本 Release 后分配；在该 DOI 出现之前，
+  请通过上方概念 DOI 引用。
 
-> 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.1.0) [计算机软件]. Zenodo.
-> https://doi.org/10.5281/zenodo.23053394
+> 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.2.0) [计算机软件]. Zenodo.
+> https://doi.org/10.5281/zenodo.23053393
 
 目前尚无可引用的论文条目。机器可读的引用信息见 [`CITATION.cff`](./CITATION.cff)。
 
