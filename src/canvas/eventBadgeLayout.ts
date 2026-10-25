@@ -7,12 +7,12 @@
 //   1. Node labels (NodeView). Layouts that shorten the depth axis (phylogram,
 //      time-calibrated) can put a parent node so close to its child that the
 //      parent's label runs straight through the child's label — e.g. the
-//      Cetacean sample's "Basilosauridae" label overlaps "Neoceti" in both
+//      aquatic demo sample's parent label once overlapped its children's labels in both
 //      layouts. Labels are placed by `labelPlacement()` alone today, which has
 //      no knowledge of the other labels.
 //   2. Evolutionary-event badges (EventLayer). They are anchored on the branch
 //      entering their node, which can drop them on top of a sibling branch's
-//      label (BUG-4: KI / AR sat on "Basilosauridae").
+//      label (BUG-4: the KI / AR badges sat on a parent label).
 //
 // This module owns the geometric solver for both: a greedy vertical stagger for
 // labels, then a nearest-first ring search for badge groups that keeps badges
@@ -31,7 +31,7 @@
 
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
 import { ERA_LANE_HEIGHT, planEraOverlay, type EraLevel } from '../layout/timescale';
-import { EVENT_BADGE_RADIUS } from '../model/events';
+import { EVENT_BADGE_RADIUS, eventBadgeExtent } from '../model/events';
 import {
   resolveNodeStyle,
   type EvolutionaryEvent,
@@ -380,8 +380,8 @@ function preferredDirections(
   } else if (horizontal) {
     along = orientation === 'LR' ? { x: 1, y: 0 } : { x: -1, y: 0 };
     // Prefer ABOVE the branch: the row below a label is usually where the next
-    // subtree's horizontal segment runs (for the Cetacean sample that is the
-    // Neoceti→Odontoceti branch), so a badge dropped there would sit on a line.
+    // subtree's horizontal segment runs (for the aquatic sample that is the
+    // deepest internal branch), so a badge dropped there would sit on a line.
     perp = { x: 0, y: -1 };
   } else {
     along = orientation === 'TB' ? { x: 0, y: 1 } : { x: 0, y: -1 };
@@ -419,8 +419,13 @@ export function badgeCandidateOffsets(
   return out;
 }
 
-function badgeBox(center: Point): Box {
-  const half = EVENT_BADGE_RADIUS + BADGE_BOX_PAD;
+/**
+ * World-space box a badge occupies. The extent is the per-event size override
+ * (falling back to EVENT_BADGE_RADIUS) scaled by the shape factor, so a
+ * triangle's vertices claim the room they actually draw.
+ */
+function badgeBox(center: Point, extent: number = EVENT_BADGE_RADIUS): Box {
+  const half = extent + BADGE_BOX_PAD;
   return { minX: center.x - half, minY: center.y - half, maxX: center.x + half, maxY: center.y + half };
 }
 
@@ -509,7 +514,7 @@ export function planEventAnchors(input: EventAnchorInput): EventAnchorPlan {
 
   // Group in event order so the stack index and the draw order are stable. The
   // cluster key is the NODE (not node+target): all events of one node move
-  // together, so e.g. Neoceti's branch event KI and node event AR stay a pair
+  // together, so e.g. the demo sample's branch event KI and node event AR stay a pair
   // instead of being scattered to different sides of the branch. The stack index
   // used for the natural anchors still counts per node+target, exactly like the
   // historical renderer did, so events on the same target keep stacking.
@@ -541,12 +546,16 @@ export function planEventAnchors(input: EventAnchorInput): EventAnchorPlan {
     }
     if (naturals.length !== group.length) continue;
 
+    // One shared offset moves the whole stack, so the collision test uses the
+    // largest badge extent in the group (a mixed-size stack clears as a block);
+    // the final grid insertion is per-event so small badges don't over-claim.
+    const groupExtent = Math.max(...group.map(eventBadgeExtent));
     const candidates = badgeCandidateOffsets(layoutType, orientation, naturals[0]);
     let chosen: Point | null = null;
     for (const offset of candidates) {
       let clear = true;
       for (const n of naturals) {
-        if (grid.intersects(badgeBox({ x: n.x + offset.x, y: n.y + offset.y }))) {
+        if (grid.intersects(badgeBox({ x: n.x + offset.x, y: n.y + offset.y }, groupExtent))) {
           clear = false;
           break;
         }
@@ -561,7 +570,7 @@ export function planEventAnchors(input: EventAnchorInput): EventAnchorPlan {
     const offset = chosen ?? { x: 0, y: 0 };
     const finals = naturals.map((n) => ({ x: n.x + offset.x, y: n.y + offset.y }));
     for (let i = 0; i < group.length; i++) anchors.set(group[i].id, finals[i]);
-    for (const f of finals) grid.insert(badgeBox(f));
+    for (let i = 0; i < finals.length; i++) grid.insert(badgeBox(finals[i], eventBadgeExtent(group[i])));
     if (Math.hypot(offset.x, offset.y) >= BADGE_LEADER_MIN_SHIFT) {
       leaders.push({ from: centroid(finals), to: centroid(naturals) });
     }

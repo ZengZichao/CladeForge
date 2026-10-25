@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 病毒演化
+# Project : 虚拟类群 · 病毒演化
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -25,11 +25,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(22, 23, 22, 24, 23, 25, 23, 26, 23, 27, 23, 28, 24, 29, 24, 30, 24, 31, 25, 32, 25, 33, 25, 1, 26, 34, 26, 2, 27, 3, 27, 4, 28, 5, 28, 6, 29, 35, 29, 36, 29, 7, 30, 8, 30, 9, 31, 10, 32, 11, 32, 12, 33, 13, 33, 14, 34, 15, 34, 16, 34, 17, 35, 18, 35, 19, 36, 20, 36, 21), ncol = 2, byrow = TRUE),
-    edge.length = c(200, 400, 1000, 1100, 1200, 1300, 1300, 1400, 1500, 1500, 1600, 3000, 1600, 2900, 2800, 2800, 2700, 2700, 1300, 1400, 2500, 2400, 2400, 2300, 1500, 1500, 1400, 1400, 1300, 1300, 1300, 1200, 1200, 1100, 1100),
-    Nnode = 15L,
-    tip.label = c("Tobacco mosaic virus", "Influenza A", "Rotavirus", "Reovirus", "HIV-1", "HTLV-1", "Adenovirus", "Papillomavirus", "Parvovirus", "Mimivirus", "Poliovirus", "Foot-and-mouth", "SARS-CoV-2", "MERS-CoV", "Measles virus", "Ebola virus", "Rhabdovirus", "HSV-1", "Varicella-zoster", "Lambda phage", "T4 phage"),
-    node.label = c("Urvirus", "RNA viruses", "DNA viruses", "+ssRNA viruses", "-ssRNA viruses", "dsRNA viruses", "Retro-transcribing", "dsDNA viruses", "ssDNA viruses", "Nucleocytoplasmic", "Picornavirales", "Nidovirales", "Mononegavirales", "Herpesvirales", "Caudovirales")
+    edge = matrix(c(22, 23, 22, 24, 23, 25, 23, 26, 24, 27, 24, 28, 25, 29, 25, 30, 26, 31, 26, 32, 27, 1, 27, 33, 28, 34, 28, 2, 29, 35, 29, 3, 30, 36, 30, 4, 31, 5, 31, 6, 32, 7, 32, 8, 33, 37, 33, 38, 34, 9, 34, 10, 35, 39, 35, 40, 36, 41, 36, 11, 37, 12, 37, 13, 38, 14, 38, 15, 39, 16, 39, 17, 40, 18, 40, 19, 41, 20, 41, 21), ncol = 2, byrow = TRUE),
+    edge.length = c(200, 400, 950, 1150, 1300, 1350, 50, 150, 50, 150, 2500, 1250, 50, 2450, 1450, 3000, 1600, 2900, 2800, 2800, 2700, 2700, 50, 150, 2400, 2400, 50, 150, 50, 1300, 1200, 1200, 1100, 1100, 1500, 1500, 1400, 1400, 1250, 1250),
+    Nnode = 20L,
+    tip.label = c("Taxon_AD", "Taxon_AO", "Taxon_K", "Taxon_R", "Taxon_X", "Taxon_Y", "Taxon_Z", "Taxon_AA", "Taxon_AM", "Taxon_AN", "Taxon_S", "Taxon_AH", "Taxon_AI", "Taxon_AJ", "Taxon_AK", "Taxon_L", "Taxon_M", "Taxon_N", "Taxon_O", "Taxon_T", "Taxon_U"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_D", "Taxon_E", "Taxon_AB", "Taxon_AC", "Taxon_F", "Taxon_G", "Taxon_V", "Taxon_W", "Taxon_AE", "Taxon_AL", "Taxon_H", "Taxon_P", "Taxon_AF", "Taxon_AG", "Taxon_I", "Taxon_J", "Taxon_Q")
   ),
   class = "phylo"
 )
@@ -62,7 +62,7 @@ characters <- list(
     states = c("RNA", "DNA"),
     colors = c("#3b82f6", "#dc2626"),
     cost = NULL,
-    tips = c("Poliovirus" = "RNA", "Foot-and-mouth" = "RNA", "SARS-CoV-2" = "RNA", "MERS-CoV" = "RNA", "Tobacco mosaic virus" = "RNA", "Influenza A" = "RNA", "Measles virus" = "RNA", "Ebola virus" = "RNA", "Rhabdovirus" = "RNA", "Rotavirus" = "RNA", "Reovirus" = "RNA", "HIV-1" = "RNA", "HTLV-1" = "RNA", "HSV-1" = "DNA", "Varicella-zoster" = "DNA", "Mimivirus" = "DNA", "Adenovirus" = "DNA", "Papillomavirus" = "DNA", "Parvovirus" = "DNA", "Lambda phage" = "DNA", "T4 phage" = "DNA")
+    tips = c("Taxon_K" = "RNA", "Taxon_L" = "RNA", "Taxon_M" = "RNA", "Taxon_N" = "RNA", "Taxon_O" = "RNA", "Taxon_R" = "RNA", "Taxon_S" = "RNA", "Taxon_T" = "RNA", "Taxon_U" = "RNA", "Taxon_X" = "RNA", "Taxon_Y" = "RNA", "Taxon_Z" = "RNA", "Taxon_AA" = "RNA", "Taxon_AH" = "DNA", "Taxon_AI" = "DNA", "Taxon_AJ" = "DNA", "Taxon_AK" = "DNA", "Taxon_AM" = "DNA", "Taxon_AN" = "DNA", "Taxon_AO" = "DNA")
   ),
   list(
     name = "宿主类型",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("动物", "细菌", "植物", "原生生物（阿米巴）"),
     colors = c("#8b5cf6", "#f59e0b", "#22c55e", "#14b8a6"),
     cost = NULL,
-    tips = c("Poliovirus" = "动物", "Foot-and-mouth" = "动物", "SARS-CoV-2" = "动物", "MERS-CoV" = "动物", "Tobacco mosaic virus" = "植物", "Influenza A" = "动物", "Measles virus" = "动物", "Ebola virus" = "动物", "Rhabdovirus" = "动物", "Rotavirus" = "动物", "Reovirus" = "动物", "HIV-1" = "动物", "HTLV-1" = "动物", "HSV-1" = "动物", "Varicella-zoster" = "动物", "Mimivirus" = "原生生物（阿米巴）", "Adenovirus" = "动物", "Papillomavirus" = "动物", "Parvovirus" = "动物", "Lambda phage" = "细菌", "T4 phage" = "细菌")
+    tips = c("Taxon_K" = "植物", "Taxon_L" = "动物", "Taxon_M" = "动物", "Taxon_N" = "动物", "Taxon_O" = "动物", "Taxon_R" = "动物", "Taxon_S" = "动物", "Taxon_T" = "动物", "Taxon_U" = "动物", "Taxon_X" = "动物", "Taxon_Y" = "动物", "Taxon_Z" = "动物", "Taxon_AA" = "动物", "Taxon_AH" = "动物", "Taxon_AI" = "动物", "Taxon_AJ" = "细菌", "Taxon_AK" = "细菌", "Taxon_AM" = "动物", "Taxon_AN" = "动物", "Taxon_AO" = "原生生物（阿米巴）")
   )
 )
 
@@ -234,7 +234,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "病毒演化", cex.main = 1.0)
+title(main = "虚拟类群 · 病毒演化", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

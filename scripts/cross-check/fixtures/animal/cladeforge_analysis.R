@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 四足动物陆地演化
+# Project : 虚拟类群 · 四足登陆
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -25,11 +25,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(21, 22, 21, 1, 22, 23, 22, 2, 22, 3, 23, 24, 23, 25, 23, 4, 23, 5, 24, 6, 24, 7, 25, 26, 25, 27, 26, 28, 26, 29, 26, 30, 27, 31, 28, 8, 28, 9, 29, 32, 29, 33, 30, 10, 31, 34, 31, 35, 31, 11, 32, 36, 32, 37, 33, 12, 34, 13, 35, 14, 35, 15, 35, 16, 36, 38, 36, 17, 37, 18, 38, 19, 38, 20), ncol = 2, byrow = TRUE),
-    edge.length = c(20, 430, 30, 410, 410, 40, 60, 380, 380, 340, 340, 10, 5, 50, 60, 50, 115, 260, 260, 20, 30, 260, 120, 135, 200, 30, 30, 220, 80, 65, 65, 65, 50, 200, 200, 150, 150),
-    Nnode = 18L,
-    tip.label = c("Latimeria", "Eusthenopteron", "Tiktaalik", "Acanthostega", "Ichthyostega", "Ambystoma", "Rana", "Lacerta", "Python", "Testudo", "Ornithorhynchus", "Crocodylus", "Didelphis", "Homo", "Mus", "Canis", "Tyrannosaurus", "Brachiosaurus", "Gallus", "Passer"),
-    node.label = c("Sarcopterygii", "Tetrapodomorpha", "Tetrapoda", "Amphibia", "Amniota", "Sauropsida", "Synapsida", "Lepidosauria", "Archosauria", "Testudines", "Mammalia", "Dinosauria", "Crocodylia", "Marsupialia", "Placentalia", "Theropoda", "Sauropodomorpha", "Aves")
+    edge = matrix(c(21, 22, 21, 1, 22, 23, 22, 24, 23, 2, 23, 3, 24, 25, 24, 26, 25, 27, 25, 28, 26, 29, 26, 30, 27, 4, 27, 5, 28, 6, 28, 7, 29, 31, 29, 32, 30, 8, 30, 33, 31, 34, 31, 9, 32, 35, 32, 10, 33, 36, 33, 11, 34, 12, 34, 13, 35, 37, 35, 14, 36, 38, 36, 15, 37, 39, 37, 16, 38, 17, 38, 18, 39, 19, 39, 20), ncol = 2, byrow = TRUE),
+    edge.length = c(20, 430, 20, 30, 390, 390, 10, 60, 10, 15, 10, 120, 360, 360, 355, 355, 45, 60, 200, 120, 5, 265, 20, 250, 15, 80, 260, 260, 30, 230, 35, 65, 50, 200, 30, 30, 150, 150),
+    Nnode = 19L,
+    tip.label = c("Taxon_C", "Taxon_E", "Taxon_F", "Taxon_N", "Taxon_O", "Taxon_L", "Taxon_M", "Taxon_AF", "Taxon_U", "Taxon_Y", "Taxon_AI", "Taxon_V", "Taxon_W", "Taxon_AA", "Taxon_AK", "Taxon_AC", "Taxon_AL", "Taxon_AM", "Taxon_AD", "Taxon_AE"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_D", "Taxon_G", "Taxon_H", "Taxon_K", "Taxon_I", "Taxon_J", "Taxon_P", "Taxon_Q", "Taxon_R", "Taxon_S", "Taxon_AG", "Taxon_T", "Taxon_X", "Taxon_AH", "Taxon_Z", "Taxon_AJ", "Taxon_AB")
   ),
   class = "phylo"
 )
@@ -62,7 +62,7 @@ characters <- list(
     states = c("水生", "半水生", "陆生", "飞行"),
     colors = c("#0ea5e9", "#3b82f6", "#22c55e", "#8b5cf6"),
     cost = NULL,
-    tips = c("Latimeria" = "水生", "Eusthenopteron" = "水生", "Tiktaalik" = "半水生", "Acanthostega" = "半水生", "Ichthyostega" = "半水生", "Ambystoma" = "半水生", "Rana" = "半水生", "Lacerta" = "陆生", "Python" = "陆生", "Testudo" = "陆生", "Crocodylus" = "半水生", "Brachiosaurus" = "陆生", "Tyrannosaurus" = "陆生", "Gallus" = "飞行", "Passer" = "飞行", "Ornithorhynchus" = "半水生", "Didelphis" = "陆生", "Homo" = "陆生", "Mus" = "陆生", "Canis" = "陆生")
+    tips = c("Taxon_C" = "水生", "Taxon_E" = "水生", "Taxon_F" = "半水生", "Taxon_L" = "半水生", "Taxon_M" = "半水生", "Taxon_N" = "半水生", "Taxon_O" = "半水生", "Taxon_U" = "陆生", "Taxon_V" = "陆生", "Taxon_W" = "陆生", "Taxon_Y" = "半水生", "Taxon_AA" = "陆生", "Taxon_AC" = "陆生", "Taxon_AD" = "飞行", "Taxon_AE" = "飞行", "Taxon_AF" = "半水生", "Taxon_AI" = "陆生", "Taxon_AK" = "陆生", "Taxon_AL" = "陆生", "Taxon_AM" = "陆生")
   ),
   list(
     name = "附肢类型",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("鳍", "趾型", "翼"),
     colors = c("#0284c7", "#b45309", "#8b5cf6"),
     cost = NULL,
-    tips = c("Latimeria" = "鳍", "Eusthenopteron" = "鳍", "Tiktaalik" = "鳍", "Acanthostega" = "趾型", "Ichthyostega" = "趾型", "Ambystoma" = "趾型", "Rana" = "趾型", "Lacerta" = "趾型", "Python" = "趾型", "Testudo" = "趾型", "Crocodylus" = "趾型", "Brachiosaurus" = "趾型", "Tyrannosaurus" = "趾型", "Gallus" = "翼", "Passer" = "翼", "Ornithorhynchus" = "趾型", "Didelphis" = "趾型", "Homo" = "趾型", "Mus" = "趾型", "Canis" = "趾型")
+    tips = c("Taxon_C" = "鳍", "Taxon_E" = "鳍", "Taxon_F" = "鳍", "Taxon_L" = "趾型", "Taxon_M" = "趾型", "Taxon_N" = "趾型", "Taxon_O" = "趾型", "Taxon_U" = "趾型", "Taxon_V" = "趾型", "Taxon_W" = "趾型", "Taxon_Y" = "趾型", "Taxon_AA" = "趾型", "Taxon_AC" = "趾型", "Taxon_AD" = "翼", "Taxon_AE" = "翼", "Taxon_AF" = "趾型", "Taxon_AI" = "趾型", "Taxon_AK" = "趾型", "Taxon_AL" = "趾型", "Taxon_AM" = "趾型")
   )
 )
 
@@ -234,7 +234,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "四足动物陆地演化", cex.main = 1.0)
+title(main = "虚拟类群 · 四足登陆", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

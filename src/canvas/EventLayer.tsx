@@ -16,12 +16,14 @@
 import { memo, useMemo } from 'react';
 import type { EvolutionaryEvent, LayoutType, NodeId, Orientation, Point, TreeNode } from '../model/types';
 import {
-  EVENT_BADGE_RADIUS,
-  EVENT_CODE_FONT_SIZE,
-  eventCode,
-  eventColor,
+  eventBadgeFontSize,
+  eventBadgeText,
+  eventMarkerColor,
+  eventMarkerShape,
+  eventMarkerSize,
   eventDisplayLabel,
 } from '../model/events';
+import { eventMarkerPath } from './markerGeometry';
 import { curvedPath } from './paths';
 import { getCanvasCollisionPlan, getLastCanvasCollisionPlan, planEventAnchors } from './eventBadgeLayout';
 import { useStore } from '../model/store';
@@ -102,7 +104,7 @@ export const EventLayer = memo(function EventLayer({
       if (!from) continue;
       for (const targetId of e.triggers) {
         const to = anchors.get(targetId);
-        if (to) out.push({ id: `${e.id}->${targetId}`, from, to, color: eventColor(e) });
+        if (to) out.push({ id: `${e.id}->${targetId}`, from, to, color: eventMarkerColor(e) });
       }
     }
     return out;
@@ -161,22 +163,26 @@ export const EventLayer = memo(function EventLayer({
       {events.map((e) => {
         const a = anchors.get(e.id);
         if (!a) return null;
-        const color = eventColor(e);
+        // Per-event style overrides (shape / size / colour / inner text) with
+        // catalogue defaults; the same accessors drive the exporter so a figure
+        // cannot disagree with the canvas about how a badge is drawn.
+        const r = eventMarkerSize(e);
+        const color = eventMarkerColor(e);
         const conf = e.confidence;
+        const fontSize = eventBadgeFontSize(e);
         const title =
           eventDisplayLabel(e) +
           (conf ? ` · ${S.confidence.label}:${confLabel(conf)}` : '') +
           (e.note ? `\n${e.note}` : '');
         return (
           <g key={e.id}>
-            <circle
-              cx={a.x}
-              cy={a.y}
-              r={EVENT_BADGE_RADIUS}
+            <path
+              d={eventMarkerPath(eventMarkerShape(e), a.x, a.y, r)}
               fill="var(--surface)"
               stroke={color}
               strokeWidth={conf === 'high' ? 2.5 : 2}
               strokeDasharray={conf === 'low' ? '2 2' : undefined}
+              strokeLinejoin="round"
               data-role="node"
               data-node-id={e.nodeId}
             />
@@ -185,11 +191,11 @@ export const EventLayer = memo(function EventLayer({
               y={a.y}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={EVENT_CODE_FONT_SIZE}
+              fontSize={fontSize}
               fontWeight={700}
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
-              {eventCode(e)}
+              {eventBadgeText(e)}
             </text>
             <title>{title}</title>
           </g>

@@ -1939,6 +1939,32 @@ body.panel-resizing {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
+/* Marker-style subsection inside the event editor: a bordered group with its
+   own title row. Its children are ordinary `.field` rows — the group itself
+   must never carry the `.field` class (a horizontal label+control row), or
+   the title collapses into a vertical column and the controls are crushed. */
+.event-marker-style {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 2px 0 var(--gap-field);
+}
+.event-marker-style-title {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+/* Number/colour inputs in the subsection keep a readable width even when the
+   inspector is at its narrowest: the number field shows its value and the px
+   unit, the colour field shows the full hex. */
+.event-marker-style .number-input-row > input[type='number'] {
+  min-width: 72px;
+}
+.event-marker-style .color-field {
+  min-width: 96px;
+}
 .event-triggers { margin-top: 6px; }
 .event-triggers-label {
   display: block;

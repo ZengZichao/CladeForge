@@ -66,8 +66,8 @@ describe('hypothesisExport', () => {
     const tips = Object.values(p.nodes).filter((n) => n.childrenIds.length === 0);
     expect(json.taxonMatrix).toHaveLength(tips.length);
     expect(json.tipCount).toBe(tips.length);
-    const pakicetus = json.taxonMatrix.find((r) => r.taxon === 'Pakicetus');
-    const raw = pakicetus?.states[habitat!.id];
+    const terra = json.taxonMatrix.find((r) => r.taxon === 'Taxon_G');
+    const raw = terra?.states[habitat!.id];
     const state = habitat!.states.find((s) => s.id === raw);
     expect(state?.label).toBe('陆生');
   });

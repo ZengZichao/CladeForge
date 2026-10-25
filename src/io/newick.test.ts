@@ -38,19 +38,19 @@ describe('newick', () => {
 
   it('round-trips a label whose underscore is literal', () => {
     // `_` means "space" in Newick, so a name that really contains one must be
-    // written quoted. Unquoted, `Pakicetus_2` reads back as `Pakicetus 2`, and
+    // written quoted. Unquoted, `Taxon_A_2` reads back as `Taxon A 2`, and
     // because character states are keyed on the label the tip silently loses
     // every state assigned to the original name.
-    const project = parseNewick('(Pakicetus_2,Ambulocetus)Cetacea;');
+    const project = parseNewick('("Taxon_A_2",Taxon_B)Taxon_C;');
     expect(project.nodes).toBeTruthy();
-    const withUnderscore = parseNewick('("Pakicetus_2",Ambulocetus)Cetacea;');
+    const withUnderscore = parseNewick('("Taxon_A_2",Taxon_B)Taxon_C;');
     const labels = Object.values(withUnderscore.nodes).map((n) => n.label);
-    expect(labels).toContain('Pakicetus_2');
+    expect(labels).toContain('Taxon_A_2');
     const written = serializeNewick(withUnderscore);
-    expect(written).toContain('"Pakicetus_2"');
+    expect(written).toContain('"Taxon_A_2"');
     const reread = Object.values(parseNewick(written).nodes).map((n) => n.label);
-    expect(reread).toContain('Pakicetus_2');
-    expect(reread).not.toContain('Pakicetus 2');
+    expect(reread).toContain('Taxon_A_2');
+    expect(reread).not.toContain('Taxon A 2');
   });
 
   it('keeps bracket comments as node metadata instead of stripping them', () => {
@@ -170,15 +170,15 @@ describe('newick', () => {
     // Newick has a single label slot, so a named clade and its support value
     // cannot both be written bare: the name goes in the slot, the support travels
     // in a `[&support=…]` comment.
-    const project = parseNewick('((A,B)Neoceti,C)Pelagiceti;');
-    const inner = Object.values(project.nodes).find((n) => n.label === 'Neoceti');
+    const project = parseNewick('((A,B)"Taxon_B",C)"Taxon_A";');
+    const inner = Object.values(project.nodes).find((n) => n.label === 'Taxon_B');
     expect(inner).toBeTruthy();
     inner!.support = 95;
     const out = serializeNewick(project);
-    expect(out).toContain('Neoceti');
+    expect(out).toContain('Taxon_B');
     expect(out).toContain('[&support=95]');
     const again = parseNewick(out);
-    const back = Object.values(again.nodes).find((n) => n.label === 'Neoceti');
+    const back = Object.values(again.nodes).find((n) => n.label === 'Taxon_B');
     expect(back?.support).toBe(95);
     // Byte-stable from there on.
     expect(serializeNewick(again)).toBe(out);

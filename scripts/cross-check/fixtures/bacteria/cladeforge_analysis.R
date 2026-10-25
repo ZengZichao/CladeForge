@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 细菌域演化
+# Project : 虚拟类群 · 壁型与氧需求
 # Format  : CladeForge project v0.1.0
 #
 # What this script reproduces, and what it does not:
@@ -25,11 +25,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(13, 14, 13, 15, 13, 16, 13, 17, 14, 18, 14, 19, 14, 20, 15, 21, 15, 22, 16, 1, 16, 2, 17, 3, 17, 4, 18, 23, 18, 24, 19, 5, 20, 6, 21, 7, 22, 8, 23, 9, 23, 10, 24, 11, 24, 12), ncol = 2, byrow = TRUE),
-    edge.length = c(100, 200, 300, 400, 700, 800, 900, 900, 1000, 3000, 3000, 2900, 2900, 500, 600, 2400, 2300, 2200, 2100, 2000, 2000, 1900, 1900),
-    Nnode = 12L,
-    tip.label = c("Streptomyces", "Mycobacterium", "Synechocystis", "Prochlorococcus", "Bacteroides", "Treponema", "Clostridium", "Bacillus", "Rhizobium", "Rickettsia", "Escherichia", "Pseudomonas"),
-    node.label = c("Terrabacteria", "Gracilicutes (GN)", "Firmicutes (GP)", "Actinobacteria", "Cyanobacteria", "Proteobacteria", "Bacteroidetes", "Spirochaetes", "Clostridiales", "Bacillales", "Alphaproteobacteria", "Gammaproteobacteria")
+    edge = matrix(c(13, 14, 13, 15, 14, 16, 14, 17, 15, 18, 15, 19, 16, 20, 16, 21, 17, 1, 17, 2, 18, 3, 18, 4, 19, 5, 19, 6, 20, 22, 20, 23, 21, 7, 21, 8, 22, 9, 22, 10, 23, 11, 23, 12), ncol = 2, byrow = TRUE),
+    edge.length = c(50, 250, 50, 150, 50, 150, 700, 750, 3100, 3100, 3000, 3000, 2900, 2900, 500, 600, 50, 150, 2000, 2000, 1900, 1900),
+    Nnode = 11L,
+    tip.label = c("Taxon_P", "Taxon_Q", "Taxon_T", "Taxon_U", "Taxon_V", "Taxon_W", "Taxon_H", "Taxon_I", "Taxon_L", "Taxon_M", "Taxon_N", "Taxon_O"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_D", "Taxon_E", "Taxon_R", "Taxon_S", "Taxon_F", "Taxon_G", "Taxon_J", "Taxon_K")
   ),
   class = "phylo"
 )
@@ -57,12 +57,12 @@ rate <- 1 / mean(bl)
 
 characters <- list(
   list(
-    name = "革兰氏反应",
+    name = "细胞壁类型",
     type = "discrete",
-    states = c("革兰氏阳性", "革兰氏阴性"),
+    states = c("厚壁", "薄壁"),
     colors = c("#7c3aed", "#0ea5e9"),
     cost = NULL,
-    tips = c("Rhizobium" = "革兰氏阴性", "Rickettsia" = "革兰氏阴性", "Escherichia" = "革兰氏阴性", "Pseudomonas" = "革兰氏阴性", "Bacteroides" = "革兰氏阴性", "Treponema" = "革兰氏阴性", "Clostridium" = "革兰氏阳性", "Bacillus" = "革兰氏阳性", "Streptomyces" = "革兰氏阳性", "Mycobacterium" = "革兰氏阳性", "Synechocystis" = "革兰氏阴性", "Prochlorococcus" = "革兰氏阴性")
+    tips = c("Taxon_H" = "薄壁", "Taxon_I" = "薄壁", "Taxon_L" = "薄壁", "Taxon_M" = "薄壁", "Taxon_N" = "薄壁", "Taxon_O" = "薄壁", "Taxon_P" = "厚壁", "Taxon_Q" = "厚壁", "Taxon_T" = "薄壁", "Taxon_U" = "薄壁", "Taxon_V" = "薄壁", "Taxon_W" = "薄壁")
   ),
   list(
     name = "氧需求",
@@ -70,7 +70,7 @@ characters <- list(
     states = c("好氧", "厌氧", "兼性"),
     colors = c("#22c55e", "#71717a", "#f59e0b"),
     cost = NULL,
-    tips = c("Rhizobium" = "好氧", "Rickettsia" = "好氧", "Escherichia" = "兼性", "Pseudomonas" = "好氧", "Bacteroides" = "厌氧", "Treponema" = "厌氧", "Clostridium" = "厌氧", "Bacillus" = "兼性", "Streptomyces" = "好氧", "Mycobacterium" = "好氧", "Synechocystis" = "好氧", "Prochlorococcus" = "好氧")
+    tips = c("Taxon_H" = "厌氧", "Taxon_I" = "厌氧", "Taxon_L" = "好氧", "Taxon_M" = "好氧", "Taxon_N" = "厌氧", "Taxon_O" = "厌氧", "Taxon_P" = "厌氧", "Taxon_Q" = "兼性", "Taxon_T" = "兼性", "Taxon_U" = "好氧", "Taxon_V" = "好氧", "Taxon_W" = "好氧")
   )
 )
 
@@ -234,7 +234,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "细菌域演化", cex.main = 1.0)
+title(main = "虚拟类群 · 壁型与氧需求", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

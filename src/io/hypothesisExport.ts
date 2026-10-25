@@ -8,7 +8,7 @@
 import type { Character, Confidence, Project, TreeNode } from '../model/types';
 import type { ConsistencyIssue } from '../model/consistency';
 import { detectTransitions, MISSING_STATE_CODES, stateLabel } from '../model/characters';
-import { causalPairs, eventCode, eventDisplayLabel, eventTypeLabel, findEventType } from '../model/events';
+import { causalPairs, eventBadgeText, eventDisplayLabel, eventTypeLabel, findEventType } from '../model/events';
 import { checkConsistency } from '../model/consistency';
 import { S, tr } from '../ui/strings';
 
@@ -171,8 +171,8 @@ export function buildNarrative(project: Project): string {
           ? tr(`分支「${nl(e.nodeId)}」`, `branch “${nl(e.nodeId)}”`)
           : tr(`节点「${nl(e.nodeId)}」`, `node “${nl(e.nodeId)}”`);
       let s = tr(
-        `- \`${eventCode(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}**「${md(eventDisplayLabel(e))}」位于${where}`,
-        `- \`${eventCode(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}** — ${md(eventDisplayLabel(e))} on ${where}`,
+        `- \`${eventBadgeText(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}**「${md(eventDisplayLabel(e))}」位于${where}`,
+        `- \`${eventBadgeText(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}** — ${md(eventDisplayLabel(e))} on ${where}`,
       );
       if (e.confidence) s += tr(`（置信度：${confLabel(e.confidence)}）`, ` (confidence: ${confLabel(e.confidence)})`);
       L.push(s);

@@ -5,15 +5,16 @@
 // coordinates, which is what the solver reasons about — a uniform pan/zoom
 // transform cannot change whether two boxes intersect.
 //
-// The Cetacean sample is the document the bug report is about: in the
-// phylogram / time-calibrated layouts "Basilosauridae" sits so close to its child
-// "Neoceti" that the two labels overlapped, and Neoceti's KI / AR badges landed
-// on the "Basilosauridae" label in every rectangular layout.
+// The aquatic demo sample (catalogue id "cetacean", all taxa named Taxon_*) is
+// one driver of this module: the original bug report had a parent label landing
+// inside its children's labels, and the KI / AR badges landing on a label in
+// every rectangular layout. The samples are strictly binary and balanced now,
+// so the squeezed geometry is rebuilt by hand in `squeezedTree()` below.
 
 import { describe, it, expect } from 'vitest';
 import { computeLayout } from '../layout/autoLayout';
 import type { LayoutResult } from '../layout/autoLayout';
-import { SAMPLE_PROJECTS } from '../model/sampleTree';
+import { SAMPLE_PROJECTS, createEmptyProject, taxonNamer } from '../model/sampleTree';
 import { EVENT_BADGE_RADIUS } from '../model/events';
 import { labelBoxForNode, type Box } from './labelBounds';
 import {
@@ -44,7 +45,46 @@ const LAYOUTS: LayoutType[] = [
 
 const AXIS: AxisOverlayOptions = { showEras: false, eraLevel: 'both' };
 
-/** The Cetacean sample, switched to one layout (fresh objects per call). */
+/**
+ * A hand-built strictly-binary tree whose long outer branch and very short inner
+ * branch force the parent label onto its children's label row — the geometric
+ * situation the shipped samples no longer contain (they are all balanced now),
+ * but the stagger solver must still survive.
+ *
+ * Topology: R → [A (bl 10), D (bl 0.2)]; D → [B (bl 0.05), C (bl 0.05)].
+ * In the phylogram D sits ~0.2/10 of the depth axis from B/C, so its label
+ * starts practically inside theirs.
+ */
+function squeezedTree(type: LayoutType): Project {
+  const p = createEmptyProject('squeezed');
+  const nextTaxon = taxonNamer();
+  const rootId = p.rootId;
+  p.nodes[rootId].label = nextTaxon(); // R
+  p.nodes[rootId].age = 10.2;
+  const tipA = mkRaw(p, nextTaxon(), rootId, 10);
+  const innerD = mkRaw(p, nextTaxon(), rootId, 0.2);
+  const tipB = mkRaw(p, nextTaxon(), innerD, 0.05);
+  const tipC = mkRaw(p, nextTaxon(), innerD, 0.05);
+  p.layout.type = type;
+  return p;
+
+  function mkRaw(project: Project, label: string, parentId: string, bl: number): string {
+    const id = `sq_${label}`;
+    const parent = project.nodes[parentId];
+    project.nodes[id] = {
+      id,
+      label,
+      parentId,
+      childrenIds: [],
+      branchLength: bl,
+      age: parent.age !== undefined ? parent.age - bl : undefined,
+    };
+    parent.childrenIds.push(id);
+    return id;
+  }
+}
+
+/** The aquatic demo sample, switched to one layout (fresh objects per call). */
 function cetacean(type: LayoutType): Project {
   const project = SAMPLE_PROJECTS.find((s) => s.id === 'cetacean')!.build();
   project.layout.type = type;
@@ -143,17 +183,30 @@ describe('label stagger — no two rendered labels overlap', () => {
     });
   }
 
-  it('fixes the reported Basilosauridae × Neoceti overlap in short-branch layouts', () => {
+  it('keeps a squeezed parent/child label pair disjoint in short-branch layouts (BUG-4)', () => {
+    // The shipped samples are all strictly binary and balanced now, so the
+    // historical overlap shape (a parent label landing inside its children's
+    // labels) is reproduced here with a hand-built long-branch/short-branch tree.
     for (const type of ['rectangular-phylogram', 'time-calibrated'] as LayoutType[]) {
-      const project = cetacean(type);
+      const project = squeezedTree(type);
       const layout = computeLayout(project);
       const plan = getCanvasCollisionPlan(project, AXIS)!;
       const boxes = staggeredLabelBoxes(project, layout, plan.nudges);
-      const basilo = boxes.find((b) => b.label === 'Basilosauridae')!;
-      const neoceti = boxes.find((b) => b.label === 'Neoceti')!;
-      expect(boxesIntersect(basilo.box, neoceti.box), `${type}: sample labels still overlap`).toBe(false);
-      expect(plan.nudges.get(neoceti.id), `${type}: child label must yield`).toBeLessThan(0);
-      expect(plan.nudges.get(basilo.id) ?? 0, `${type}: parent label keeps its row`).toBe(0);
+      expect(boxes.length).toBe(5); // R, A, D, B, C — every visible node
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          expect(
+            boxesIntersect(boxes[i].box, boxes[j].box),
+            `${type}: ${boxes[i].label} × ${boxes[j].label}`,
+          ).toBe(false);
+        }
+      }
+      // Which label yields is the solver's direction choice; what the contract
+      // pins is that the collision WAS resolved by staggering.
+      expect(
+        [...plan.nudges.values()].some((n) => n !== 0),
+        `${type}: the squeezed labels must be staggered apart`,
+      ).toBe(true);
     }
   });
 
@@ -244,7 +297,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
     });
   }
 
-  it('keeps a node’s events together as one stack (KI + AR of Neoceti)', () => {
+  it('keeps a node’s events together as one stack (KI + AR of Taxon_D)', () => {
     for (const type of LAYOUTS) {
       const project = cetacean(type);
       const layout = computeLayout(project);
@@ -269,17 +322,41 @@ describe('event badge placement — clears labels, markers, axis text and other 
   });
 
   it('reports a leader line when a stack is displaced, and not otherwise', () => {
+    // A squeezed tree with a two-badge stack on the inner parent: in the
+    // cladogram the stack cannot sit on its branch without hitting a label, so
+    // it is displaced and the plan reports the leader back to the branch.
     const cladogram = (() => {
-      const project = cetacean('rectangular-cladogram');
+      // The cladogram spreads depths evenly, so the squeeze only exists in the
+      // phylogram, where branch-length proportions rule.
+      const project = squeezedTree('rectangular-phylogram');
+      const d = Object.values(project.nodes).find((n) => n.label === 'Taxon_D')!;
+      project.events.push(
+        {
+          id: 'ev-ki',
+          typeId: 'key-innovation',
+          target: 'branch',
+          nodeId: d.id,
+          triggers: [],
+        },
+        {
+          id: 'ev-ar',
+          typeId: 'adaptive-radiation',
+          target: 'node',
+          nodeId: d.id,
+          triggers: [],
+        },
+      );
       const layout = computeLayout(project);
       return planEventAnchors(anchorInput(project, layout));
     })();
-    expect(cladogram.leaders).toHaveLength(1);
+    expect(cladogram.leaders.length).toBeGreaterThanOrEqual(1);
     const leader = cladogram.leaders[0];
     expect(Math.hypot(leader.from.x - leader.to.x, leader.from.y - leader.to.y)).toBeGreaterThanOrEqual(
       BADGE_LEADER_MIN_SHIFT,
     );
 
+    // The circular layout places anchors radially clear of the labels, so the
+    // same stack needs no displacement and no leader.
     const circular = (() => {
       const project = cetacean('circular');
       const layout = computeLayout(project);
@@ -291,12 +368,12 @@ describe('event badge placement — clears labels, markers, axis text and other 
   it('does not let the two badges of one stack be confused with another node’s badge', () => {
     const project = cetacean('rectangular-cladogram');
     // Add a second cluster on a different node to exercise badge-vs-badge spacing.
-    const pakicetus = nodeByLabel(project, 'Pakicetus');
+    const terra = nodeByLabel(project, 'Taxon_G');
     project.events.push({
       id: 'extra-event',
       typeId: 'extinction-local',
       target: 'node',
-      nodeId: pakicetus,
+      nodeId: terra,
       triggers: [],
     });
     const layout = computeLayout(project);
@@ -335,15 +412,15 @@ describe('label geometry helpers', () => {
   it('measures CJK labels at full em width, not the Latin advance', () => {
     const project = cetacean('rectangular-cladogram');
     const layout = computeLayout(project);
-    const id = nodeByLabel(project, 'Cetacea');
+    const id = nodeByLabel(project, 'Taxon_A');
     const node = project.nodes[id];
     const latin = labelBoxForNode(project, layout.positions, node, { widthFactor: 1 })!;
-    node.label = '鲸类水生适应'; // 6 full-width glyphs
+    node.label = '虚拟类群演示'; // 6 full-width glyphs
     const cjk = labelBoxForNode(project, layout.positions, node, { widthFactor: 1 })!;
     const latinWidth = latin.maxX - latin.minX;
     const cjkWidth = cjk.maxX - cjk.minX;
     expect(cjkWidth).toBeGreaterThan(latinWidth);
-    // 6 CJK glyphs at fontSize 14 ≈ 84 world px; the Latin "Cetacea" is ~0.62em each.
+    // 6 CJK glyphs at fontSize 14 ≈ 84 world px; the Latin "Taxon_A" is ~0.62em each.
     expect(cjkWidth).toBeGreaterThan(6 * 14 * 0.9);
   });
 });

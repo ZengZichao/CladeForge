@@ -85,7 +85,7 @@ On first launch, CladeForge opens an empty workspace and offers a four-step guid
 To start immediately, you can:
 - **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex` or `.nexus` file onto the window, or choose **Import tree** in the File menu. ⌘O / Ctrl+O is **Open project**, which reads a `.cladeforge.json` file.
 - **Build from scratch** — Select the root and click the header's **+ Add children** button, which opens one dialog for binary, ternary and polytomy splits.
-- **Load a sample project** — Click "Load sample tree" on the empty-state screen, or pick from the sample grid. Six built-in samples cover archaeal domain evolution, bacterial domain evolution (including cyanobacterial oxygenic photosynthesis), viral evolution (RNA/DNA genome types), cetacean aquatic transition, plant terrestrialization (vascular tissue and seeds), and tetrapod terrestrialization (limbs, amniotic egg, and flight). Each sample comes pre-loaded with characters, events, and hypothesis layers.
+- **Load a sample project** — Click "Load sample tree" on the empty-state screen, or pick from the sample grid. Six built-in samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), and every sample tree is strictly binary: aquatic transition (habitat and locomotion), deep-domain radiation (energy metabolism and temperature adaptation), wall type & oxygen, viral evolution (genome types and host range), plant terrestrialization (vascular tissue and seeds), and tetrapod land invasion (limbs, amniotic egg, and flight). Each sample comes pre-loaded with characters, events, and hypothesis layers.
 
 ### Language and Theme
 

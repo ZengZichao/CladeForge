@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEmptyProject, createCetaceanSample, createSampleProject } from './sampleTree';
+import { createEmptyProject, createAquaticSample, createSampleProject } from './sampleTree';
 import { addCharacter, addChildren, setNodeState } from './treeOps';
 import { switchLayer } from './layers';
 import { newCharacter } from './characters';
@@ -488,7 +488,7 @@ describe('Holm correction — one family definition for model and UI', () => {
     // The demo documents a reader actually opens. The family is whatever
     // carries a statistic, m is that family, and the ≥0.5 flag only filters the
     // rows afterwards — never the correction.
-    for (const make of [createCetaceanSample, createSampleProject]) {
+    for (const make of [createAquaticSample, createSampleProject]) {
       const p = make();
       const family = testableCharacterPairs(p);
       expect(family.length, p.name).toBeGreaterThan(0);
@@ -551,7 +551,7 @@ describe('consistency categories — all five exist and can fire', () => {
     // C2 must not be gated on "character has no cost matrix": the demo project's
     // fully assigned character Habitat carries a Sankoff matrix, so the check could
     // never fire there. Both sides of the comparison use that same matrix.
-    const p = createCetaceanSample();
+    const p = createAquaticSample();
     const habitat = p.characters.find((c) => c.costMatrix)!;
     expect(habitat).toBeDefined();
     const issues = checkConsistency(p, habitat);
