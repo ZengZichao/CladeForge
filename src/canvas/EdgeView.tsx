@@ -9,7 +9,7 @@ import {
   type Orientation,
   type Point,
 } from '../model/types';
-import { circularPath, elbowPath } from './paths';
+import { branchPath } from './paths';
 import { unmeasuredMark } from './branchFlags';
 
 interface EdgeViewProps {
@@ -35,7 +35,7 @@ export const EdgeView = memo(function EdgeView({
   style,
   unmeasured,
 }: EdgeViewProps) {
-  const d = layoutType === 'circular' ? circularPath(from, to) : elbowPath(from, to, orientation);
+  const d = branchPath(from, to, orientation, layoutType, style.shape);
   const caps = branchCaps(style.shape);
   const mark = unmeasured ? unmeasuredMark(style.width) : null;
   return (

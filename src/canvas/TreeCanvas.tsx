@@ -21,6 +21,7 @@ import {
 } from '../model/treeOps';
 import { resolveBranchStyle, resolveNodeStyle, branchColorFor, DEFAULT_CANVAS, DEFAULT_BRANCH_STYLE, type NodeId, type Point } from '../model/types';
 import {
+  characterValueColor,
   continuousRange,
   detectTransitions,
   findCharacter,
@@ -89,6 +90,7 @@ export function TreeCanvas() {
   const viewportSize = useStore((s) => s.viewport);
   const activeCharacterId = useStore((s) => s.activeCharacterId);
   const showTransitions = useStore((s) => s.showTransitions);
+  const characterColorTarget = useStore((s) => s.characterColorTarget);
   const showEvents = useStore((s) => s.showEvents);
   const showEras = useStore((s) => s.showEras);
   const eraLevel = useStore((s) => s.eraLevel);
@@ -517,7 +519,9 @@ export function TreeCanvas() {
     [project, activeCharacter],
   );
   const transitions = useMemo(() => {
-    if (!activeCharacter || activeCharacter.type !== 'discrete' || !showTransitions) return [];
+    // Both character types use the same mid-branch marker; hiding the markers
+    // is the user's switch, not an implicit type difference.
+    if (!activeCharacter || !showTransitions) return [];
     return detectTransitions(project, activeCharacter, layout.visible).filter(
       (t) => culledIds.has(t.nodeId) && culledIds.has(t.parentId),
     );
@@ -636,13 +640,22 @@ export function TreeCanvas() {
                     color: C_MRCA,
                     width: resolveBranchStyle(b.node, project).width + 8,
                     dash: 'solid',
-                    shape: 'line',
+                    // Follow the branch's own geometry: a highlight drawn as an
+                    // elbow over a curved branch would visibly diverge from it.
+                    shape: resolveBranchStyle(b.node, project).shape,
                   }}
                 />
               ))}
           {branches.map((b) => {
             const bs = styleCache.branchStyles.get(b.node.id) ?? resolveBranchStyle(b.node, project);
-            const color = branchColorFor(
+            // Character colouring can paint the child's state on its incoming
+            // branch. Unassigned branches keep the normal style colour rather
+            // than turning the whole tree grey.
+            const charColor =
+              activeCharacter && characterColorTarget === 'branch'
+                ? nodeCharacterColor(activeCharacter, b.node, charRange)
+                : undefined;
+            const color = charColor ?? branchColorFor(
               b.node,
               project,
               layout.depths.get(b.node.id) ?? 0,
@@ -651,8 +664,11 @@ export function TreeCanvas() {
             // Default branch colour (#333333) is invisible on the dark canvas;
             // when the user has not customised it, render the theme variable
             // (exports keep the stored default, so files stay self-contained).
-            const renderedColor =
-              color === DEFAULT_BRANCH_STYLE.color ? 'var(--c-default-branch)' : color;
+            const renderedColor = charColor
+              ? charColor
+              : color === DEFAULT_BRANCH_STYLE.color
+                ? 'var(--c-default-branch)'
+                : color;
             return (
               <EdgeView
                 key={`b-${b.node.id}`}
@@ -707,9 +723,17 @@ export function TreeCanvas() {
             const from = layout.positions.get(t.parentId);
             const to = layout.positions.get(t.nodeId);
             if (!from || !to) return null;
-            // Anchor the marker ON the elbow segment — the bounding-box
-            // midpoint floats in empty air for rectangular layouts.
-            const m = branchMidpointOn(from, to, project.layout.orientation, project.layout.type);
+            // Anchor the marker ON the drawn branch. Opacity/colour styles may
+            // leave the path itself untouched, but a curved branch no longer
+            // passes through the elbow midpoint.
+            const transitionStyle = resolveBranchStyle(project.nodes[t.nodeId], project);
+            const m = branchMidpointOn(
+              from,
+              to,
+              project.layout.orientation,
+              project.layout.type,
+              transitionStyle.shape === 'curved',
+            );
             // A branch with an UNKNOWN endpoint is a data prompt, not an
             // evolutionary change (missing data adds no homoplasy), so it is
             // drawn in its own class — a dashed grey ring with a question mark
@@ -743,8 +767,14 @@ export function TreeCanvas() {
                 </g>
               );
             }
-            const fromColor = activeCharacter?.states.find((s) => s.id === t.from)?.color ?? C_UNKNOWN;
-            const toColor = activeCharacter?.states.find((s) => s.id === t.to)?.color ?? C_TRANSITION_TO;
+            // Same colour helper for discrete states and continuous ramps, so
+            // both character types get identical mid-branch change markers.
+            const fromColor =
+              (activeCharacter ? characterValueColor(activeCharacter, t.from, charRange) : undefined) ??
+              C_UNKNOWN;
+            const toColor =
+              (activeCharacter ? characterValueColor(activeCharacter, t.to, charRange) : undefined) ??
+              C_TRANSITION_TO;
             return (
               <g key={`t-${t.nodeId}`}>
                 <circle cx={m.x} cy={m.y} r={5.5} fill="var(--surface)" stroke={fromColor} strokeWidth={2} />
@@ -767,7 +797,7 @@ export function TreeCanvas() {
                 isLeaf={n.childrenIds.length === 0}
                 isDropTarget={dropTargetId === n.id}
                 isConnectSource={connect?.sourceId === n.id}
-                characterActive={!!activeCharacter}
+                characterActive={!!activeCharacter && characterColorTarget === 'node'}
                 characterColor={
                   activeCharacter ? nodeCharacterColor(activeCharacter, n, charRange) : undefined
                 }

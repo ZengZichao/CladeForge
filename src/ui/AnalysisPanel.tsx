@@ -16,13 +16,7 @@ import { characterCorrelations, checkConsistency } from '../model/consistency';
 import { Section } from './Section';
 import { S, tr } from './strings';
 
-export function AnalysisPanel({
-  onOpenMatrix,
-  onOpenAnalysis,
-}: {
-  onOpenMatrix: () => void;
-  onOpenAnalysis: () => void;
-}) {
+export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }) {
   const project = useStore((s) => s.project);
   const activeCharacterId = useStore((s) => s.activeCharacterId);
   const characters = useStore((s) => s.project.characters);
@@ -52,58 +46,16 @@ export function AnalysisPanel({
     <>
       <div className="panel-header">
         <span className="panel-header-title">{S.nav.analysis}</span>
-        <span className="panel-header-subtitle">{S.analysis.title}</span>
+        <span className="panel-header-subtitle">{S.analysis.subtitle}</span>
       </div>
 
-      {/* Tree summary statistics */}
-      <Section id="analysis-tree-summary" title={S.analysis.treeSummarySection} pinable>
-        <div className="field">
-          <label>{S.analysis.tipCount}</label>
-          <span className="field-value">{summary.tipCount}</span>
-        </div>
-        <div className="field">
-          <label>{S.analysis.internalCount}</label>
-          <span className="field-value">{summary.internalCount}</span>
-        </div>
-        <div className="field">
-          <label>{S.analysis.resolution}</label>
-          <span className="field-value">{(summary.resolution * 100).toFixed(1)}%</span>
-        </div>
-        <div className="field">
-          <label>{S.analysis.avgBranchLength}</label>
-          <span className="field-value">{summary.avgBranchLength.toFixed(3)}</span>
-        </div>
-        {/* Coverage is shown with the number, so a mean over 3 of 40
-            branches cannot be read as a mean over the tree. */}
-        {summary.missingBranchLengths > 0 && (
-          <div className="hint">
-            {S.analysis.branchLengthCoverage(summary.branchLengthNodes, summary.missingBranchLengths)}
-          </div>
-        )}
-        <div className="field">
-          <label>{S.analysis.sackinIndex}</label>
-          <span className="field-value">{summary.sackinIndex}</span>
-        </div>
-        <div className="field">
-          <label>{S.analysis.collessIndex}</label>
-          <span className="field-value">{summary.collessIndex}</span>
-        </div>
-        {!summary.collessApplies &&
-          summary.internalCount - Math.round(summary.resolution * summary.internalCount) > 0 && (
-            <div className="hint">
-              {S.analysis.collessBinaryOnly(
-                summary.internalCount - Math.round(summary.resolution * summary.internalCount),
-              )}
-            </div>
-          )}
-      </Section>
+      <div className="panel-intro">{S.analysis.intro}</div>
 
-      {/* Character-level analysis summary */}
-      <Section id="analysis-character" title={S.analysis.title} pinable>
+      {/* Character-level analysis summary. Matrix entry lives in Traits (where
+          characters are managed); this module only shows and interprets. */}
+      <Section id="analysis-character" title={S.analysis.characterSummary} pinable>
         {!character ? (
-          <>
-            <div className="hint">{S.analysis.needCharacter}</div>
-          </>
+          <div className="hint">{S.analysis.needCharacter}</div>
         ) : (
           <>
             <div className="field">
@@ -150,21 +102,14 @@ export function AnalysisPanel({
                     )}
               </span>
             </div>
-            <div className="hint">{S.analysis.fillHint}</div>
           </>
         )}
       </Section>
 
-      {/* Analysis action buttons — complete workflow entry points */}
-      <Section title={S.analysisMenu.label} pinable>
+      {/* Inference tools: one clearly named entry, plus the ASR run. */}
+      <Section title={S.analysis.toolsSection} pinable>
+        <div className="hint">{S.analysis.toolsHint}</div>
         <div className="field row-actions">
-          <button
-            className="btn"
-            disabled={characters.length === 0}
-            onClick={onOpenMatrix}
-          >
-            {S.analysisMenu.matrix}
-          </button>
           <button
             className="btn primary"
             disabled={characters.length === 0}
@@ -188,6 +133,51 @@ export function AnalysisPanel({
             </button>
           )}
         </div>
+        <div className="hint">{S.analysis.fillHint}</div>
+      </Section>
+
+      {/* Tree summary is reference data, not the main workflow: collapsed by
+          default so it no longer pushes the analysis tools below the fold. */}
+      <Section id="analysis-tree-summary" title={S.analysis.treeSummarySection} pinable defaultOpen={false}>
+        <div className="field">
+          <label>{S.analysis.tipCount}</label>
+          <span className="field-value">{summary.tipCount}</span>
+        </div>
+        <div className="field">
+          <label>{S.analysis.internalCount}</label>
+          <span className="field-value">{summary.internalCount}</span>
+        </div>
+        <div className="field">
+          <label>{S.analysis.resolution}</label>
+          <span className="field-value">{(summary.resolution * 100).toFixed(1)}%</span>
+        </div>
+        <div className="field">
+          <label>{S.analysis.avgBranchLength}</label>
+          <span className="field-value">{summary.avgBranchLength.toFixed(3)}</span>
+        </div>
+        {/* Coverage is shown with the number, so a mean over 3 of 40
+            branches cannot be read as a mean over the tree. */}
+        {summary.missingBranchLengths > 0 && (
+          <div className="hint">
+            {S.analysis.branchLengthCoverage(summary.branchLengthNodes, summary.missingBranchLengths)}
+          </div>
+        )}
+        <div className="field">
+          <label>{S.analysis.sackinIndex}</label>
+          <span className="field-value">{summary.sackinIndex}</span>
+        </div>
+        <div className="field">
+          <label>{S.analysis.collessIndex}</label>
+          <span className="field-value">{summary.collessIndex}</span>
+        </div>
+        {!summary.collessApplies &&
+          summary.internalCount - Math.round(summary.resolution * summary.internalCount) > 0 && (
+            <div className="hint">
+              {S.analysis.collessBinaryOnly(
+                summary.internalCount - Math.round(summary.resolution * summary.internalCount),
+              )}
+            </div>
+          )}
       </Section>
     </>
   );

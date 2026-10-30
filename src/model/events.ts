@@ -11,18 +11,19 @@ import { newId } from './treeOps';
 import { tr } from '../ui/strings';
 
 /**
- * How an event type is marked on a badge: a two-letter uppercase ASCII **code**
- * derived from the English type name, drawn inside a colour-ringed badge.
+ * How an event type is identified: a two-letter uppercase ASCII **code**
+ * derived from the English type name. The code is the default text a badge can
+ * show, but badges draw NO letters unless the user explicitly turns text on —
+ * shape and colour identify the event on the tree. This keeps figures clean
+ * and avoids every evolutionary event turning into an acronym.
  *
- * Events are marked with a code rather than a pictographic glyph. Emoji are out
- * of the question for a figure-generating app: they render through an emoji font
- * the export pipeline does not embed, so a badge would come out in colour on
- * screen and as a missing-glyph box in SVG/PDF; they differ across
- * platforms; and they cannot be read aloud or grepped. Two letters are plain
- * text everywhere — canvas, legend, export and Markdown — stay identical on
- * every platform, and survive greyscale printing. The colour ring still carries
- * the group, and the full localised name sits beside the badge in the legend,
- * the inspector and the tooltip.
+ * When text IS requested, it is plain text rather than a pictographic glyph.
+ * Emoji are out of the question for a figure-generating app: they render
+ * through an emoji font the export pipeline does not embed, so a badge would
+ * come out in colour on screen and as a missing-glyph box in SVG/PDF; they
+ * differ across platforms; and they cannot be read aloud or grepped. The
+ * colour ring still carries the group, and the full localised name sits beside
+ * the badge in the legend, the inspector and the tooltip.
  */
 export interface EventTypeDef {
   id: string;
@@ -31,7 +32,7 @@ export interface EventTypeDef {
   labelEn: string;
   group: string;
   groupEn: string;
-  /** Two-letter code shown inside the badge (see the note above). */
+  /** Two-letter code used as the badge's default text when text is shown. */
   code: string;
   color: string;
   /** Where this event most naturally attaches (drives the default target). */
@@ -42,6 +43,8 @@ export interface EventTypeDef {
 export const EVENT_BADGE_RADIUS = 8;
 /** Two uppercase letters need a smaller size than a single pictograph did. */
 export const EVENT_CODE_FONT_SIZE = 7.5;
+/** Longest inner badge text kept on use; the badge is a marker, not a label. */
+export const EVENT_BADGE_TEXT_MAX = 4;
 
 /**
  * Badge shapes the event editor offers, with display labels. `circle` is the
@@ -85,20 +88,53 @@ export function eventMarkerColor(event: EvolutionaryEvent): string {
 }
 
 /**
- * The text drawn inside the badge: the per-event override, else the type's
- * catalogue code. Long overrides are truncated to 4 characters — the badge is
- * a marker, not a label, and the collision planner sizes boxes off the radius.
+ * Whether the badge draws inner text. Markers are text-free by default: the
+ * event is carried by the ring colour and the shape, so a figure does not
+ * become a field of two-letter acronyms. The user opts in per event; a custom
+ * `markerText` written by an older document also counts as opting in.
+ */
+export function eventMarkerTextVisible(event: EvolutionaryEvent): boolean {
+  if (event.markerShowText !== undefined) return event.markerShowText;
+  return !!event.markerText?.trim();
+}
+
+/**
+ * The text drawn inside the badge, or '' when text is hidden. Shown text is
+ * the per-event override, else the type's catalogue code. Long text is
+ * truncated — the badge is a marker, not a label, and collision planning
+ * sizes boxes off the radius.
  */
 export function eventBadgeText(event: EvolutionaryEvent): string {
+  if (!eventMarkerTextVisible(event)) return '';
   const text = event.markerText?.trim();
-  if (text) return text.slice(0, 4);
+  if (text) return text.slice(0, EVENT_BADGE_TEXT_MAX);
   return eventCode(event);
 }
 
-/** Font size for the inner badge text, scaled with the badge radius. */
+/**
+ * Approximate text width in em: full-width (CJK) glyphs are 1 em, Latin and
+ * digits about 0.62 em. Used to shrink custom text so it stays inside the
+ * marker outline.
+ */
+function badgeTextWidth(text: string): number {
+  let units = 0;
+  for (const ch of text) {
+    units += (ch.codePointAt(0) ?? 0) >= 0x2e80 ? 1 : 0.62;
+  }
+  return Math.max(units, 0.62);
+}
+
+/**
+ * Font size for the inner badge text, scaled with the badge radius and the
+ * text width so a short custom label (e.g. two CJK characters) still fits
+ * inside the outline. Returns 0 when the badge carries no text.
+ */
 export function eventBadgeFontSize(event: EvolutionaryEvent): number {
+  const text = eventBadgeText(event);
+  if (!text) return 0;
   const r = eventMarkerSize(event);
-  return Math.min(11, Math.max(5.5, r * (eventBadgeText(event).length > 2 ? 0.42 : 0.94)));
+  const fit = (r * 1.32) / badgeTextWidth(text);
+  return Math.min(11, Math.max(3.5, fit));
 }
 
 /**

@@ -54,11 +54,14 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 // the universal convention of control-on-left.
 export function CheckboxField({
   label,
+  title,
   checked,
   disabled,
   onChange,
 }: {
   label: string;
+  /** Hover text for a label that had to be shortened for a narrow panel. */
+  title?: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
@@ -73,7 +76,9 @@ export function CheckboxField({
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id} title={title}>
+        {label}
+      </label>
     </div>
   );
 }
@@ -428,6 +433,7 @@ export function BranchShapeSelect({
       onChange={(e) => onChange(e.target.value as BranchShape)}
     >
       <option value="line">{S.branchShape.line}</option>
+      <option value="curved">{S.branchShape.curved}</option>
       <option value="rectangular">{S.branchShape.rectangular}</option>
       <option value="rounded">{S.branchShape.rounded}</option>
     </select>

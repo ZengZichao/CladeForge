@@ -13,15 +13,19 @@ import {
   updateEvent,
 } from '../model/treeOps';
 import {
+  EVENT_BADGE_TEXT_MAX,
   EVENT_MARKER_SHAPES,
   EVENT_MARKER_SIZE_MAX,
   EVENT_MARKER_SIZE_MIN,
   EVENT_TYPES,
   clampEventMarkerSize,
+  eventBadgeExtent,
+  eventBadgeFontSize,
   eventBadgeText,
   eventMarkerColor,
   eventMarkerShape,
   eventMarkerSize,
+  eventMarkerTextVisible,
   eventDisplayLabel,
   eventTypeGroup,
   eventTypeLabel,
@@ -30,7 +34,10 @@ import {
   newEvent,
 } from '../model/events';
 import type { Confidence, EvolutionaryEvent, Project, TreeNode } from '../model/types';
-import { ColorField, Field, NumberField, TextField } from './fields';
+import { eventMarkerPath } from '../canvas/markerGeometry';
+import { CheckboxField, ColorField, Field, TextField } from './fields';
+import { SliderNumberField } from './SliderNumberField';
+import { Section } from './Section';
 import { S, tr } from './strings';
 
 type Apply = (recipe: (d: Project) => void) => void;
@@ -69,22 +76,43 @@ function OneEvent({
   const id = event.id;
   const up = (patch: Partial<EvolutionaryEvent>) => apply((d) => updateEvent(d, id, patch));
   const others = project.events.filter((e) => e.id !== id);
+  const badgeText = eventBadgeText(event);
+  const badgeExtent = eventBadgeExtent(event);
 
   return (
     <div className="event-item">
       <div className="event-row">
         {/* Live marker preview: the same shape / colour / text the canvas draws. */}
         <span
-          className="event-badge"
+          className="event-badge-preview"
           title={findEventType(event.typeId) ? eventTypeLabel(findEventType(event.typeId)!) : undefined}
-          style={{
-            borderColor: eventMarkerColor(event),
-            width: eventMarkerSize(event) * 2,
-            height: eventMarkerSize(event) * 2,
-            fontSize: Math.min(11, Math.max(6, eventMarkerSize(event) * 0.94)),
-          }}
+          aria-hidden
         >
-          {eventBadgeText(event)}
+          <svg
+            viewBox={`${-badgeExtent - 2} ${-badgeExtent - 2} ${badgeExtent * 2 + 4} ${badgeExtent * 2 + 4}`}
+            width="26"
+            height="26"
+          >
+            <path
+              d={eventMarkerPath(eventMarkerShape(event), 0, 0, eventMarkerSize(event))}
+              fill="var(--surface)"
+              stroke={eventMarkerColor(event)}
+              strokeWidth={2}
+              strokeLinejoin="round"
+            />
+            {badgeText && (
+              <text
+                x={0}
+                y={0}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={eventBadgeFontSize(event)}
+                fontWeight={700}
+              >
+                {badgeText}
+              </text>
+            )}
+          </svg>
         </span>
         <span className="event-title" title={eventDisplayLabel(event)}>
           {eventDisplayLabel(event)}
@@ -129,6 +157,7 @@ function OneEvent({
               column and squeezed every nested control unreadably narrow. */}
           <div className="event-marker-style">
             <div className="event-marker-style-title">{S.event.markerSection}</div>
+            <div className="hint event-marker-hint">{S.event.markerHint}</div>
             <Field label={S.event.markerShape}>
               <select
                 value={eventMarkerShape(event)}
@@ -142,15 +171,13 @@ function OneEvent({
               </select>
             </Field>
             <Field label={S.event.markerSize}>
-              <NumberField
+              <SliderNumberField
                 value={event.markerSize ?? 8}
                 min={EVENT_MARKER_SIZE_MIN}
                 max={EVENT_MARKER_SIZE_MAX}
                 step={1}
                 unit="px"
-                onCommit={(v) =>
-                  up({ markerSize: v === undefined ? undefined : clampEventMarkerSize(v) })
-                }
+                recipe={(v) => (d) => updateEvent(d, id, { markerSize: clampEventMarkerSize(v) })}
               />
             </Field>
             <Field label={S.event.markerColor}>
@@ -160,19 +187,38 @@ function OneEvent({
                 onChange={(v) => up({ markerColor: v })}
               />
             </Field>
+            <CheckboxField
+              label={S.event.markerShowText}
+              checked={eventMarkerTextVisible(event)}
+              onChange={(v) => up({ markerShowText: v })}
+            />
             <Field label={S.event.markerText}>
               <TextField
                 value={event.markerText ?? ''}
                 placeholder={S.event.markerTextPlaceholder}
-                onCommit={(v) => up({ markerText: v.slice(0, 4) })}
+                onCommit={(v) => {
+                  const text = v.slice(0, EVENT_BADGE_TEXT_MAX);
+                  // Typing custom text is an explicit request to see it.
+                  up(text.trim() ? { markerText: text, markerShowText: true } : { markerText: text });
+                }}
               />
             </Field>
-            {(event.markerShape || event.markerSize !== undefined || event.markerColor || event.markerText) && (
+            {(event.markerShape ||
+              event.markerSize !== undefined ||
+              event.markerColor ||
+              event.markerText ||
+              event.markerShowText !== undefined) && (
               <div className="row-actions">
                 <button
                   className="btn"
                   onClick={() =>
-                    up({ markerShape: undefined, markerSize: undefined, markerColor: undefined, markerText: undefined })
+                    up({
+                      markerShape: undefined,
+                      markerSize: undefined,
+                      markerColor: undefined,
+                      markerText: undefined,
+                      markerShowText: undefined,
+                    })
                   }
                 >
                   {S.event.markerReset}
@@ -204,19 +250,23 @@ function OneEvent({
             {others.length === 0 ? (
               <div className="hint">{S.event.triggersNone}</div>
             ) : (
-              others.map((o) => (
-                <label key={o.id} className="event-trigger-row">
-                  <input
-                    type="checkbox"
-                    checked={event.triggers.includes(o.id)}
-                    onChange={() => apply((d) => toggleEventTrigger(d, id, o.id))}
-                  />
-                  <span>
-                    {eventBadgeText(o)} · {eventDisplayLabel(o)}
-                    {project.nodes[o.nodeId]?.label ? ` (${project.nodes[o.nodeId].label})` : ''}
-                  </span>
-                </label>
-              ))
+              others.map((o) => {
+                const code = eventBadgeText(o);
+                return (
+                  <label key={o.id} className="event-trigger-row">
+                    <input
+                      type="checkbox"
+                      checked={event.triggers.includes(o.id)}
+                      onChange={() => apply((d) => toggleEventTrigger(d, id, o.id))}
+                    />
+                    <span>
+                      {code ? `${code} · ` : ''}
+                      {eventDisplayLabel(o)}
+                      {project.nodes[o.nodeId]?.label ? ` (${project.nodes[o.nodeId].label})` : ''}
+                    </span>
+                  </label>
+                );
+              })
             )}
           </div>
 
@@ -250,8 +300,13 @@ export function EventEditor({
   };
 
   return (
-    <div className="panel-section">
-      <h3>{S.event.section}</h3>
+    <Section
+      title={S.event.section}
+      count={events.length}
+      defaultOpen={false}
+      favoritable
+      keywords={['事件', '演化事件', '因果链', 'event', 'evolutionary event', 'causal']}
+    >
       {events.length === 0 && <div className="hint">{S.event.empty}</div>}
       {events.map((e) => (
         <OneEvent key={e.id} event={e} project={project} apply={apply} isRoot={isRoot} />
@@ -267,6 +322,6 @@ export function EventEditor({
           <TypeOptions />
         </select>
       </Field>
-    </div>
+    </Section>
   );
 }

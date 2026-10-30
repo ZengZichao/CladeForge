@@ -12,7 +12,13 @@
 
 import { create, type StateCreator } from 'zustand';
 import { produce, freeze, setAutoFreeze } from 'immer';
-import type { EdgeId, NodeId, Project, ViewTransform } from './types';
+import type {
+  CharacterColorTarget,
+  EdgeId,
+  NodeId,
+  Project,
+  ViewTransform,
+} from './types';
 import { IDENTITY_VIEW } from './types';
 import { pushSnapshot, type HistoryEntry } from './history';
 import { createEmptyProject, createSampleProject, SAMPLE_PROJECTS } from './sampleTree';
@@ -96,6 +102,7 @@ interface TabSnapshot {
   view: ViewTransform;
   activeCharacterId: string | null;
   showTransitions: boolean;
+  characterColorTarget: CharacterColorTarget;
   showEvents: boolean;
   showEras: boolean;
   eraLevel: EraLevel;
@@ -115,6 +122,7 @@ function captureTab(s: AppState): TabSnapshot {
     view: s.view,
     activeCharacterId: s.activeCharacterId,
     showTransitions: s.showTransitions,
+    characterColorTarget: s.characterColorTarget,
     showEvents: s.showEvents,
     showEras: s.showEras,
     eraLevel: s.eraLevel,
@@ -135,6 +143,7 @@ function snapshotFor(project: Project): TabSnapshot {
     view: { ...IDENTITY_VIEW },
     activeCharacterId: project.characters[0]?.id ?? null,
     showTransitions: true,
+    characterColorTarget: 'node',
     showEvents: true,
     showEras: false,
     eraLevel: 'both',
@@ -157,6 +166,7 @@ function docStateFor(project: Project): Partial<AppState> {
     view: { ...IDENTITY_VIEW },
     activeCharacterId: project.characters[0]?.id ?? null,
     showTransitions: true,
+    characterColorTarget: 'node',
     showEvents: true,
     showEras: false,
     eraLevel: 'both',
@@ -182,6 +192,7 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     view: snap.view,
     activeCharacterId: snap.activeCharacterId,
     showTransitions: snap.showTransitions,
+    characterColorTarget: snap.characterColorTarget,
     showEvents: snap.showEvents,
     showEras: snap.showEras,
     eraLevel: snap.eraLevel,
@@ -247,6 +258,8 @@ export interface UISlice {
   activeCharacterId: string | null;
   /** Whether state-change markers are drawn on branches for the active character. */
   showTransitions: boolean;
+  /** Where the active character paints its colours: node markers or branches. */
+  characterColorTarget: CharacterColorTarget;
   /** Whether evolutionary-event badges and causal-chain arrows are drawn. */
   showEvents: boolean;
   /** Whether geological-era bands are drawn behind the time-calibrated layout. */
@@ -279,6 +292,7 @@ export interface UISlice {
   zoomBy: (factor: number) => void;
   setActiveCharacter: (id: string | null) => void;
   setShowTransitions: (v: boolean) => void;
+  setCharacterColorTarget: (v: CharacterColorTarget) => void;
   setShowEvents: (v: boolean) => void;
   setShowEras: (v: boolean) => void;
   setEraLevel: (v: EraLevel) => void;
@@ -495,6 +509,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   viewport: { w: 0, h: 0 },
   activeCharacterId: null,
   showTransitions: true,
+  characterColorTarget: 'node',
   showEvents: true,
   showEras: false,
   eraLevel: 'both',
@@ -543,6 +558,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   setActiveCharacter: (id) => set({ activeCharacterId: id, asr: null }),
 
   setShowTransitions: (v) => set({ showTransitions: v }),
+
+  setCharacterColorTarget: (v) => set({ characterColorTarget: v }),
 
   setShowEvents: (v) => set({ showEvents: v }),
 

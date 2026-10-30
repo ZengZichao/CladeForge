@@ -14,8 +14,15 @@ import {
   planEraOverlay,
   type EraLevel,
 } from '../layout/timescale';
-import { curveMidpoint, circularPath, curvedPath, elbowPath, straightPath } from '../canvas/paths';
-import { labelAngleOf, labelPlacement } from '../canvas/labels';
+import { branchPath, curveMidpoint, curvedPath, straightPath } from '../canvas/paths';
+import {
+  HYPOTHESIS_NOTE_PAD,
+  hypothesisNoteFontSize,
+  hypothesisNotePlacement,
+  hypothesisNoteText,
+  labelAngleOf,
+  labelPlacement,
+} from '../canvas/labels';
 import { labelAngleFor, labelBoxForNode, estimateLabelWidth, type Box } from '../canvas/labelBounds';
 import {
   MAX_COLLISION_PLAN_NODES,
@@ -31,13 +38,21 @@ import {
   dashArray,
   resolveBranchStyle,
   resolveNodeStyle,
+  type CharacterColorTarget,
+  type EventMarkerShape,
   type NodeId,
   type NodeStyle,
   type Point,
   type Project,
   type TreeNode,
 } from '../model/types';
-import { continuousRange, detectTransitions, findCharacter, nodeCharacterColor } from '../model/characters';
+import {
+  characterValueColor,
+  continuousRange,
+  detectTransitions,
+  findCharacter,
+  nodeCharacterColor,
+} from '../model/characters';
 import {
   eventBadgeFontSize,
   eventBadgeText,
@@ -70,6 +85,8 @@ export const FONT_FAMILY_FOR_TEST = FONT_FAMILY;
 export interface ExportOptions {
   activeCharacterId?: string | null;
   showTransitions?: boolean;
+  /** Paint the active character on node markers or on branches (default node). */
+  characterColorTarget?: CharacterColorTarget;
   showEvents?: boolean;
   showEras?: boolean;
   /** Which geological rank to draw when `showEras` is on (default: both). */
@@ -175,6 +192,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   const { positions, visible, bounds, depths, maxDepth, timeAxis } = layout;
   const orientation = project.layout.orientation;
   const activeCharacter = findCharacter(project, opts.activeCharacterId);
+  const colorTarget = opts.characterColorTarget ?? 'node';
   const charRange =
     activeCharacter?.type === 'continuous' ? continuousRange(project, activeCharacter) : undefined;
 
@@ -205,11 +223,13 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
 
   // --- legend entries (character states + event types actually used) ----------
   interface LegendRow {
-    kind: 'title' | 'state' | 'event' | 'transition' | 'needsData';
+    kind: 'title' | 'state' | 'stateBranch' | 'event' | 'transition' | 'needsData';
     label: string;
     color?: string;
     color2?: string;
-    /** Two-letter code drawn inside an event swatch. */
+    /** Event marker outline shape, for kind === 'event'. */
+    shape?: EventMarkerShape;
+    /** Inner event-badge text; empty when the badge carries no text. */
     code?: string;
   }
   const legendRows: LegendRow[] = [];
@@ -217,46 +237,75 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   // the legend is the tally drawn on the branches — and so the two classes
   // (real change vs. missing data) can never be conflated.
   const transitionMarks =
-    opts.showTransitions && activeCharacter && activeCharacter.type === 'discrete'
+    opts.showTransitions && activeCharacter
       ? detectTransitions(project, activeCharacter, visible)
       : [];
   if (activeCharacter) {
     legendRows.push({ kind: 'title', label: tr(`性状：${activeCharacter.name}`, `Character: ${activeCharacter.name}`) });
+    const stateKind = colorTarget === 'branch' ? ('stateBranch' as const) : ('state' as const);
     if (activeCharacter.type === 'discrete') {
-      for (const s of activeCharacter.states) legendRows.push({ kind: 'state', label: s.label, color: s.color });
+      for (const s of activeCharacter.states) legendRows.push({ kind: stateKind, label: s.label, color: s.color });
     } else {
-      legendRows.push({ kind: 'state', label: tr('低值', 'Low'), color: activeCharacter.lowColor ?? '#dbeafe' });
-      legendRows.push({ kind: 'state', label: tr('高值', 'High'), color: activeCharacter.highColor ?? '#1e3a8a' });
+      legendRows.push({ kind: stateKind, label: tr('低值', 'Low'), color: activeCharacter.lowColor ?? '#dbeafe' });
+      legendRows.push({ kind: stateKind, label: tr('高值', 'High'), color: activeCharacter.highColor ?? '#1e3a8a' });
     }
-    if (opts.showTransitions && activeCharacter.type === 'discrete' && transitionMarks.length > 0) {
-      const real = transitionMarks.filter((t) => !t.involvesUnknown).length;
+    if (opts.showTransitions && transitionMarks.length > 0) {
+      const realMarks = transitionMarks.filter((t) => !t.involvesUnknown);
+      const real = realMarks.length;
       const unknown = transitionMarks.length - real;
-      legendRows.push({ kind: 'title', label: tr('状态转变', 'State transitions') });
+      const sample = realMarks[0];
+      const continuous = activeCharacter.type === 'continuous';
+      legendRows.push({
+        kind: 'title',
+        label: continuous ? tr('数值变化', 'Value changes') : tr('状态转变', 'State transitions'),
+      });
       legendRows.push({
         kind: 'transition',
-        label: tr(`已知 ↔ 已知（${real} 处）`, `known ↔ known (${real})`),
-        color: activeCharacter.states[0]?.color,
-        color2: activeCharacter.states[1]?.color,
+        label: continuous
+          ? tr(`两端均有值（${real} 处）`, `both endpoints assigned (${real})`)
+          : tr(`已知 ↔ 已知（${real} 处）`, `known ↔ known (${real})`),
+        color: sample
+          ? characterValueColor(activeCharacter, sample.from, charRange)
+          : activeCharacter.states[0]?.color,
+        color2: sample
+          ? characterValueColor(activeCharacter, sample.to, charRange)
+          : activeCharacter.states[1]?.color,
       });
       if (unknown > 0) {
         legendRows.push({
           kind: 'needsData',
           label: tr(
-            `待补数据：端点未赋值（${unknown} 枝，不计入演化转变）`,
+            `待补数据：端点未赋值（${unknown} 枝，不计入变化）`,
             `needs data: endpoint unassigned (${unknown} branch(es), not counted as changes)`,
           ),
         });
       }
     }
   }
-  if (opts.showEvents) {
-    const used = [...new Set(project.events.map((e) => e.typeId))];
-    if (used.length) {
+  if (opts.showEvents && project.events.length) {
+    // One row per visual identity, not per type: an event with a custom
+    // shape / colour / text must be explained by the swatch it actually draws.
+    const seen = new Set<string>();
+    const rows: LegendRow[] = [];
+    for (const e of project.events) {
+      const color = eventMarkerColor(e);
+      const shape = eventMarkerShape(e);
+      const code = eventBadgeText(e);
+      const id = `${e.typeId}|${color}|${shape}|${code}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const t = findEventType(e.typeId);
+      rows.push({
+        kind: 'event',
+        label: t ? tr(t.label, t.labelEn) : tr('事件', 'Event'),
+        color,
+        shape,
+        code,
+      });
+    }
+    if (rows.length) {
       legendRows.push({ kind: 'title', label: tr('事件', 'Events') });
-      for (const tid of used) {
-        const t = findEventType(tid);
-        if (t) legendRows.push({ kind: 'event', label: t.label, color: t.color, code: t.code });
-      }
+      legendRows.push(...rows);
     }
   }
   const legendHeight = legendRows.length ? legendRows.length * 18 + 18 : 0;
@@ -368,12 +417,13 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     const to = positions.get(id);
     if (!from || !to) continue;
     const bs = resolveBranchStyle(node, project);
-    const color = branchColorFor(node, project, depths.get(id) ?? 0, maxDepth);
+    const charColor =
+      activeCharacter && colorTarget === 'branch'
+        ? nodeCharacterColor(activeCharacter, node, charRange)
+        : undefined;
+    const color = charColor ?? branchColorFor(node, project, depths.get(id) ?? 0, maxDepth);
     const caps = branchCaps(bs.shape);
-    const d =
-      project.layout.type === 'circular'
-        ? circularPath(from, to)
-        : elbowPath(from, to, orientation);
+    const d = branchPath(from, to, orientation, project.layout.type, bs.shape);
     const dash = dashArray(bs.dash, bs.width);
     parts.push(
       `<path d="${d}" fill="none" stroke="${safeColour(color)}" stroke-width="${num(bs.width, 1)}" ${dash ? `stroke-dasharray="${dash}"` : ''} stroke-linejoin="${caps.linejoin}" stroke-linecap="${caps.linecap}"/>`,
@@ -433,7 +483,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   // with an UNKNOWN endpoint is a prompt to score data and must not be readable
   // as a change in the figure (missing data adds no homoplasy). `transitionMarks`
   // is detected once above, so the legend and the markers can never disagree.
-  if (opts.showTransitions && activeCharacter && activeCharacter.type === 'discrete') {
+  if (opts.showTransitions && activeCharacter) {
     for (const t of transitionMarks) {
       const from = positions.get(t.parentId);
       const to = positions.get(t.nodeId);
@@ -449,8 +499,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         );
         continue;
       }
-      const fromColor = activeCharacter.states.find((s) => s.id === t.from)?.color ?? C_UNKNOWN;
-      const toColor = activeCharacter.states.find((s) => s.id === t.to)?.color ?? C_TRANSITION_TO;
+      const fromColor =
+        characterValueColor(activeCharacter, t.from, charRange) ?? C_UNKNOWN;
+      const toColor = characterValueColor(activeCharacter, t.to, charRange) ?? C_TRANSITION_TO;
       parts.push(`<circle cx="${mx}" cy="${my}" r="5.5" fill="#ffffff" stroke="${safeColour(fromColor)}" stroke-width="2"/>`);
       parts.push(`<circle cx="${mx}" cy="${my}" r="3" fill="${safeColour(toColor)}"/>`);
     }
@@ -465,7 +516,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     let fill = style.fill;
     let stroke = style.stroke;
     let dashed = false;
-    if (activeCharacter) {
+    if (activeCharacter && colorTarget === 'node') {
       const c = nodeCharacterColor(activeCharacter, node, charRange);
       if (c) fill = c;
       else {
@@ -476,7 +527,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     }
     const marker = markerSVG(pos, style, fill, stroke, dashed);
     if (marker) parts.push(marker);
-    if (style.showLabel && node.label) {
+    const note = node.hypothesisNote?.trim();
+    const showLabel = style.showLabel && !!node.label;
+    if (showLabel || note) {
       const place = labelPlacement(
         orientation,
         node.childrenIds.length === 0,
@@ -486,14 +539,33 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         style.labelOffsetY,
         labelAngleFor(project, positions, node),
       );
-      const lx = pos.x + place.dx;
-      // Same vertical stagger as the canvas; the rotation ORIGIN moves with the
-      // label, otherwise a rotated label would swing around its old position.
-      const ly = pos.y + place.dy + (labelNudges.get(id) ?? 0);
-      const rot = style.labelRotation ? ` transform="rotate(${num(style.labelRotation, 0)} ${lx} ${ly})"` : '';
-      parts.push(
-        `<text x="${lx}" y="${ly}" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" font-size="${num(style.fontSize, 12)}" font-style="${style.fontStyle === 'italic' ? 'italic' : 'normal'}" font-weight="${num(Number(style.fontWeight), 400)}"${rot} font-family="${FONT_FAMILY}" fill="${safeColour(style.labelColor)}">${escXml(node.label)}</text>`,
-      );
+      const nudge = labelNudges.get(id) ?? 0;
+      if (showLabel) {
+        const lx = pos.x + place.dx;
+        // Same vertical stagger as the canvas; the rotation ORIGIN moves with the
+        // label, otherwise a rotated label would swing around its old position.
+        const ly = pos.y + place.dy + nudge;
+        const rot = style.labelRotation ? ` transform="rotate(${num(style.labelRotation, 0)} ${lx} ${ly})"` : '';
+        parts.push(
+          `<text x="${lx}" y="${ly}" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" font-size="${num(style.fontSize, 12)}" font-style="${style.fontStyle === 'italic' ? 'italic' : 'normal'}" font-weight="${num(Number(style.fontWeight), 400)}"${rot} font-family="${FONT_FAMILY}" fill="${safeColour(style.labelColor)}">${escXml(node.label)}</text>`,
+        );
+      }
+      if (note) {
+        const nPlace = hypothesisNotePlacement(place, style.fontSize);
+        const nFont = hypothesisNoteFontSize(style.fontSize);
+        const nText = hypothesisNoteText(note);
+        const nW = estimateLabelWidth(nText, nFont);
+        const nx = pos.x + nPlace.dx;
+        const ny = pos.y + nPlace.dy + nudge;
+        const left =
+          nPlace.anchor === 'start' ? nx : nPlace.anchor === 'middle' ? nx - nW / 2 : nx - nW;
+        parts.push(
+          `<rect x="${(left - HYPOTHESIS_NOTE_PAD).toFixed(2)}" y="${(ny - HYPOTHESIS_NOTE_PAD).toFixed(2)}" width="${(nW + HYPOTHESIS_NOTE_PAD * 2).toFixed(2)}" height="${(nFont + HYPOTHESIS_NOTE_PAD * 2).toFixed(2)}" rx="3" fill="#ffffff" opacity="0.9"/>`,
+        );
+        parts.push(
+          `<text x="${nx}" y="${ny}" text-anchor="${nPlace.anchor}" dominant-baseline="${nPlace.baseline}" font-size="${num(nFont, 10)}" font-style="italic" font-family="${FONT_FAMILY}" fill="${FIG_AXIS}">${escXml(nText)}<title>${escXml(note)}</title></text>`,
+        );
+      }
     }
   }
 
@@ -552,12 +624,16 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       parts.push(
         `<path d="${eventMarkerPath(eventMarkerShape(e), a.x, a.y, r)}" fill="#ffffff" stroke="${safeColour(color)}" stroke-width="${sw}"${cdash}${join}/>`,
       );
-      // The canvas centres text with dominant-baseline; plain SVG text has no
-      // such attribute in every renderer, so shift the baseline by ~0.34 em.
-      const fs = eventBadgeFontSize(e);
-      parts.push(
-        `<text x="${a.x}" y="${(a.y + fs * 0.34).toFixed(2)}" text-anchor="middle" font-size="${fs.toFixed(2)}" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(eventBadgeText(e))}</text>`,
-      );
+      // Text is optional: markers draw shape + colour only unless the event
+      // explicitly shows text. When shown, centre it with the same ~0.34 em
+      // baseline shift the canvas uses.
+      const badgeText = eventBadgeText(e);
+      if (badgeText) {
+        const fs = eventBadgeFontSize(e);
+        parts.push(
+          `<text x="${a.x}" y="${(a.y + fs * 0.34).toFixed(2)}" text-anchor="middle" font-size="${fs.toFixed(2)}" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(badgeText)}</text>`,
+        );
+      }
     }
   }
 
@@ -621,6 +697,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       } else if (r.kind === 'state') {
         parts.push(`<circle cx="${lx + 6}" cy="${ly - 4}" r="6" fill="${safeColour(r.color)}" stroke="${FIG_LEGEND_BORDER}"/>`);
         parts.push(`<text x="${lx + 18}" y="${ly}" font-size="12" font-family="${FONT_FAMILY}" fill="${FIG_LEGEND}">${escXml(r.label)}</text>`);
+      } else if (r.kind === 'stateBranch') {
+        parts.push(`<path d="M ${lx} ${ly - 4} L ${lx + 12} ${ly - 4}" fill="none" stroke="${safeColour(r.color, FIG_LEGEND_BORDER)}" stroke-width="2.6" stroke-linecap="round"/>`);
+        parts.push(`<text x="${lx + 18}" y="${ly}" font-size="12" font-family="${FONT_FAMILY}" fill="${FIG_LEGEND}">${escXml(r.label)}</text>`);
       } else if (r.kind === 'transition') {
         // The two-colour dot used on the branches that really changed state.
         parts.push(`<circle cx="${lx + 6}" cy="${ly - 4}" r="7" fill="#ffffff" stroke="${safeColour(r.color, FIG_LEGEND_BORDER)}" stroke-width="2"/>`);
@@ -633,8 +712,10 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         parts.push(`<text x="${lx + 6}" y="${ly - 1}" text-anchor="middle" font-size="9" font-weight="700" font-family="${FONT_FAMILY}" fill="${C_UNKNOWN}">?</text>`);
         parts.push(`<text x="${lx + 18}" y="${ly}" font-size="12" font-family="${FONT_FAMILY}" fill="${FIG_LEGEND}">${escXml(r.label)}</text>`);
       } else {
-        parts.push(`<circle cx="${lx + 6}" cy="${ly - 4}" r="7" fill="#ffffff" stroke="${safeColour(r.color, FIG_LEGEND_BORDER)}" stroke-width="2"/>`);
-        parts.push(`<text x="${lx + 6}" y="${ly - 1.3}" text-anchor="middle" font-size="6.5" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(r.code ?? '')}</text>`);
+        parts.push(`<path d="${eventMarkerPath(r.shape ?? 'circle', lx + 6, ly - 4, 6.6)}" fill="#ffffff" stroke="${safeColour(r.color, FIG_LEGEND_BORDER)}" stroke-width="2" stroke-linejoin="round"/>`);
+        if (r.code) {
+          parts.push(`<text x="${lx + 6}" y="${ly - 1.3}" text-anchor="middle" font-size="${r.code.length > 2 ? 4.5 : 6.5}" font-weight="700" font-family="${FONT_FAMILY}" fill="#111111">${escXml(r.code)}</text>`);
+        }
         parts.push(`<text x="${lx + 18}" y="${ly}" font-size="12" font-family="${FONT_FAMILY}" fill="${FIG_LEGEND}">${escXml(r.label)}</text>`);
       }
       ly += 18;

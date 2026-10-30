@@ -9,7 +9,14 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { renameNode } from '../model/treeOps';
 import { DEFAULT_NODE_STYLE, type NodeStyle, type Orientation, type Point, type TreeNode } from '../model/types';
-import { labelPlacement } from './labels';
+import {
+  HYPOTHESIS_NOTE_PAD,
+  hypothesisNoteFontSize,
+  hypothesisNotePlacement,
+  hypothesisNoteText,
+  labelPlacement,
+} from './labels';
+import { estimateLabelWidth } from './labelBounds';
 import { getCanvasCollisionPlan, getLastCanvasCollisionPlan } from './eventBadgeLayout';
 import { isImeComposing } from '../ui/imeGuard';
 import { markerPath } from './markerGeometry';
@@ -120,6 +127,7 @@ export const NodeView = memo(function NodeView({
   );
   const showPort = hovered || selected;
   const showLabel = style.showLabel && (node.label !== '' || editing);
+  const note = node.hypothesisNote?.trim();
   const labelNudge = useMemo(() => {
     if (!showLabel) return 0;
     const opts = { showEras, eraLevel };
@@ -233,6 +241,48 @@ export const NodeView = memo(function NodeView({
           {node.label}
         </text>
       )}
+
+      {/* Per-layer hypothesis annotation: one muted line under the label. It is
+          part of the layer snapshot, not node style, so switching hypotheses
+          swaps the statement together with the ancestral states. */}
+      {note &&
+        (() => {
+          const nPlace = hypothesisNotePlacement(place, style.fontSize);
+          const nFont = hypothesisNoteFontSize(style.fontSize);
+          const nText = hypothesisNoteText(note);
+          const nW = estimateLabelWidth(nText, nFont);
+          const left =
+            nPlace.anchor === 'start'
+              ? nPlace.dx
+              : nPlace.anchor === 'middle'
+                ? nPlace.dx - nW / 2
+                : nPlace.dx - nW;
+          return (
+            <g data-role="node" data-node-id={node.id} style={{ userSelect: 'none' }}>
+              <rect
+                x={left - HYPOTHESIS_NOTE_PAD}
+                y={nPlace.dy - HYPOTHESIS_NOTE_PAD}
+                width={nW + HYPOTHESIS_NOTE_PAD * 2}
+                height={nFont + HYPOTHESIS_NOTE_PAD * 2}
+                rx={3}
+                fill="var(--surface)"
+                opacity={0.9}
+              />
+              <text
+                x={nPlace.dx}
+                y={nPlace.dy}
+                textAnchor={nPlace.anchor}
+                dominantBaseline={nPlace.baseline}
+                fontSize={nFont}
+                fontStyle="italic"
+                fill="var(--muted)"
+              >
+                {nText}
+                <title>{note}</title>
+              </text>
+            </g>
+          );
+        })()}
 
       {editing && (
         <foreignObject

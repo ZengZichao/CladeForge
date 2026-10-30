@@ -31,6 +31,26 @@ describe('hypothesis layers', () => {
     expect(p.nodes[a].charStates?.[char.id]).toBe(s0);
   });
 
+  it('keeps hypothesis notes inside their layer and clears them in a blank layer', () => {
+    const p = createEmptyProject();
+    const [a] = addChildren(p, p.rootId, 2);
+    p.nodes[a].hypothesisNote = 'layer 1 statement';
+    const layer1 = p.activeLayerId;
+    const layer2 = duplicateActiveLayer(p, 'H2');
+
+    switchLayer(p, layer2);
+    expect(p.nodes[a].hypothesisNote).toBe('layer 1 statement'); // duplicated
+    p.nodes[a].hypothesisNote = 'layer 2 statement';
+    switchLayer(p, layer1);
+    expect(p.nodes[a].hypothesisNote).toBe('layer 1 statement');
+    switchLayer(p, layer2);
+    expect(p.nodes[a].hypothesisNote).toBe('layer 2 statement');
+
+    const blank = addBlankLayer(p, 'blank');
+    switchLayer(p, blank);
+    expect(p.nodes[a].hypothesisNote).toBeUndefined();
+  });
+
   it('a blank layer clears internal hypotheses but keeps tips', () => {
     const p = createEmptyProject();
     const [a] = addChildren(p, p.rootId, 2);
@@ -94,11 +114,13 @@ describe('layer switching after a character deletion', () => {
     const doomed = char.id;
     p.layerStore[second].states[p.rootId] = { [doomed]: 'gone-state' };
     p.layerStore[second].meta[p.rootId] = { [doomed]: { confidence: 'low', support: 'x' } };
+    p.layerStore[second].notes = { 'node-that-no-longer-exists': 'orphan note' };
     p.characters = [];
 
     expect(pruneLayerStore(p)).toBe(true);
     expect(p.layerStore[second].states[p.rootId]).toBeUndefined();
     expect(p.layerStore[second].meta[p.rootId]).toBeUndefined();
+    expect(p.layerStore[second].notes).toEqual({});
     expect(pruneLayerStore(p)).toBe(false); // idempotent
 
     switchLayer(p, second);

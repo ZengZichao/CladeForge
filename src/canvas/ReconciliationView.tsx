@@ -12,8 +12,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
+import { estimateLabelWidth, type Box } from './labelBounds';
 import { elbowPath } from './paths';
 import type { GeneNodeAssumption, NodeId, Project } from '../model/types';
+import { scenarioSummary } from '../model/reconciliation';
 import { S, tr } from '../ui/strings';
 import { isImeComposing } from '../ui/imeGuard';
 
@@ -36,6 +38,35 @@ export const DTL_STYLE = {
   duplication: { color: '#2563eb', glyph: 'δ' },
   transfer: { color: '#ec4899', glyph: 'τ' },
 } as const;
+
+/**
+ * World box including the labels AS THIS VIEW DRAWS THEM.
+ *
+ * ReconPane puts internal labels to the LEFT of the node and tip labels to the
+ * right, which is not the main canvas' label placement. `labelBounds` therefore
+ * described different boxes and the fit clipped the root/internal labels at the
+ * pane edge. This local box mirrors the two text rules below exactly.
+ */
+function reconPaneBounds(doc: Project, layout: LayoutResult): Box {
+  const box: Box = { ...layout.bounds };
+  for (const id of layout.visible) {
+    const node = doc.nodes[id];
+    const p = layout.positions.get(id);
+    if (!node?.label || !p) continue;
+    const tip = node.childrenIds.length === 0;
+    const fontSize = tip ? 11.5 : 10.5;
+    const w = estimateLabelWidth(node.label, fontSize) * 1.05;
+    const x0 = tip ? p.x + 9 : p.x - 10.5 - w;
+    const x1 = tip ? p.x + 9 + w : p.x - 10.5;
+    const y0 = p.y + 4 - fontSize;
+    const y1 = p.y + 4 + fontSize * 0.35;
+    box.minX = Math.min(box.minX, x0);
+    box.maxX = Math.max(box.maxX, x1);
+    box.minY = Math.min(box.minY, y0);
+    box.maxY = Math.max(box.maxY, y1);
+  }
+  return box;
+}
 
 function fitTransform(bounds: LayoutResult['bounds'], w: number, h: number): PaneTransform {
   const bw = Math.max(1, bounds.maxX - bounds.minX);
@@ -189,7 +220,13 @@ function ReconPane({ doc, transform, setTransform, paneRef, tagLabel, nodeMeta, 
   );
 }
 
-export function ReconciliationView() {
+export function ReconciliationView({
+  onBuildGeneTree,
+  onCopySpeciesTree,
+}: {
+  onBuildGeneTree: () => void;
+  onCopySpeciesTree: () => void;
+}) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
   const geneSelection = useStore((s) => s.geneSelection);
@@ -210,10 +247,14 @@ export function ReconciliationView() {
     const sb = speciesPaneRef.current?.getBoundingClientRect();
     const gb = genePaneRef.current?.getBoundingClientRect();
     const spLayout = computeLayout(horizontalCladogram(project));
-    if (sb) setSpeciesT(fitTransform(spLayout.bounds, sb.width, sb.height));
+    if (sb) {
+      // Fit the labels too, not just the node dots: taxon names otherwise run
+      // past the pane edge.
+      setSpeciesT(fitTransform(reconPaneBounds(project, spLayout), sb.width, sb.height));
+    }
     if (gb && entry) {
       const gpLayout = computeLayout(horizontalCladogram(entry.doc));
-      setGeneT(fitTransform(gpLayout.bounds, gb.width, gb.height));
+      setGeneT(fitTransform(reconPaneBounds(entry.doc, gpLayout), gb.width, gb.height));
     }
   }, [project, entry]);
 
@@ -315,10 +356,33 @@ export function ReconciliationView() {
     selectGeneNode(id, e.shiftKey || e.metaKey);
   };
 
+  const summary = useMemo(
+    () =>
+      entry
+        ? scenarioSummary(
+            entry.doc,
+            entry.assumptions,
+            project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 },
+          )
+        : null,
+    [project, entry],
+  );
+
   if (!entry) {
     return (
       <div className="recon-view" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="hint" style={{ padding: 24 }}>{S.recon.empty}</div>
+        <div className="recon-empty-card">
+          <div className="recon-empty-title">{S.recon.emptyTitle}</div>
+          <div className="hint">{S.recon.empty}</div>
+          <div className="field row-actions">
+            <button className="btn primary" onClick={onBuildGeneTree}>
+              {S.recon.buildGeneTree}
+            </button>
+            <button className="btn" onClick={onCopySpeciesTree}>
+              {S.recon.copySpeciesTree}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -347,6 +411,23 @@ export function ReconciliationView() {
         <button className="btn primary" onClick={() => setReconMode(false)}>
           {S.recon.exitView}
         </button>
+      </div>
+
+      {/* Species/gene co-display summary: a compact bottom legend, separate from
+          the top chrome so it cannot squeeze the pane selector. */}
+      <div className="recon-view-summary">
+        <span className="recon-chip chip-sigma" title={S.recon.cntSpeciation}>
+          σ {summary?.speciation ?? 0}
+        </span>
+        <span className="recon-chip chip-dup" title={S.recon.cntDuplication}>
+          δ {summary?.duplication ?? 0}
+        </span>
+        <span className="recon-chip chip-transfer" title={S.recon.cntTransfer}>
+          τ {summary?.transfer ?? 0}
+        </span>
+        <span className="recon-chip chip-loss" title={S.recon.cntLosses}>
+          λ {summary?.losses ?? 0}
+        </span>
       </div>
 
       <ReconPane

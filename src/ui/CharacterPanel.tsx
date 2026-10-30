@@ -290,10 +290,12 @@ export function CharacterPanel({
   const setActiveCharacter = useStore((s) => s.setActiveCharacter);
   const showTransitions = useStore((s) => s.showTransitions);
   const setShowTransitions = useStore((s) => s.setShowTransitions);
+  const colorTarget = useStore((s) => s.characterColorTarget);
+  const setColorTarget = useStore((s) => s.setCharacterColorTarget);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const active = characters.find((c) => c.id === activeCharacterId);
-  const transitionsDisabled = !active || active.type !== 'discrete';
+  const transitionsDisabled = !active;
 
   return (
     <Section title={S.character.section} pinable>
@@ -312,8 +314,22 @@ export function CharacterPanel({
         </select>
       </Field>
 
+      <Field label={S.character.colorTarget}>
+        <button
+          type="button"
+          className="btn color-target-toggle"
+          disabled={!active}
+          aria-pressed={colorTarget === 'branch'}
+          onClick={() => setColorTarget(colorTarget === 'node' ? 'branch' : 'node')}
+          title={S.character.colorTargetHint}
+        >
+          ⇄ {colorTarget === 'node' ? S.character.colorTargetNode : S.character.colorTargetBranch}
+        </button>
+      </Field>
+
       <CheckboxField
         label={S.character.showTransitions}
+        title={S.character.showTransitionsHint}
         checked={showTransitions && !transitionsDisabled}
         disabled={transitionsDisabled}
         onChange={(v) => setShowTransitions(v)}

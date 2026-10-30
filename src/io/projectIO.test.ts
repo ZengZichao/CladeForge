@@ -147,3 +147,26 @@ describe('project IO — DTL reconciliation fields', () => {
     });
   });
 });
+
+describe('project IO — event marker style', () => {
+  it('round-trips show-text, custom text, shape and colour', () => {
+    const p = createEmptyProject('marks');
+    p.events.push({
+      id: 'ev1',
+      typeId: 'custom',
+      target: 'node',
+      nodeId: p.rootId,
+      triggers: [],
+      markerShape: 'hexagon',
+      markerColor: '#0ea5a3',
+      markerShowText: true,
+      markerText: '创新',
+    });
+    const { project: back } = readProjectFile(serializeProject(p));
+    const e = back.events[0];
+    expect(e.markerShowText).toBe(true);
+    expect(e.markerText).toBe('创新');
+    expect(e.markerShape).toBe('hexagon');
+    expect(e.markerColor).toBe('#0ea5a3');
+  });
+});

@@ -33,6 +33,7 @@ import { computeLayout, type LayoutResult } from '../layout/autoLayout';
 import { ERA_LANE_HEIGHT, planEraOverlay, type EraLevel } from '../layout/timescale';
 import { EVENT_BADGE_RADIUS, eventBadgeExtent } from '../model/events';
 import {
+  resolveBranchStyle,
   resolveNodeStyle,
   type EvolutionaryEvent,
   type LayoutType,
@@ -438,16 +439,19 @@ function badgeBox(center: Point, extent: number = EVENT_BADGE_RADIUS): Box {
 export function naturalBadgeAnchor(
   event: EvolutionaryEvent,
   index: number,
-  input: Pick<EventAnchorInput, 'positions' | 'nodes' | 'orientation' | 'layoutType'>,
+  input: Pick<EventAnchorInput, 'project' | 'positions' | 'nodes' | 'orientation' | 'layoutType'>,
 ): Point | null {
-  const { positions, nodes, orientation, layoutType } = input;
+  const { project, positions, nodes, orientation, layoutType } = input;
   const p = positions.get(event.nodeId);
   if (!p) return null;
   const parentId = nodes[event.nodeId]?.parentId ?? null;
   const pp = parentId ? positions.get(parentId) : undefined;
   const horizontal = orientation === 'LR' || orientation === 'RL';
+  const child = nodes[event.nodeId];
+  const curved =
+    layoutType !== 'circular' && !!pp && !!child && resolveBranchStyle(child, project).shape === 'curved';
   if (event.target === 'branch') {
-    const b = pp ? branchMidpointOn(pp, p, orientation, layoutType) : p;
+    const b = pp ? branchMidpointOn(pp, p, orientation, layoutType, curved) : p;
     if (layoutType === 'circular' && pp) {
       const rc = Math.hypot(p.x, p.y) || 1;
       const ux = p.x / rc;
@@ -459,7 +463,7 @@ export function naturalBadgeAnchor(
       : { x: b.x, y: b.y + index * BADGE_STACK_GAP };
   }
   if (pp) {
-    const m = branchMidpointOn(pp, p, orientation, layoutType);
+    const m = branchMidpointOn(pp, p, orientation, layoutType, curved);
     if (layoutType === 'circular') {
       const rc = Math.hypot(p.x, p.y) || 1;
       const ux = p.x / rc;
@@ -532,7 +536,7 @@ export function planEventAnchors(input: EventAnchorInput): EventAnchorPlan {
     list.push(e);
   }
 
-  const anchorInput = { positions, nodes, orientation, layoutType };
+  const anchorInput = { project, positions, nodes, orientation, layoutType };
   for (const group of groups) {
     const naturals: Point[] = [];
     const groupIdx = new Map<string, number>();

@@ -5,7 +5,14 @@
 // the node dot sits. This module must stay free of export-only heavy imports
 // (jspdf / svg2pdf), because the canvas pulls it in on every render.
 
-import { labelAngleOf, labelPlacement } from './labels';
+import {
+  HYPOTHESIS_NOTE_PAD,
+  hypothesisNoteFontSize,
+  hypothesisNotePlacement,
+  hypothesisNoteText,
+  labelAngleOf,
+  labelPlacement,
+} from './labels';
 import type { Bounds } from './coords';
 import { resolveNodeStyle, type NodeId, type Point, type Project, type TreeNode } from '../model/types';
 
@@ -43,9 +50,11 @@ export function labelBoxForNode(
   options: LabelBoxOptions = {},
 ): Box | null {
   const pos = positions.get(node.id);
-  if (!node.label || !pos) return null;
+  if (!pos) return null;
   const style = resolveNodeStyle(node, project);
-  if (!style.showLabel) return null;
+  const showLabel = !!node.label && style.showLabel;
+  const note = node.hypothesisNote?.trim();
+  if (!showLabel && !note) return null;
   const place = labelPlacement(
     project.layout.orientation,
     node.childrenIds.length === 0,
@@ -60,30 +69,66 @@ export function labelBoxForNode(
   // taxon name off.
   const widthFactor = options.widthFactor ?? 1.05;
   const heightFactor = options.heightFactor ?? 1;
-  const w = estimateLabelWidth(node.label, style.fontSize) * widthFactor;
-  const x = pos.x + place.dx;
-  const y = pos.y + place.dy;
-  let x0 = x;
-  let x1 = x + w;
-  if (place.anchor === 'end') {
-    x0 = x - w;
-    x1 = x;
-  } else if (place.anchor === 'middle') {
-    x0 = x - w / 2;
-    x1 = x + w / 2;
+  let box: Box | null = null;
+  const addBox = (x0: number, y0: number, x1: number, y1: number) => {
+    if (!box) {
+      box = { minX: x0, minY: y0, maxX: x1, maxY: y1 };
+    } else {
+      box.minX = Math.min(box.minX, x0);
+      box.minY = Math.min(box.minY, y0);
+      box.maxX = Math.max(box.maxX, x1);
+      box.maxY = Math.max(box.maxY, y1);
+    }
+  };
+  if (showLabel) {
+    const w = estimateLabelWidth(node.label, style.fontSize) * widthFactor;
+    const x = pos.x + place.dx;
+    const y = pos.y + place.dy;
+    let x0 = x;
+    let x1 = x + w;
+    if (place.anchor === 'end') {
+      x0 = x - w;
+      x1 = x;
+    } else if (place.anchor === 'middle') {
+      x0 = x - w / 2;
+      x1 = x + w / 2;
+    }
+    const half = style.fontSize * heightFactor;
+    let y0 = y - half;
+    let y1 = y + half;
+    if (style.labelRotation) {
+      // A rotated label sweeps the larger of width / height in every direction.
+      const r = Math.max(w, half) + Math.hypot(x - pos.x, y - pos.y);
+      x0 = pos.x - r;
+      x1 = pos.x + r;
+      y0 = pos.y - r;
+      y1 = pos.y + r;
+    }
+    addBox(x0, y0, x1, y1);
   }
-  const half = style.fontSize * heightFactor;
-  let y0 = y - half;
-  let y1 = y + half;
-  if (style.labelRotation) {
-    // A rotated label sweeps the larger of width / height in every direction.
-    const r = Math.max(w, half) + Math.hypot(x - pos.x, y - pos.y);
-    x0 = pos.x - r;
-    x1 = pos.x + r;
-    y0 = pos.y - r;
-    y1 = pos.y + r;
+  if (note) {
+    const nPlace = hypothesisNotePlacement(place, style.fontSize);
+    const nFont = hypothesisNoteFontSize(style.fontSize);
+    const nW = estimateLabelWidth(hypothesisNoteText(note), nFont) * widthFactor;
+    const nx = pos.x + nPlace.dx;
+    const ny = pos.y + nPlace.dy;
+    let nx0 = nx;
+    let nx1 = nx + nW;
+    if (nPlace.anchor === 'end') {
+      nx0 = nx - nW;
+      nx1 = nx;
+    } else if (nPlace.anchor === 'middle') {
+      nx0 = nx - nW / 2;
+      nx1 = nx + nW / 2;
+    }
+    addBox(
+      nx0 - HYPOTHESIS_NOTE_PAD,
+      ny - HYPOTHESIS_NOTE_PAD,
+      nx1 + HYPOTHESIS_NOTE_PAD,
+      ny + nFont * heightFactor + HYPOTHESIS_NOTE_PAD,
+    );
   }
-  return { minX: x0, minY: y0, maxX: x1, maxY: y1 };
+  return box;
 }
 
 /**

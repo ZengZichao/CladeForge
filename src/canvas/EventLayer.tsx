@@ -169,6 +169,7 @@ export const EventLayer = memo(function EventLayer({
         const r = eventMarkerSize(e);
         const color = eventMarkerColor(e);
         const conf = e.confidence;
+        const text = eventBadgeText(e);
         const fontSize = eventBadgeFontSize(e);
         const title =
           eventDisplayLabel(e) +
@@ -186,17 +187,19 @@ export const EventLayer = memo(function EventLayer({
               data-role="node"
               data-node-id={e.nodeId}
             />
-            <text
-              x={a.x}
-              y={a.y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={fontSize}
-              fontWeight={700}
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {eventBadgeText(e)}
-            </text>
+            {text && (
+              <text
+                x={a.x}
+                y={a.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={fontSize}
+                fontWeight={700}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+              >
+                {text}
+              </text>
+            )}
             <title>{title}</title>
           </g>
         );

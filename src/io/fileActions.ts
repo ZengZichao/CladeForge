@@ -124,6 +124,7 @@ function exportOptions(): ExportOptions {
   return {
     activeCharacterId: s.activeCharacterId,
     showTransitions: s.showTransitions,
+    characterColorTarget: s.characterColorTarget,
     showEvents: s.showEvents,
     showEras: s.showEras,
     eraLevel: s.eraLevel,

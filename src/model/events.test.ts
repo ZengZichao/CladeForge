@@ -4,7 +4,10 @@ import { addChildren, addEvent, deleteNode, removeEvent, toggleEventTrigger } fr
 import {
   EVENT_TYPES,
   causalPairs,
+  eventBadgeFontSize,
+  eventBadgeText,
   eventCode,
+  eventMarkerTextVisible,
   eventsForNode,
   findEventCycle,
   hasEventCycle,
@@ -168,5 +171,34 @@ describe('event-type badge marks', () => {
   it('mark an unknown type with ?, not a stale glyph', () => {
     expect(eventCode(newEvent('not-in-the-catalogue', 'node', 'root'))).toBe('?');
     expect(eventCode(newEvent('key-innovation', 'branch', 'root'))).toBe('KI');
+  });
+});
+
+describe('event badge text', () => {
+  const event = (
+    extra: Partial<EvolutionaryEvent> = {},
+  ): EvolutionaryEvent => ({ ...newEvent('key-innovation', 'branch', 'root'), ...extra });
+
+  it('is off by default — badges carry shape and colour, not letter codes', () => {
+    expect(eventMarkerTextVisible(event())).toBe(false);
+    expect(eventBadgeText(event())).toBe('');
+    expect(eventBadgeFontSize(event())).toBe(0);
+  });
+
+  it('draws the type code when the user turns text on', () => {
+    expect(eventMarkerTextVisible(event({ markerShowText: true }))).toBe(true);
+    expect(eventBadgeText(event({ markerShowText: true }))).toBe('KI');
+    expect(eventBadgeFontSize(event({ markerShowText: true }))).toBeGreaterThan(0);
+  });
+
+  it('draws user-authored text and truncates it to four characters', () => {
+    expect(eventBadgeText(event({ markerText: '创新' }))).toBe('创新');
+    expect(eventBadgeText(event({ markerText: '一二三四五' }))).toBe('一二三四');
+  });
+
+  it('an explicit off switch wins over a stored custom text', () => {
+    const hidden = event({ markerText: '创新', markerShowText: false });
+    expect(eventMarkerTextVisible(hidden)).toBe(false);
+    expect(eventBadgeText(hidden)).toBe('');
   });
 });

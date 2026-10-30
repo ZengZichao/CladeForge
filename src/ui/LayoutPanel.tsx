@@ -27,8 +27,8 @@ import {
   DismissibleHint,
   Field,
   FontWeightSelect,
-  NumberField,
 } from './fields';
+import { SliderNumberField } from './SliderNumberField';
 import { S, tr } from './strings';
 import { notify } from './toast';
 import { enterTimeChartLayout } from './timeChartEras';
@@ -55,7 +55,9 @@ export function LayoutPanel() {
     set((d) => {
       d.defaults.branch.shape = shape;
       const w = d.defaults.branch.width;
-      if (shape === 'line') {
+      if (shape === 'line' || shape === 'curved') {
+        // Both are thin-stroke styles: a leftover thick bar would swamp the
+        // curve instead of reading as a branch.
         if (w > 4) d.defaults.branch.width = 1.5;
       } else if (w < 4) {
         d.defaults.branch.width = 8;
@@ -164,21 +166,21 @@ export function LayoutPanel() {
 
       <Section title={S.layoutPanel.spacingSection} defaultOpen={false} pinable>
         <Field label={S.layoutPanel.branchGap}>
-          <NumberField
+          <SliderNumberField
             value={layout.vGap}
             min={8}
             max={240}
             step={2}
-            onCommit={(v) => v !== undefined && set((d) => void (d.layout.vGap = v))}
+            recipe={(v) => (d) => void (d.layout.vGap = v)}
           />
         </Field>
         <Field label={S.layoutPanel.levelGap}>
-          <NumberField
+          <SliderNumberField
             value={layout.hGap}
             min={20}
             max={400}
             step={10}
-            onCommit={(v) => v !== undefined && set((d) => void (d.layout.hGap = v))}
+            recipe={(v) => (d) => void (d.layout.hGap = v)}
           />
         </Field>
       </Section>
@@ -188,12 +190,12 @@ export function LayoutPanel() {
           <BranchShapeSelect value={branch.shape} onChange={setBranchShape} />
         </Field>
         <Field label={S.layoutPanel.branchWidth}>
-          <NumberField
+          <SliderNumberField
             value={branch.width}
             min={0.5}
             max={40}
             step={0.5}
-            onCommit={(v) => v !== undefined && set((d) => void (d.defaults.branch.width = v))}
+            recipe={(v) => (d) => void (d.defaults.branch.width = v)}
           />
         </Field>
         <Field label={S.layoutPanel.branchColor}>
@@ -235,11 +237,11 @@ export function LayoutPanel() {
 
       <Section title={S.layoutPanel.fontSection} defaultOpen={false} pinable>
         <Field label={S.layoutPanel.fontSize}>
-          <NumberField
+          <SliderNumberField
             value={node.fontSize}
             min={6}
             max={48}
-            onCommit={(v) => v !== undefined && set((d) => void (d.defaults.node.fontSize = v))}
+            recipe={(v) => (d) => void (d.defaults.node.fontSize = v)}
           />
         </Field>
         <Field label={S.layoutPanel.fontWeight}>
@@ -249,12 +251,32 @@ export function LayoutPanel() {
           />
         </Field>
         <Field label={S.layoutPanel.rotation}>
-          <NumberField
+          <SliderNumberField
             value={node.labelRotation}
             min={-180}
             max={180}
             step={5}
-            onCommit={(v) => v !== undefined && set((d) => void (d.defaults.node.labelRotation = v))}
+            recipe={(v) => (d) => void (d.defaults.node.labelRotation = v)}
+          />
+        </Field>
+        <Field label={S.node.labelOffsetX}>
+          <SliderNumberField
+            value={node.labelOffsetX ?? 0}
+            sliderMin={-100}
+            sliderMax={100}
+            step={1}
+            unit="px"
+            recipe={(v) => (d) => void (d.defaults.node.labelOffsetX = v)}
+          />
+        </Field>
+        <Field label={S.node.labelOffsetY}>
+          <SliderNumberField
+            value={node.labelOffsetY ?? 0}
+            sliderMin={-100}
+            sliderMax={100}
+            step={1}
+            unit="px"
+            recipe={(v) => (d) => void (d.defaults.node.labelOffsetY = v)}
           />
         </Field>
         <CheckboxField
