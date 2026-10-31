@@ -13,20 +13,29 @@ import {
   renameLayer,
   switchLayer,
 } from '../model/layers';
-import { Field, TextField, DismissibleHint, CheckboxField } from './fields';
+import { Field, TextField, CheckboxField } from './fields';
 import { Section } from './Section';
 import { S } from './strings';
 import { requestConfirm } from './confirmDialog';
 
 export function LayerPanel() {
   const apply = useStore((s) => s.apply);
-  const layers = useStore((s) => s.project.layers);
-  const activeLayerId = useStore((s) => s.project.activeLayerId);
+  const project = useStore((s) => s.project);
+  const layers = project.layers;
+  const activeLayerId = project.activeLayerId;
   const showEvents = useStore((s) => s.showEvents);
   const setShowEvents = useStore((s) => s.setShowEvents);
 
   const active = layers.find((l) => l.id === activeLayerId);
   const nextName = () => `${S.layer.section} ${layers.length + 1}`;
+  // A layer is more than a name: show what it currently asserts, so "New"
+  // does not read as an empty label with no consequence.
+  const nodes = Object.values(project.nodes);
+  const noteCount = nodes.filter((n) => n.hypothesisNote?.trim()).length;
+  const stateCount = nodes.reduce(
+    (sum, n) => (n.childrenIds.length > 0 ? sum + Object.keys(n.charStates ?? {}).length : sum),
+    0,
+  );
 
   return (
     <Section title={S.layer.section} pinable>
@@ -52,6 +61,10 @@ export function LayerPanel() {
           />
         </Field>
       )}
+
+      <div className="layer-summary">
+        {S.layer.summary(noteCount, stateCount, project.events.length)}
+      </div>
 
       {/* Event overlay toggle lives HERE: events are hypothesis content. */}
       <CheckboxField
@@ -106,7 +119,7 @@ export function LayerPanel() {
         </button>
       </div>
 
-      <DismissibleHint id="layer-hint">{S.layer.hint}</DismissibleHint>
+      <div className="hint">{S.layer.noteGuide}</div>
     </Section>
   );
 }

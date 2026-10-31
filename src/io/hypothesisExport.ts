@@ -162,6 +162,15 @@ export function buildNarrative(project: Project): string {
     }
   }
 
+  const annotated = Object.values(project.nodes).filter((n) => n.hypothesisNote?.trim());
+  if (annotated.length) {
+    L.push(tr('## 假说标注', '## Hypothesis annotations'), '');
+    for (const n of annotated) {
+      L.push(`- **${md(nodeLabel(project, n.id))}**：${md(n.hypothesisNote!.trim())}`);
+    }
+    L.push('');
+  }
+
   if (project.events.length) {
     L.push(tr('## 演化事件', '## Evolutionary events'), '');
     for (const e of project.events) {
@@ -170,10 +179,20 @@ export function buildNarrative(project: Project): string {
         e.target === 'branch'
           ? tr(`分支「${nl(e.nodeId)}」`, `branch “${nl(e.nodeId)}”`)
           : tr(`节点「${nl(e.nodeId)}」`, `node “${nl(e.nodeId)}”`);
-      let s = tr(
-        `- \`${eventBadgeText(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}**「${md(eventDisplayLabel(e))}」位于${where}`,
-        `- \`${eventBadgeText(e)}\` **${md(t ? eventTypeLabel(t) : tr('事件', 'Event'))}** — ${md(eventDisplayLabel(e))} on ${where}`,
-      );
+      // The badge code is only repeated when the badge actually draws text;
+      // with text off the report names the event by its localized type name.
+      const badge = eventBadgeText(e);
+      const typeName = md(t ? eventTypeLabel(t) : tr('事件', 'Event'));
+      const title = md(eventDisplayLabel(e));
+      let s = badge
+        ? tr(
+            `- \`${md(badge)}\` **${typeName}**「${title}」位于${where}`,
+            `- \`${md(badge)}\` **${typeName}** — ${title} on ${where}`,
+          )
+        : tr(
+            `- **${typeName}**「${title}」位于${where}`,
+            `- **${typeName}** — ${title} on ${where}`,
+          );
       if (e.confidence) s += tr(`（置信度：${confLabel(e.confidence)}）`, ` (confidence: ${confLabel(e.confidence)})`);
       L.push(s);
       if (e.note) L.push(tr(`  - 说明：${md(e.note)}`, `  - Note: ${md(e.note)}`));
@@ -279,6 +298,13 @@ export function buildHypothesisJSON(project: Project): string {
         nodeId: n.id,
         states: charStateMap(project, n),
         evidence: evidenceOf(n),
+      })),
+    hypothesisAnnotations: Object.values(project.nodes)
+      .filter((n) => n.hypothesisNote?.trim())
+      .map((n) => ({
+        node: n.label || n.id,
+        nodeId: n.id,
+        note: n.hypothesisNote!.trim(),
       })),
     events: project.events.map((e) => ({
       type: findEventType(e.typeId)?.labelEn ?? findEventType(e.typeId)?.label ?? e.typeId,

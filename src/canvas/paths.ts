@@ -1,6 +1,6 @@
 // Pure SVG path builders for branches and custom (reticulation) edges.
 
-import type { LayoutType, Orientation, Point } from '../model/types';
+import type { BranchShape, LayoutType, Orientation, Point } from '../model/types';
 
 /** Round to 2 decimals to keep exported SVG compact and stable. */
 function f(n: number): number {
@@ -14,8 +14,44 @@ export function elbowPath(from: Point, to: Point, orientation: Orientation): str
   return `M ${f(from.x)} ${f(from.y)} L ${f(corner.x)} ${f(corner.y)} L ${f(to.x)} ${f(to.y)}`;
 }
 
+/**
+ * Smooth cubic connector for a rectangular tree — the "tube" branch style
+ * ported from PhyloRecViewer. The branch leaves the parent along the depth
+ * axis and enters the child along the same axis, bending on the breadth axis
+ * at the midpoint: both control points of an LR/RL branch share
+ * x = (from.x + to.x) / 2, and both of a TB/BT branch share
+ * y = (from.y + to.y) / 2. At t = 0.5 the curve passes through the plain
+ * midpoint of the two endpoints, which is what branch-midpoint anchors use.
+ */
+export function curvedBranchPath(from: Point, to: Point, orientation: Orientation): string {
+  const horizontal = orientation === 'LR' || orientation === 'RL';
+  if (horizontal) {
+    const xm = (from.x + to.x) / 2;
+    return `M ${f(from.x)} ${f(from.y)} C ${f(xm)} ${f(from.y)} ${f(xm)} ${f(to.y)} ${f(to.x)} ${f(to.y)}`;
+  }
+  const ym = (from.y + to.y) / 2;
+  return `M ${f(from.x)} ${f(from.y)} C ${f(from.x)} ${f(ym)} ${f(to.x)} ${f(ym)} ${f(to.x)} ${f(to.y)}`;
+}
+
 export function straightPath(from: Point, to: Point): string {
   return `M ${f(from.x)} ${f(from.y)} L ${f(to.x)} ${f(to.y)}`;
+}
+
+/**
+ * One branch path for every renderer: the circular layout keeps its arc +
+ * radial construction, rectangular layouts use the user's branch shape
+ * (elbow by default, smooth cubic for 'curved'). Canvas and exporter both call
+ * this so a branch cannot be curved on screen and angular in an export.
+ */
+export function branchPath(
+  from: Point,
+  to: Point,
+  orientation: Orientation,
+  layoutType: LayoutType,
+  shape: BranchShape,
+): string {
+  if (layoutType === 'circular') return circularPath(from, to);
+  return shape === 'curved' ? curvedBranchPath(from, to, orientation) : elbowPath(from, to, orientation);
 }
 
 /**
@@ -58,6 +94,7 @@ export function branchMidpointOn(
   to: Point,
   orientation: Orientation,
   layoutType?: LayoutType,
+  curved = false,
 ): Point {
   if (layoutType === 'circular') {
     const rp = Math.hypot(from.x, from.y);
@@ -66,7 +103,7 @@ export function branchMidpointOn(
     const r = (rp + rc) / 2;
     return { x: r * Math.cos(ac), y: r * Math.sin(ac) };
   }
-  return branchMidpoint(from, to, orientation);
+  return branchMidpoint(from, to, orientation, curved);
 }
 
 /**
@@ -77,7 +114,17 @@ export function branchMidpointOn(
  * segment of the polyline, otherwise coloured dots appear to float next to
  * (not on) the branches (P6).
  */
-export function branchMidpoint(from: Point, to: Point, orientation: Orientation): Point {
+export function branchMidpoint(
+  from: Point,
+  to: Point,
+  orientation: Orientation,
+  curved = false,
+): Point {
+  if (curved) {
+    // On the curvedBranchPath cubic, t = 0.5 lands on the plain midpoint of
+    // the two endpoints (both control points sit on the breadth midpoint).
+    return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  }
   const horizontal = orientation === 'LR' || orientation === 'RL';
   return horizontal
     ? // For LR/RL the horizontal segment runs from x=from.x to x=to.x at y=to.y.

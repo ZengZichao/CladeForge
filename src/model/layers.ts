@@ -36,21 +36,24 @@ function copyEvents(events: EvolutionaryEvent[]): EvolutionaryEvent[] {
   return events.map((e) => ({ ...e, triggers: [...e.triggers] }));
 }
 
-/** Snapshot the current live hypotheses (internal-node states/meta + events). */
+/** Snapshot the current live hypotheses (internal-node states/meta + notes + events). */
 export function captureLayer(project: Project): StoredLayer {
   const states: StoredLayer['states'] = {};
   const meta: StoredLayer['meta'] = {};
+  const notes: Record<string, string> = {};
   for (const n of Object.values(project.nodes)) {
-    if (n.childrenIds.length === 0) continue; // internal nodes only
+    if (n.hypothesisNote?.trim()) notes[n.id] = n.hypothesisNote;
+    if (n.childrenIds.length === 0) continue; // internal-node state hypotheses only
     if (n.charStates && Object.keys(n.charStates).length) states[n.id] = { ...n.charStates };
     if (n.charMeta && Object.keys(n.charMeta).length) meta[n.id] = copyMeta(n.charMeta);
   }
-  return { states, meta, events: copyEvents(project.events) };
+  return { states, meta, notes, events: copyEvents(project.events) };
 }
 
-/** Replace the live internal-node hypotheses + events with a stored snapshot. */
+/** Replace the live internal-node hypotheses + notes + events with a stored snapshot. */
 export function applyLayer(project: Project, stored: StoredLayer): void {
   for (const n of Object.values(project.nodes)) {
+    delete n.hypothesisNote;
     if (n.childrenIds.length === 0) continue; // keep tips (shared observations)
     if (n.charStates) delete n.charStates;
     if (n.charMeta) delete n.charMeta;
@@ -62,6 +65,10 @@ export function applyLayer(project: Project, stored: StoredLayer): void {
   for (const [nid, m] of Object.entries(stored.meta)) {
     const n = project.nodes[nid];
     if (n && n.childrenIds.length > 0) n.charMeta = copyMeta(m);
+  }
+  for (const [nid, note] of Object.entries(stored.notes ?? {})) {
+    const n = project.nodes[nid];
+    if (n && note.trim()) n.hypothesisNote = note;
   }
   project.events = copyEvents(stored.events);
 }
@@ -81,7 +88,7 @@ export function switchLayer(project: Project, targetId: string): void {
 export function addBlankLayer(project: Project, name: string): string {
   const id = newId();
   project.layers.push({ id, name });
-  project.layerStore[id] = { states: {}, meta: {}, events: [] };
+  project.layerStore[id] = { states: {}, meta: {}, notes: {}, events: [] };
   return id;
 }
 
@@ -142,6 +149,14 @@ export function pruneLayerStore(project: Project): boolean {
           }
         }
         if (Object.keys(rec).length === 0) delete bucket[nid];
+      }
+    }
+    if (stored.notes) {
+      for (const nid of Object.keys(stored.notes)) {
+        if (!project.nodes[nid]) {
+          delete stored.notes[nid];
+          changed = true;
+        }
       }
     }
     const validEvents = stored.events.filter((e) => project.nodes[e.nodeId]);

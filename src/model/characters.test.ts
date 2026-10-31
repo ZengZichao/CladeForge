@@ -10,6 +10,7 @@ import {
   MIN_STATE_COLOR_CONTRAST,
   MISSING_STATE_CODES,
   STATE_PALETTE,
+  characterValueColor,
   countEvolutionaryTransitions,
   detectTransitions,
   evolutionaryTransitions,
@@ -66,6 +67,58 @@ describe('characters', () => {
     // Both unknown → no information, skip.
     setNodeState(p, p.rootId, char.id, undefined);
     expect(detectTransitions(p, char)).toHaveLength(0);
+  });
+
+  it('detects continuous value changes with the same rules as discrete states', () => {
+    const p = createEmptyProject();
+    const [a, b] = addChildren(p, p.rootId, 2);
+    const char = {
+      id: 'continuous-trait',
+      name: 'size',
+      type: 'continuous' as const,
+      states: [],
+      lowColor: '#000000',
+      highColor: '#ffffff',
+    };
+    p.characters.push(char);
+    p.nodes[p.rootId].charStates = { [char.id]: 1 };
+    p.nodes[a].charStates = { [char.id]: 5 };
+    p.nodes[b].charStates = { [char.id]: 1 };
+
+    const trans = detectTransitions(p, char);
+    expect(trans).toHaveLength(1); // only a changed; b equals the parent
+    expect(trans[0].nodeId).toBe(a);
+    expect(trans[0].from).toBe(1);
+    expect(trans[0].to).toBe(5);
+    expect(trans[0].involvesUnknown).toBe(false);
+
+    // Missing endpoint is a data prompt, not a change.
+    delete p.nodes[p.rootId].charStates;
+    const unknown = detectTransitions(p, char);
+    expect(unknown).toHaveLength(2); // both children now have an unknown parent
+    expect(unknown.every((t) => t.involvesUnknown)).toBe(true);
+  });
+
+  it('maps both discrete states and continuous values through one colour helper', () => {
+    const p = createEmptyProject();
+    const char = newCharacter('trait');
+    addCharacter(p, char);
+    setNodeState(p, p.rootId, char.id, char.states[0].id);
+    expect(characterValueColor(char, char.states[0].id)).toBe(char.states[0].color);
+
+    const continuous = {
+      id: 'c',
+      name: 'size',
+      type: 'continuous' as const,
+      states: [],
+      lowColor: '#000000',
+      highColor: '#ffffff',
+    };
+    p.characters.push(continuous);
+    const range = { min: 0, max: 10 };
+    expect(characterValueColor(continuous, 0, range)).toBe('#000000');
+    expect(characterValueColor(continuous, 10, range)).toBe('#ffffff');
+    expect(characterValueColor(continuous, undefined, range)).toBeUndefined();
   });
 
   it('resolves a discrete state colour, undefined when unassigned', () => {

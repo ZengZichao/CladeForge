@@ -55,7 +55,15 @@ function issueTagText(issue: ReconIssue): string {
   }
 }
 
-export function ReconPanel() {
+export function ReconPanel({
+  onBuildGeneTree,
+  onCopySpeciesTree,
+  onEditGeneTree,
+}: {
+  onBuildGeneTree: () => void;
+  onCopySpeciesTree: () => void;
+  onEditGeneTree: (id: string) => void;
+}) {
   // Individual selectors, not `const st = useStore()`. A store
   // subscription without a selector re-renders this panel on EVERY state change —
   // including `view` (pan / zoom), which forces the per-gene `mapTipsByLabel` +
@@ -221,8 +229,16 @@ export function ReconPanel() {
         </div>
 
         <div className="field row-actions">
-          <button className="btn primary" onClick={() => void file.actionImportGeneTree()}>
-            <PlusIcon /> {S.recon.importFile}
+          <button className="btn primary" onClick={onBuildGeneTree}>
+            <PlusIcon /> {S.recon.buildGeneTree}
+          </button>
+          <button className="btn" onClick={onCopySpeciesTree}>
+            {S.recon.copySpeciesTree}
+          </button>
+        </div>
+        <div className="field row-actions">
+          <button className="btn" onClick={() => void file.actionImportGeneTree()}>
+            {S.recon.importFile}
           </button>
         </div>
         {tabOptions.length > 0 && (
@@ -263,6 +279,9 @@ export function ReconPanel() {
 
             <div className="field row-actions-spread" style={{ marginTop: 8 }}>
               <div className="actions-group">
+                <button className="btn" onClick={() => onEditGeneTree(activeEntry.id)}>
+                  {S.recon.editTopology}
+                </button>
                 <button className="btn primary" onClick={runLcaSuggestion}>
                   {S.recon.suggestLca}
                 </button>

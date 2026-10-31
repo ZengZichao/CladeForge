@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { boundsWithLabels, labelBoxes } from './labelBounds';
+import { boundsWithLabels, labelBoxes, labelBoxForNode } from './labelBounds';
 import { fitView, worldToScreen } from './coords';
 import { computeLayout } from '../layout/autoLayout';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
@@ -41,6 +41,17 @@ describe('fit-to-view contains the label text, not just the node dots', () => {
       }
     });
   }
+
+  it('includes the hypothesis-note line in the box (fit and export cropping)', () => {
+    const project = SAMPLE_PROJECTS[0].build();
+    const layout = computeLayout(project);
+    const internal = Object.values(project.nodes).find((n) => n.childrenIds.length > 0)!;
+    const before = labelBoxForNode(project, layout.positions, internal)!;
+    internal.hypothesisNote = 'A long hypothesis statement that must not be cropped away from the figure.';
+    const after = labelBoxForNode(project, layout.positions, internal)!;
+    expect(after.maxY).toBeGreaterThan(before.maxY);
+    expect(after.maxX).toBeGreaterThan(before.maxX);
+  });
 
   it('the node-only box really is too small — the guard is not vacuous', () => {
     const project = SAMPLE_PROJECTS[0].build();

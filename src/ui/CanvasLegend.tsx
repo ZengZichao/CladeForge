@@ -12,7 +12,14 @@ import { useMemo, useState } from 'react';
 import { ListBulletIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { findCharacter } from '../model/characters';
-import { eventBadgeText, eventMarkerColor, eventDisplayLabel } from '../model/events';
+import {
+  eventBadgeText,
+  eventDisplayLabel,
+  eventMarkerColor,
+  eventMarkerShape,
+} from '../model/events';
+import { eventMarkerPath } from '../canvas/markerGeometry';
+import type { EventMarkerShape } from '../model/types';
 import { S } from './strings';
 
 type SwatchKind =
@@ -21,6 +28,7 @@ type SwatchKind =
   | 'drop'
   | 'connect'
   | 'state'
+  | 'stateBranch'
   | 'transition'
   | 'needsData'
   | 'unmeasured'
@@ -33,7 +41,9 @@ interface LegendItem {
   color?: string;
   /** Secondary colour (transition inner dot). */
   color2?: string;
-  /** Two-letter event code (for kind === 'event'). */
+  /** Event marker shape (for kind === 'event'). */
+  shape?: EventMarkerShape;
+  /** Inner event-badge text; empty when the badge carries no text. */
   code?: string;
   label: string;
   /** When set, this item only shows while the matching layer is active. */
@@ -52,7 +62,19 @@ const C_UNKNOWN = '#9ca3af';
 const C_TRANSITION_TO = 'var(--c-transition-to, #3f3f46)';
 
 /** Renders a legend swatch using the exact same SVG primitives as the canvas. */
-function LegendSwatch({ kind, color, color2, code }: { kind: SwatchKind; color?: string; color2?: string; code?: string }) {
+function LegendSwatch({
+  kind,
+  color,
+  color2,
+  shape,
+  code,
+}: {
+  kind: SwatchKind;
+  color?: string;
+  color2?: string;
+  shape?: EventMarkerShape;
+  code?: string;
+}) {
   const svgProps = {
     className: 'legend-swatch',
     viewBox: '0 0 16 16',
@@ -101,6 +123,19 @@ function LegendSwatch({ kind, color, color2, code }: { kind: SwatchKind; color?:
             fill={color ?? 'var(--surface)'}
             stroke={color ? 'rgba(0,0,0,0.25)' : C_UNKNOWN}
             strokeWidth="1"
+          />
+        </svg>
+      );
+    case 'stateBranch':
+      // A branch painted in the character's colour (the node/branch toggle).
+      return (
+        <svg {...svgProps}>
+          <path
+            d="M 2 8 L 14 8"
+            fill="none"
+            stroke={color ?? C_UNKNOWN}
+            strokeWidth="2.6"
+            strokeLinecap="round"
           />
         </svg>
       );
@@ -156,21 +191,30 @@ function LegendSwatch({ kind, color, color2, code }: { kind: SwatchKind; color?:
         </svg>
       );
     case 'event':
-      // Event badge: surface-filled circle with a coloured ring + two-letter code.
+      // Event badge: the event's own outline shape and ring colour, with the
+      // inner text only when that badge actually draws text.
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="7" fill="var(--surface)" stroke={color} strokeWidth="2" />
-          <text
-            x="8"
-            y="8"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize="6.5"
-            fontWeight={700}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-          >
-            {code}
-          </text>
+          <path
+            d={eventMarkerPath(shape ?? 'circle', 8, 8, 6.6)}
+            fill="var(--surface)"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          {code && (
+            <text
+              x="8"
+              y="8"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={code.length > 2 ? 4.5 : 6.5}
+              fontWeight={700}
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+            >
+              {code}
+            </text>
+          )}
         </svg>
       );
     case 'era':
@@ -190,6 +234,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   const showTransitions = useStore((s) => s.showTransitions);
   const showEvents = useStore((s) => s.showEvents);
   const showEras = useStore((s) => s.showEras);
+  const characterColorTarget = useStore((s) => s.characterColorTarget);
   const layoutType = useStore((s) => s.project.layout.type);
   const projectEvents = useStore((s) => s.project.events);
   const activeCharacter = findCharacter(useStore.getState().project, activeCharacterId ?? '');
@@ -205,17 +250,21 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
     // State colouring: shown whenever a character is active — the sample tree
     // colours leaf markers by state (e.g. 陆行 / 飞行), and users found those
     // coloured dots unexplained because this entry only appeared with ASR.
+    // The swatch follows the node/branch target chosen in the Traits module.
     {
-      kind: 'state',
+      kind: characterColorTarget === 'branch' ? 'stateBranch' : 'state',
       color: stateColor,
-      label: S.legend.stateMarker,
+      color2: activeCharacter?.states[1]?.color,
+      label:
+        characterColorTarget === 'branch' ? S.legend.stateBranch : S.legend.stateMarker,
       requires: { character: true },
     },
     {
       kind: 'transition',
       color: activeCharacter?.states[0]?.color,
       color2: activeCharacter?.states[1]?.color,
-      label: S.legend.transition,
+      label:
+        activeCharacter?.type === 'continuous' ? S.legend.valueChange : S.legend.transition,
       requires: { transitions: true },
     },
     // The branch the canvas marks with a dashed "?" is a request for data,
@@ -254,17 +303,18 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   // identity — two badges of the same type drawn differently must be listed
   // differently, or the legend would promise a look the canvas doesn't have.
   const eventLegendItems = useMemo(() => {
-    if (!showEvents || projectEvents.length === 0)
-      return [] as { id: string; color: string; code: string; label: string }[];
+    type Row = { id: string; color: string; shape: EventMarkerShape; code: string; label: string };
+    if (!showEvents || projectEvents.length === 0) return [] as Row[];
     const seen = new Set<string>();
-    const out: { id: string; color: string; code: string; label: string }[] = [];
+    const out: Row[] = [];
     for (const e of projectEvents) {
       const color = eventMarkerColor(e);
+      const shape = eventMarkerShape(e);
       const code = eventBadgeText(e);
-      const id = `${e.typeId}|${color}|${code}`;
+      const id = `${e.typeId}|${color}|${shape}|${code}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      out.push({ id, color, code, label: eventDisplayLabel(e) });
+      out.push({ id, color, shape, code, label: eventDisplayLabel(e) });
     }
     return out;
   }, [showEvents, projectEvents]);
@@ -300,7 +350,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
         ))}
         {eventLegendItems.map((it) => (
           <div className="legend-item" key={it.id}>
-            <LegendSwatch kind="event" color={it.color} code={it.code} />
+            <LegendSwatch kind="event" color={it.color} shape={it.shape} code={it.code} />
             <span className="legend-label">{it.label}</span>
           </div>
         ))}

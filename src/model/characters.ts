@@ -435,20 +435,32 @@ export function continuousRange(project: Project, character: Character): NumRang
   return { min, max };
 }
 
+/**
+ * Colour for one observed value of a character: a state swatch for discrete
+ * characters, the ramp colour for continuous ones. Shared by node markers,
+ * character-coloured branches and transition dots so all three agree.
+ */
+export function characterValueColor(
+  character: Character,
+  value: string | number | undefined,
+  range?: NumRange,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (character.type === 'continuous') {
+    if (typeof value !== 'number' || !range) return undefined;
+    const t = range.max > range.min ? (value - range.min) / (range.max - range.min) : 0;
+    return lerpHexColor(character.lowColor ?? '#dbeafe', character.highColor ?? '#1e3a8a', t);
+  }
+  return discreteColor(character, value);
+}
+
 /** Fill colour for a node under a character, or undefined when unassigned. */
 export function nodeCharacterColor(
   character: Character,
   node: TreeNode,
   range?: NumRange,
 ): string | undefined {
-  const v = node.charStates?.[character.id];
-  if (v === undefined) return undefined;
-  if (character.type === 'continuous') {
-    if (typeof v !== 'number' || !range) return undefined;
-    const t = range.max > range.min ? (v - range.min) / (range.max - range.min) : 0;
-    return lerpHexColor(character.lowColor ?? '#dbeafe', character.highColor ?? '#1e3a8a', t);
-  }
-  return discreteColor(character, v);
+  return characterValueColor(character, node.charStates?.[character.id], range);
 }
 
 export interface Transition {
@@ -470,11 +482,12 @@ export interface Transition {
 }
 
 /**
- * Every branch whose child state differs from its parent state, for a discrete
- * character. A branch where one endpoint has an assigned state and the other
- * is unassigned ("unknown") is still returned — the canvas uses it to prompt
- * the user for missing data — but it is flagged with `involvesUnknown` so
- * statistics, legends and exports never read it as an evolutionary change.
+ * Every branch whose child value differs from its parent value. Works for BOTH
+ * discrete and continuous characters so the two do not show different marker
+ * sets for the same kind of change. A branch where one endpoint is assigned and
+ * the other is unassigned ("unknown") is still returned — the canvas uses it to
+ * prompt the user for missing data — but it is flagged with `involvesUnknown`
+ * so statistics, legends and exports never read it as an evolutionary change.
  * Only branches where BOTH endpoints are unassigned (or where both are assigned
  * and equal) are skipped. `visible` optionally restricts detection to on-screen
  * nodes.
@@ -484,19 +497,25 @@ export function detectTransitions(
   character: Character,
   visible?: Set<NodeId>,
 ): Transition[] {
-  if (character.type !== 'discrete') return [];
+  const continuous = character.type === 'continuous';
+  const observed = (v: string | number | undefined): string | number | undefined =>
+    continuous
+      ? typeof v === 'number' && Number.isFinite(v)
+        ? v
+        : undefined
+      : isObservedState(character, v)
+        ? v
+        : undefined;
   const UNKNOWN_LABEL = tr('未知', 'Unknown');
   const out: Transition[] = [];
   for (const node of Object.values(project.nodes)) {
     const parentId = node.parentId;
     if (!parentId) continue;
     if (visible && (!visible.has(node.id) || !visible.has(parentId))) continue;
-    // Anything that is not a declared state (missing-data code, stale id) is
-    // treated exactly like "no data" here, as everywhere else.
-    const rawTo = node.charStates?.[character.id];
-    const rawFrom = project.nodes[parentId]?.charStates?.[character.id];
-    const to = isObservedState(character, rawTo) ? rawTo : undefined;
-    const from = isObservedState(character, rawFrom) ? rawFrom : undefined;
+    // Anything that is not a declared state / finite number is treated exactly
+    // like "no data" here, as everywhere else.
+    const to = observed(node.charStates?.[character.id]);
+    const from = observed(project.nodes[parentId]?.charStates?.[character.id]);
     // Both unassigned → no information, skip.
     if (to === undefined && from === undefined) continue;
     // Both assigned and equal → no change, skip.

@@ -31,6 +31,7 @@ import { CharacterPanel } from './ui/CharacterPanel';
 import { AnalysisPanel } from './ui/AnalysisPanel';
 import { TimePanel } from './ui/TimePanel';
 import { ReconPanel } from './ui/ReconPanel';
+import { GeneTreeBuilderDialog } from './ui/GeneTreeBuilderDialog';
 import { CharacterMatrixDialog } from './ui/CharacterMatrixDialog';
 import { AnalysisDialog } from './ui/AnalysisDialog';
 import { NexusExportDialog } from './ui/NexusExportDialog';
@@ -56,6 +57,7 @@ import { NavigationRail, type NavModule } from './ui/NavigationRail';
 import { useLanguage, onLanguageChange, currentLanguage } from './ui/i18n';
 import { tr } from './ui/strings';
 import { buildConsensusTree } from './model/consensus';
+import { addBuiltGeneTree, createGeneDocFromSpecies } from './model/geneTreeBuild';
 import { AboutDialog } from './ui/AboutDialog';
 
 // Locale switch side effect OUTSIDE the React tree: sample documents that the
@@ -386,11 +388,17 @@ function LeftPanelContent({
   onOpenMatrix,
   onOpenAnalysis,
   onNexusExport,
+  onBuildGeneTree,
+  onCopySpeciesTree,
+  onEditGeneTree,
 }: {
   module: NavModule;
   onOpenMatrix: () => void;
   onOpenAnalysis: () => void;
   onNexusExport: () => void;
+  onBuildGeneTree: () => void;
+  onCopySpeciesTree: () => void;
+  onEditGeneTree: (id: string) => void;
 }) {
   switch (module) {
     case 'traits':
@@ -415,7 +423,13 @@ function LeftPanelContent({
       );
     case 'recon':
       // ReconPanel renders its own header.
-      return <ReconPanel />;
+      return (
+        <ReconPanel
+          onBuildGeneTree={onBuildGeneTree}
+          onCopySpeciesTree={onCopySpeciesTree}
+          onEditGeneTree={onEditGeneTree}
+        />
+      );
     case 'time':
       // TimePanel renders its own header.
       return <TimePanel />;
@@ -429,12 +443,7 @@ function LeftPanelContent({
         </>
       );
     case 'analysis':
-      return (
-        <AnalysisPanel
-          onOpenMatrix={onOpenMatrix}
-          onOpenAnalysis={onOpenAnalysis}
-        />
-      );
+      return <AnalysisPanel onOpenAnalysis={onOpenAnalysis} />;
     case 'export':
       return <ExportPanel onNexusExport={onNexusExport} />;
   }
@@ -442,32 +451,40 @@ function LeftPanelContent({
 
 /** Export module panel for the navigation rail, grouped by format family. */
 function ExportPanel({ onNexusExport }: { onNexusExport: () => void }) {
+  // One equal-width column: format labels differ wildly in length, and a row of
+  // ragged buttons read as an accident rather than a menu.
   const row = (label: string, fn: () => void) => (
-    <div className="field row-actions" key={label}>
-      <button className="btn" onClick={fn}>
-        {label}
-      </button>
-    </div>
+    <button className="btn export-btn" onClick={fn} key={label}>
+      {label}
+    </button>
   );
   return (
     <>
       <div className="panel-header">
         <span className="panel-header-title">{S.nav.export}</span>
       </div>
-      <div className="panel-section">
+      <div className="panel-section export-panel-section">
         <h3>{S.exportGroup.vector}</h3>
-        {row(S.exportItems.svg, () => void file.actionExportSVG())}
-        {row(S.exportItems.pdf, () => void file.actionExportPDF())}
+        <div className="export-actions">
+          {row(S.exportItems.svg, () => void file.actionExportSVG())}
+          {row(S.exportItems.pdf, () => void file.actionExportPDF())}
+        </div>
         <h3>{S.exportGroup.raster}</h3>
-        {row(S.exportItems.png, () => void file.actionExportPNG())}
+        <div className="export-actions">
+          {row(S.exportItems.png, () => void file.actionExportPNG())}
+        </div>
         <h3>{S.exportGroup.data}</h3>
-        {row(S.exportItems.newick, () => void file.actionExportNewick())}
-        {row(S.exportItems.nexus, onNexusExport)}
-        {row(S.exportItems.hypothesisJSON, () => void file.actionExportHypothesisJSON())}
-        {row(S.exportItems.rScript, () => void file.actionExportRScript())}
-        {row(S.exportItems.reconReport, () => void file.actionExportReconciliationReport())}
+        <div className="export-actions">
+          {row(S.exportItems.newick, () => void file.actionExportNewick())}
+          {row(S.exportItems.nexus, onNexusExport)}
+          {row(S.exportItems.hypothesisJSON, () => void file.actionExportHypothesisJSON())}
+          {row(S.exportItems.rScript, () => void file.actionExportRScript())}
+          {row(S.exportItems.reconReport, () => void file.actionExportReconciliationReport())}
+        </div>
         <h3>{S.exportGroup.report}</h3>
-        {row(S.exportItems.narrative, () => void file.actionExportNarrative())}
+        <div className="export-actions">
+          {row(S.exportItems.narrative, () => void file.actionExportNarrative())}
+        </div>
       </div>
     </>
   );
@@ -487,6 +504,49 @@ export function App() {
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [nexusExportOpen, setNexusExportOpen] = useState(false);
+  const [geneBuilderOpen, setGeneBuilderOpen] = useState(false);
+  const [geneBuilderEditId, setGeneBuilderEditId] = useState<string | null>(null);
+
+  const openGeneBuilder = (editId: string | null = null) => {
+    setGeneBuilderEditId(editId);
+    setGeneBuilderOpen(true);
+  };
+
+  /**
+   * One-click "copy the species topology as a gene tree". This is the direct
+   * construction path for users who do not have a gene tree file at hand; the
+   * tip labels are identical, so every tip maps and the view opens populated.
+   */
+  const copySpeciesTreeToGene = () => {
+    const st = useStore.getState();
+    const tips = Object.values(st.project.nodes).filter((n) => n.childrenIds.length === 0).length;
+    if (tips < 2) {
+      notify.info(S.recon.needSpeciesTips);
+      return;
+    }
+    let id: string | null = null;
+    let mapped = 0;
+    let total = 0;
+    st.apply((d) => {
+      const doc = createGeneDocFromSpecies(
+        d,
+        tr(`${d.name} · 基因树`, `${d.name} · gene tree`),
+      );
+      const built = addBuiltGeneTree(d, doc);
+      id = built.id;
+      mapped = built.scenario.mappedTips;
+      total = built.scenario.totalTips;
+    });
+    if (!id) return;
+    st.setActiveGeneTree(id);
+    st.setReconMode(true);
+    notify.success(
+      tr(
+        `已从物种树创建基因树：${mapped}/${total} 个末端已自动映射`,
+        `Gene tree created from the species tree: ${mapped}/${total} tip(s) auto-mapped`,
+      ),
+    );
+  };
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -505,8 +565,10 @@ export function App() {
   const openShortcutsFromPalette = useCallback(() => { setPaletteOpen(false); setShortcutsOpen(true); }, []);
   const openAboutFromPalette = useCallback(() => { setPaletteOpen(false); setAboutOpen(true); }, []);
   const [multiTreeProjects, setMultiTreeProjects] = useState<Project[] | null>(null);
-  const [leftWidth, setLeftWidth] = useState(() => readPanelWidth(LS_LEFT_WIDTH, 240));
-  const [rightWidth, setRightWidth] = useState(() => readPanelWidth(LS_RIGHT_WIDTH, 272));
+  // Slightly wider defaults + the denser section rhythm (app.css) fit the
+  // common controls without wrapping or a scroll trip; both remain resizable.
+  const [leftWidth, setLeftWidth] = useState(() => readPanelWidth(LS_LEFT_WIDTH, 260));
+  const [rightWidth, setRightWidth] = useState(() => readPanelWidth(LS_RIGHT_WIDTH, 292));
   // Clamp on EVERY render, not only when the handle is released: `clampPanel`
   // bounds the ceiling by the current window width, so a width committed while
   // the window was wide would otherwise stay oversized after a shrink and keep
@@ -779,6 +841,9 @@ module={navModule}
 onOpenMatrix={() => setMatrixOpen(true)}
 onOpenAnalysis={() => setAnalysisOpen(true)}
 onNexusExport={() => setNexusExportOpen(true)}
+onBuildGeneTree={() => openGeneBuilder(null)}
+onCopySpeciesTree={copySpeciesTreeToGene}
+onEditGeneTree={(id) => openGeneBuilder(id)}
 />
         </div>
         {!isNarrow && !panelsHidden && (
@@ -786,7 +851,10 @@ onNexusExport={() => setNexusExportOpen(true)}
         )}
         <div className="canvas-host" onContextMenu={handleContextMenu}>
           {reconActive ? (
-            <ReconciliationView />
+            <ReconciliationView
+              onBuildGeneTree={() => openGeneBuilder(null)}
+              onCopySpeciesTree={copySpeciesTreeToGene}
+            />
           ) : (
             <>
               <TreeCanvas />
@@ -870,6 +938,11 @@ onNexusExport={() => setNexusExportOpen(true)}
         onOpenAbout={openAboutFromPalette}
       />
 <CharacterMatrixDialog open={matrixOpen} onClose={() => setMatrixOpen(false)} />
+<GeneTreeBuilderDialog
+  open={geneBuilderOpen}
+  editId={geneBuilderEditId}
+  onClose={() => setGeneBuilderOpen(false)}
+/>
 <AnalysisDialog open={analysisOpen} onClose={() => setAnalysisOpen(false)} />
 <NexusExportDialog
   open={nexusExportOpen}

@@ -1,11 +1,13 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { buildSVG, exportSVGString } from './exportImage';
-import { createSampleProject } from '../model/sampleTree';
+import { createEmptyProject, createSampleProject } from '../model/sampleTree';
+import { addChildren } from '../model/treeOps';
 import { serializeProject, parseProject } from './projectIO';
 import { parseNewick } from './newick';
 import { computeLayout } from '../layout/autoLayout';
 import { EVENT_BADGE_RADIUS } from '../model/events';
+import { curvedBranchPath } from '../canvas/paths';
 import {
   planEventAnchors,
   planLabelNudges,
@@ -42,16 +44,55 @@ describe('exportImage', () => {
     expect(svg).toContain('关键创新'); // event type appears in the legend
   });
 
-  it('marks exported event badges with ASCII codes, never pictographs', () => {
-    // Badges carry ASCII codes, never pictographs: nothing in this pipeline
-    // embeds an emoji font, so an emoji would draw a missing-glyph box exactly
-    // where the canvas drew a picture — the code has to survive as text.
+  it('exports hypothesis annotations under the node label, XML-escaped', () => {
     const p = createSampleProject();
-    const svg = exportSVGString(p, { showEvents: true });
-    expect(svg).toContain('>KI<'); // key innovation on the branch
-    expect(svg).toContain('>AR<'); // adaptive radiation
-    expect(svg).toContain('font-weight="700"');
-    expect(svg.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{FE0F}]/gu)).toBeNull();
+    p.nodes[p.rootId].hypothesisNote = 'Dispersal <before> & after the split';
+    const svg = exportSVGString(p);
+    expect(svg).toContain('Dispersal &lt;before&gt; &amp; after the split');
+    expect(svg).toContain('<title>Dispersal &lt;before&gt; &amp; after the split</title>');
+  });
+
+  it('paints character colours on branches when the target is branch', () => {
+    const p = createSampleProject();
+    const character = p.characters[0];
+    const state = character.states[0];
+    const svg = exportSVGString(p, {
+      activeCharacterId: character.id,
+      characterColorTarget: 'branch',
+    });
+    // The branch strokes carry the state colour; on the node target the same
+    // colour only appears as marker fills.
+    expect(svg).toMatch(new RegExp(`<path[^>]*stroke="${state.color}"[^>]*stroke-width`));
+  });
+
+  it('exports a per-branch curved style as the same cubic the canvas draws', () => {
+    const p = createEmptyProject('curve');
+    const [child] = addChildren(p, p.rootId, 2);
+    p.defaults.branch.shape = 'line';
+    p.nodes[child].branchStyle = { shape: 'curved' };
+    const layout = computeLayout(p);
+    const from = layout.positions.get(p.rootId)!;
+    const to = layout.positions.get(child)!;
+    const svg = buildSVG(p).svg;
+    expect(svg).toContain(curvedBranchPath(from, to, p.layout.orientation));
+  });
+
+  it('draws no badge letters by default and shows text only on request', () => {
+    // Default markers are shape + colour only: a figure full of two-letter
+    // acronyms is exactly what the per-event marker options exist to avoid.
+    const p = createSampleProject();
+    const plain = exportSVGString(p, { showEvents: true });
+    expect(plain).not.toContain('>KI<'); // key innovation on the branch
+    expect(plain).not.toContain('>AR<'); // adaptive radiation
+
+    // Opting in draws the same text the canvas draws (type code or custom),
+    // XML-escaped like every other text run in the export.
+    p.events[0].markerShowText = true;
+    p.events[1].markerText = '创<&>';
+    const withText = exportSVGString(p, { showEvents: true });
+    expect(withText).toContain('>KI<');
+    expect(withText).toContain('创&lt;&amp;&gt;');
+    expect(withText).toContain('font-weight="700"');
   });
 });
 

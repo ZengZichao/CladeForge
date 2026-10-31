@@ -40,9 +40,14 @@ describe('hypothesisExport', () => {
     expect(md.startsWith('# ')).toBe(true);
     expect(md).toContain('栖息地'); // demo character
     expect(md).toContain('演化事件'); // demo events section
-    // Event types are named by their badge code, as text a reader can copy.
-    expect(md).toContain('`KI`');
+    // Badges draw no codes by default, so the report names events by type and
+    // repeats a code only for a badge that actually shows text.
+    expect(md).not.toContain('`KI`');
     expect(md.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{FE0F}]/gu)).toBeNull();
+
+    const p = createSampleProject();
+    p.events[0].markerShowText = true;
+    expect(buildNarrative(p)).toContain('`KI`');
   });
 
   it('hypothesis JSON is valid and carries the taxon matrix', () => {

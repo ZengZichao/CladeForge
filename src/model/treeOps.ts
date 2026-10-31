@@ -281,6 +281,7 @@ export function deleteNode(project: Project, id: NodeId, cascade = true): boolea
       (e) => !removed.has(e.sourceId) && !removed.has(e.targetId),
     );
     pruneEventsForNodes(project, removed);
+    pruneHypothesisNotesForNodes(project, removed);
     // Clean up calibration points referencing deleted nodes so exported
     // MrBayes/BEAST blocks don't reference non-existent nodes.
     project.calibrationPoints = project.calibrationPoints.filter(
@@ -315,6 +316,7 @@ export function deleteNode(project: Project, id: NodeId, cascade = true): boolea
       (e) => e.sourceId !== id && e.targetId !== id,
     );
     pruneEventsForNodes(project, new Set([id]));
+    pruneHypothesisNotesForNodes(project, new Set([id]));
     project.calibrationPoints = project.calibrationPoints.filter(
       (cp) => cp.nodeId !== id,
     );
@@ -1227,6 +1229,15 @@ export function renameNode(project: Project, id: NodeId, label: string): void {
   if (n) n.label = label;
 }
 
+/** Set or clear the active layer's free-text hypothesis annotation on a node. */
+export function setHypothesisNote(project: Project, id: NodeId, note: string): void {
+  const n = project.nodes[id];
+  if (!n) return;
+  const text = note.trim();
+  if (text) n.hypothesisNote = text;
+  else delete n.hypothesisNote;
+}
+
 export function moveNode(project: Project, id: NodeId, pos: Point): void {
   const n = project.nodes[id];
   if (!n) return;
@@ -1407,6 +1418,22 @@ export function setNodeStyle(project: Project, id: NodeId, style: Partial<NodeSt
 export function setBranchStyle(project: Project, id: NodeId, style: Partial<BranchStyle>): void {
   const n = project.nodes[id];
   if (n) n.branchStyle = { ...n.branchStyle, ...style };
+}
+
+/**
+ * Colour the branch entering `node` and every descendant branch in one edit.
+ * Root has no incoming branch, so only its descendant branches are touched.
+ * Returns how many branches were changed (the inspector reports it).
+ */
+export function setSubtreeBranchColor(project: Project, id: NodeId, color: string): number {
+  let changed = 0;
+  for (const nid of collectSubtree(project, id)) {
+    const n = project.nodes[nid];
+    if (!n || !n.parentId) continue;
+    n.branchStyle = { ...n.branchStyle, color };
+    changed += 1;
+  }
+  return changed;
 }
 
 /**
@@ -1955,6 +1982,14 @@ function pruneEventsForNodes(project: Project, removedNodeIds: Set<NodeId>): voi
     if (e.triggers.some((t) => removedEventIds.has(t))) {
       e.triggers = e.triggers.filter((t) => !removedEventIds.has(t));
     }
+  }
+}
+
+/** Drop hypothesis annotations for deleted nodes from every stored layer. */
+function pruneHypothesisNotesForNodes(project: Project, removedNodeIds: Set<NodeId>): void {
+  for (const stored of Object.values(project.layerStore)) {
+    if (!stored.notes) continue;
+    for (const id of removedNodeIds) delete stored.notes[id];
   }
 }
 

@@ -28,10 +28,11 @@ export type LabelPosition =
 /**
  * Visual style of a tree branch:
  *  - `line`        thin stroked polyline (the classic look)
+ *  - `curved`      smooth cubic "tube" branch (ported from PhyloRecViewer)
  *  - `rectangular` thick bar with flat ends and sharp (mitred) corners
  *  - `rounded`     thick bar with round ends and rounded corners
  */
-export type BranchShape = 'line' | 'rectangular' | 'rounded';
+export type BranchShape = 'line' | 'curved' | 'rectangular' | 'rounded';
 export type LayoutType =
   | 'rectangular-cladogram'
   | 'rectangular-phylogram'
@@ -108,6 +109,9 @@ export interface EdgeStyle {
 
 export type CharacterType = 'discrete' | 'continuous';
 
+/** Where a character's colours are painted: node markers or branches. */
+export type CharacterColorTarget = 'node' | 'branch';
+
 /** One possible value of a discrete character (e.g. "aquatic"), with a colour. */
 export interface CharacterState {
   id: string;
@@ -159,11 +163,13 @@ export interface HypothesisMeta {
  * node. `typeId` keys into the event-type catalogue (see model/events.ts);
  * `triggers` lists downstream events for the causal-chain overlay.
  *
- * The four `marker*` fields are optional per-event style overrides. Absent
- * fields fall back to the defaults: a circle of `EVENT_BADGE_RADIUS` in the
- * event type's catalogue colour, carrying the type's two-letter code. They are
- * user-set in the event editor (shape / size / colour / inner text) so events
- * of the same type can be told apart and figures can match a journal's style.
+ * The `marker*` fields are optional per-event style overrides. Absent fields
+ * fall back to the defaults: a circle of `EVENT_BADGE_RADIUS` in the event
+ * type's catalogue colour, with NO text inside — the shape and colour carry
+ * the identity, so a figure does not turn into a field of letter codes. They
+ * are user-set in the event editor (shape / size / colour / inner text), and
+ * the user decides per event whether text is drawn at all; a custom
+ * `markerText` is still honoured for documents that set one.
  */
 export interface EvolutionaryEvent {
   id: EventId;
@@ -182,7 +188,17 @@ export interface EvolutionaryEvent {
   markerSize?: number;
   /** Badge outline colour override; default = the event type's catalogue colour. */
   markerColor?: string;
-  /** Text drawn inside the badge (e.g. "KI"); default = the type's two-letter code. */
+  /**
+   * Whether the badge draws inner text. Absent means no text, except that an
+   * explicit custom `markerText` (from an older document) still shows; resolve
+   * it through `eventMarkerTextVisible()` rather than reading this directly.
+   */
+  markerShowText?: boolean;
+  /**
+   * Text drawn inside the badge (e.g. "KI" or a short custom label). Only
+   * drawn when the marker's text is shown; defaults to the type's code when
+   * shown with no custom text.
+   */
   markerText?: string;
 }
 
@@ -214,6 +230,8 @@ export interface EnvironmentalEvent {
 export interface StoredLayer {
   states: Record<NodeId, Record<string, string | number>>;
   meta: Record<NodeId, Record<string, HypothesisMeta>>;
+  /** Free-text hypothesis annotation per node (shown on the tree). */
+  notes?: Record<NodeId, string>;
   events: EvolutionaryEvent[];
 }
 
@@ -242,6 +260,12 @@ export interface TreeNode {
   charStates?: Record<string, string | number>;
   /** Confidence / evidence for this node's ancestral-state hypotheses, per character. */
   charMeta?: Record<string, HypothesisMeta>;
+  /**
+   * Free-text hypothesis statement for this node, belonging to the ACTIVE
+   * hypothesis layer. Rendered on the tree under the node label; switching
+   * layers swaps it with that layer's snapshot.
+   */
+  hypothesisNote?: string;
   meta?: Record<string, unknown>;
 }
 
@@ -475,6 +499,7 @@ export function branchCaps(shape: BranchShape): {
   switch (shape) {
     case 'rectangular':
       return { linecap: 'butt', linejoin: 'miter' };
+    case 'curved':
     case 'rounded':
       return { linecap: 'round', linejoin: 'round' };
     case 'line':

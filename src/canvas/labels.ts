@@ -26,6 +26,7 @@
 // of any placement.
 
 import type { LabelPosition, Orientation, Point } from '../model/types';
+import { tr } from '../ui/strings';
 
 export interface LabelPlacement {
   dx: number;
@@ -116,6 +117,42 @@ function explicitPlacement(pos: LabelPosition, size: number): LabelPlacement {
     default:
       return { dx: g, dy: 0, anchor: 'start', baseline: 'central' };
   }
+}
+
+/** Distance from the label baseline to the hypothesis-note line. */
+const HYPOTHESIS_NOTE_GAP = 3;
+
+/** Smaller than the taxon label but never below 8.5px. */
+export function hypothesisNoteFontSize(labelFontSize: number): number {
+  return Math.min(16, Math.max(8.5, Math.round(labelFontSize * 0.68 * 10) / 10));
+}
+
+/** Padding around the annotation text inside its light background pill. */
+export const HYPOTHESIS_NOTE_PAD = 2;
+
+/** Keep the on-tree annotation to one readable line; the tooltip has the rest. */
+const HYPOTHESIS_NOTE_DISPLAY_MAX = 48;
+
+/** The text drawn for a node's hypothesis annotation. */
+export function hypothesisNoteText(note: string): string {
+  const shown =
+    note.length > HYPOTHESIS_NOTE_DISPLAY_MAX
+      ? `${note.slice(0, HYPOTHESIS_NOTE_DISPLAY_MAX - 1)}…`
+      : note;
+  return tr('假说：', 'Hypothesis: ') + shown;
+}
+
+/** One line below the taxon label, sharing its horizontal anchor and offset. */
+export function hypothesisNotePlacement(
+  labelPlace: LabelPlacement,
+  labelFontSize: number,
+): LabelPlacement {
+  return {
+    dx: labelPlace.dx,
+    dy: labelPlace.dy + labelFontSize + HYPOTHESIS_NOTE_GAP,
+    anchor: labelPlace.anchor,
+    baseline: 'hanging',
+  };
 }
 
 export function labelPlacement(

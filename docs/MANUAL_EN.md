@@ -274,7 +274,7 @@ For discrete characters, you can define an optional **cost matrix** (Sankoff ste
 
 ### Colour Mapping
 
-In the Traits module, use the "Colour by" dropdown to colour nodes and branches by a character's states. State transitions are optionally shown as markers on branches.
+In the Traits module, choose a character under "Colour by", then use the **Paint on** toggle to switch between **Nodes** and **Branches**: node mode paints the node markers, branch mode paints the incoming branch of each child (unassigned branches keep their normal style). Change markers can be drawn at branch midpoints; discrete and continuous characters follow the same rule — both endpoints must carry a value and differ — and the markers can be switched off with "Change markers".
 
 ### Missing and Not-Applicable Data
 
@@ -298,7 +298,19 @@ CladeForge provides 15 built-in evolutionary event types across six groups — S
 | **Biogeography** | `DI` Dispersal, `VI` Vicariance, `RE` Regional extirpation |
 | **General** | `CU` Custom event |
 
-Each event type has a badge code — two uppercase letters taken from its English name — a colour, and a default anchor: node, branch, or either. On the canvas the code sits inside a ring drawn in that colour; the legend, the inspector and the type dropdown always spell out the full name in your UI language. Codes are plain text, so a badge exports to SVG, PNG and PDF exactly as it appears on screen and stays readable in greyscale print. You can override the anchor when placing the event.
+Each event type has a code — two uppercase letters taken from its English name — a default colour, and a default anchor: node, branch, or either. **By default a badge draws only its shape and colour, with no letters inside.** To add text, open “Evolutionary events → Marker style” in the inspector and tick “Show text”; the badge then draws the type code, or up to 4 custom characters (a short Chinese label, for example). You can override the anchor when placing the event.
+
+### Marker style
+
+Select a node that carries events, expand the event in the inspector, and adjust each event under “Marker style”:
+
+- **Shape** — circle, square, diamond, triangle, star, hexagon;
+- **Size** — 5–24 px;
+- **Colour** — the badge outline, following the event type or chosen by hand;
+- **Show text** — off by default; turn on to draw text inside the badge;
+- **Marker text** — leave empty for the type code, or type up to 4 custom characters.
+
+Badges are pure vector graphics: canvas, legend and SVG/PNG/PDF export share the same shape, colour and text rules, and stay readable in greyscale print.
 
 ### Placing Events
 
@@ -314,7 +326,7 @@ Events can be linked in causal chains — for example, a key innovation on a bra
 
 ### Showing/Hiding Events
 
-Show or hide the events overlay with the toggle in the **Hypotheses** module. When visible, event badges appear on nodes and branches and the canvas legend lists the codes in use.
+Show or hide the events overlay with the toggle in the **Hypotheses** module. When visible, event badges appear on nodes and branches and the canvas legend lists the badges in use with their actual shapes and colours.
 
 ---
 
@@ -325,16 +337,18 @@ CladeForge supports managing multiple competing evolutionary hypotheses on a sha
 ### How It Works
 
 - **Tip (observed) states are shared** across all layers — they represent empirical data.
-- **Internal-node ancestral-state hypotheses and events diverge** per layer — each layer is an independent scenario.
+- **Internal-node ancestral-state hypotheses, events and per-node “Hypothesis notes” diverge** per layer — each layer is an independent scenario.
 - Only the **active layer** lives on the tree nodes; non-active layers are stored separately and restored when you switch.
+- **To write a hypothesis on the tree**: select a node and fill “Hypothesis note” under Node in the inspector. The note belongs to the active layer and is drawn in a light pill below the node label; switching layers swaps in that layer’s notes. A blank layer is a scenario you can fill in, not just a meaningless name.
 
 ### Managing Layers
 
 Open the **Hypotheses** module (left panel, Content group):
-- **New** — Create a blank hypothesis layer (copies the shared tip states; starts with no internal-node hypotheses).
-- **Duplicate** — Clone the current layer (including all hypotheses and events) as a starting point for an alternative.
+- **New** — Create a blank hypothesis layer (shares tip states; no internal-node hypotheses, events or notes).
+- **Duplicate** — Clone the current layer (including ancestral states, events and hypothesis notes) as a starting point for an alternative.
 - **Delete** — Remove a layer. Deleting the active layer switches to another.
 - **Switch** — Pick a layer from the module's dropdown to activate it. The canvas updates immediately.
+- The module's “This layer” summary reports how many notes, ancestral states and events the active layer actually asserts.
 
 ### Workflow Example
 
@@ -346,13 +360,13 @@ Open the **Hypotheses** module (left panel, Content group):
 
 ---
 
-## 8. Inference Assistant
+## 8. Trait Evolution Inference
 
-The inference assistant provides *advisory* suggestions — it does not overwrite your hypotheses. You choose which suggestions to accept.
+Trait evolution inference provides *advisory* suggestions — it does not overwrite your hypotheses. You choose which suggestions to accept.
 
-Open the **Analysis** module (left panel, Output group) and click **Inference assistant…**, or use the ⌘K command palette and search "inference."
+Open the **Analysis** module (left panel, Output group) and click **Trait evolution inference…**, or use the ⌘K command palette. The Analysis module now owns results and inference only: it summarises the active character's parsimony cost, CI/RI, consistency and correlations, then offers “Trait evolution inference” and Mk reconstruction. The tree-summary statistics are collapsed by default so they no longer push the tools below the fold. The **character matrix** belongs to character management and stays in the Traits module.
 
-The module is a live summary before it is a button strip: it reports the tree's tip and node counts and what the current hypothesis already implies — parsimony cost, CI/RI per character, the number of flagged consistency issues, correlated character pairs — so you can judge whether a closer look is warranted before opening the full dialog. Its controls cover the character matrix, the inference assistant, running and clearing ASR, and jumping into a character's analysis.
+The full dialog covers parsimony ancestral-state suggestions, consistency checks, character correlations and permutation tests; the Analysis module itself only summarises and links to it. Suggestions only enter a hypothesis when you accept them node by node in the inspector.
 
 ### Parsimony (Sankoff)
 
@@ -451,14 +465,28 @@ CladeForge implements gene-tree/species-tree reconciliation using a Duplication�
 
 1. The **current project's tree is the species tree**.
 2. Open the **Reconcile** module (left panel, Content group).
-3. Click **Import gene tree from file** (a Newick or Nexus file) or **Import from open tab** (another open project supplies the gene tree).
-4. The gene tree's tips are matched to the species tree's tips by label. Unmatched tips are reported rather than dropped quietly, and labels that collide once normalised are called out.
+3. No file is required up front — choose a construction path:
+   - **Build gene tree…** — open the builder and start from a blank root, adding children/siblings, renaming nodes or deleting subtrees;
+   - **Create from species tree** — copy the current species topology as the gene-tree starting point;
+   - **Import gene tree from file** (Newick/Nexus) and **Import from open tab** remain optional alternatives.
+4. The gene tree's tips are matched to the species tree's tips by label. Matching tips are mapped automatically and an LCA-based initial scenario is suggested; unmatched or normalisation-colliding labels are reported rather than dropped quietly.
 
-The module holds **several gene trees at once**. Each entry shows its name, how many of its tips mapped onto the species tree, and a badge when its scenario carries errors or warnings. Click an entry to make it active, or press Enter while it is focused; rename and remove act on an entry, and removal asks for confirmation. Everything below applies to the active gene tree.
+### Building a Gene Tree Directly
+
+The **Build gene tree…** dialog provides an editable topology outline:
+
+- Start **blank (root only)** or **copy the species topology**;
+- Select any node to **add a child**, **add a sibling**, rename it under “Node label”, or **delete its subtree** (the root cannot be deleted);
+- When tip names match species tips, the dialog reports “N/M tips match … will be auto-mapped” live;
+- **Create and open reconciliation** writes the tree once, auto-maps the tips, suggests a scenario and opens the side-by-side view.
+
+An existing gene tree can be reopened through **Edit gene-tree topology…** in the active-gene section. Saving rebuilds name-based mappings and the suggested scenario; existing manual mappings are replaced (the dialog says so).
+
+The module holds **several gene trees at once**. Each entry shows its name, how many of its tips mapped onto the species tree, and a badge when its scenario carries errors or warnings. Click an entry to make it active, or press Enter while it is focused; rename, edit topology and remove act on an entry, and removal asks for confirmation. Everything below applies to the active gene tree.
 
 ### Manual Refinement
 
-After importing, you can manually refine the reconciliation:
+After creating or importing, you can manually refine the reconciliation:
 - Select a gene node in the reconciliation view.
 - In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch.
 - Use **Suggest via LCA** to automatically map unresolved internal gene nodes to their lowest common ancestor in the species tree.
@@ -487,7 +515,7 @@ The module keeps running tallies for the active gene tree as you edit: speciatio
 
 ### Reconciliation View
 
-Click **Enter reconciliation view** for a side-by-side display: the species tree on the left, the gene tree on the right, with mapping lines connecting them. Click a gene node to inspect and edit its DTL assumption. Alt+click a species node to set the mapping of the selected gene node. **Esc** leaves the view; the header's view-mode switch does the same.
+Click **Enter reconciliation view** for a side-by-side display: the species tree on the left, the gene tree on the right, and event-coloured mapping lines between them. The fit includes the taxon labels on both sides, so names are no longer clipped by the pane edge. A compact σ / δ / τ / λ summary bar at the bottom reports the active scenario's counts. Click a gene node to inspect and edit its DTL assumption. Alt+click a species node to set the mapping of the selected gene node. **Esc** leaves the view; the header's view-mode switch does the same.
 
 The reconciliation inspector carries the species-tree mapping as a dropdown, the event type (with a control to clear it again), the loss count on the incoming branch, the node's confidence, support value and supporting/contradicting evidence, and for a tip-bearing clade how many tips it spans.
 
@@ -589,13 +617,15 @@ Select any node or edge on the canvas to style it individually in the inspector:
 - Label: show/hide, colour, font size, font weight (300–900), italic, bold, rotation
 
 **Branches (incoming edge to a node):**
-- Shape: Thin line, Thick bar (rectangular), Rounded bar
-- Colour, width, dash style (solid/dashed/dotted)
+- Shape: Thin line, **Curved** (the smooth cubic/tube style from PhyloRecViewer), Thick bar (rectangular), Rounded bar
+- Colour, width (number or slider), dash style (solid/dashed/dotted)
+- **Apply to subtree**: applies the current colour to the selected node’s incoming branch and every descendant branch in one step; siblings and ancestors are untouched, and individual branches can still be changed afterwards.
+- With a character’s **Paint on: Branches**, the branch colour comes from the child node’s character value and overrides the ordinary branch colour; switch back to **Nodes** to restore it.
 
 **Custom edges:**
-- Label, colour, width, dash, arrow, curvature
+- Label, colour, width (number or slider), dash, arrow, curvature (number or slider)
 
-Use **Reset to default** in the inspector to clear all overrides for an object.
+Every property with both a number box and a slider edits the same value: type an exact number or drag the slider for a live preview; one drag records one undo step. The Style module's branch width, spacing, font size, rotation and the global taxon-label X/Y offsets offer the same sliders; a node's own offset in the inspector overrides the global value. Node size/stroke width and label font size, rotation and X/Y offset in the inspector do too.
 
 ### Branch Gradient
 

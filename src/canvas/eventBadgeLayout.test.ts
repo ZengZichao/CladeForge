@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeLayout } from '../layout/autoLayout';
 import type { LayoutResult } from '../layout/autoLayout';
-import { SAMPLE_PROJECTS, createEmptyProject, taxonNamer } from '../model/sampleTree';
+import { SAMPLE_PROJECTS, createEmptyProject, createSampleProject, taxonNamer } from '../model/sampleTree';
 import { EVENT_BADGE_RADIUS } from '../model/events';
 import { labelBoxForNode, type Box } from './labelBounds';
 import {
@@ -319,6 +319,21 @@ describe('event badge placement — clears labels, markers, axis text and other 
       expect(separation).toBeGreaterThan(12);
       expect(separation).toBeLessThan(20);
     }
+  });
+
+  it('anchors a branch event on the smooth-curve midpoint, not the elbow corner', () => {
+    const project = createSampleProject();
+    project.defaults.branch.shape = 'curved';
+    const layout = computeLayout(project);
+    const event = project.events.find((e) => e.target === 'branch')!;
+    const child = project.nodes[event.nodeId];
+    const p = layout.positions.get(event.nodeId)!;
+    const pp = layout.positions.get(child.parentId!)!;
+    const anchor = naturalBadgeAnchor(event, 0, anchorInput(project, layout))!;
+    expect(anchor.x).toBeCloseTo((pp.x + p.x) / 2, 6);
+    expect(anchor.y).toBeCloseTo((pp.y + p.y) / 2, 6);
+    // The elbow anchor shares the child's y; the curve anchor must not.
+    expect(Math.abs(anchor.y - p.y)).toBeGreaterThan(1);
   });
 
   it('reports a leader line when a stack is displaced, and not otherwise', () => {

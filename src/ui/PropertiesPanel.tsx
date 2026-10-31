@@ -26,8 +26,10 @@ import {
   setEdgeStyle,
   setNodeAge,
   setNodeCharMeta,
+  setHypothesisNote,
   setNodeState,
   setNodeStyle,
+  setSubtreeBranchColor,
   toggleCollapse,
   unpinNode,
 } from '../model/treeOps';
@@ -58,9 +60,9 @@ import {
   Field,
   FontWeightSelect,
   NumberField,
-  RangeField,
   TextField,
 } from './fields';
+import { SliderNumberField } from './SliderNumberField';
 import { Section } from './Section';
 import { stateLabel } from '../model/characters';
 import { parsimony, type ParsimonyResult } from '../model/parsimony';
@@ -68,6 +70,7 @@ import { EventEditor } from './EventEditor';
 import { GeneAssumptionInspector } from './ReconInspector';
 import { requestDeletion } from './deleteGuard';
 import { S, tr, selectedCount } from './strings';
+import { notify } from './toast';
 
 
 type Apply = (recipe: (d: Project) => void) => void;
@@ -91,7 +94,7 @@ type NodeSectionKey =
   | 'branchSection';
 
 const NODE_SECTION_KEYWORDS: Record<NodeSectionKey, string[]> = {
-  section: ['名称', '枝长', '支持率', '年代', '时间', 'name', 'branch length', 'support', 'age'],
+  section: ['名称', '枝长', '支持率', '年代', '时间', '假说', '标注', 'name', 'branch length', 'support', 'age', 'hypothesis', 'note', 'annotation'],
   timeConstraintSection: ['时间约束', '校准', '区间', '最小年代', '最大年代', 'calibration', 'constraint', 'min age', 'max age'],
   styleSection: ['填充色', '描边色', '大小', '形状', '描边', '颜色', '字号', 'fill', 'stroke', 'size', 'shape', 'colour', 'color'],
   labelSection: ['标签', '字号', '字体', '颜色', '旋转', '斜体', '加粗', '字重', '位置', '方位', '偏移', 'label', 'font', 'size', 'colour', 'color', 'rotate', 'italic', 'bold', 'position', 'offset'],
@@ -416,7 +419,7 @@ function NodePanel({
   const weight = fontWeightValue(style.fontWeight);
   const setNodeBranchShape = (shape: BranchShape) => {
     const patch: Parameters<typeof setBranchStyle>[2] = { shape };
-    if (shape === 'line') {
+    if (shape === 'line' || shape === 'curved') {
       if (branch.width > 4) patch.width = 1.5;
     } else if (branch.width < 4) {
       patch.width = 8;
@@ -440,12 +443,20 @@ function NodePanel({
         title={S.node.section}
         searchQuery={search}
         favoritable
-        count={4}
+        count={5}
         keywords={NODE_SECTION_KEYWORDS.section}
       >
         <Field label={S.node.name}>
           <TextField value={node.label} onCommit={(v) => apply((d) => renameNode(d, id, v))} />
         </Field>
+        <Field label={S.node.hypothesisNote}>
+          <TextField
+            value={node.hypothesisNote ?? ''}
+            placeholder={S.node.hypothesisNotePlaceholder}
+            onCommit={(v) => apply((d) => setHypothesisNote(d, id, v))}
+          />
+        </Field>
+        <div className="hint">{S.node.hypothesisNoteHint}</div>
         <Field label={S.node.branchLength}>
           <NumberField
             value={node.branchLength}
@@ -635,12 +646,12 @@ function NodePanel({
           </select>
         </Field>
         <Field label={S.node.size}>
-          <NumberField
+          <SliderNumberField
             value={style.size}
             min={1}
             max={40}
             unit="px"
-            onCommit={(v) => ns({ size: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { size: v })}
           />
         </Field>
         <Field label={S.node.fill}>
@@ -650,13 +661,13 @@ function NodePanel({
           <ColorField value={style.stroke} onChange={(v) => ns({ stroke: v })} />
         </Field>
         <Field label={S.node.strokeWidth}>
-          <NumberField
+          <SliderNumberField
             value={style.strokeWidth}
             min={0}
             max={10}
             step={0.5}
             unit="px"
-            onCommit={(v) => ns({ strokeWidth: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { strokeWidth: v })}
           />
         </Field>
       </Section>
@@ -683,25 +694,25 @@ function NodePanel({
           <ColorField value={style.labelColor} onChange={(v) => ns({ labelColor: v })} />
         </Field>
         <Field label={S.node.fontSize}>
-          <NumberField
+          <SliderNumberField
             value={style.fontSize}
             min={6}
             max={48}
             unit="px"
-            onCommit={(v) => ns({ fontSize: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { fontSize: v })}
           />
         </Field>
         <Field label={S.node.fontWeight}>
           <FontWeightSelect value={weight} onChange={(v) => ns({ fontWeight: v })} />
         </Field>
         <Field label={S.node.rotation}>
-          <NumberField
+          <SliderNumberField
             value={style.labelRotation}
             min={-180}
             max={180}
             step={5}
             unit="°"
-            onCommit={(v) => v !== undefined && ns({ labelRotation: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { labelRotation: v })}
           />
         </Field>
         <CheckboxField
@@ -721,19 +732,23 @@ function NodePanel({
           />
         </Field>
         <Field label={S.node.labelOffsetX}>
-          <NumberField
+          <SliderNumberField
             value={style.labelOffsetX ?? 0}
+            sliderMin={-100}
+            sliderMax={100}
             step={1}
             unit="px"
-            onCommit={(v) => ns({ labelOffsetX: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { labelOffsetX: v })}
           />
         </Field>
         <Field label={S.node.labelOffsetY}>
-          <NumberField
+          <SliderNumberField
             value={style.labelOffsetY ?? 0}
+            sliderMin={-100}
+            sliderMax={100}
             step={1}
             unit="px"
-            onCommit={(v) => ns({ labelOffsetY: v })}
+            recipe={(v) => (d) => setNodeStyle(d, id, { labelOffsetY: v })}
           />
         </Field>
       </Section>
@@ -753,14 +768,33 @@ function NodePanel({
         <Field label={S.node.color}>
           <ColorField value={branch.color} onChange={(v) => bs({ color: v })} />
         </Field>
+        <div className="field row-actions">
+          <button
+            className="btn"
+            title={S.node.applyBranchColorHint}
+            onClick={() => {
+              // Must run through apply(): the live project is Immer-frozen, and
+              // a direct mutation would throw (and bypass undo).
+              let changed = 0;
+              apply((d) => {
+                changed = setSubtreeBranchColor(d, id, branch.color);
+              });
+              if (changed > 0) {
+                notify.success(S.node.applyBranchColorDone(changed));
+              }
+            }}
+          >
+            {S.node.applyBranchColor}
+          </button>
+        </div>
         <Field label={S.node.width}>
-          <NumberField
+          <SliderNumberField
             value={branch.width}
             min={0.5}
             max={40}
             step={0.5}
             unit="px"
-            onCommit={(v) => bs({ width: v })}
+            recipe={(v) => (d) => setBranchStyle(d, id, { width: v })}
           />
         </Field>
         <Field label={S.node.dash}>
@@ -771,6 +805,8 @@ function NodePanel({
       {project.characters.length > 0 && (
         <Section
           title={S.nodeChar.section}
+          count={project.characters.length}
+          defaultOpen={false}
           searchQuery={search}
           favoritable
           keywords={['性状', '状态', '祖先状态', '证据', 'character', 'state', 'ancestral', 'evidence']}
@@ -856,24 +892,28 @@ function MultiPanel({
           <ColorField value={style.stroke} onChange={(v) => nsAll({ stroke: v })} />
         </Field>
         <Field label={S.multi.nodeSize}>
-          <NumberField
+          <SliderNumberField
             value={style.size}
             min={1}
             max={40}
             unit="px"
-            onCommit={(v) => nsAll({ size: v })}
+            recipe={(v) => (d) => {
+              for (const nodeId of selection) setNodeStyle(d, nodeId, { size: v });
+            }}
           />
         </Field>
         <Field label={S.multi.labelColor}>
           <ColorField value={style.labelColor} onChange={(v) => nsAll({ labelColor: v })} />
         </Field>
         <Field label={S.multi.fontSize}>
-          <NumberField
+          <SliderNumberField
             value={style.fontSize}
             min={6}
             max={48}
             unit="px"
-            onCommit={(v) => nsAll({ fontSize: v })}
+            recipe={(v) => (d) => {
+              for (const nodeId of selection) setNodeStyle(d, nodeId, { fontSize: v });
+            }}
           />
         </Field>
         <Field label={S.multi.branchColor}>
@@ -925,13 +965,13 @@ function EdgePanel({ edge, apply, search }: { edge: CustomEdge; apply: Apply; se
         <ColorField value={edge.style.color} onChange={(v) => es({ color: v })} />
       </Field>
       <Field label={S.edge.width}>
-        <NumberField
+        <SliderNumberField
           value={edge.style.width}
           min={0.5}
           max={10}
           step={0.5}
           unit="px"
-          onCommit={(v) => es({ width: v })}
+          recipe={(v) => (d) => setEdgeStyle(d, id, { width: v })}
         />
       </Field>
       <Field label={S.edge.dash}>
@@ -943,12 +983,12 @@ function EdgePanel({ edge, apply, search }: { edge: CustomEdge; apply: Apply; se
         onChange={(v) => es({ arrow: v })}
       />
       <Field label={S.edge.curvature}>
-        <RangeField
+        <SliderNumberField
           value={edge.style.curvature}
           min={0}
           max={1}
           step={0.05}
-          onCommit={(v) => es({ curvature: v })}
+          recipe={(v) => (d) => setEdgeStyle(d, id, { curvature: v })}
         />
       </Field>
       <div className="field row-actions-spread">
