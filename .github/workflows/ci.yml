@@ -60,7 +60,12 @@ jobs:
       # are advisory output first (the numbers go to the run log); a hard
       # threshold can be enabled once the baseline is re-measured on the runner.
       - name: Tip-count scaling benchmark
-        run: node scripts/bench_tips.mjs
+        # Through vite-node (the `bench` npm script): the benchmark imports the
+        # real TypeScript modules, which plain `node` cannot load. vite-node is
+        # an explicit devDependency — vitest 4 no longer carries it. Rounds and
+        # realizations are trimmed for the runner budget: the gate witnesses
+        # scaling behaviour, it does not need the developer-grade sample count.
+        run: BENCH_RUNS=2 BENCH_REALIZATIONS=2 npm run bench
 
   # The Rust side carries the app's actual security boundary — the path allow-list
   # in src-tauri/src/lib.rs — and no web job can reach it, so it is compiled and
