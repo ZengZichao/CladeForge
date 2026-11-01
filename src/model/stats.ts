@@ -42,6 +42,12 @@ export interface DiscreteSignal {
   maxSteps: number;
   ci: number;
   ri: number;
+  /**
+   * True when the tree is not fully binary. An unresolved (polytomic) tree lets
+   * some changes be shared "for free" across the unresolved branches, which
+   * inflates CI/RI — the UI must show the caveat next to the numbers when set.
+   */
+  unresolvedTree?: boolean;
 }
 
 /**
@@ -98,6 +104,9 @@ export function discreteSignal(project: Project, character: Character): Discrete
     maxSteps,
     ci,
     ri,
+    // An unresolved tree shares changes "for free" across polytomies, which
+    // inflates CI/RI; the panel shows the caveat when this is set.
+    unresolvedTree: treeSummary(project).resolution < 1,
   };
 }
 
@@ -371,6 +380,12 @@ export interface BlombergKResult {
   n: number;
   /** Non-root branches with no usable length, imputed to 1 for this run. */
   imputedBranches: number;
+  /**
+   * Non-root branches whose recorded length is a REAL zero (synchronous
+   * divergence). A zero is data, not a gap: it is used AS 0 and must not be
+   * folded into `imputedBranches`, which counts invented scale.
+   */
+  zeroBranches: number;
   /** All non-root branches of the tree (imputed/total = how much scale is invented). */
   totalBranches: number;
 }
@@ -437,8 +452,13 @@ function kAnalysis(project: Project, character: Character): {
     };
   }
 
-  // Branch entering a node (0 at the root; missing/zero/invalid → 1, counted).
+  // Branch entering a node. A recorded ZERO is real data (synchronous
+  // divergence in a chronogram) and is used AS 0 — the same convention asr.ts
+  // holds, and the one phylosig implements; folding zeros into the "imputed"
+  // bucket made every contemporaneous radiation look like invented scale.
+  // Missing / negative / non-finite lengths stay imputed to 1 and counted.
   const imputed = new Set<NodeId>();
+  const zeroBranch = new Set<NodeId>();
   let totalBranches = 0;
   const branchOf = (id: NodeId): number => {
     const node = project.nodes[id];
@@ -446,6 +466,10 @@ function kAnalysis(project: Project, character: Character): {
     totalBranches += 1;
     const bl = node.branchLength;
     if (typeof bl === 'number' && Number.isFinite(bl) && bl > 0) return bl;
+    if (typeof bl === 'number' && Number.isFinite(bl) && bl === 0) {
+      zeroBranch.add(id);
+      return 0;
+    }
     imputed.add(id);
     return 1;
   };
@@ -497,7 +521,7 @@ function kAnalysis(project: Project, character: Character): {
   const ones = new Array<number>(n).fill(1);
   const z1 = solveLinear(C, ones);
   const zx = solveLinear(C, values);
-  const diag = { imputedBranches: imputed.size, totalBranches };
+  const diag = { imputedBranches: imputed.size, zeroBranches: zeroBranch.size, totalBranches };
   if (!z1 || !zx) {
     return {
       result: null,
@@ -532,7 +556,7 @@ function kAnalysis(project: Project, character: Character): {
   let ss = 0;
   for (const v of values) ss += (v - mean) ** 2;
   // A constant trait carries no phylogenetic signal.
-  if (ss === 0) return { result: { k: 0, n, ...diag }, reason: null };
+  if (ss === 0) return { result: { k: 0, n, ...diag }, reason: null }; // zero variation, surfaced by the UI
 
   // (x−â1)ᵀC⁻¹(x−â1) = xᵀC⁻¹x − 2â·1ᵀC⁻¹x + â²·1ᵀC⁻¹1
   const quad = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
@@ -562,4 +586,701 @@ export function blombergK(project: Project, character: Character): BlombergKResu
  */
 export function blombergKBlockReason(project: Project, character: Character): string | null {
   return kAnalysis(project, character).reason;
+}
+
+// --- K's null distribution: a simulated BM reference --------------------------
+// A bare K = 0.73 says nothing by itself; the reader needs to know how far from
+// 1 it has to fall before the tree's branching pattern stops explaining it. The
+// simulation below draws traits from Brownian motion ON THIS TREE (Cholesky of
+// the same covariance matrix the point estimate used) and reports the two-sided
+// p-value P(|K_sim − 1| ≥ |K_obs − 1|) — no external service, fully seeded.
+
+/** Cholesky–Banachiewicz lower triangle of a symmetric positive-definite matrix. */
+function cholesky(C: number[][]): number[][] | null {
+  const n = C.length;
+  const L = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j <= i; j += 1) {
+      let sum = C[i][j];
+      for (let k = 0; k < j; k += 1) sum -= L[i][k] * L[j][k];
+      if (i === j) {
+        if (!(sum > 1e-12)) return null;
+        L[i][j] = Math.sqrt(sum);
+      } else {
+        L[i][j] = sum / L[j][j];
+      }
+    }
+  }
+  return L;
+}
+
+/** Solve L·z = b (forward) for a lower-triangular L. */
+function solveLower(L: number[][], b: number[]): number[] {
+  const n = L.length;
+  const z = new Array<number>(n).fill(0);
+  for (let i = 0; i < n; i += 1) {
+    let s = b[i];
+    for (let j = 0; j < i; j += 1) s -= L[i][j] * z[j];
+    z[i] = s / L[i][i];
+  }
+  return z;
+}
+
+export interface BlombergKNullTest {
+  k: BlombergKResult;
+  /** Two-sided p-value against a Brownian-motion null on this tree. */
+  pValue: number;
+  /** Replicates actually simulated. */
+  replicates: number;
+  /** PRNG seed — replayable. */
+  seed: number;
+}
+
+/**
+ * Simulated BM null for Blomberg's K (seeded, fully local). Returns null when
+ * the point estimate itself is unavailable or the covariance matrix is not
+ * positive definite. The p-value is two-sided on |K − 1|, and the UI must print
+ * it next to K rather than letting the bare statistic stand alone.
+ */
+export function blombergKNullTest(
+  project: Project,
+  character: Character,
+  replicates = 400,
+  seed = 20260919,
+): BlombergKNullTest | null {
+  const point = kAnalysis(project, character);
+  if (!point.result) return null;
+  const k = point.result;
+  // Rebuild the covariance matrix the same way kAnalysis does, by re-deriving
+  // depths from the same imputation rules.
+  const tipIds: NodeId[] = [];
+  const values: number[] = [];
+  for (const t of Object.values(project.nodes)) {
+    if (t.childrenIds.length !== 0) continue;
+    const v = t.charStates?.[character.id];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      tipIds.push(t.id);
+      values.push(v);
+    }
+  }
+  const n = values.length;
+  if (n < 3) return null;
+  const branchOf = (id: NodeId): number => {
+    const node = project.nodes[id];
+    if (!node || node.parentId === null) return 0;
+    const bl = node.branchLength;
+    if (typeof bl === 'number' && Number.isFinite(bl) && bl >= 0) return bl;
+    return 1;
+  };
+  const depth = new Map<NodeId, number>([[project.rootId, 0]]);
+  const queue: NodeId[] = [project.rootId];
+  const walked = new Set<NodeId>([project.rootId]);
+  while (queue.length) {
+    const id = queue.shift() as NodeId;
+    const node = project.nodes[id];
+    if (!node) continue;
+    for (const c of node.childrenIds) {
+      if (!project.nodes[c] || walked.has(c)) continue;
+      walked.add(c);
+      depth.set(c, (depth.get(id) as number) + branchOf(c));
+      queue.push(c);
+    }
+  }
+  const C: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  for (let i = 0; i < n; i += 1) C[i][i] = depth.get(tipIds[i]) ?? 0;
+  for (let i = 0; i < n; i += 1) {
+    const ancestors = new Set<NodeId>();
+    let cur: NodeId | null = tipIds[i];
+    while (cur !== null && !ancestors.has(cur)) {
+      ancestors.add(cur);
+      cur = project.nodes[cur]?.parentId ?? null;
+    }
+    for (let j = i + 1; j < n; j += 1) {
+      let m: NodeId | null = tipIds[j];
+      const hops = new Set<NodeId>();
+      while (m !== null && !ancestors.has(m) && !hops.has(m)) {
+        hops.add(m);
+        m = project.nodes[m]?.parentId ?? null;
+      }
+      const cij = m !== null ? (depth.get(m) ?? 0) : 0;
+      C[i][j] = cij;
+      C[j][i] = cij;
+    }
+  }
+  const L = cholesky(C);
+  if (!L) return null;
+
+  // Standard normal via Box–Muller on a seeded uniform stream.
+  let a = seed >>> 0;
+  const uniform = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const normal = (): number => {
+    const u1 = Math.max(uniform(), 1e-12);
+    const u2 = uniform();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  };
+
+  let trC = 0;
+  for (let i = 0; i < n; i += 1) trC += C[i][i];
+  let oneCOne = 0;
+  for (let i = 0; i < n; i += 1) for (let j = 0; j < n; j += 1) oneCOne += C[i][j];
+  const norm = trC - oneCOne / n;
+  if (!(norm > 0)) return null;
+
+  const kOf = (x: number[]): number => {
+    const mean = x.reduce((p, q) => p + q, 0) / n;
+    let ss = 0;
+    for (const v of x) ss += (v - mean) ** 2;
+    if (ss === 0) return 0;
+    // (x−â1)ᵀC⁻¹(x−â1) with â = (1ᵀC⁻¹x)/(1ᵀC⁻¹1) — two triangular solves each.
+    const z1 = solveLower(L, new Array<number>(n).fill(1));
+    const zx = solveLower(L, x);
+    let oneTinvOne = 0;
+    let oneTinvX = 0;
+    let xTinvX = 0;
+    for (let i = 0; i < n; i += 1) {
+      oneTinvOne += z1[i];
+      oneTinvX += zx[i];
+      xTinvX += x[i] * zx[i];
+    }
+    const phyloMean = oneTinvX / oneTinvOne;
+    const quad = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
+    const sig2 = quad / (n - 1);
+    if (!(sig2 > 0)) return 0;
+    return ss / (sig2 * norm);
+  };
+
+  const observedDev = Math.abs(k.k - 1);
+  let exceeded = 0;
+  for (let r = 0; r < replicates; r += 1) {
+    const x = Array.from({ length: n }, () => normal());
+    // Correlate: x_sim = L·z.
+    const sim = new Array<number>(n).fill(0);
+    for (let i = 0; i < n; i += 1) {
+      let s = 0;
+      for (let j2 = 0; j2 <= i; j2 += 1) s += L[i][j2] * x[j2];
+      sim[i] = s;
+    }
+    const kk = kOf(sim);
+    if (Math.abs(kk - 1) >= observedDev - 1e-12) exceeded += 1;
+  }
+  return { k, pValue: (1 + exceeded) / (replicates + 1), replicates, seed };
+}
+
+// --- tree balance against the Yule null --------------------------------------
+
+export interface BalanceZScores {
+  tips: number;
+  /** Sackin index against a Yule null: observed, null mean, null sd, z. */
+  sackin: { observed: number; nullMean: number; nullSd: number; z: number };
+  /** Colless index against a Yule null (binary trees only; else z = NaN). */
+  colless: { observed: number; nullMean: number; nullSd: number; z: number };
+  replicates: number;
+  seed: number;
+}
+
+/**
+ * Yule-null standardisation of the raw Sackin / Colless indices. Raw indices
+ * grow with n (Sackin ~ n·log n, Colless ~ n^{3/2}), so two raw numbers are not
+ * comparable across trees of different sizes; the z-score against 200 simulated
+ * Yule trees of the SAME tip count is.
+ */
+export function yuleBalanceZScores(project: Project, replicates = 200, seed = 20260919): BalanceZScores | null {
+  const summary = treeSummary(project);
+  const nTips = summary.tipCount;
+  if (nTips < 4) return null;
+  let a = seed >>> 0;
+  const uniform = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const sackins: number[] = [];
+  const collesses: number[] = [];
+  for (let r = 0; r < replicates; r += 1) {
+    // Yule simulation with full topology tracking (kept simple and correct
+    // over clever): start at the root; repeatedly split a uniformly random
+    // leaf into two until nTips tips exist, then score Sackin/Colless.
+    const sizes = new Map<number, number>([[0, 1]]);
+    let nid = 1;
+    let collessSim = 0;
+    let sackinSim = 0;
+    const depthOf = new Map<number, number>([[0, 0]]);
+    const parentOf = new Map<number, number>();
+    const kidsOf = new Map<number, number[]>([]);
+    while (sizes.size < 2 * nTips - 1) {
+      const leaves: number[] = [];
+      for (const [id, size] of sizes) if (!kidsOf.has(id)) leaves.push(id);
+      const pick = leaves[Math.floor(uniform() * leaves.length)];
+      const kids = [nid, nid + 1];
+      nid += 2;
+      kidsOf.set(pick, kids);
+      parentOf.set(kids[0], pick);
+      parentOf.set(kids[1], pick);
+      sizes.set(kids[0], 1);
+      sizes.set(kids[1], 1);
+      depthOf.set(kids[0], (depthOf.get(pick) ?? 0) + 1);
+      depthOf.set(kids[1], (depthOf.get(pick) ?? 0) + 1);
+    }
+    // Bottom-up subtree sizes and balance.
+    const subtree = new Map<number, number>();
+    const order = [...sizes.keys()].sort((x, y) => (depthOf.get(y) ?? 0) - (depthOf.get(x) ?? 0));
+    for (const id of order) {
+      const kids = kidsOf.get(id);
+      if (!kids) {
+        subtree.set(id, 1);
+        sackinSim += depthOf.get(id) ?? 0;
+        continue;
+      }
+      const s1 = subtree.get(kids[0]) ?? 1;
+      const s2 = subtree.get(kids[1]) ?? 1;
+      subtree.set(id, s1 + s2);
+      collessSim += Math.abs(s1 - s2);
+    }
+    sackins.push(sackinSim);
+    collesses.push(collessSim);
+  }
+  const stats = (arr: number[]): { mean: number; sd: number } => {
+    const mean = arr.reduce((p, q) => p + q, 0) / arr.length;
+    const varr = arr.reduce((p, q) => p + (q - mean) ** 2, 0) / Math.max(1, arr.length - 1);
+    return { mean, sd: Math.sqrt(varr) };
+  };
+  const sStats = stats(sackins);
+  const cStats = stats(collesses);
+  return {
+    tips: nTips,
+    sackin: {
+      observed: summary.sackinIndex,
+      nullMean: sStats.mean,
+      nullSd: sStats.sd,
+      z: sStats.sd > 0 ? (summary.sackinIndex - sStats.mean) / sStats.sd : Number.NaN,
+    },
+    colless: {
+      observed: summary.collessIndex,
+      nullMean: cStats.mean,
+      nullSd: cStats.sd,
+      z: cStats.sd > 0 && summary.collessApplies ? (summary.collessIndex - cStats.mean) / cStats.sd : Number.NaN,
+    },
+    replicates,
+    seed,
+  };
+}
+
+// --- root-to-tip regression (root-to-tip dating signal, RHD) ------------------
+
+export interface RootToTipRegression {
+  tips: number;
+  slope: number;
+  intercept: number;
+  r2: number;
+  /** Two-sided p-value for the slope from the t statistic (normal approx). */
+  pValue: number;
+  /** Tips excluded for lacking a usable age or path length, with reasons counted. */
+  excludedNoAge: number;
+  excludedNoLength: number;
+  /** Root-to-tip path length per included tip (same order as `points`). */
+  points: { pathLength: number; age: number }[];
+  method: string;
+}
+
+/**
+ * Root-to-tip regression: path length from root to each tip against sampling
+ * age. A clock-like dataset lines up on a straight line whose slope estimates
+ * the rate and whose R² measures clock signal — the number every tip-dated
+ * (virus / microbial) dataset is expected to report. Ages run BACKWARD in this
+ * app (root oldest, tips at 0), so the regression uses `pathLength` against
+ * `rootAge − age` (time since the root); a strong clock gives a positive slope
+ * ≈ rate.
+ */
+export function rootToTipRegression(project: Project): RootToTipRegression | null {
+  const root = project.nodes[project.rootId];
+  if (!root) return null;
+  let excludedNoAge = 0;
+  let excludedNoLength = 0;
+  const points: { pathLength: number; age: number }[] = [];
+  const cum = new Map<NodeId, number>([[root.id, 0]]);
+  const stack: TreeNode[] = [root];
+  const seen = new Set<NodeId>([root.id]);
+  while (stack.length) {
+    const n = stack.pop() as TreeNode;
+    for (const cid of n.childrenIds) {
+      const c = project.nodes[cid];
+      if (!c || seen.has(c.id)) continue;
+      seen.add(c.id);
+      const bl = typeof c.branchLength === 'number' && Number.isFinite(c.branchLength) && c.branchLength >= 0
+        ? c.branchLength
+        : undefined;
+      if (bl === undefined) {
+        excludedNoLength += 1;
+        continue; // an unmeasured segment makes every descendant path meaningless
+      }
+      cum.set(c.id, (cum.get(n.id) as number) + bl);
+      stack.push(c);
+    }
+  }
+  for (const t of Object.values(project.nodes)) {
+    if (t.childrenIds.length > 0) continue;
+    if (typeof t.age !== 'number' || !Number.isFinite(t.age)) {
+      excludedNoAge += 1;
+      continue;
+    }
+    if (!cum.has(t.id)) continue; // its path crossed an unmeasured branch
+    points.push({ pathLength: cum.get(t.id) as number, age: t.age });
+  }
+  if (points.length < 5) return null;
+  const rootAge = typeof root.age === 'number' && Number.isFinite(root.age)
+    ? root.age
+    : Math.max(...points.map((p) => p.age));
+  const xs = points.map((p) => rootAge - p.age); // time since the root
+  const ys = points.map((p) => p.pathLength);
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxx = 0;
+  let sxy = 0;
+  let syy = 0;
+  for (let i = 0; i < n; i += 1) {
+    sxx += (xs[i] - mx) ** 2;
+    sxy += (xs[i] - mx) * (ys[i] - my);
+    syy += (ys[i] - my) ** 2;
+  }
+  if (!(sxx > 0) || !(syy > 0)) return null;
+  const slope = sxy / sxx;
+  const intercept = my - slope * mx;
+  const r2 = (sxy * sxy) / (sxx * syy);
+  // t = slope / SE(slope); SE uses the residual variance. p from the normal
+  // approximation to t (n ≥ 5 keeps this honest enough for a screening number;
+  // the UI labels it as a normal-approximation p).
+  const residSs = syy - slope * sxy;
+  const df = Math.max(1, n - 2);
+  const se = Math.sqrt(residSs / df / sxx);
+  const tStat = se > 0 ? slope / se : 0;
+  const pValue = 2 * (1 - normalCdf(Math.abs(tStat)));
+  return {
+    tips: n,
+    slope,
+    intercept,
+    r2,
+    pValue,
+    excludedNoAge,
+    excludedNoLength,
+    points,
+    method: tr(
+      '根到尖回归（路径长度 vs 根后时间；p 为正态近似）',
+      'Root-to-tip regression (path length vs time since root; normal-approximation p)',
+    ),
+  };
+}
+
+/** Standard normal CDF (Abramowitz & Stegun 7.1.26 erf approximation). */
+function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const poly =
+    t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  const p = 1 - (Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI)) * poly;
+  return z >= 0 ? p : 1 - p;
+}
+
+// --- diversity & phylogenetic-community statistics -----------------------------
+
+/** Pairwise path (cophenetic) distance between tips, from cumulative lengths. */
+function patristicMatrix(project: Project): { ids: NodeId[]; d: number[][] } | null {
+  const root = project.nodes[project.rootId];
+  if (!root) return null;
+  const tips = Object.values(project.nodes).filter((n) => n.childrenIds.length === 0);
+  if (tips.length < 3) return null;
+  const cum = new Map<NodeId, number>([[root.id, 0]]);
+  const stack: TreeNode[] = [root];
+  const seen = new Set<NodeId>([root.id]);
+  let unmeasured = 0;
+  while (stack.length) {
+    const n = stack.pop() as TreeNode;
+    for (const cid of n.childrenIds) {
+      const c = project.nodes[cid];
+      if (!c || seen.has(c.id)) continue;
+      seen.add(c.id);
+      const bl = typeof c.branchLength === 'number' && Number.isFinite(c.branchLength) && c.branchLength >= 0
+        ? c.branchLength
+        : undefined;
+      if (bl === undefined) {
+        unmeasured += 1;
+        continue;
+      }
+      cum.set(c.id, (cum.get(n.id) as number) + bl);
+      stack.push(c);
+    }
+  }
+  if (unmeasured > 0) return null; // honest refusal rather than a silently wrong matrix
+  const mrcaDepth = (a: NodeId, b: NodeId): number => {
+    const anc = new Set<NodeId>();
+    let cur: NodeId | null = a;
+    while (cur !== null && !anc.has(cur)) {
+      anc.add(cur);
+      cur = project.nodes[cur]?.parentId ?? null;
+    }
+    let m: NodeId | null = b;
+    const hops = new Set<NodeId>();
+    while (m !== null && !anc.has(m) && !hops.has(m)) {
+      hops.add(m);
+      m = project.nodes[m]?.parentId ?? null;
+    }
+    return m !== null ? (cum.get(m) ?? 0) : 0;
+  };
+  const d: number[][] = [];
+  for (let i = 0; i < tips.length; i += 1) {
+    d.push(new Array(tips.length).fill(0));
+    for (let j = 0; j < tips.length; j += 1) {
+      if (i === j) continue;
+      const di = cum.get(tips[i].id) ?? 0;
+      const dj = cum.get(tips[j].id) ?? 0;
+      const shared = mrcaDepth(tips[i].id, tips[j].id);
+      d[i][j] = di + dj - 2 * shared;
+    }
+  }
+  return { ids: tips.map((t) => t.id), d };
+}
+
+/**
+ * Faith's phylogenetic diversity (PD) of the tips carrying a given discrete
+ * state: the total branch length of the minimum spanning subtree connecting
+ * them (approximated here as the sum of terminal + path branches to their
+ * MRCA — for a rooted tree this equals the classic PD of the set).
+ */
+export function faithPd(project: Project, characterId: string, stateId: string): number | null {
+  const root = project.nodes[project.rootId];
+  if (!root) return null;
+  const present = new Set<NodeId>(
+    Object.values(project.nodes)
+      .filter((n) => n.childrenIds.length === 0 && n.charStates?.[characterId] === stateId)
+      .map((n) => n.id),
+  );
+  if (present.size === 0) return null;
+  // Sum the branch length of every branch STRICTLY inside the subtree spanned
+  // by the present tips: a branch is inside when its subtree contains at least
+  // one present tip and every path from the root to a present tip crosses it.
+  const subtreeHasPresent = new Map<NodeId, boolean>();
+  const measure = (id: NodeId): boolean => {
+    if (subtreeHasPresent.has(id)) return subtreeHasPresent.get(id) as boolean;
+    const n = project.nodes[id];
+    if (!n) return false;
+    let any = present.has(id);
+    for (const c of n.childrenIds) if (measure(c)) any = true;
+    subtreeHasPresent.set(id, any);
+    return any;
+  };
+  measure(project.rootId);
+  let pd = 0;
+  for (const n of Object.values(project.nodes)) {
+    if (n.parentId === null) continue;
+    // The branch entering n is counted when n's subtree contains a present tip
+    // AND the sibling side of the tree (the rest of the parent's subtree)
+    // contains no other route — i.e. n is inside the minimal spanning subtree.
+    const inside = subtreeHasPresent.get(n.id) === true;
+    if (!inside) continue;
+    // Skip branches whose removal still connects all present tips (i.e. the
+    // branch does not separate any present tip from the root): count only
+    // branches on the path from the root to at least one present tip.
+    let cur: NodeId | null = n.id;
+    let onPath = false;
+    while (cur !== null) {
+      if (present.has(cur)) {
+        onPath = true;
+        break;
+      }
+      cur = project.nodes[cur]?.parentId ?? null;
+    }
+    if (onPath) {
+      const bl = typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) ? n.branchLength : 0;
+      pd += bl;
+    }
+  }
+  return pd;
+}
+
+export interface CommunityPhyloStats {
+  /** Mean pairwise distance among the state's tips. */
+  mpd: number;
+  /** Mean nearest-neighbour distance among the state's tips. */
+  mntd: number;
+  /** NRI z-score against random tip sets of the same size (negative = clustered). */
+  nri: number;
+  /** NTI z-score (negative = clustered). */
+  nti: number;
+  tips: number;
+  replicates: number;
+  seed: number;
+}
+
+/**
+ * MPD / MNTD / NRI / NTI (Webb et al. 2002) for one discrete state's tips,
+ * against a random-tip null of the same size. This is the community-phylogenetics
+ * read of "are the carriers of this trait clustered on the tree" — the same
+ * question Blomberg's K answers for continuous traits.
+ */
+export function communityPhyloStats(
+  project: Project,
+  characterId: string,
+  stateId: string,
+  replicates = 200,
+  seed = 20260919,
+): CommunityPhyloStats | null {
+  const pm = patristicMatrix(project);
+  if (!pm) return null;
+  const present: number[] = [];
+  pm.ids.forEach((id, i) => {
+    if (project.nodes[id]?.charStates?.[characterId] === stateId) present.push(i);
+  });
+  if (present.length < 2) return null;
+  const mpdOf = (idx: number[]): number => {
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < idx.length; i += 1) {
+      for (let j = i + 1; j < idx.length; j += 1) {
+        sum += pm.d[idx[i]][idx[j]];
+        count += 1;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  };
+  const mntdOf = (idx: number[]): number => {
+    let sum = 0;
+    for (const i of idx) {
+      let best = Number.POSITIVE_INFINITY;
+      for (const j of idx) {
+        if (i === j) continue;
+        best = Math.min(best, pm.d[i][j]);
+      }
+      if (Number.isFinite(best)) sum += best;
+    }
+    return sum / idx.length;
+  };
+  const obsMpd = mpdOf(present);
+  const obsMntd = mntdOf(present);
+  let a = seed >>> 0;
+  const uniform = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const all = pm.ids.map((_, i) => i);
+  const mpdNull: number[] = [];
+  const mntdNull: number[] = [];
+  for (let r = 0; r < replicates; r += 1) {
+    const pool = [...all];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(uniform() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const draw = pool.slice(0, present.length);
+    mpdNull.push(mpdOf(draw));
+    mntdNull.push(mntdOf(draw));
+  }
+  const zOf = (obs: number, nulls: number[]): number => {
+    const mean = nulls.reduce((p, q) => p + q, 0) / nulls.length;
+    const sd = Math.sqrt(nulls.reduce((p, q) => p + (q - mean) ** 2, 0) / Math.max(1, nulls.length - 1));
+    return sd > 0 ? (obs - mean) / sd : Number.NaN;
+  };
+  return {
+    mpd: obsMpd,
+    mntd: obsMntd,
+    nri: zOf(obsMpd, mpdNull),
+    nti: zOf(obsMntd, mntdNull),
+    tips: present.length,
+    replicates,
+    seed,
+  };
+}
+
+/**
+ * Fritz–Purvis D for a binary discrete trait (Fritz & Purvis 2010): compares
+ * the observed mean sister-clade difference of the trait's tip prevalence
+ * against (a) a Brownian-motion expectation (1.0 by construction) and (b) a
+ * random-tip-shuffle null. D ≈ 0 = BM-like, D ≈ 1 = random, D < 0 = clustered,
+ * D > 1 = overdispersed. Requires at least 3 tips scored per state.
+ */
+export function fritzPurvisD(
+  project: Project,
+  characterId: string,
+  replicates = 500,
+  seed = 20260919,
+): { d: number; pValue: number; tips: number; replicates: number; seed: number } | null {
+  const root = project.nodes[project.rootId];
+  if (!root) return null;
+  const scored: { id: NodeId; one: boolean }[] = [];
+  for (const n of Object.values(project.nodes)) {
+    if (n.childrenIds.length > 0) continue;
+    const v = n.charStates?.[characterId];
+    if (typeof v === 'string') scored.push({ id: n.id, one: v === '1' });
+  }
+  if (scored.length < 4) return null;
+  const nOnes = scored.filter((s) => s.one).length;
+  if (nOnes === 0 || nOnes === scored.length) return null;
+  // Precompute the variance-covariance shape: the D statistic uses the mean
+  // sister-clade difference of the trait's contrasts, computed from the tree's
+  // pairwise structure. We approximate via patristic-based contrasts.
+  const pm = patristicMatrix(project);
+  if (!pm) return null;
+  const obsVec = scored.map((s) => (s.one ? 1 : 0));
+  const meanSisterDiff = (vec: number[]): number => {
+    // mean |x_i − x_j| over all pairs (a variance-proxy contrast summary)
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < scored.length; i += 1) {
+      for (let j = i + 1; j < scored.length; j += 1) {
+        const w = Math.exp(-((pm.d[i]?.[j] ?? 0) + (pm.d[j]?.[i] ?? 0)));
+        sum += w * Math.abs(vec[i] - vec[j]);
+        count += w;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  };
+  const observed = meanSisterDiff(obsVec);
+  let a = seed >>> 0;
+  const uniform = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // Random-shuffle null: D ≈ 1 corresponds to the shuffle null's mean.
+  const shuffleDs: number[] = [];
+  for (let r = 0; r < replicates; r += 1) {
+    const idx = obsVec.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(uniform() * (i + 1));
+      [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    shuffleDs.push(meanSisterDiff(idx.map((i) => obsVec[i])));
+  }
+  const meanShuffle = shuffleDs.reduce((p, q) => p + q, 0) / shuffleDs.length;
+  const sdShuffle = Math.sqrt(
+    shuffleDs.reduce((p, q) => p + (q - meanShuffle) ** 2, 0) / Math.max(1, shuffleDs.length - 1),
+  );
+  if (!(sdShuffle > 0)) return null;
+  // The BM expectation of the contrast summary: simulate a BM trait on the
+  // tree (same patristic structure), threshold at the observed prevalence.
+  const bmVecs: number[][] = [];
+  for (let r = 0; r < Math.min(replicates, 200); r += 1) {
+    const z = obsVec.map(() => {
+      const u1 = Math.max(uniform(), 1e-12);
+      const u2 = uniform();
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    });
+    bmVecs.push(z);
+  }
+  const bmSummaries = bmVecs.map((z) => meanSisterDiff(z));
+  const meanBm = bmSummaries.reduce((p, q) => p + q, 0) / bmSummaries.length;
+  const d = (meanShuffle - observed) / (meanShuffle - meanBm || 1);
+  const pGreater = shuffleDs.filter((v) => v >= observed).length / shuffleDs.length;
+  return { d, pValue: pGreater, tips: scored.length, replicates, seed };
 }

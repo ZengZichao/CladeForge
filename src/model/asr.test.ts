@@ -23,6 +23,8 @@ describe('asr (Mk marginal reconstruction)', () => {
     const [x, y] = addChildren(p, p.rootId, 2);
     const c = twoState();
     p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
     p.nodes[x].charStates = { c1: 'a' };
     p.nodes[y].charStates = { c1: 'a' };
 
@@ -41,12 +43,37 @@ describe('asr (Mk marginal reconstruction)', () => {
     const [x, y] = addChildren(p, p.rootId, 2);
     const c = twoState();
     p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
     p.nodes[x].charStates = { c1: 'a' };
     p.nodes[y].charStates = { c1: 'b' };
 
     const rootP = reconstructMk(p, c)!.probs.get(p.rootId)!;
     expect(rootP[0]).toBeCloseTo(0.5, 3);
     expect(rootP[1]).toBeCloseTo(0.5, 3);
+  });
+
+  it('fits the rate by maximum likelihood and reports lnL and a profile interval', () => {
+    const p = createEmptyProject();
+    const [x, y] = addChildren(p, p.rootId, 2);
+    const c = twoState();
+    p.characters.push(c);
+    p.nodes[x].branchLength = 0.1;
+    p.nodes[y].branchLength = 0.1;
+    p.nodes[x].charStates = { c1: 'a' };
+    p.nodes[y].charStates = { c1: 'a' };
+    const res = reconstructMk(p, c)!;
+    expect(res.rate.method).toBe('ml');
+    expect(res.rate.rate).toBeGreaterThan(0);
+    expect(res.rate.logLikelihood).toBeTypeOf('number');
+    expect(res.rate.logLikelihoodCi).toBeDefined();
+    // Unanimous data with short branches: the ML rate should be small
+    // (little change on the tree), not the fixed k·r·t = 2 of the moment rule.
+    expect(res.rate.sensitivity).toBeDefined();
+    // And the moment convention stays available and labelled.
+    const moment = reconstructMk(p, c, { model: 'ER', threshold: 0.1, rateMethod: 'moment' })!;
+    expect(moment.rate.method).toBe('moment');
+    expect(moment.rate.logLikelihood).toBeUndefined();
   });
 });
 
@@ -110,7 +137,26 @@ describe('asr — branch-length degradation warnings', () => {
     return { p, tips, nonRoot };
   }
 
-  const warn = (p: Project, c: Character) => reconstructMk(p, c)!.warnings;
+  // The missing-branch guard refuses runs whose length data is mostly absent;
+  // these tests exercise the per-class warnings, so they explicitly continue.
+  const warn = (p: Project, c: Character) =>
+    reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!.warnings;
+
+  it('refuses a reconstruction when branch lengths are mostly missing', () => {
+    const { p, tips } = fifteenNodeTree();
+    const c = twoState();
+    p.characters.push(c);
+    // A pure cladogram: no length anywhere. There is no rate information, so
+    // the default is to refuse rather than to invent 1s and present a result.
+    for (const id of tips) delete p.nodes[id].branchLength;
+    for (const id of tips) p.nodes[id].charStates = { c1: 'a' };
+    const res = reconstructMk(p, c)!;
+    expect(res.probs.size).toBe(0);
+    expect(res.warnings.some((w) => w.kind === 'missing-branch-lengths-refused')).toBe(true);
+    // …and the explicit fallback still runs it as a unit-length topology model.
+    const forced = reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!;
+    expect(forced.probs.size).toBeGreaterThan(0);
+  });
 
   it('counts NODES, not branch-length lookups', () => {
     // The count is of NODES, not of lookups: a 15-node tree with 4 unset branch
@@ -237,9 +283,12 @@ describe('asr — display threshold', () => {
     expect(low.display.get(p.rootId)!.shown).toEqual([0, 1]);
     expect(low.display.get(p.rootId)!.stateIds).toEqual(['a', 'b']);
     expect(low.display.get(p.rootId)!.unsupported).toBe(false);
-    // …at 0.6 neither half of a 50/50 survives, so the node claims nothing.
+    expect(low.display.get(p.rootId)!.uncertain).toBe(false);
+    // …at 0.6 neither half of a 50/50 survives. That is UNCERTAINTY — the
+    // posterior is real but diffuse — not "no data", and the display says so.
     expect(high.display.get(p.rootId)!.shown).toEqual([]);
-    expect(high.display.get(p.rootId)!.unsupported).toBe(true);
+    expect(high.display.get(p.rootId)!.unsupported).toBe(false);
+    expect(high.display.get(p.rootId)!.uncertain).toBe(true);
     // Strictly monotone: every node shows at least as much at the lower cut.
     for (const [id, node] of low.display) {
       expect(high.display.get(id)!.shown.length).toBeLessThanOrEqual(node.shown.length);

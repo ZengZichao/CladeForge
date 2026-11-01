@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Central application store (Zustand + Immer), organised as two slices:
 //
 //   * DocumentSlice — the Project document, reference-based undo/redo history,
@@ -13,13 +14,52 @@
 import { create, type StateCreator } from 'zustand';
 import { produce, freeze, setAutoFreeze } from 'immer';
 import type {
+  AnalysisResult,
   CharacterColorTarget,
   EdgeId,
   NodeId,
   Project,
+  ReconSection,
+  ReconViewOptions,
   ViewTransform,
 } from './types';
-import { IDENTITY_VIEW } from './types';
+
+/**
+ * Explicit figure-export settings. The historical exporter read the LIVE UI
+ * state, so clicking "export SVG" captured whatever happened to be on screen —
+ * the active character, the event toggle, the ASR run. Decoupling the two is
+ * what makes "re-export the same figure twice" possible.
+ */
+export interface ExportSettings {
+  /** Export exactly what the screen shows (legacy behaviour) instead of the preset. */
+  followView: boolean;
+  /** Target resolution in DPI for PNG (96 = screen size, 300/600 = journal). */
+  dpi: number;
+  showEvents: boolean;
+  showEras: boolean;
+  eraLevel: EraLevel;
+  /** Print support values as figure text (canvas shows them only as tooltips). */
+  showSupportValues: boolean;
+  includeLegend: boolean;
+  includeScaleBar: boolean;
+  grayscale: boolean;
+  /** White background regardless of theme (the default for publication). */
+  whiteBackground: boolean;
+}
+
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  followView: true,
+  dpi: 300,
+  showEvents: true,
+  showEras: false,
+  eraLevel: 'both',
+  showSupportValues: false,
+  includeLegend: true,
+  includeScaleBar: true,
+  grayscale: false,
+  whiteBackground: true,
+};
+import { DEFAULT_RECON_VIEW_OPTIONS, IDENTITY_VIEW } from './types';
 import { pushSnapshot, type HistoryEntry } from './history';
 import { createEmptyProject, createSampleProject, SAMPLE_PROJECTS } from './sampleTree';
 import { reconstructMk, type AsrResult, type AsrOptions, DEFAULT_ASR_OPTIONS } from './asr';
@@ -97,6 +137,10 @@ interface TabSnapshot {
   project: Project;
   past: HistoryEntry[];
   future: HistoryEntry[];
+  /** Document revision at capture; 0 = freshly loaded. */
+  revision: number;
+  /** Revision the tab last wrote to disk. */
+  lastSavedRevision: number;
   selection: NodeId[];
   selectedEdgeId: EdgeId | null;
   view: ViewTransform;
@@ -117,6 +161,8 @@ function captureTab(s: AppState): TabSnapshot {
     project: s.project,
     past: s.past,
     future: s.future,
+    revision: s.revision,
+    lastSavedRevision: s.lastSavedRevision,
     selection: s.selection,
     selectedEdgeId: s.selectedEdgeId,
     view: s.view,
@@ -138,6 +184,8 @@ function snapshotFor(project: Project): TabSnapshot {
     project: freeze(project, true),
     past: [],
     future: [],
+    revision: 0,
+    lastSavedRevision: 0,
     selection: [],
     selectedEdgeId: null,
     view: { ...IDENTITY_VIEW },
@@ -161,6 +209,10 @@ function docStateFor(project: Project): Partial<AppState> {
     future: [] as HistoryEntry[],
     interactionBase: null as HistoryEntry | null,
     draggingId: null as NodeId | null,
+    // Dirty tracking: a document loaded from disk starts clean; every applied
+    // edit bumps `revision`, and a successful save pins `lastSavedRevision`.
+    revision: 0 as number,
+    lastSavedRevision: 0 as number,
     selection: [] as NodeId[],
     selectedEdgeId: null as EdgeId | null,
     view: { ...IDENTITY_VIEW },
@@ -171,11 +223,16 @@ function docStateFor(project: Project): Partial<AppState> {
     showEras: false,
     eraLevel: 'both',
     focusTarget: null,
+    renameRequest: null,
     asr: null,
   asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: false,
     activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
     geneSelection: [] as NodeId[],
+    reconSection: 'trees' as ReconSection,
+    reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
+    reconHoverGeneId: null as NodeId | null,
+    reconFocusTarget: null,
   };
 }
 
@@ -187,6 +244,8 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     future: snap.future,
     interactionBase: null as HistoryEntry | null,
     draggingId: null as NodeId | null,
+    revision: snap.revision,
+    lastSavedRevision: snap.lastSavedRevision,
     selection: pruneSelection(snap.project, snap.selection),
     selectedEdgeId: snap.selectedEdgeId,
     view: snap.view,
@@ -197,6 +256,7 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     showEras: snap.showEras,
     eraLevel: snap.eraLevel,
     focusTarget: null,
+    renameRequest: null,
     asr: null,
   asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: snap.reconMode,
@@ -221,6 +281,15 @@ export interface DocumentSlice {
   interactionBase: HistoryEntry | null;
   /** Id of the node being dragged, or null outside a drag interaction. */
   draggingId: NodeId | null;
+  /**
+   * Monotonic edit counter for the active document (0 right after load).
+   * "Unsaved" is `revision !== lastSavedRevision` — NOT "the undo stack has
+   * depth", which misreports an undo-back-to-clean document as dirty and a
+   * history-limit-truncated one as clean.
+   */
+  revision: number;
+  /** Value `revision` had at the last successful disk save. */
+  lastSavedRevision: number;
 
   apply: (recipe: Recipe) => void;
   beginInteraction: (dragId?: NodeId) => void;
@@ -241,6 +310,10 @@ export interface DocumentSlice {
 
   loadProject: (project: Project) => void;
   newProject: () => void;
+  /** Pin the current revision as the last-saved one (called after a disk save). */
+  markSaved: () => void;
+  /** Store a completed analysis run on the document (one undo-able step). */
+  recordAnalysis: (result: AnalysisResult) => void;
 }
 
 // --- UI slice ------------------------------------------------------------------
@@ -272,6 +345,8 @@ export interface UISlice {
   asr: AsrResult | null;
   /** ASR model and display threshold options. */
   asrOptions: AsrOptions;
+  /** Figure-export settings (decoupled from the live view; see ExportSettings). */
+  exportSettings: ExportSettings;
   // --- gene-tree / species-tree reconciliation -------------------------------
   /** Whether the canvas shows the side-by-side reconciliation view. */
   reconMode: boolean;
@@ -279,6 +354,14 @@ export interface UISlice {
   activeGeneTreeId: string | null;
   /** Selection within the active gene tree's canvas pane. */
   geneSelection: NodeId[];
+  /** Which section of the reconciliation left panel is shown (UI state only). */
+  reconSection: ReconSection;
+  /** Transient reconciliation canvas display options (UI state only). */
+  reconViewOptions: ReconViewOptions;
+  /** Gene node currently hovered (mapping-line highlight); null = none. */
+  reconHoverGeneId: NodeId | null;
+  /** Bumped to request the gene pane to centre a node (left-panel locate). */
+  reconFocusTarget: { id: NodeId; seq: number } | null;
 
   select: (id: NodeId | null, additive?: boolean) => void;
   selectMany: (ids: NodeId[]) => void;
@@ -296,8 +379,12 @@ export interface UISlice {
   setShowEvents: (v: boolean) => void;
   setShowEras: (v: boolean) => void;
   setEraLevel: (v: EraLevel) => void;
+  setExportSettings: (patch: Partial<ExportSettings>) => void;
   focusNode: (id: NodeId) => void;
-  runAsr: () => void;
+  /** Open the inline rename editor for a node (keyboard F2 path). */
+  requestRename: (id: NodeId) => void;
+  /** Run the Mk reconstruction. `force` continues past the missing-branch guard. */
+  runAsr: (force?: boolean) => void;
   clearAsr: () => void;
   setAsrOptions: (opts: Partial<AsrOptions>) => void;
 
@@ -305,6 +392,18 @@ export interface UISlice {
   setActiveGeneTree: (id: string | null) => void;
   selectGeneNode: (id: NodeId | null, additive?: boolean) => void;
   clearGeneSelection: () => void;
+  setReconSection: (s: ReconSection) => void;
+  setReconViewOptions: (patch: Partial<ReconViewOptions>) => void;
+  setReconHoverGene: (id: NodeId | null) => void;
+  focusGeneNode: (id: NodeId) => void;
+  /**
+   * Open the reconciliation WORKSPACE (the single mode switch): pick the first
+   * surviving gene tree when none is active, then set `reconMode`. With no gene
+   * tree at all it still enters — the workspace renders its empty state there.
+   */
+  enterReconWorkspace: () => void;
+  /** Leave the reconciliation workspace; the active gene tree is preserved. */
+  exitReconWorkspace: () => void;
 }
 
 // --- tabs slice ----------------------------------------------------------------
@@ -361,12 +460,68 @@ export function isReconActive(state: Pick<AppState, 'reconMode' | 'activeGeneTre
   );
 }
 
+/**
+ * Does a usable active gene tree exist, regardless of whether the
+ * reconciliation WORKSPACE is open?
+ *
+ * The workspace switch itself reads only `reconMode` (one mode, one workspace —
+ * entering with no gene tree shows the reconciliation empty state instead of a
+ * dead toast). This predicate is the reconciliation workspace's internal
+ * "content vs empty state" gate, used by renders and helpers alike.
+ */
+export function hasActiveGeneTree(
+  state: Pick<AppState, 'activeGeneTreeId' | 'project'>,
+): boolean {
+  return (
+    Boolean(state.activeGeneTreeId) &&
+    state.project.geneTrees?.some((g) => g.id === state.activeGeneTreeId) === true
+  );
+}
+
+/**
+ * Repair the reconciliation pointers against a new document: drop a stale
+ * active-gene-tree id (deleted tree, undo of a creation, …) to the first
+ * surviving tree, and prune gene selections that no longer exist.
+ *
+ * Called after every document mutation path (`apply`, `live`, commit,
+ * undo / redo) so "delete the last gene tree" lands on the empty state IN the
+ * reconciliation workspace, and "undo that deletion" restores a usable active
+ * tree — instead of the old half-reconciled state where the toolbar claimed
+ * reconciliation while the canvas showed the standard tree.
+ */
+function reconciledGenePointers(
+  project: Project,
+  activeGeneTreeId: string | null,
+  geneSelection: NodeId[],
+): { activeGeneTreeId: string | null; geneSelection: NodeId[] } {
+  const trees = project.geneTrees ?? [];
+  const activeOk =
+    activeGeneTreeId !== null && trees.some((g) => g.id === activeGeneTreeId);
+  const nextActive = activeOk ? activeGeneTreeId : (trees[0]?.id ?? null);
+  const activeEntry = trees.find((g) => g.id === nextActive);
+  const nextSelection = activeEntry
+    ? geneSelection.filter((id) => Boolean(activeEntry.doc.nodes[id]))
+    : [];
+  const sameActive = nextActive === activeGeneTreeId;
+  const sameSelection =
+    nextSelection.length === geneSelection.length &&
+    nextSelection.every((id, i) => id === geneSelection[i]);
+  if (sameActive && sameSelection) {
+    // Same values by identity so a no-op cannot dirty the state (and re-render
+    // subscribers) on every keystroke.
+    return { activeGeneTreeId, geneSelection };
+  }
+  return { activeGeneTreeId: nextActive, geneSelection: nextSelection };
+}
+
 const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set, get) => ({
   project: freeze(createSampleProject(), true),
   past: [],
   future: [],
   interactionBase: null,
   draggingId: null,
+  revision: 0,
+  lastSavedRevision: 0,
 
   apply: (recipe) =>
     set((s) => {
@@ -381,12 +536,22 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       // makes the status bar keep reporting "1 selected" for a node that no
       // longer exists.
       // The past entry keeps the PRE-edit selection so undo restores it faithfully.
+      // Gene pointers heal here too: deleting the active gene tree (or undoing
+      // its creation) must leave a usable pointer, never a dangling id.
+      const pointers = reconciledGenePointers(next, s.activeGeneTreeId, s.geneSelection);
       return {
         project: next,
+        revision: s.revision + 1,
         selection: keptSelection(next, s.selection),
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
         past: pushSnapshot(s.past, entryOf(s)),
         future: [],
-        asr: null,
+        // A completed ASR is marked STALE, not deleted: the posterior was
+        // computed from data that just changed, but the reader may still want
+        // to see (and export) it — the UI renders the stale badge and offers a
+        // one-click recompute instead of silently discarding the result.
+        asr: s.asr ? { ...s.asr, stale: true } : null,
       };
     }),
 
@@ -398,7 +563,14 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       const next = produce(s.project, (d) => {
         recipe(d);
       });
-      return next === s.project ? {} : { project: next, selection: keptSelection(next, s.selection) };
+      if (next === s.project) return {};
+      const pointers = reconciledGenePointers(next, s.activeGeneTreeId, s.geneSelection);
+      return {
+        project: next,
+        selection: keptSelection(next, s.selection),
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+      };
     }),
 
   commitInteraction: (finalRecipe) =>
@@ -418,13 +590,22 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       // Project reference, so a cheap identity check is enough — no O(n) deep
       // comparison is needed to tell whether anything actually moved.
       const changed = current !== base.project;
+      const pointers = reconciledGenePointers(current, s.activeGeneTreeId, s.geneSelection);
       return {
         project: current,
         selection: keptSelection(current, s.selection),
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
         interactionBase: null,
         draggingId: null,
-        asr: null,
-        ...(changed ? { past: pushSnapshot(s.past, base), future: [] } : {}),
+        ...(changed
+          ? {
+              revision: s.revision + 1,
+              asr: s.asr ? { ...s.asr, stale: true } : null,
+              past: pushSnapshot(s.past, base),
+              future: [],
+            }
+          : {}),
       };
     }),
 
@@ -445,6 +626,11 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
     set((s) => {
       if (s.past.length === 0) return {};
       const previous = s.past[s.past.length - 1];
+      // Undo can resurrect gene trees (e.g. undo of a deletion). Heal the
+      // pointers against the restored document so the reconciliation workspace
+      // — still open if `reconMode` says so — shows the restored tree again
+      // instead of silently dropping to the standard canvas.
+      const pointers = reconciledGenePointers(previous.project, s.activeGeneTreeId, s.geneSelection);
       return {
         project: previous.project,
         past: s.past.slice(0, -1),
@@ -453,7 +639,10 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         selectedEdgeId: previous.selectedEdgeId,
         view: previous.view,
         activeCharacterId: previous.activeCharacterId,
-        asr: null,
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+        revision: s.revision + 1,
+        asr: s.asr ? { ...s.asr, stale: true } : null,
       };
     }),
 
@@ -461,6 +650,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
     set((s) => {
       if (s.future.length === 0) return {};
       const nextEntry = s.future[0];
+      const pointers = reconciledGenePointers(nextEntry.project, s.activeGeneTreeId, s.geneSelection);
       return {
         project: nextEntry.project,
         past: pushSnapshot(s.past, entryOf(s)),
@@ -469,12 +659,22 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         selectedEdgeId: nextEntry.selectedEdgeId,
         view: nextEntry.view,
         activeCharacterId: nextEntry.activeCharacterId,
-        asr: null,
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+        revision: s.revision + 1,
+        asr: s.asr ? { ...s.asr, stale: true } : null,
       };
     }),
 
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
+
+  markSaved: () => set((s) => ({ lastSavedRevision: s.revision })),
+
+  recordAnalysis: (result) =>
+    get().apply((d) => {
+      d.analysisResults = [...(d.analysisResults ?? []), result].slice(-100);
+    }),
 
   loadProject: (project) =>
     set((s) => ({
@@ -483,6 +683,15 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       // geneSelection and the view — an incomplete reset could leave the
       // reconciliation state pointing at a gene tree of the previous document.
       ...docStateFor(project),
+      // PM-23: loading REPLACED the document with no way back — ⌘O on the wrong
+      // file destroyed the working copy with the undo stack. Keep ONE undo step
+      // pointing at the outgoing document so ⌘Z right after an import restores
+      // it (deep history stays reset: this is a document boundary, not an edit).
+      past:
+        s.project.nodes && Object.keys(s.project.nodes).length > 0
+          ? [entryOf(s)]
+          : [],
+      future: [],
       loadCounter: s.loadCounter + 1,
       fitRequests: s.fitRequests + 1,
     })),
@@ -516,9 +725,15 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   focusTarget: null,
   asr: null,
   asrOptions: DEFAULT_ASR_OPTIONS,
+  exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+  renameRequest: null,
   reconMode: false,
   activeGeneTreeId: null,
   geneSelection: [],
+  reconSection: 'trees',
+  reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
+  reconHoverGeneId: null,
+  reconFocusTarget: null,
 
   select: (id, additive = false) =>
     set((s) => {
@@ -567,14 +782,21 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
 
   setEraLevel: (v) => set({ eraLevel: v }),
 
+  setExportSettings: (patch) =>
+    set((s) => ({ exportSettings: { ...s.exportSettings, ...patch } })),
+
   focusNode: (id) =>
     set((s) => ({ focusTarget: { id, seq: (s.focusTarget?.seq ?? 0) + 1 } })),
 
-  runAsr: () =>
+  requestRename: (id) =>
+    set((s) => ({ renameRequest: { id, seq: (s.renameRequest?.seq ?? 0) + 1 } })),
+
+  runAsr: (force = false) =>
     set((s) => {
       const c = s.project.characters.find((x) => x.id === s.activeCharacterId);
       if (!c || c.type !== 'discrete') return {};
-      const result = reconstructMk(s.project, c, s.asrOptions);
+      const opts: AsrOptions = force ? { ...s.asrOptions, maxMissingBranchFraction: 1 } : s.asrOptions;
+      const result = reconstructMk(s.project, c, opts);
       if (!result) {
         // A null result means "this Mk model is not implemented here", and
         // must never be left to read as "the data supports no reconstruction".
@@ -584,8 +806,17 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
             `The Mk model "${s.asrOptions.model}" is not implemented: this software reconstructs only equal rates (ER), so no result is shown`,
           ),
         );
+        return {};
       }
-      if (result?.warnings.length) {
+      if (result.probs.size === 0) {
+        // The missing-branch guard refused the run. Say what to do — the UI
+        // surfaces a "continue with a unit-length topology model" action that
+        // calls back with force = true.
+        const refused = result.warnings.find((w) => w.kind === 'missing-branch-lengths-refused');
+        if (refused) notify.error(refused.message);
+        return {};
+      }
+      if (result.warnings.length) {
         for (const w of result.warnings) {
           notify.info(w.message);
         }
@@ -613,6 +844,38 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
     }),
 
   clearGeneSelection: () => set({ geneSelection: [] }),
+
+  setReconSection: (section) => set({ reconSection: section }),
+
+  setReconViewOptions: (patch) =>
+    set((s) => ({ reconViewOptions: { ...s.reconViewOptions, ...patch } })),
+
+  setReconHoverGene: (id) =>
+    set((s) => (s.reconHoverGeneId === id ? {} : { reconHoverGeneId: id })),
+
+  focusGeneNode: (id) =>
+    set((s) => ({ reconFocusTarget: { id, seq: (s.reconFocusTarget?.seq ?? 0) + 1 } })),
+
+  enterReconWorkspace: () =>
+    set((s) => {
+      // Pick the first surviving tree when the pointer is stale — the toolbar
+      // and palette both funnel here, so "enter" is always possible; with no
+      // gene tree at all the workspace shows its empty state (never a dead end).
+      // §9.2 default: the rail opens on 场景 (scenario) when there is content to
+      // work with, and on 树库 (trees) for the empty state, whose primary
+      // actions (build / copy / import / load sample) live there.
+      const trees = s.project.geneTrees ?? [];
+      const ok = s.activeGeneTreeId && trees.some((g) => g.id === s.activeGeneTreeId);
+      const hasContent = ok || trees.length > 0;
+      return {
+        reconMode: true,
+        activeGeneTreeId: ok ? s.activeGeneTreeId : (trees[0]?.id ?? null),
+        geneSelection: ok ? s.geneSelection : [],
+        reconSection: hasContent ? 'scenario' : 'trees',
+      };
+    }),
+
+  exitReconWorkspace: () => set({ reconMode: false }),
 });
 
 const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({

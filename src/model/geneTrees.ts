@@ -8,9 +8,18 @@
 // and inherit undo/redo + autosave for free.
 
 import { tr } from '../ui/strings';
-import type { GeneNodeAssumption, GeneTreeEntry, NodeId, Project, ReconCosts } from './types';
+import type {
+  GeneNodeAssumption,
+  GeneTreeEntry,
+  NodeId,
+  Project,
+  ReconCosts,
+  ReconEventType,
+} from './types';
 import { DEFAULT_RECON_COSTS } from './types';
-import { newId } from './treeOps';
+import { newId, rerootAtNode } from './treeOps';
+import { solveDtl, type DtlOptions, type DtlScenario } from './dtl';
+import type { TipMapping } from './reconciliation';
 
 /**
  * Wrap a parsed standalone document as an embedded gene tree. The doc is
@@ -127,4 +136,224 @@ export function setReconCosts(project: Project, patch: Partial<ReconCosts>): str
   }
   project.reconCosts = cur;
   return problems.length > 0 ? problems.join('；') : null;
+}
+
+// --- polytomy handling ---------------------------------------------------------
+// The DP requires a binary gene tree, but majority-rule consensus trees, fast
+// clustering trees and many published gene trees carry polytomies. Refusing them
+// outright cut the "build consensus → reconcile" pipeline at its last step, so
+// the solver-facing alternative is a RANDOM binary resolution with replicates:
+// each replicate resolves every polytomy into an arbitrary binary shape, the
+// solve runs per replicate, and the spread of the event counts IS the reported
+// uncertainty ("resolution-sensitive" is a finding, not noise to hide).
+
+export interface PolytomyResolution {
+  /** A resolved (binary) copy of `gene`; polytomy nodes replaced by new binary nodes. */
+  doc: Project;
+  /** How many polytomies were split. */
+  resolved: number;
+}
+
+let polytomyRngState = 20260919;
+function polytomyRng(): number {
+  polytomyRngState += 0x6d2b79f5;
+  let t = polytomyRngState;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** One random binary resolution of a single polytomy's child list. */
+function randomBinaryAttach(children: NodeId[], rng: () => number): NodeId[] {
+  // Shuffle, then fold pairwise: each fold creates an internal node whose id is
+  // minted fresh, so the original ids (and any assumption keyed by them) survive.
+  const pool = [...children];
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+/**
+ * Randomly resolve every polytomy of a gene tree into a binary shape.
+ * Original node ids are preserved (only NEW internal joiners are minted), so a
+ * scenario solved on the resolved copy can still be read against the original.
+ * Not written into the document — this is a solver-side expansion.
+ */
+export function resolvePolytomiesRandom(gene: Project, seed = 20260919): PolytomyResolution {
+  polytomyRngState = seed >>> 0;
+  const doc = JSON.parse(JSON.stringify(gene)) as Project;
+  delete doc.geneTrees;
+  let resolved = 0;
+  // Repeated passes: a resolved node's parent gains a child, never a polytomy,
+  // so one pass per polytomy suffices — but walk until stable defensively.
+  for (let pass = 0; pass < 8; pass += 1) {
+    const polytomies = Object.values(doc.nodes).filter((n) => n.childrenIds.length > 2);
+    if (polytomies.length === 0) break;
+    for (const node of polytomies) {
+      const shuffled = randomBinaryAttach(node.childrenIds, polytomyRng);
+      // Fold the shuffled child list into a binary tree of fresh internal nodes.
+      let current: NodeId[] = shuffled;
+      while (current.length > 2) {
+        const next: NodeId[] = [];
+        for (let i = 0; i < current.length; i += 2) {
+          if (i + 1 === current.length) {
+            next.push(current[i]);
+            continue;
+          }
+          const joiner = newId();
+          const a = doc.nodes[current[i]];
+          const b = doc.nodes[current[i + 1]];
+          a.parentId = joiner;
+          b.parentId = joiner;
+          doc.nodes[joiner] = {
+            id: joiner,
+            label: '',
+            parentId: node.id,
+            childrenIds: [current[i], current[i + 1]],
+          };
+          next.push(joiner);
+        }
+        current = next;
+      }
+      node.childrenIds = current;
+      for (const c of current) doc.nodes[c].parentId = node.id;
+      resolved += 1;
+    }
+  }
+  return { doc, resolved };
+}
+
+export interface PolytomySolveSummary {
+  scenario: DtlScenario;
+  replicates: number;
+  /** Per event class: min / mean / max across replicates (losses included). */
+  counts: Record<'speciation' | 'duplication' | 'transfer' | 'losses', { min: number; mean: number; max: number }>;
+  /** True when the event totals vary across resolutions — i.e. the answer is resolution-sensitive. */
+  sensitive: boolean;
+}
+
+/**
+ * Solve a possibly-polytomic gene tree: random binary resolutions × `replicates`,
+ * each solved independently; the FIRST finite-cost scenario is returned as the
+ * representative (its per-node events are readable), and the count spread across
+ * replicates travels with it so the UI can report the resolution sensitivity
+ * instead of presenting one arbitrary resolution as the answer.
+ */
+export function solveDtlWithPolytomies(
+  species: Project,
+  gene: Project,
+  costs: ReconCosts,
+  tipOverride?: TipMapping,
+  options: DtlOptions = {},
+  replicates = 8,
+  seed = 20260919,
+): DtlSolveResult & { polytomySummary?: PolytomySolveSummary } {
+  const hasPolytomy = Object.values(gene.nodes).some((n) => n.childrenIds.length > 2);
+  if (!hasPolytomy) {
+    const r = solveDtl(species, gene, costs, tipOverride, options);
+    return r;
+  }
+  const perReplicate: { events: Record<string, number>; cost: number }[] = [];
+  let representative: DtlScenario | undefined;
+  let lastError: string | undefined;
+  for (let i = 0; i < Math.max(1, replicates); i += 1) {
+    const { doc } = resolvePolytomiesRandom(gene, seed + i * 7919);
+    const r = solveDtl(species, doc, costs, tipOverride, options);
+    if (!r.scenario) {
+      lastError = r.error;
+      continue;
+    }
+    if (!representative) representative = r.scenario;
+    const tally: Record<string, number> = { speciation: 0, duplication: 0, transfer: 0, losses: r.scenario.totalLosses };
+    for (const ev of Object.values(r.scenario.events)) tally[ev] += 1;
+    perReplicate.push({ events: tally, cost: r.scenario.cost });
+  }
+  if (!representative) return { error: lastError };
+  const stats = (key: string): { min: number; mean: number; max: number } => {
+    const vals = perReplicate.map((r) => r.events[key] ?? 0);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return { min, mean, max };
+  };
+  const counts = {
+    speciation: stats('speciation'),
+    duplication: stats('duplication'),
+    transfer: stats('transfer'),
+    losses: stats('losses'),
+  };
+  const sensitive =
+    counts.speciation.min !== counts.speciation.max ||
+    counts.duplication.min !== counts.duplication.max ||
+    counts.transfer.min !== counts.transfer.max ||
+    counts.losses.min !== counts.losses.max;
+  const polytomySummary: PolytomySolveSummary = {
+    scenario: representative,
+    replicates: perReplicate.length,
+    counts,
+    sensitive,
+  };
+  return { scenario: representative, polytomySummary };
+}
+
+// --- gene-tree reroot -----------------------------------------------------------
+// DTL event counts are notoriously sensitive to the gene tree's root position,
+// yet the embedded topology used to be frozen: no reroot entry point existed.
+// Rerooting PRESERVES every node id (only parent/child links move), so the
+// assumption records stay keyed correctly and only need re-validation — the
+// same `rerootAtNode` used on the main canvas carries the branch-length/age
+// bookkeeping.
+
+export function rerootGeneTree(
+  project: Project,
+  geneTreeId: string,
+  targetGeneNodeId: NodeId,
+  fraction = 0.5,
+): boolean {
+  const g = findGeneTree(project, geneTreeId);
+  if (!g) return false;
+  return rerootAtNode(g.doc, targetGeneNodeId, fraction);
+}
+
+/**
+ * Apply a tip→species mapping table (e.g. from a CSV: gene label, species node
+ * id or label). Unknown gene labels are ignored and reported by count so a
+ * stale table cannot silently narrow the mapping.
+ */
+export function applyTipMappingTable(
+  project: Project,
+  geneTreeId: string,
+  table: { geneLabel: string; speciesNodeId: NodeId }[],
+): { applied: number; unknownGeneLabels: string[]; unknownSpeciesNodes: string[] } {
+  const g = findGeneTree(project, geneTreeId);
+  if (!g) return { applied: 0, unknownGeneLabels: [], unknownSpeciesNodes: [] };
+  const byLabel = new Map<string, NodeId>();
+  for (const n of Object.values(g.doc.nodes)) {
+    if (n.childrenIds.length === 0 && n.label) byLabel.set(n.label, n.id);
+  }
+  const appliedSet = new Map<NodeId, NodeId>();
+  const unknownGeneLabels: string[] = [];
+  const unknownSpeciesNodes: string[] = [];
+  for (const row of table) {
+    const geneNode = byLabel.get(row.geneLabel);
+    if (!geneNode) {
+      unknownGeneLabels.push(row.geneLabel);
+      continue;
+    }
+    if (!project.nodes[row.speciesNodeId]) {
+      unknownSpeciesNodes.push(row.speciesNodeId);
+      continue;
+    }
+    appliedSet.set(geneNode, row.speciesNodeId);
+  }
+  for (const [geneNode, speciesNode] of appliedSet) {
+    setAssumption(project, geneTreeId, geneNode, {}, speciesNode);
+  }
+  return {
+    applied: appliedSet.size,
+    unknownGeneLabels: [...new Set(unknownGeneLabels)],
+    unknownSpeciesNodes: [...new Set(unknownSpeciesNodes)],
+  };
 }

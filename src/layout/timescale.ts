@@ -21,14 +21,33 @@ export interface GeoInterval {
 }
 
 /** Which rank(s) of the geological time scale to draw behind the tree. */
-export type EraLevel = 'eon' | 'period' | 'both';
+export type EraLevel = 'eon' | 'era' | 'period' | 'both';
+
+/**
+ * Version stamp of the geological time scale encoded below (ICS International
+ * Chronostratigraphic Chart). Boundary ages are REVISED between chart versions,
+ * so a figure that prints geological bands must be able to say which chart it
+ * used — this constant is echoed into the time panel and the export metadata.
+ * The Hadean/Archean boundary (4 000 / 4 600 Ma) is INFORMAL: the ICS chart
+ * shows no formal Hadean subdivision.
+ */
+export const ICS_CHART_VERSION = 'ICS v2023/09';
+export const ICS_CHART_NOTE_EN =
+  'Boundary ages follow ICS v2023/09; the Hadean/Archean boundary (4000/4600 Ma) is informal.';
+export const ICS_CHART_NOTE_ZH =
+  '年代界线采用 ICS v2023/09 年表；冥古宙/太古宙界线（4000/4600 Ma）为非正式划分。';
 
 /** ICS eons (宙), Ma before present, youngest first. */
 export const GEO_EONS: GeoInterval[] = [
-  { label: '显生宙', labelEn: 'Phanerozoic', start: 0, end: 538.8, color: '#bbf7d0' },
-  { label: '元古宙', labelEn: 'Proterozoic', start: 538.8, end: 2500, color: '#fbcfe8' },
-  { label: '太古宙', labelEn: 'Archean', start: 2500, end: 4000, color: '#ddd6fe' },
-  { label: '冥古宙', labelEn: 'Hadean', start: 4000, end: 4600, color: '#fecaca' },
+  // Eon colours deliberately share NO hex with any period colour below: with
+  // eraLevel 'both' the two lanes render side by side, and four of the old eon
+  // colours were byte-identical to four period colours — the Cretaceous band
+  // visually vanished inside the Phanerozoic band. A unit test pins the
+  // disjointness so a future palette edit cannot reintroduce it.
+  { label: '显生宙', labelEn: 'Phanerozoic', start: 0, end: 538.8, color: '#7fd4b8' },
+  { label: '元古宙', labelEn: 'Proterozoic', start: 538.8, end: 2500, color: '#e4a4c9' },
+  { label: '太古宙', labelEn: 'Archean', start: 2500, end: 4000, color: '#c9b3e6' },
+  { label: '冥古宙', labelEn: 'Hadean', start: 4000, end: 4600, color: '#f2a19c' },
 ];
 
 /**
@@ -49,8 +68,8 @@ export const GEO_PERIODS: GeoInterval[] = [
   { label: '二叠纪', labelEn: 'Permian', start: 251.9, end: 298.9, color: '#fbcfe8' },
   { label: '石炭纪', labelEn: 'Carboniferous', start: 298.9, end: 358.9, color: '#d9f99d' },
   { label: '泥盆纪', labelEn: 'Devonian', start: 358.9, end: 419.2, color: '#bae6fd' },
-  { label: '志留纪', labelEn: 'Silurian', start: 419.2, end: 443.8, color: '#ddd6fe' },
-  { label: '奥陶纪', labelEn: 'Ordovician', start: 443.8, end: 485.4, color: '#99f6e4' },
+  { label: '志留纪', labelEn: 'Silurian', start: 419.2, end: 443.4, color: '#ddd6fe' },
+  { label: '奥陶纪', labelEn: 'Ordovician', start: 443.4, end: 485.4, color: '#99f6e4' },
   { label: '寒武纪', labelEn: 'Cambrian', start: 485.4, end: 538.8, color: '#fecaca' },
   { label: '埃迪卡拉纪', labelEn: 'Ediacaran', start: 538.8, end: 635, color: '#fed7aa' },
   { label: '成冰纪', labelEn: 'Cryogenian', start: 635, end: 720, color: '#a5f3fc' },
@@ -62,6 +81,29 @@ export const GEO_PERIODS: GeoInterval[] = [
   { label: '造山纪', labelEn: 'Orosirian', start: 1800, end: 2050, color: '#f9a8d4' },
   { label: '层侵纪', labelEn: 'Rhyacian', start: 2050, end: 2300, color: '#d8b4fe' },
   { label: '成铁纪', labelEn: 'Siderian', start: 2300, end: 2500, color: '#d6d3d1' },
+];
+
+/**
+ * ICS eras (代) — the rank the deep-time microbial literature actually works
+ * on: the GOE is delimited by Rhyacian/Orosirian-era boundaries (on the period
+ * lane, but the GOE narrative is told in eras), and the Archean subdivisions
+ * are FORMAL eras with no periods beneath them. Youngest first, same shape as
+ * GEO_EONS / GEO_PERIODS.
+ */
+export const GEO_ERAS: GeoInterval[] = [
+  // Cenozoic / Mesozoic / Paleozoic eras of the Phanerozoic.
+  { label: '新生代', labelEn: 'Cenozoic', start: 0, end: 66, color: '#fde68a' },
+  { label: '中生代', labelEn: 'Mesozoic', start: 66, end: 251.9, color: '#a7f3d0' },
+  { label: '古生代', labelEn: 'Paleozoic', start: 251.9, end: 538.8, color: '#99f6e4' },
+  // Neoproterozoic / Mesoproterozoic / Paleoproterozoic.
+  { label: '新元古代', labelEn: 'Neoproterozoic', start: 538.8, end: 1000, color: '#f5d0fe' },
+  { label: '中元古代', labelEn: 'Mesoproterozoic', start: 1000, end: 1600, color: '#c4b5fd' },
+  { label: '古元古代', labelEn: 'Paleoproterozoic', start: 1600, end: 2500, color: '#fda4af' },
+  // The four formal Archean eras (ICS): Eoarchean has no formal base (informal 4 000).
+  { label: '新太古代', labelEn: 'Neoarchean', start: 2500, end: 2800, color: '#d6d3d1' },
+  { label: '中太古代', labelEn: 'Mesoarchean', start: 2800, end: 3200, color: '#d8b4fe' },
+  { label: '古太古代', labelEn: 'Paleoarchean', start: 3200, end: 3600, color: '#f9a8d4' },
+  { label: '始太古代', labelEn: 'Eoarchean', start: 3600, end: 4000, color: '#c7d2fe' },
 ];
 
 /**
@@ -116,6 +158,8 @@ export interface TimeAxisInfo {
   ticks: { age: number; coord: number }[];
   /** Eon bands (宙) clipped to the axis range, as world coordinates. */
   eons: { label: string; color: string; a: number; b: number }[];
+  /** Era bands (代) clipped to the axis range, as world coordinates. */
+  eras: { label: string; color: string; a: number; b: number }[];
   /** Period bands (纪) clipped to the axis range, as world coordinates. */
   periods: { label: string; color: string; a: number; b: number }[];
   /** Extent perpendicular to the depth axis (for drawing full-span lines/bands). */
@@ -192,6 +236,7 @@ export function buildTimeAxis(
     return out;
   };
   const eons = clip(GEO_EONS);
+  const eras = clip(GEO_ERAS);
   const periods = clip(GEO_PERIODS);
   return {
     horizontal,
@@ -202,6 +247,7 @@ export function buildTimeAxis(
     ageToCoord,
     ticks,
     eons,
+    eras,
     periods,
     breadthMin,
     breadthMax,
@@ -333,8 +379,9 @@ export function planEraOverlay(
   envEvents: { id: string; label: string; from: number; to: number }[],
   fontSize = 11,
 ): EraOverlayPlan {
-  const showEons = opts.showEras && opts.eraLevel !== 'period';
-  const showPeriods = opts.showEras && opts.eraLevel !== 'eon';
+  const showEons = opts.showEras && (opts.eraLevel === 'eon' || opts.eraLevel === 'both');
+  const showEras = opts.showEras && (opts.eraLevel === 'era' || opts.eraLevel === 'both');
+  const showPeriods = opts.showEras && (opts.eraLevel === 'period' || opts.eraLevel === 'both');
 
   const bands: EraOverlayPlan['bands'] = [];
   const inputs: BandLabelInput[] = [];
@@ -357,10 +404,13 @@ export function planEraOverlay(
       });
     }
   };
-  // With both ranks shown, eons take the row closest to the band and periods
-  // the row beyond it.
-  if (showEons) addRank(info.eons, 'eon', 0);
-  if (showPeriods) addRank(info.periods, 'period', showEons ? 1 : 0);
+  // With multiple ranks shown, the rank closest to the tree is the coarsest:
+  // eons, then eras, then periods. The lane assignment below keeps every rank
+  // on its own row so adjacent-rank labels never collide.
+  let lane = 0;
+  if (showEons) addRank(info.eons, 'eon', lane++);
+  if (showEras) addRank(info.eras, 'era', lane++);
+  if (showPeriods) addRank(info.periods, 'period', lane++);
 
   // Clamp horizontal label centres into the drawn axis extent (tick span) so
   // edge bands keep their labels visible.

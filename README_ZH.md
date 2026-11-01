@@ -25,7 +25,11 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 - **推理辅助（建议性）** — 桑科夫简约法建议、Mk 模型概率性 ASR（对数空间数值稳定）、一致性检查、性状相关性提示（Jaccard 共变化）。
 - **DTL 协同重建** — 基因树/物种树分析，含动态规划求解器、手动细化、验证和并排协同视图。
 - **时间校准** — 化石校准点、地质年代条带和环境事件叠加。
-- **导入/导出** — Newick 和 Nexus 导入（NHX 元数据无损往返）；`.cladeforge.json` 项目文件；SVG/PNG/PDF 图像导出（带自动图例）；假说 JSON 导出。
+- **导入/导出** — Newick 和 NEXUS 导入（NEXUS 读取 TREES 与 DATA/CHARACTERS/ASSUMPTIONS 块；Newick 原样保留方括号注释，并解释 &support、&R/&U、BEAST 的 height/height_95%_HPD/posterior 与 NHX 标签——其余注释文本仅按原文保存，不做解释）；CSV/TSV 性状矩阵与注释表导入，矩阵/注释/空模板 CSV 导出；NeXML 导出；`.cladeforge.json` 项目文件（格式见 docs/FORMAT.md）；SVG/PNG/PDF 图像导出（带导出设置对话框：DPI 控制、支持值可选打印、比例尺、图例开关与自动图例）；假说 JSON、Markdown 叙述与自包含 R 分析脚本。
+
+**边界声明。** CladeForge 是假说编辑与论证工作台：不建树、不比对序列、
+不做贝叶斯定年、不搜索拓扑；界面上的一切推断都条件于文档中那棵由你编辑的
+单一拓扑。Mk 重建按极大似然拟合一维速率，但只实现等速率（ER）子模型。
 - **撤销/重做** 基于 Immer 结构共享；双语界面（英文/中文）。
 
 ## 系统要求

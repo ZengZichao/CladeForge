@@ -1,184 +1,407 @@
-// Right-hand inspector for reconciliation mode: edit the DTL assumption of the
-// selected gene node — its species-tree mapping, event class (σ / δ / τ),
-// asserted losses, and confidence/evidence. Tip nodes only take a mapping.
-// Per-node validation issues are shown inline with click-through hints.
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
+// Right-hand inspector of the reconciliation WORKSPACE.
+//
+// Four states instead of the old "generic panel + one branch" (§5.4):
+//   A. nothing selected      → scenario overview (completeness, events,
+//                              data quality, legend, quick actions)
+//   B. one gene node         → DTL assumption editor (GeneAssumptionInspector)
+//   C. one species node      → species inspector + the gene lineages mapped
+//                              here
+//   D. several gene nodes    → batch summary (+ clear-mappings action)
+// The standard `PropertiesPanel` never mounts in the reconciliation workspace.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '../model/store';
+import type { NodeId } from '../model/types';
+import {
+  mapTipsByLabel,
+  suggestLcaScenario,
+  validateScenario,
+  type ReconIssue,
+} from '../model/reconciliation';
+import { geneTreeRows } from './reconStats';
+import { solveDtl, dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
 import { setAssumption } from '../model/geneTrees';
-import { validateScenario, type ReconIssue } from '../model/reconciliation';
-import type { Confidence, NodeId, Project } from '../model/types';
-import { CheckboxField, Field, NumberField, TextField } from './fields';
+import { GeneAssumptionInspector } from './GeneAssumptionInspector';
 import { Section } from './Section';
+import { requestConfirm } from './confirmDialog';
+import { notify } from './toast';
 import { S, tr } from './strings';
 
-type Apply = (recipe: (d: Project) => void) => void;
+const DTL_GLYPH: Record<string, string> = {
+  speciation: 'σ',
+  duplication: 'δ',
+  transfer: 'τ',
+};
 
-/** Depth-indented option list over the species tree for the mapping select. */
-function useSpeciesOptions(project: Project): { id: NodeId; label: string; depth: number }[] {
-  return useMemo(() => {
-    const out: { id: NodeId; label: string; depth: number }[] = [];
-    const walk = (id: NodeId, depth: number) => {
-      const n = project.nodes[id];
-      if (!n) return;
-      out.push({ id, label: n.label || n.id.slice(0, 6), depth });
-      for (const c of n.childrenIds) walk(c, depth + 1);
-    };
-    if (project.rootId) walk(project.rootId, 0);
-    return out;
-  }, [project]);
-}
-
-export function GeneAssumptionInspector({
-  geneTreeId,
-  geneNodeId,
-}: {
-  geneTreeId: string;
-  geneNodeId: NodeId;
-}) {
-  const apply = useStore((s) => s.apply);
+/** A. nothing selected — the scenario overview (default). */
+function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
   const project = useStore((s) => s.project);
+  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
+  const apply = useStore((s) => s.apply);
+  const setReconSection = useStore((s) => s.setReconSection);
+  const selectGeneNode = useStore((s) => s.selectGeneNode);
+  const focusGeneNode = useStore((s) => s.focusGeneNode);
+  const [dp, setDp] = useState<{ geneId: string; scenario: DtlScenario } | null>(null);
 
-  const entry = project.geneTrees?.find((g) => g.id === geneTreeId);
-  const geneNode = entry?.doc.nodes[geneNodeId];
-  const assumption = entry?.assumptions[geneNodeId];
+  const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
   const costs = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
+  const rows = useMemo(() => geneTreeRows(project), [project]);
+  const row = rows.find((r) => r.id === activeGeneTreeId);
 
-  // Per-node validation issues for inline display.
-  const myIssues = useMemo(() => {
-    if (!entry) return [] as ReconIssue[];
-    return validateScenario(project, entry.doc, entry.assumptions, costs).filter(
-      (i) => i.nodeId === geneNodeId,
+  if (!entry || !row) {
+    return (
+      <>
+        <div className="panel-header">
+          <span className="panel-header-title">{S.recon.overviewTitle}</span>
+          <span className="panel-header-subtitle">{S.recon.section}</span>
+        </div>
+        <div className="hint" style={{ margin: '12px' }}>{S.recon.emptyReconHint}</div>
+        <div className="field row-actions" style={{ margin: '0 12px' }}>
+          <button className="btn primary" onClick={onBuildGeneTree}>{S.recon.emptyBuild}</button>
+        </div>
+        <LegendBlock />
+      </>
     );
-  }, [project, entry, geneNodeId, costs]);
+  }
 
-  const speciesOptions = useSpeciesOptions(project);
-  if (!entry || !geneNode) return null;
-  const isTip = geneNode.childrenIds.length === 0;
-
-  type EventClass = 'speciation' | 'duplication' | 'transfer';
-
-  const update = (
-    recipe: { speciesNode?: NodeId; event?: EventClass | undefined; losses?: number },
-    remove = false,
-  ) => {
-    apply((d) => {
-      if (remove) {
-        setAssumption(d, geneTreeId, geneNodeId, null);
-        return;
-      }
-      // Species change without a valid target leaves the row untouched.
-      if (recipe.speciesNode !== undefined && !d.nodes[recipe.speciesNode]) return;
-      setAssumption(d, geneTreeId, geneNodeId, recipe, recipe.speciesNode);
-    });
-  };
-
-  const metaUpdate = (patchMeta: { confidence?: Confidence; support?: string; against?: string }) => {
-    apply((d) => {
-      const g = d.geneTrees?.find((x) => x.id === geneTreeId);
-      if (!g) return;
-      const a = g.assumptions[geneNodeId];
-      if (!a) return;
-      a.meta = { ...a.meta, ...patchMeta };
-    });
-  };
+  const topIssues = row.issues.slice(0, 3);
 
   return (
     <>
       <div className="panel-header">
-        <span className="panel-header-title">{S.reconInspector.title}</span>
-        <span className="panel-header-subtitle">
-          {geneNode.label || geneNodeId.slice(0, 6)}
-          {isTip ? ` · ${tr('尖端', 'tip')}` : ''}
-        </span>
+        <span className="panel-header-title">{S.recon.overviewTitle}</span>
+        <span className="panel-header-subtitle">{S.recon.section}</span>
       </div>
-
-      {isTip && <div className="hint" style={{ margin: '0 12px' }}>{S.reconInspector.tipHint}</div>}
-
-      <Section title={S.reconInspector.mapTo} pinable>
-        <Field label={S.reconInspector.mapTo}>
-          <select
-            value={assumption?.speciesNode ?? ''}
-            onChange={(e) =>
-              e.target.value ? update({ speciesNode: e.target.value }) : update({}, true)
-            }
-          >
-            <option value="">{tr('（未映射）', '(unmapped)')}</option>
-            {speciesOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {'\u00A0'.repeat(o.depth * 2)}
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        {!isTip && (
-          <>
-            <Field label={S.reconInspector.event}>
-              <select
-                value={assumption?.event ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({ event: v === '' ? undefined : (v as EventClass) });
-                }}
-              >
-                <option value="">{S.reconInspector.evClear}</option>
-                <option value="speciation">{S.reconInspector.evSpeciation}</option>
-                <option value="duplication">{S.reconInspector.evDuplication}</option>
-                <option value="transfer">{S.reconInspector.evTransfer}</option>
-              </select>
-            </Field>
-            <Field label={S.reconInspector.losses}>
-              <NumberField
-                value={assumption?.losses}
-                allowEmpty
-                min={0}
-                step={1}
-                onCommit={(v) => update({ losses: v })}
-              />
-            </Field>
-          </>
+      <Section title={entry.name} pinable>
+        <div className="hint">
+          <span className="recon-readonly-tag">{S.recon.readonlyBadge}</span>
+        </div>
+        <div className="recon-ov-grid">
+          <span>{S.recon.overviewSpeciesNodes}</span>
+          <b>{Object.keys(project.nodes).length}</b>
+          <span>{S.recon.overviewGeneTips}</span>
+          <b>{row.tips}</b>
+          <span>{S.recon.sbTipsMapped(row.mappedTips, row.tips)}</span>
+          <b>{`${row.mappedTips}/${row.tips}`}</b>
+          <span>{S.recon.sbInternal(row.summary.mappedInternal, row.summary.totalInternal)}</span>
+          <b>{`${row.summary.mappedInternal}/${row.summary.totalInternal}`}</b>
+          <span>{S.recon.sbUnresolved(row.summary.totalInternal - row.summary.mappedInternal)}</span>
+          <b>{String(row.summary.totalInternal - row.summary.mappedInternal)}</b>
+        </div>
+        <div className="recon-stat-grid">
+          <span className="recon-chip chip-sigma">σ {row.summary.speciation}</span>
+          <span className="recon-chip chip-dup">δ {row.summary.duplication}</span>
+          <span className="recon-chip chip-transfer">τ {row.summary.transfer}</span>
+          <span className="recon-chip chip-loss">λ {row.summary.losses}</span>
+          <span className="recon-chip">{tr('总代价', 'total cost')} {row.summary.cost}</span>
+        </div>
+        {dp && dp.geneId === entry.id && (
+          <div className="recon-stat-grid">
+            <span className="recon-chip">{S.recon.dpOptimal} {dp.scenario.cost}</span>
+            <button
+              className="btn"
+              onClick={() => {
+                apply((d) => {
+                  const g = d.geneTrees?.find((x) => x.id === entry.id);
+                  if (!g) return;
+                  g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario);
+                });
+                notify.success(S.recon.dpApply);
+              }}
+            >
+              {S.recon.dpApply}
+            </button>
+          </div>
         )}
       </Section>
 
-      {assumption && (
-        <Section title={S.confidence.label} defaultOpen={false} pinable>
-          <Field label={S.confidence.label}>
-            <select
-              value={assumption.meta?.confidence ?? ''}
-              onChange={(e) => metaUpdate({ confidence: (e.target.value || undefined) as Confidence })}
-            >
-              <option value="">{S.confidence.none}</option>
-              <option value="high">{S.confidence.high}</option>
-              <option value="medium">{S.confidence.medium}</option>
-              <option value="low">{S.confidence.low}</option>
-            </select>
-          </Field>
-          <Field label={S.confidence.support}>
-            <TextField value={assumption.meta?.support ?? ''} onCommit={(v) => metaUpdate({ support: v })} />
-          </Field>
-          <Field label={S.confidence.against}>
-            <TextField value={assumption.meta?.against ?? ''} onCommit={(v) => metaUpdate({ against: v })} />
-          </Field>
-          <Field label={tr('证据记录', 'Evidence')}>
-            <span className="hint">{tr('映射移除前持续保留', 'Kept until the mapping is removed')}</span>
-          </Field>
-        </Section>
-      )}
-
-      {myIssues.length > 0 && (
-        <Section title={S.recon.validation} pinable>
+      <Section title={S.recon.dataQuality} pinable>
+        <div
+          className="hint issue-summary-link"
+          role="button"
+          tabIndex={0}
+          onClick={() => setReconSection('validation')}
+          onKeyDown={(e) => e.key === 'Enter' && setReconSection('validation')}
+        >
+          {S.recon.sbIssues(row.errors, row.warnings)}
+        </div>
+        {topIssues.length > 0 && (
           <ul className="issue-list">
-            {myIssues.map((it, i) => (
-              <li key={i} className={`issue issue-${it.severity}`}>
-                <span className="issue-tag">[{it.severity === 'error' ? S.recon.severityError : S.recon.severityWarning}]</span>{' '}
-                {it.message}
+            {topIssues.map((it: ReconIssue, i: number) => (
+              <li
+                key={i}
+                className={`issue issue-${it.severity}${it.nodeId ? ' issue-click' : ''}`}
+                onClick={() => {
+                  if (it.nodeId) {
+                    selectGeneNode(it.nodeId);
+                    focusGeneNode(it.nodeId);
+                  }
+                }}
+              >
+                <span className="issue-tag">[{it.severity === 'error' ? S.recon.severityError : S.recon.severityWarning}]</span> {it.message}
               </li>
             ))}
           </ul>
-        </Section>
-      )}
+        )}
+      </Section>
+
+      <Section title={S.recon.quickActions} pinable>
+        <div className="field row-actions">
+          <button
+            className="btn primary"
+            onClick={() => {
+              apply((d) => {
+                const g = d.geneTrees?.find((x) => x.id === entry.id);
+                if (!g) return;
+                const tipMap = mapTipsByLabel(d, g.doc).mappings;
+                g.assumptions = suggestLcaScenario(d, g.doc, tipMap, g.assumptions);
+              });
+              notify.success(tr('已生成 LCA 建议场景', 'LCA suggestion applied'));
+            }}
+          >
+            {S.recon.suggestLca}
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
+              const r = solveDtl(project, entry.doc, costs);
+              if (r.error || !r.scenario) {
+                notify.info(r.error ?? tr('求解失败', 'Solver failed'));
+                setDp(null);
+                return;
+              }
+              setDp({ geneId: entry.id, scenario: r.scenario });
+            }}
+          >
+            {S.recon.dpRun}
+          </button>
+        </div>
+      </Section>
+
+      <LegendBlock />
     </>
   );
 }
+
+/** The mapping-line colour language, spelled out where the user reads. */
+export function LegendBlock() {
+  return (
+    <div className="recon-insp-legend">
+      <div className="recon-insp-legend-title">{S.recon.legendTitle}</div>
+      <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
+      <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
+      <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
+      <span className="legend-item"><span className="legend-swatch sw-unresolved" />{S.recon.legendUnresolved}</span>
+      <span className="legend-item"><span className="legend-swatch sw-tip" />{S.recon.legendTipLine}</span>
+      <span className="legend-item"><span className="legend-swatch sw-internal" />{S.recon.legendInternalLine}</span>
+      <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
+    </div>
+  );
+}
+
+/** C. one species node selected. */
+function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
+  const project = useStore((s) => s.project);
+  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
+  const geneSelection = useStore((s) => s.geneSelection);
+  const apply = useStore((s) => s.apply);
+  const selectGeneNode = useStore((s) => s.selectGeneNode);
+  const focusGeneNode = useStore((s) => s.focusGeneNode);
+
+  const node = project.nodes[nodeId];
+  const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
+  const lineages = useMemo(() => {
+    if (!entry) return [];
+    return Object.entries(entry.assumptions)
+      .filter(([, a]) => a.speciesNode === nodeId)
+      .map(([gid, a]) => ({ gid, a, node: entry.doc.nodes[gid] }))
+      .filter((x) => x.node);
+  }, [entry, nodeId]);
+
+  if (!node) return null;
+  const parent = node.parentId ? project.nodes[node.parentId] : null;
+  const geneSelected = geneSelection.length === 1;
+
+  return (
+    <>
+      <div className="panel-header">
+        <span className="panel-header-title">{S.recon.speciesInspectorTitle}</span>
+        <span className="panel-header-subtitle">{node.label || nodeId.slice(0, 6)}</span>
+      </div>
+      <div className="hint" style={{ margin: '0 12px 8px' }}>{S.recon.isSpeciesNode}</div>
+      <Section title={tr('节点信息', 'Node')} pinable>
+        <div className="recon-ov-grid">
+          <span>{tr('名称', 'Name')}</span>
+          <b>{node.label || '—'}</b>
+          <span>{tr('类型', 'Kind')}</span>
+          <b>{node.childrenIds.length > 0 ? tr('内部节点', 'internal') : tr('末端', 'tip')}</b>
+          <span>{tr('年龄', 'Age')}</span>
+          <b>{node.age !== undefined ? String(node.age) : '—'}</b>
+          <span>{tr('枝长', 'Branch length')}</span>
+          <b>{node.branchLength !== undefined ? String(node.branchLength) : '—'}</b>
+          <span>{tr('支持率', 'Support')}</span>
+          <b>{node.support !== undefined ? String(node.support) : '—'}</b>
+          <span>{tr('父节点', 'Parent')}</span>
+          <b>{parent?.label || '—'}</b>
+        </div>
+      </Section>
+      <Section title={S.recon.lineagesHere} pinable>
+        {lineages.length === 0 ? (
+          <div className="hint">{S.recon.noLineagesHere}</div>
+        ) : (
+          <ul className="issue-list">
+            {lineages.map(({ gid, a, node: gNode }) => (
+              <li
+                key={gid}
+                className="issue issue-click"
+                onClick={() => {
+                  selectGeneNode(gid);
+                  focusGeneNode(gid);
+                }}
+              >
+                <span className="issue-tag">[{DTL_GLYPH[a.event ?? ''] ?? '·'}]</span>{' '}
+                {gNode.label || gid.slice(0, 6)}
+                {a.losses ? ` · λ${a.losses}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="field row-actions">
+          <button
+            className="btn"
+            disabled={!geneSelected}
+            title={geneSelected ? S.recon.mapSelectedHere : S.recon.mapSelectedHereNeedGene}
+            onClick={() => {
+              if (!geneSelected || !entry) return;
+              const gid = geneSelection[0];
+              apply((d) => {
+                setAssumption(d, entry.id, gid, {}, nodeId);
+              });
+              selectGeneNode(gid);
+            }}
+          >
+            {S.recon.mapSelectedHere}
+          </button>
+        </div>
+        {!geneSelected && <div className="hint">{S.recon.mapSelectedHereNeedGene}</div>}
+      </Section>
+    </>
+  );
+}
+
+/** D. several gene nodes selected — batch summary. */
+function MultiGeneSummary() {
+  const project = useStore((s) => s.project);
+  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
+  const geneSelection = useStore((s) => s.geneSelection);
+  const apply = useStore((s) => s.apply);
+  const selectGeneNode = useStore((s) => s.selectGeneNode);
+  const focusGeneNode = useStore((s) => s.focusGeneNode);
+
+  const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
+  const items = useMemo(() => {
+    if (!entry) return [];
+    return geneSelection
+      .map((gid) => ({ gid, node: entry.doc.nodes[gid], a: entry.assumptions[gid] }))
+      .filter((x) => x.node);
+  }, [entry, geneSelection]);
+
+  if (!entry || items.length === 0) return null;
+  const unresolved = items.filter((x) => !x.a?.event).length;
+  const eventMix = items.reduce<Record<string, number>>((acc, x) => {
+    const k = x.a?.event ?? 'none';
+    acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <>
+      <div className="panel-header">
+        <span className="panel-header-title">{S.recon.multiTitle(items.length)}</span>
+        <span className="panel-header-subtitle">{S.recon.section}</span>
+      </div>
+      <Section title={S.recon.multiTargets} pinable>
+        <ul className="issue-list">
+          {items.map(({ gid, node, a }) => (
+            <li
+              key={gid}
+              className="issue issue-click"
+              onClick={() => {
+                selectGeneNode(gid);
+                focusGeneNode(gid);
+              }}
+            >
+              <span className="issue-tag">[{DTL_GLYPH[a?.event ?? ''] ?? '·'}]</span>{' '}
+              {node!.label || gid.slice(0, 6)} →{' '}
+              {a ? project.nodes[a.speciesNode]?.label || '?' : S.recon.tipUnmapped}
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title={S.recon.multiEvents} pinable>
+        <div className="recon-stat-grid">
+          <span className="recon-chip">{S.recon.sbUnresolved(unresolved)}</span>
+          {eventMix.speciation && <span className="recon-chip chip-sigma">σ {eventMix.speciation}</span>}
+          {eventMix.duplication && <span className="recon-chip chip-dup">δ {eventMix.duplication}</span>}
+          {eventMix.transfer && <span className="recon-chip chip-transfer">τ {eventMix.transfer}</span>}
+        </div>
+      </Section>
+      <div className="field row-actions" style={{ margin: '8px 12px' }}>
+        <button
+          className="btn danger"
+          onClick={() => {
+            requestConfirm({
+              key: 'recon-clear-selection',
+              title: S.recon.clearMappings,
+              message: S.recon.clearMappingsConfirm(items.length),
+              confirmLabel: S.recon.clearMappings,
+              danger: true,
+              onConfirm: () =>
+                apply((d) => {
+                  const g = d.geneTrees?.find((x) => x.id === entry.id);
+                  if (!g) return;
+                  for (const gid of geneSelection) {
+                    setAssumption(d, entry.id, gid, null);
+                  }
+                }),
+            });
+          }}
+        >
+          {S.recon.clearMappings}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** The four-state dispatcher. */
+export function ReconInspector({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
+  const geneSelection = useStore((s) => s.geneSelection);
+  const selection = useStore((s) => s.selection);
+
+  if (geneSelection.length === 1) {
+    return (
+      <GeneInspectorWrapper geneNodeId={geneSelection[0]} />
+    );
+  }
+  if (geneSelection.length > 1) return <MultiGeneSummary />;
+  if (selection.length === 1) return <SpeciesNodeInspector nodeId={selection[0]} />;
+  return <ReconOverview onBuildGeneTree={onBuildGeneTree} />;
+}
+
+function GeneInspectorWrapper({ geneNodeId }: { geneNodeId: NodeId }) {
+  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
+  if (!activeGeneTreeId) return <ReconInspectorFallback />;
+  return <GeneAssumptionInspector geneTreeId={activeGeneTreeId} geneNodeId={geneNodeId} />;
+}
+
+function ReconInspectorFallback() {
+  return (
+    <div className="panel-section">
+      <h3>{S.reconInspector.title}</h3>
+      <div className="hint">{S.reconInspector.emptyHint}</div>
+    </div>
+  );
+}
+

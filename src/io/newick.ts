@@ -38,10 +38,15 @@
 // so an unrooted import can no longer come back out as a rooted tree.
 
 import { createEmptyProject } from '../model/sampleTree';
-import { newId } from '../model/treeOps';
+import { inferSupportScale, newId } from '../model/treeOps';
 import { tr } from '../ui/strings';
 import { assertNodeCount, assertTreeInput, assertTreeCount } from './limits';
-import type { NodeId, Project, TreeNode } from '../model/types';
+import type { NodeId, Project, SupportScale, TreeNode } from '../model/types';
+
+/** File-wide support convention inference (see treeOps.inferSupportScale). */
+function inferSupportScaleFromValues(values: number[]): SupportScale {
+  return inferSupportScale(values);
+}
 
 // --- tokeniser -----------------------------------------------------------------
 
@@ -254,6 +259,7 @@ function parseSegment(
   name: string,
   issues: string[],
   budget: ParseBudget = newParseBudget(),
+  supportConvention: 'auto' | SupportScale = 'auto',
 ): Project {
   const nodes: Record<NodeId, TreeNode> = {};
   // The node-count guard below must not ask `Object.keys(nodes).length` for every
@@ -301,13 +307,86 @@ function parseSegment(
    * that is exactly the support annotation written by `supportComment` is read
    * back into `support` instead of being stored, so a node with both a name and
    * a support value round-trips unchanged.
+   *
+   * BEYOND the support pair, structured annotations are now PARSED, not just
+   * preserved as text: BEAST / FigTree `[&height=…]`, `[&height_95%_HPD={a,b}]`,
+   * `[&posterior=…]`, `[&bootstrap=…]` / `[&ufboot=…]` / `[&SH-aLRT=…]` become
+   * node age / age-interval / typed support fields, and the app's own NHX
+   * dialect (`&&NHX:S=…,E=…,D=true,T=true,TD=…,L=…` written by reconExport)
+   * is kept as a QUERYABLE map on `meta.nhx` instead of an opaque string —
+   * so a reconciliation report can be read back as data.
    */
   const attachComment = (node: TreeNode, text: string): void => {
-    const m = /^&support=(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)$/.exec(text.trim());
+    const trimmed = text.trim();
+    const m = /^&support=(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)$/.exec(trimmed);
     if (m) {
       const v = Number(m[1]);
       if (Number.isFinite(v)) {
         node.support = v;
+        return;
+      }
+    }
+    // BEAST-style key[=value] pairs: `&key=val,key2=val2` or `&&NHX:key=val,...`.
+    if (/^&{1,2}[A-Za-z_]/.test(trimmed)) {
+      const isNhx = trimmed.startsWith('&&NHX:');
+      const body = isNhx ? trimmed.slice(6) : trimmed.replace(/^&{1,2}/, '');
+      const pairs: Record<string, string> = {};
+      for (const part of body.split(',')) {
+        const eq = part.indexOf('=');
+        if (eq <= 0) continue;
+        pairs[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+      }
+      let consumed = false;
+      const num = (v: string | undefined): number | undefined => {
+        if (v === undefined) return undefined;
+        const cleaned = v.replace(/[{}[\]]/g, '');
+        const n = Number(cleaned);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      // Age: BEAST height / nodetime / age.
+      const height = num(pairs.height ?? pairs.nodetime ?? pairs.age);
+      if (height !== undefined) {
+        node.age = Math.abs(height);
+        node.ageSource = 'clock';
+        consumed = true;
+      }
+      // Age interval: height_95%_HPD={a,b} or height_range_ms={a,b}.
+      const hpd = pairs['height_95%_HPD'] ?? pairs.height_range_ms ?? pairs.age_range;
+      if (hpd) {
+        const nums = hpd.replace(/[{}[\]]/g, '').split(/[\s,]+/).map(Number).filter(Number.isFinite);
+        if (nums.length >= 2) {
+          node.ageMin = Math.min(nums[0], nums[1]);
+          node.ageMax = Math.max(nums[0], nums[1]);
+          consumed = true;
+        }
+      }
+      // Typed support: posterior (0–1), bootstrap / ufboot / SH-aLRT (0–100).
+      const posterior = num(pairs.posterior);
+      if (posterior !== undefined) {
+        node.support = posterior;
+        node.supportScale = 'fraction';
+        node.supportKind = 'posterior';
+        consumed = true;
+      }
+      for (const bootKey of ['bootstrap', 'ufboot', 'ufboot2', 'SH-aLRT', 'sh-aLRT'] as const) {
+        const boot = num(pairs[bootKey]);
+        if (boot !== undefined && boot > 1) {
+          node.support = boot;
+          node.supportScale = 'percent';
+          node.supportKind = 'bootstrap';
+          consumed = true;
+          break;
+        }
+      }
+      if (isNhx) {
+        // Keep the full NHX map structured and queryable — including the app's
+        // own S=/E=/D=/T=/TD=/L= reconciliation tags.
+        node.meta = { ...node.meta, nhx: { ...(node.meta?.nhx as Record<string, string> | undefined), ...pairs } };
+        consumed = true;
+      }
+      if (consumed) {
+        // Still preserve the raw text for lossless round-tripping.
+        node.meta = { ...node.meta, comments: [...nodeComments(node), text] };
         return;
       }
     }
@@ -432,6 +511,44 @@ function parseSegment(
   // Recording that on the root's meta is what stops the NEXUS / Newick exporters
   // from claiming `[&R]` for an IQ-TREE / RAxML output.
   resolveRootedness(project, issues);
+
+  // PM-31: duplicate tip labels used to be handled only at NEXUS export
+  // (rewritten base_2 + notices), while the canvas and inspector stayed silent —
+  // so a character-table join silently matched only ONE of the duplicates.
+  // Report at import: which labels, how many tips each.
+  {
+    const byLabel = new Map<string, number>();
+    for (const n of Object.values(project.nodes)) {
+      if (n.childrenIds.length > 0 || !n.label) continue;
+      byLabel.set(n.label, (byLabel.get(n.label) ?? 0) + 1);
+    }
+    const dupes = [...byLabel.entries()].filter(([, c]) => c > 1);
+    if (dupes.length > 0) {
+      const shown = dupes.slice(0, 3).map(([l, c]) => `${l}×${c}`).join(', ');
+      issues.push(
+        tr(
+          `树中存在重复末端名（${dupes.length} 个，如 ${shown}）：性状表连接与注释表只会命中其中一个。建议先重命名或用 NEXUS 导出的重名处理`,
+          `The tree has duplicate tip labels (${dupes.length}, e.g. ${shown}): character/annotation table joins will hit only one of each. Rename them first, or use the NEXUS export's deduplication`,
+        ),
+      );
+    }
+  }
+
+  // Stamp the support convention the user declared (or the file-wide inference
+  // chose) onto every support value that carries no explicit scale yet. A bare
+  // `1` under the WRONG convention is the difference between 100% and 1%, so
+  // the scale is recorded at the border, where the convention is known.
+  if (supportConvention !== 'auto') {
+    for (const n of Object.values(project.nodes)) {
+      if (n.support !== undefined && !n.supportScale) n.supportScale = supportConvention;
+      if (n.support !== undefined && n.supportScale === 'percent' && !n.supportKind) {
+        n.supportKind = 'bootstrap';
+      }
+      if (n.support !== undefined && n.supportScale === 'fraction' && !n.supportKind) {
+        n.supportKind = 'posterior';
+      }
+    }
+  }
   return project;
 }
 
@@ -499,6 +616,54 @@ export interface NewickParseResult {
   issues: string[];
 }
 
+export interface NewickParseOptions {
+  /**
+   * The support-value convention of THIS file: 'percent' (0–100 bootstrap),
+   * 'fraction' (0–1 posterior), or 'auto' (infer: any value > 1 ⇒ percent).
+   * The import dialog asks; the answer is stamped on every imported support so
+   * a real 1% bootstrap can never be re-read as 100%.
+   */
+  supportConvention?: 'auto' | SupportScale;
+}
+
+/**
+ * Net-evolution syntax detector. Extended Newick (`(A,B)#H1:::0.9`, PhyloNet /
+ * PhyloNetworks) and Huber–van-Iersel annotations (`(A,B)>H1`) are NOT trees:
+ * this parser treats `#`/`>`/`<`/`@` as ordinary label characters, which would
+ * turn a network into a tree with names like ">H1" while silently DROPPING the
+ * reticulation edges (`0.1#H1` parses as branch length 0.1 and discards the
+ * hybrid tag). Detection happens on the raw text (outside quotes and bracket
+ * comments) so the user is told, in no uncertain terms, that the file is a
+ * network and what their options are — silent degradation is data corruption.
+ */
+const NET_SYNTAX = /[#@<>@]/;
+
+function scanForNetSyntax(input: string): string | null {
+  let inQuote: string | null = null;
+  let inComment = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input[i];
+    if (inQuote) {
+      if (c === inQuote) inQuote = null;
+      continue;
+    }
+    if (inComment) {
+      if (c === ']') inComment = false;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      inQuote = c;
+      continue;
+    }
+    if (c === '[') {
+      inComment = true;
+      continue;
+    }
+    if (NET_SYNTAX.test(c)) return c;
+  }
+  return null;
+}
+
 /**
  * Parse every ";"-separated tree in `input`, reporting anything that could not
  * be represented. Most files hold a single tree; multi-tree files (e.g.
@@ -508,10 +673,23 @@ export function parseNewickTrees(
   input: string,
   name = 'Imported tree',
   budget: ParseBudget = newParseBudget(),
+  options: NewickParseOptions = {},
 ): NewickParseResult {
   assertTreeInput(input);
   const trimmed = input.trim();
   const issues: string[] = [];
+
+  // Net syntax first: refuse-to-lie about what the file contains before any
+  // topology is built from it.
+  const netChar = scanForNetSyntax(trimmed);
+  if (netChar) {
+    issues.push(
+      tr(
+        `该文件包含网状进化 Newick 语法（字符「${netChar}」，如 PhyloNet 扩展 Newick 的 #H1 或 >H1/<H1 标记）。本软件按普通树解析：网状关系已被丢弃，这不是无损导入。请用网络专用工具转换后再导入，或在画布上用「关联线」手工补画网状关系`,
+        `This file contains network-evolution Newick syntax (character "${netChar}", e.g. PhyloNet extended-Newick #H1 or >H1/<H1 markers). It was parsed as an ORDINARY tree: the reticulation was dropped, which is NOT a lossless import. Convert the file with a network-aware tool first, or redraw the reticulation with custom edges on the canvas`,
+      ),
+    );
+  }
 
   const segments: Token[][] = [];
   let cur: Token[] = [];
@@ -526,10 +704,38 @@ export function parseNewickTrees(
   if (cur.length > 0) segments.push(cur);
   if (segments.length === 0) throw new Error('No tree found in Newick string (missing ";"?)');
 
+  // File-wide support convention: an explicit user choice, else inference —
+  // any value above 1 can only be a percent; all-≤1 values are PROBABLY
+  // fractions (posterior probabilities) but the inference is reported so the
+  // user can override it in the dialog.
+  let convention: SupportScale;
+  if (options.supportConvention && options.supportConvention !== 'auto') {
+    convention = options.supportConvention;
+  } else {
+    const numericSupports: number[] = [];
+    for (const seg of segments) {
+      for (const tok of seg) {
+        if (tok.t === 'label' && !tok.quoted) {
+          const v = Number(tok.v);
+          if (Number.isFinite(v)) numericSupports.push(v);
+        }
+      }
+    }
+    convention = inferSupportScaleFromValues(numericSupports);
+    if (numericSupports.length > 0 && convention === 'fraction') {
+      issues.push(
+        tr(
+          `支持值全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 UFBoot=1 表示 1%），请在导入对话框中显式选择「百分比」`,
+          `All support values are ≤ 1 and were interpreted as 0–1 posteriors (fraction). If they are actually 0–100 percentages (e.g. UFBoot=1 meaning 1%), pick "percent" explicitly in the import dialog`,
+        ),
+      );
+    }
+  }
+
   assertTreeCount(segments.length);
   const projects = segments.map((seg, idx) => {
     budget.tree = 0; // per-tree ceiling resets; the document ceiling does not
-    return parseSegment(seg, segments.length > 1 ? `${name} (${idx + 1})` : name, issues, budget);
+    return parseSegment(seg, segments.length > 1 ? `${name} (${idx + 1})` : name, issues, budget, convention);
   });
   return { projects, issues };
 }
@@ -555,6 +761,13 @@ export interface NewickSerializeOptions {
    * statement carries its own `[&R]` / `[&U]` marker.
    */
   rootedMarker?: boolean;
+  /**
+   * Whether the ROOT node's own branch length is written. Default 'write' (the
+   * historical behaviour, kept for round-trip stability); 'omit' produces
+   * `((A,B),C)root;` — some readers reject a root length, and the root edge is
+   * not a real branch. The manual documents the choice.
+   */
+  rootBranchLength?: 'write' | 'omit';
 }
 
 export function serializeNewick(
@@ -608,7 +821,9 @@ export function serializeNewick(
       for (const c of n.childrenIds) parts.delete(c);
     }
     out += nodeToken(n, unnamed.get(id));
-    if (n.branchLength !== undefined) out += `:${n.branchLength}`;
+    if (n.branchLength !== undefined && !(n.parentId === null && options.rootBranchLength === 'omit')) {
+      out += `:${n.branchLength}`;
+    }
     // Comments are written last so a name / support pair that cannot share the
     // single label slot travels in `[&support=…]` (see `supportComment`).
     const texts = [

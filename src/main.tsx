@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { useStore } from './model/store';
 import { initTheme } from './ui/theme';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import './styles/app.css';
 
 // Apply the stored / OS theme before first paint so the chrome never flashes.
@@ -21,7 +22,12 @@ if (!container) throw new Error('Root element #root not found');
 
 createRoot(container).render(
   <React.StrictMode>
-    <App />
+    {/* Root boundary: a render-phase exception anywhere above this line used to
+        blank the window with no recovery path. The boundary shows the error, the
+        diagnostic block and the reload / reset exits instead. */}
+    <ErrorBoundary scope="CladeForge">
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 

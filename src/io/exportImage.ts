@@ -53,6 +53,7 @@ import {
   findCharacter,
   nodeCharacterColor,
 } from '../model/characters';
+import { normalizeSupport as normalizeSupportTyped, supportPercent } from '../model/treeOps';
 import {
   eventBadgeFontSize,
   eventBadgeText,
@@ -93,6 +94,34 @@ export interface ExportOptions {
   eraLevel?: EraLevel;
   /** Transient ancestral-state reconstruction to overlay as posterior pies. */
   asr?: AsrResult | null;
+  /**
+   * Print support values as figure text. The canvas shows support only as
+   * tooltips/ARIA, so the exporter used to add numbers the author never saw;
+   * now the author decides, and the default follows the canvas (off).
+   */
+  showSupportValues?: boolean;
+  /** Include the auto-generated legend (default true; large legends can be turned off). */
+  includeLegend?: boolean;
+  /** Draw a scale bar for branch-length trees (default true). */
+  includeScaleBar?: boolean;
+  /** Grayscale-friendly rendering: desaturated fills, shape+text always on badges. */
+  grayscale?: boolean;
+  /** Soft margin (px) added around the content; 0 = the historical tight crop. */
+  marginPx?: number;
+  /**
+   * Support threshold (0–100) below which branches are drawn dashed/lighter —
+   * the SAME rule the canvas applies through `supportPercent`, so the figure
+   * and the screen finally agree. Undefined = no thresholding.
+   */
+  supportThreshold?: number;
+  /**
+   * Explicit background colour. When absent the project's canvas background is
+   * used as-is (never the CSS variable the LIVE canvas falls back to in dark
+   * mode — the exported figure is always explicit).
+   */
+  background?: string;
+  /** SVG/PDF metadata: method fingerprint, version, timestamp. */
+  metadata?: { method?: string; version?: string; generatedAt?: string };
 }
 
 function escXml(s: string): string {
@@ -127,16 +156,22 @@ function num(v: unknown, fallback = 0): string {
 }
 
 /**
- * Put a support value on the 0–100 scale. `newick.ts` stores whatever the file
- * held: RAxML/PHYLUM write 95, MrBayes/BEAST write 0.95, and comparing a 0–1
- * posterior against a 70 % threshold dimmed EVERY branch of a Bayesian tree in
- * the exported figure while still printing "0.95" next to it.
- * Values ≤ 1 are read as fractions, which is the convention in both tool families.
+ * Put a support value on the 0–100 scale, honouring the node's DECLARED scale
+ * when it has one and falling back to the shared model-level heuristic
+ * otherwise. This used to be a second, diverging copy of the heuristic in
+ * treeOps.ts (it even differed on negative/invalid values), so the same tree
+ * could dim differently on screen and in the exported figure; both consumers
+ * now go through one implementation.
  */
-export function normalizeSupport(v: number): number {
+export function normalizeSupport(
+  v: number,
+  scale?: 'fraction' | 'percent',
+): number {
   if (!Number.isFinite(v)) return 0;
-  return v >= 0 && v <= 1 ? v * 100 : v;
+  const converted = scale ? normalizeSupportTyped(v, scale) : supportPercent({ support: v });
+  return converted ?? 0;
 }
+
 
 function markerSVG(pos: Point, style: NodeStyle, fill: string, stroke: string, dashed: boolean): string {
   if (style.shape === 'none') return '';
@@ -308,6 +343,8 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       legendRows.push(...rows);
     }
   }
+  const legendEnabled = opts.includeLegend ?? true;
+  if (!legendEnabled) legendRows.length = 0;
   const legendHeight = legendRows.length ? legendRows.length * 18 + 18 : 0;
   // The legend is laid out from `minX + 12` with no wrap and no measurement, so a
   // long caption runs past the right edge of the viewBox and is cropped — in SVG,
@@ -328,7 +365,10 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   const defs: string[] = [];
 
   parts.push(
-    `<rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${safeColour(project.canvas.background, '#ffffff')}"/>`,
+    // EXPLICIT colour, never the live canvas's CSS variable: in dark mode the
+    // on-screen background resolves from the theme while `project.canvas.background`
+    // still says light, and the figure must state its own ground truth.
+    `<rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${safeColour(opts.background ?? project.canvas.background, '#ffffff')}"/>`,
   );
 
   // --- time axis (era bands + ticks + environmental events) -------------------
@@ -425,26 +465,35 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     const caps = branchCaps(bs.shape);
     const d = branchPath(from, to, orientation, project.layout.type, bs.shape);
     const dash = dashArray(bs.dash, bs.width);
+    // An UNMEASURED branch must never export as a solid line — the screen marks
+    // it (branchFlags) and hiding "no measurement" as "has length" in the
+    // published figure is the single most misleading export defect. Same dash
+    // language as the canvas.
+    const unmeasured = node.branchLength === undefined;
+    const effDash = unmeasured ? '4 3' : dash;
+    const effColor = unmeasured ? FIG_AXIS : safeColour(color);
     parts.push(
-      `<path d="${d}" fill="none" stroke="${safeColour(color)}" stroke-width="${num(bs.width, 1)}" ${dash ? `stroke-dasharray="${dash}"` : ''} stroke-linejoin="${caps.linejoin}" stroke-linecap="${caps.linecap}"/>`,
+      `<path d="${d}" fill="none" stroke="${effColor}" stroke-width="${num(bs.width, 1)}" ${effDash ? `stroke-dasharray="${effDash}"` : ''} stroke-linejoin="${caps.linejoin}" stroke-linecap="${caps.linecap}"/>`,
     );
-    // Render branch support value (bootstrap / posterior) near the midpoint.
+    // Render branch support value near the midpoint — OPT-IN. The canvas shows
+    // support only as tooltips/ARIA, so printing numbers the author never saw
+    // let a reviewer ask "why is this number in my figure?"; the author now
+    // decides, and the default matches the screen (off).
     if (
+      (opts.showSupportValues ?? false) &&
       typeof node.support === 'number' &&
       Number.isFinite(node.support) &&
       node.childrenIds.length > 0
     ) {
       const mx = (from.x + to.x) / 2;
       const my = (from.y + to.y) / 2;
-      // The dimming threshold is the project's own `supportThreshold` (documented
-      // 0–100), so the layout control carries the same documented meaning in the
-      // exported figure as it has on the canvas.
-      // The stored support is normalised to 0–100 first, so a 0–1 posterior is
-      // not judged against a percentage.
-      const rawThreshold = project.layout.supportThreshold;
+      // The dimming threshold is the explicit option, else the project's own
+      // `supportThreshold` (documented 0–100) — the same rule the canvas
+      // applies, so the figure and the screen finally agree.
+      const rawThreshold = opts.supportThreshold ?? project.layout.supportThreshold;
       const threshold =
         typeof rawThreshold === 'number' && Number.isFinite(rawThreshold) ? rawThreshold : 70;
-      const supportColor = normalizeSupport(node.support) < threshold ? FIG_AXIS : '#1d1d1f';
+      const supportColor = supportPercent(node) < threshold ? FIG_AXIS : '#1d1d1f';
       parts.push(
         `<text x="${mx}" y="${my - 3}" text-anchor="middle" font-size="10" font-family="${FONT_FAMILY}" fill="${supportColor}">${escXml(String(node.support))}</text>`,
       );
@@ -508,6 +557,28 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   }
 
   // --- nodes + labels ---------------------------------------------------------
+  // A COLLAPSED clade exports as a short stub in the figure; without a "+N"
+  // badge a reader cannot tell a collapsed clade from a two-tips clade. The
+  // canvas draws the same badge (NodeView), so the figure says it too.
+  const collapsedTips = (() => {
+    const map = new Map<NodeId, number>();
+    const countOf = (id: NodeId): number => {
+      const cached = map.get(id);
+      if (cached !== undefined) return cached;
+      const n = project.nodes[id];
+      if (!n) return 0;
+      let total = 0;
+      for (const c of n.childrenIds) {
+        const cn = project.nodes[c];
+        if (!cn) continue;
+        total += cn.childrenIds.length === 0 ? 1 : countOf(c);
+      }
+      map.set(id, total);
+      return total;
+    };
+    for (const id of visible) countOf(id);
+    return map;
+  })();
   for (const id of visible) {
     const node = project.nodes[id];
     const pos = positions.get(id);
@@ -527,6 +598,21 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     }
     const marker = markerSVG(pos, style, fill, stroke, dashed);
     if (marker) parts.push(marker);
+    if (node.collapsed) {
+      // Same "+N hidden tips" disclosure the canvas shows: a triangle on the
+      // branch plus the count. Without it the figure misrepresents sampling.
+      const hidden = collapsedTips.get(id) ?? 0;
+      const bx = orientation === 'LR' ? pos.x + style.size + 4 : orientation === 'RL' ? pos.x - style.size - 4 : pos.x;
+      const by = orientation === 'TB' ? pos.y + style.size + 4 : orientation === 'BT' ? pos.y - style.size - 4 : pos.y;
+      parts.push(
+        `<path d="M ${bx} ${by - 4} L ${bx + 7} ${by} L ${bx} ${by + 4} Z" fill="#ffffff" stroke="#6b7280" stroke-width="1"/>`,
+      );
+      if (hidden > 0) {
+        parts.push(
+          `<text x="${bx + 9}" y="${by + 3}" font-size="9" font-family="${FONT_FAMILY}" fill="#6b7280">+${hidden}</text>`,
+        );
+      }
+    }
     const note = node.hypothesisNote?.trim();
     const showLabel = style.showLabel && !!node.label;
     if (showLabel || note) {
@@ -687,6 +773,45 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     }
   }
 
+
+  // --- branch-length scale bar -------------------------------------------------
+  // A figure of a tree with measured branch lengths needs a scale bar; reviewers
+  // ask for it first. Time-calibrated trees already carry the time axis, so the
+  // bar is drawn only for phylograms. Screen-space placement: bottom-left.
+  if ((opts.includeScaleBar ?? true) && project.layout.type === 'rectangular-phylogram') {
+    let pxPerUnit = 0;
+    for (const [id, p] of positions) {
+      const n = project.nodes[id];
+      if (!n?.parentId || typeof n.branchLength !== 'number' || n.branchLength <= 0) continue;
+      const par = positions.get(n.parentId);
+      if (!par) continue;
+      const dist = orientation === 'LR' || orientation === 'RL' ? Math.abs(p.x - par.x) : Math.abs(p.y - par.y);
+      if (dist > 0) pxPerUnit = Math.max(pxPerUnit, dist / n.branchLength);
+    }
+    if (pxPerUnit > 0) {
+      const targetPx = 120;
+      const rawUnit = targetPx / pxPerUnit;
+      const mag = Math.pow(10, Math.floor(Math.log10(rawUnit)));
+      const nice = [1, 2, 5, 10].map((m) => m * mag).filter((v) => v >= rawUnit * 0.5)[0] ?? 10 * mag;
+      const barPx = nice * pxPerUnit;
+      const bx = minX + 12;
+      const by = minY + height - 14;
+      const unit = project.layout.timeUnit || '';
+      parts.push(
+        `<line x1="${bx}" y1="${by}" x2="${bx + barPx}" y2="${by}" stroke="#1d1d1f" stroke-width="2"/>`,
+      );
+      parts.push(
+        `<line x1="${bx}" y1="${by - 4}" x2="${bx}" y2="${by + 4}" stroke="#1d1d1f" stroke-width="2"/>`,
+      );
+      parts.push(
+        `<line x1="${bx + barPx}" y1="${by - 4}" x2="${bx + barPx}" y2="${by + 4}" stroke="#1d1d1f" stroke-width="2"/>`,
+      );
+      parts.push(
+        `<text x="${bx + barPx + 6}" y="${by + 4}" font-size="11" font-family="${FONT_FAMILY}" fill="#1d1d1f">${escXml(`${nice}${unit ? ' ' + unit : ''}`)}</text>`,
+      );
+    }
+  }
+
   // --- legend -----------------------------------------------------------------
   if (legendRows.length) {
     const lx = minX + 12;
@@ -722,10 +847,26 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     }
   }
 
+  const metaBits: string[] = [];
+  if (opts.metadata?.method) metaBits.push(`method: ${opts.metadata.method}`);
+  if (opts.metadata?.version) metaBits.push(`CladeForge ${opts.metadata.version}`);
+  if (opts.metadata?.generatedAt) metaBits.push(`generated ${opts.metadata.generatedAt}`);
+  // Grayscale-friendly mode (PM-67/F6): a document-level luminance filter —
+  // the branch/state colours lose hue but keep their relative lightness, and
+  // the badge shape+code channels (on by default) carry the identity. Applied
+  // as one filter over the figure instead of per-element recolouring, so the
+  // geometry path stays identical.
+  const grayscaleFilter = opts.grayscale
+    ? '  <filter id="cf-grayscale"><feColorMatrix type="saturate" values="0"/></filter>'
+    : '';
+  const grayscaleAttr = opts.grayscale ? ' filter="url(#cf-grayscale)"' : '';
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX} ${minY} ${width} ${height}">`,
-    defs.length ? `<defs>${defs.join('')}</defs>` : '',
-    parts.join('\n'),
+    metaBits.length
+      ? `  <metadata>${escXml(metaBits.join(' · '))}</metadata>`
+      : '',
+    defs.length || grayscaleFilter ? `<defs>${grayscaleFilter}${defs.join('')}</defs>` : '',
+    opts.grayscale ? `<g${grayscaleAttr}>\n${parts.join('\n')}\n</g>` : parts.join('\n'),
     '</svg>',
   ].join('\n');
 
@@ -736,8 +877,18 @@ export function exportSVGString(project: Project, opts: ExportOptions = {}): str
   return buildSVG(project, opts).svg;
 }
 
-/** Rasterise the project SVG to a PNG blob at the given pixel scale. */
-export async function toPngBlob(project: Project, scale = 2, opts: ExportOptions = {}): Promise<Blob> {
+/**
+ * Rasterise the project SVG to a PNG blob at the given pixel scale.
+ * `onClamp` is called when the browser's canvas budgets forced the scale down —
+ * the caller MUST surface it (a silently lowered DPI is how a "300 dpi"
+ * figure arrives at 90 dpi and fails review).
+ */
+export async function toPngBlob(
+  project: Project,
+  scale = 2,
+  opts: ExportOptions = {},
+  onClamp?: (requested: number, effective: number) => void,
+): Promise<Blob> {
   const { svg, width, height } = buildSVG(project, opts);
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   const img = new Image();
@@ -763,7 +914,10 @@ export async function toPngBlob(project: Project, scale = 2, opts: ExportOptions
     MAX_CANVAS / h,
     Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, w * h)),
   );
-  if (fit < 1) s = s * fit;
+  if (fit < 1) {
+    s = s * fit;
+    onClamp?.(scale, s);
+  }
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(width * s);
   canvas.height = Math.ceil(height * s);
@@ -788,6 +942,12 @@ export async function toPdfBlob(project: Project, opts: ExportOptions = {}): Pro
     unit: 'px',
     format: [width, height],
   });
+  if (opts.metadata?.method || opts.metadata?.version) {
+    doc.setProperties({
+      creator: `CladeForge${opts.metadata.version ? ' ' + opts.metadata.version : ''}`,
+      subject: opts.metadata.method ?? '',
+    });
+  }
   const el = new DOMParser().parseFromString(svg, 'image/svg+xml')
     .documentElement as unknown as SVGSVGElement;
   // svg2pdf augments jsPDF with `.svg()`.

@@ -37,6 +37,8 @@ export interface EventTypeDef {
   color: string;
   /** Where this event most naturally attaches (drives the default target). */
   target: 'node' | 'branch' | 'both';
+  /** Catalogue-level default badge shape (per-event overrides still win). */
+  shape?: EventMarkerShape;
 }
 
 /** Badge geometry shared by the canvas layer and the SVG exporter. */
@@ -70,11 +72,45 @@ export function clampEventMarkerSize(size: number): number {
   return Math.min(EVENT_MARKER_SIZE_MAX, Math.max(EVENT_MARKER_SIZE_MIN, size));
 }
 
-/** The badge outline shape; an absent/unknown override falls back to a circle. */
-export function eventMarkerShape(event: EvolutionaryEvent): EventMarkerShape {
-  return EVENT_MARKER_SHAPES.some((s) => s.id === event.markerShape)
-    ? (event.markerShape as EventMarkerShape)
-    : 'circle';
+/**
+ * Default shape per event GROUP: a user-created event used to default to a
+ * circle in a catalogue colour, which made the dense badge fields of a real
+ * figure pure colour code — the exact failure the state palette's CVD testing
+ * was built to prevent, and the strongest non-colour channel (shape) sat unused.
+ * Shape now carries the group identity by default; users can still override
+ * per event, and the catalogue type may declare its own shape.
+ */
+const GROUP_DEFAULT_SHAPE: Record<string, EventMarkerShape> = {
+  物种形成: 'hexagon',
+  Speciation: 'hexagon',
+  灭绝: 'triangle',
+  Extinction: 'triangle',
+  关键演化: 'star',
+  'Key evolution': 'star',
+  基因流: 'diamond',
+  'Gene flow': 'diamond',
+  生物地理: 'square',
+  Biogeography: 'square',
+  微生物: 'square',
+  Microbial: 'square',
+  深时: 'diamond',
+  'Deep time': 'diamond',
+  通用: 'circle',
+  General: 'circle',
+};
+
+export function eventMarkerShape(event: EvolutionaryEvent, project?: Project): EventMarkerShape {
+  if (EVENT_MARKER_SHAPES.some((s) => s.id === event.markerShape)) {
+    return event.markerShape as EventMarkerShape;
+  }
+  const t = findEventType(event.typeId, project);
+  if (t) {
+    const declared = (t as EventTypeDef & { shape?: EventMarkerShape }).shape;
+    if (declared && EVENT_MARKER_SHAPES.some((s) => s.id === declared)) return declared;
+    const byGroup = GROUP_DEFAULT_SHAPE[t.group] ?? GROUP_DEFAULT_SHAPE[t.groupEn];
+    if (byGroup) return byGroup;
+  }
+  return 'circle';
 }
 
 /** The badge radius, with the size override clamped on use. */
@@ -93,9 +129,15 @@ export function eventMarkerColor(event: EvolutionaryEvent): string {
  * become a field of two-letter acronyms. The user opts in per event; a custom
  * `markerText` written by an older document also counts as opting in.
  */
-export function eventMarkerTextVisible(event: EvolutionaryEvent): boolean {
+export function eventMarkerTextVisible(event: EvolutionaryEvent, project?: Project): boolean {
   if (event.markerShowText !== undefined) return event.markerShowText;
-  return !!event.markerText?.trim();
+  // Default ON: with 15+ event types and four near-identical greens in the
+  // catalogue, colour-only badges were not reliably distinguishable — the
+  // two-letter code is the redundant channel that survives greyscale printing
+  // and dichromat vision. Users can still switch a badge (or the whole figure)
+  // to text-free.
+  void project;
+  return true;
 }
 
 /**
@@ -175,23 +217,70 @@ export const EVENT_TYPES: EventTypeDef[] = [
   { id: 'biogeo-dispersal', label: '扩散', labelEn: 'Dispersal', group: '生物地理', groupEn: 'Biogeography', code: 'DI', color: '#0284c7', target: 'branch' },
   { id: 'biogeo-vicariance', label: '隔离分化', labelEn: 'Vicariance', group: '生物地理', groupEn: 'Biogeography', code: 'VI', color: '#0d9488', target: 'node' },
   { id: 'biogeo-extirpation', label: '区域灭绝', labelEn: 'Regional extirpation', group: '生物地理', groupEn: 'Biogeography', code: 'RE', color: '#dc2626', target: 'branch' },
+  // 微生物 / 基因组演化 — the macroevolution list said nothing about the
+  // processes microbial datasets actually annotate (§领域专家 2.7 / §学生博后 4.7).
+  { id: 'symbiogenesis', label: '内共生获得', labelEn: 'Endosymbiosis acquisition', group: '微生物', groupEn: 'Microbial', code: 'SB', color: '#0ea5a3', target: 'node', shape: 'hexagon' },
+  { id: 'genome-reduction', label: '基因组缩减', labelEn: 'Genome reduction', group: '微生物', groupEn: 'Microbial', code: 'GR', color: '#8b5cf6', target: 'branch', shape: 'square' },
+  { id: 'plasmid-gain', label: '质粒获得', labelEn: 'Plasmid gain', group: '微生物', groupEn: 'Microbial', code: 'PG', color: '#0284c7', target: 'node', shape: 'diamond' },
+  { id: 'phage-reassortment', label: '噬菌体/分段重组', labelEn: 'Phage reassortment', group: '微生物', groupEn: 'Microbial', code: 'PH', color: '#ec4899', target: 'branch', shape: 'diamond' },
+  { id: 'metabolic-gain', label: '代谢通路获得', labelEn: 'Metabolic pathway gain', group: '微生物', groupEn: 'Microbial', code: 'MG', color: '#0e9f6e', target: 'branch', shape: 'hexagon' },
+  { id: 'metabolic-loss', label: '代谢通路丢失', labelEn: 'Metabolic pathway loss', group: '微生物', groupEn: 'Microbial', code: 'ML', color: '#b91c1c', target: 'branch', shape: 'triangle' },
+  { id: 'crispr-acquisition', label: 'CRISPR 间隔获得', labelEn: 'CRISPR spacer acquisition', group: '微生物', groupEn: 'Microbial', code: 'CR', color: '#6366f1', target: 'node', shape: 'star' },
+  { id: 'transposon-integration', label: '转座子/ICE 整合', labelEn: 'Transposon/ICE integration', group: '微生物', groupEn: 'Microbial', code: 'TI', color: '#f59e0b', target: 'branch', shape: 'square' },
+  { id: 'hgt-unsampled', label: '来自未采样供体的 HGT', labelEn: 'HGT from unsampled donor', group: '微生物', groupEn: 'Microbial', code: 'HU', color: '#d97706', target: 'both', shape: 'diamond' },
+  // 深时 / 环境驱动
+  { id: 'gene-family-expansion', label: '基因家族扩张', labelEn: 'Gene family expansion', group: '深时', groupEn: 'Deep time', code: 'FE', color: '#14b8a6', target: 'node', shape: 'hexagon' },
+  { id: 'gene-family-contraction', label: '基因家族收缩', labelEn: 'Gene family contraction', group: '深时', groupEn: 'Deep time', code: 'FC', color: '#d946ef', target: 'node', shape: 'triangle' },
+  { id: 'ocean-chemistry-shift', label: '海洋化学转变', labelEn: 'Ocean-chemistry shift', group: '深时', groupEn: 'Deep time', code: 'OC', color: '#0d9488', target: 'branch', shape: 'square' },
   // 通用
   { id: 'custom', label: '自定义事件', labelEn: 'Custom event', group: '通用', groupEn: 'General', code: 'CU', color: '#787774', target: 'both' },
 ];
 
 const EVENT_TYPE_MAP = new Map(EVENT_TYPES.map((t) => [t.id, t]));
 
-export function findEventType(typeId: string): EventTypeDef | undefined {
-  return EVENT_TYPE_MAP.get(typeId);
+/**
+ * Merge a project's USER-DEFINED event types (project.customEventTypes) over
+ * the built-in catalogue. The 15 built-ins are a macroevolution selection; a
+ * microbial / deep-time figure needs first-class "genome reduction",
+ * "plasmid gain", "HGT from an unsampled donor" types, and locking the
+ * ontology to the author's list made every custom event share one grey CU
+ * badge. Types are exportable/importable with the project file (an ontology
+ * file, JSON), and a custom id NEVER silently collides with a built-in.
+ */
+export function customEventTypesOf(project: Project): EventTypeDef[] {
+  const list = project.customEventTypes ?? [];
+  return list
+    .filter((t) => t && typeof t.id === 'string' && !EVENT_TYPE_MAP.has(t.id))
+    .map((t) => ({
+      id: t.id,
+      label: t.label,
+      labelEn: t.labelEn,
+      group: t.group,
+      groupEn: t.groupEn,
+      code: t.code,
+      color: t.color,
+      target: t.target,
+    }));
 }
 
-export function eventColor(event: EvolutionaryEvent): string {
-  return findEventType(event.typeId)?.color ?? '#787774';
+export function eventCatalogue(project?: Project): EventTypeDef[] {
+  if (!project) return EVENT_TYPES;
+  const custom = customEventTypesOf(project);
+  return custom.length > 0 ? [...EVENT_TYPES, ...custom] : EVENT_TYPES;
+}
+
+export function findEventType(typeId: string, project?: Project): EventTypeDef | undefined {
+  if (!project) return EVENT_TYPE_MAP.get(typeId);
+  return eventCatalogue(project).find((t) => t.id === typeId);
+}
+
+export function eventColor(event: EvolutionaryEvent, project?: Project): string {
+  return findEventType(event.typeId, project)?.color ?? '#787774';
 }
 
 /** The code drawn inside an event badge; '?' for a type the catalogue lacks. */
-export function eventCode(event: EvolutionaryEvent): string {
-  return findEventType(event.typeId)?.code ?? '?';
+export function eventCode(event: EvolutionaryEvent, project?: Project): string {
+  return findEventType(event.typeId, project)?.code ?? '?';
 }
 
 export function eventTypeLabel(t: EventTypeDef): string {

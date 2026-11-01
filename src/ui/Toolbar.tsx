@@ -7,40 +7,34 @@
 // The old language (中/EN) and theme (light/dark/system) segmented controls are
 // now one Preferences dropdown (see PreferencesMenu.tsx): BUG-10 caps the header
 // at ten clickable targets and those five segments were low-frequency chrome.
+//
+// Mode-aware (§5.5): the reconciliation workspace hides "add children" — the
+// gene tree is read-only and species-tree topology edits belong to the standard
+// workspace — while undo/redo/save/preferences stay (their tooltips explain
+// what a reconciliation-mode undo can cover).
 
 import { PlusIcon, ResetIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { PreferencesMenu } from './PreferencesMenu';
 import * as file from '../io/fileActions';
-import { S, tr } from './strings';
-import { notify } from './toast';
+import { S } from './strings';
 
-/** View-mode segment: 标准 standard canvas ↔ 协同 side-by-side reconciliation. */
+/** View-mode segment: 标准 standard canvas ↔ 协同 side-by-side reconciliation.
+ *
+ * The active state and the workspace switch BOTH read `reconMode`, so the
+ * toolbar can never claim reconciliation while the app renders the standard
+ * workspace. Entering with no gene tree opens the reconciliation EMPTY state —
+ * there is no toast-and-nothing path any more (review R-16). */
 function ViewModeSegment() {
   const reconMode = useStore((s) => s.reconMode);
-  const setReconMode = useStore((s) => s.setReconMode);
-  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
-  const firstGeneId = useStore((s) => s.project.geneTrees?.[0]?.id ?? null);
-  const setActiveGeneTree = useStore((s) => s.setActiveGeneTree);
-
-  const enterRecon = () => {
-    if (activeGeneTreeId) {
-      setReconMode(true);
-      return;
-    }
-    if (firstGeneId) {
-      setActiveGeneTree(firstGeneId);
-      setReconMode(true);
-      return;
-    }
-    notify.info(tr('请先在「协同」模块导入一个基因树', 'Import a gene tree in the Reconcile module first'));
-  };
+  const enterReconWorkspace = useStore((s) => s.enterReconWorkspace);
+  const exitReconWorkspace = useStore((s) => s.exitReconWorkspace);
 
   return (
     <div className="seg" role="tablist" aria-label={S.recon.section}>
       <button
         className={`seg-btn${!reconMode ? ' active' : ''}`}
-        onClick={() => setReconMode(false)}
+        onClick={() => exitReconWorkspace()}
         aria-selected={!reconMode}
         title={S.recon.viewStandard}
       >
@@ -48,7 +42,7 @@ function ViewModeSegment() {
       </button>
       <button
         className={`seg-btn${reconMode ? ' active' : ''}`}
-        onClick={() => !reconMode && enterRecon()}
+        onClick={() => !reconMode && enterReconWorkspace()}
         aria-selected={reconMode}
         title={S.recon.viewRecon}
       >
@@ -89,6 +83,7 @@ function UndoRedo() {
 
 export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => void }) {
   const projectName = useStore((s) => s.project.name);
+  const reconMode = useStore((s) => s.reconMode);
 
   // Tauri's drag region fires only when the mousedown TARGET itself carries
   // `data-tauri-drag-region` — an attribute on the parent `.header-bar` does
@@ -99,9 +94,14 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
   // and are ignored by the Tauri webview.)
   return (
     <div className="toolbar" data-tauri-drag-region>
-      <button className="btn primary" onClick={onAddChildrenDialog} title={S.toolbar.addMultiTitle}>
-        <PlusIcon /> {S.toolbar.addChildren}
-      </button>
+      {/* No "add children" in the reconciliation workspace: adding nodes to the
+          species tree here would invalidate existing mappings silently, and the
+          action reads as if it could edit the read-only gene tree. */}
+      {!reconMode && (
+        <button className="btn primary" onClick={onAddChildrenDialog} title={S.toolbar.addMultiTitle}>
+          <PlusIcon /> {S.toolbar.addChildren}
+        </button>
+      )}
       <UndoRedo />
       <ViewModeSegment />
       <div className="spacer" data-tauri-drag-region />

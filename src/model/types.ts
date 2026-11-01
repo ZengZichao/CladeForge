@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Core data model for CladeForge.
 // A Project is a single serialisable document: one rooted tree (adjacency map),
 // plus free-form "custom edges" (reticulation / special evolutionary relations),
@@ -6,6 +7,20 @@
 export type NodeId = string;
 export type EdgeId = string;
 export type EventId = string;
+
+/**
+ * What a node's `support` number MEASURES. The statistics are not
+ * interchangeable — an SH-aLRT of 90 and a Bayesian posterior of 0.90 are
+ * different quantities that must not share one threshold line — so every
+ * consumer that turns support into visuals (dashing, dimming, printing)
+ * should know the kind before it compares.
+ */
+export type SupportKind = 'bootstrap' | 'posterior' | 'sh-alrt' | 'consensus-frequency' | 'other';
+/** Scale a support value is stored in. Import lets the user declare it explicitly. */
+export type SupportScale = 'fraction' | 'percent';
+
+/** Where a node's `age` (and its interval) came from. Drives labelling of estimated ages. */
+export type AgeSource = 'fossil' | 'clock' | 'estimate' | 'manual';
 
 export type NodeShape = 'circle' | 'square' | 'diamond' | 'none';
 export type DashStyle = 'solid' | 'dashed' | 'dotted';
@@ -109,6 +124,15 @@ export interface EdgeStyle {
 
 export type CharacterType = 'discrete' | 'continuous';
 
+/**
+ * The model a discrete character's cost matrix encodes. 'unordered' is Fitch
+ * (all changes cost 1), 'wagner' an ordered linear gradient, 'dollo' an
+ * irreversible gain (changes back to the derived state are forbidden), and
+ * 'custom' any hand-edited matrix. The model drives matrix presets in the UI
+ * and decides which homoplasy wording is scientifically meaningful (C3).
+ */
+export type CharacterModel = 'unordered' | 'wagner' | 'dollo' | 'custom';
+
 /** Where a character's colours are painted: node markers or branches. */
 export type CharacterColorTarget = 'node' | 'branch';
 
@@ -136,9 +160,17 @@ export interface Character {
   /**
    * Optional Sankoff step matrix: `costMatrix[i][j]` is the cost of a change
    * from state i to state j (indices follow `states` order). Undefined means
-   * uniform cost (Fitch parsimony: 0 on the diagonal, 1 elsewhere).
+   * uniform cost (Fitch parsimony: 0 on the diagonal, 1 elsewhere). `Infinity`
+   * is a legal entry and forbids a transition outright; only NaN falls back.
    */
   costMatrix?: number[][];
+  /** Which standard model the cost matrix implements (drives presets and C3 wording). */
+  model?: CharacterModel;
+  /**
+   * Relative weight of this character in cross-character aggregates (weighted
+   * CI summaries, correlation families). 1 = unweighted.
+   */
+  weight?: number;
 }
 
 export type Confidence = 'high' | 'medium' | 'low';
@@ -156,6 +188,10 @@ export interface HypothesisMeta {
   confidence?: Confidence;
   support?: string;
   against?: string;
+  /** Accession / catalogue number of the specimen or record backing the claim. */
+  accession?: string;
+  /** DOI or URL of the publication backing the claim. */
+  doi?: string;
 }
 
 /**
@@ -202,10 +238,28 @@ export interface EvolutionaryEvent {
   markerText?: string;
 }
 
-/** A named alternative hypothesis over the shared topology (see model/layers.ts). */
+/** Lifecycle of a named hypothesis layer. */
+export type HypothesisStatus = 'draft' | 'tested' | 'supported' | 'refuted';
+
+/**
+ * A named alternative hypothesis over the shared topology (see model/layers.ts).
+ * Beyond the name, a competitive hypothesis carries its CLAIM (statement), how
+ * it would be tested (prediction), lifecycle status and evidence pointers —
+ * without these the comparison numbers have nowhere to land.
+ */
 export interface HypothesisLayer {
   id: string;
   name: string;
+  /** One-sentence claim this layer asserts (the hypothesis本体). */
+  statement?: string;
+  /** The observation that would test or refute the claim. */
+  prediction?: string;
+  status?: HypothesisStatus;
+  /** Evidence pointers: character/event ids, citations, DOIs. */
+  evidence?: string[];
+  author?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
@@ -228,7 +282,7 @@ export interface EnvironmentalEvent {
  * are shared across layers and are not stored here.
  */
 export interface StoredLayer {
-  states: Record<NodeId, Record<string, string | number>>;
+  states: Record<NodeId, Record<string, string | number | string[]>>;
   meta: Record<NodeId, Record<string, HypothesisMeta>>;
   /** Free-text hypothesis annotation per node (shown on the tree). */
   notes?: Record<NodeId, string>;
@@ -241,9 +295,27 @@ export interface TreeNode {
   parentId: NodeId | null;
   childrenIds: NodeId[];
   branchLength?: number;
+  /**
+   * Branch-support value as written by the source file. Read it together with
+   * `supportKind` / `supportScale` — the bare number alone cannot distinguish
+   * a 0–1 posterior from a 0–100 bootstrap, and `1` under the two conventions
+   * means "100%" and "1%" respectively.
+   */
   support?: number;
+  /** What the support number measures, when the source (or the user) declares it. */
+  supportKind?: SupportKind;
+  /** Scale the support value is stored in; defaulted heuristically only when unknown. */
+  supportScale?: SupportScale;
   /** Node age (time before present) in the project's time unit; used by the time-calibrated layout. */
   age?: number;
+  /** Lower bound of the node-age interval (e.g. 95% HPD), same unit as `age`. */
+  ageMin?: number;
+  /** Upper bound of the node-age interval. */
+  ageMax?: number;
+  /** Where the age / interval comes from; 'estimate' marks topology-derived pseudo-ages. */
+  ageSource?: AgeSource;
+  /** Citation for the age or its interval (publication / database id). */
+  ageCitation?: string;
   /** Manual position override in world coordinates. */
   position?: Point;
   /** When true the node keeps its manual position and is ignored by auto-layout. */
@@ -256,8 +328,12 @@ export interface TreeNode {
    * Character-state assignments keyed by character id. On a tip this is an
    * observed/known state; on an internal node it is the user's *hypothesised*
    * ancestral state. Discrete characters store a state id, continuous a number.
+   * A discrete assignment may also be a `string[]`: a POLYMORPHIC /
+   * partially-observed set of states ("A or B") — distinct from an unobserved
+   * tip, which simply has no entry. Parsimony scores a set as the cheapest
+   * state in the set; Mk multiplies likelihoods of the set members.
    */
-  charStates?: Record<string, string | number>;
+  charStates?: Record<string, string | number | string[]>;
   /** Confidence / evidence for this node's ancestral-state hypotheses, per character. */
   charMeta?: Record<string, HypothesisMeta>;
   /**
@@ -266,6 +342,12 @@ export interface TreeNode {
    * layers swaps it with that layer's snapshot.
    */
   hypothesisNote?: string;
+  /**
+   * Structured per-tip metadata (accession, strain, host, country, collection
+   * date, lineage, …) joined from an external table. Queryable — unlike the
+   * free-form `meta` bag — and it is what the CSV/TSV import writes.
+   */
+  annotations?: Record<string, string | number>;
   meta?: Record<string, unknown>;
 }
 
@@ -275,7 +357,19 @@ export interface CustomEdge {
   targetId: NodeId;
   label?: string;
   style: EdgeStyle;
+  /**
+   * What the drawn line asserts. Custom edges are DRAWING ANNOTATIONS, not
+   * model components — they never enter parsimony / Mk / DTL computation —
+   * but recording the intended meaning makes them a checkable register of
+   * reticulation hypotheses instead of decoration.
+   */
+  kind?: CustomEdgeKind;
+  /** Free-text justification (evidence, source, why this reticulation). */
+  note?: string;
 }
+
+/** Meaning a user can attach to a custom (net-like) edge. */
+export type CustomEdgeKind = 'hgt' | 'hybridization' | 'symbiosis' | 'recombination' | 'association';
 
 /** A fossil calibration point for time-calibrated layouts. */
 export interface CalibrationPoint {
@@ -284,6 +378,8 @@ export interface CalibrationPoint {
   minAge: number;
   maxAge: number;
   label?: string;
+  /** Where the bound comes from (publication, PBDB collection id, …). */
+  source?: string;
 }
 
 // --- gene-tree / species-tree reconciliation (DTL) ---------------------------
@@ -337,7 +433,102 @@ export interface ReconCosts {
   loss: number;
 }
 
-export const DEFAULT_RECON_COSTS: ReconCosts = { dup: 1, transfer: 2, loss: 1 };
+/**
+ * DTL cost presets. Every default encodes a methodological stance — the classic
+ * `transfer = 2` makes "duplication + loss" cheaper than a single transfer,
+ * which biases microbial (HGT-rich) data toward under-reporting transfers.
+ * The presets make the stance explicit and selectable:
+ *  - `eukaryote-conservative`: the historical default; transfers are expensive.
+ *  - `unit`: standard Page/JMM unit costs — every event costs the same.
+ *  - `microbial`: HGT is treated as at least as cheap as duplication + loss.
+ */
+export const RECON_COST_PRESETS: {
+  id: string;
+  label: string;
+  labelEn: string;
+  costs: ReconCosts;
+}[] = [
+  {
+    id: 'eukaryote-conservative',
+    label: '真核/保守（转移较贵）',
+    labelEn: 'Eukaryote / conservative (costly transfers)',
+    costs: { dup: 1, transfer: 2, loss: 1 },
+  },
+  { id: 'unit', label: '标准等价代价 (1,1,1)', labelEn: 'Standard unit costs (1,1,1)', costs: { dup: 1, transfer: 1, loss: 1 } },
+  {
+    id: 'microbial',
+    label: '微生物/高转移（转移廉价）',
+    labelEn: 'Microbial / transfer-friendly (cheap transfers)',
+    costs: { dup: 1, transfer: 1, loss: 0.5 },
+  },
+];
+
+/**
+ * The historical default. Changed from `{dup:1, transfer:2, loss:1}` to the
+ * standard unit costs: with `transfer = 2` the solver reads real horizontal
+ * transfers as "duplication + loss", which is the wrong prior for microbial
+ * data. Users who want the conservative stance pick the matching preset.
+ */
+export const DEFAULT_RECON_COSTS: ReconCosts = { dup: 1, transfer: 1, loss: 1 };
+
+/**
+ * Options beyond the raw cost vector that change what the DTL DP is allowed to
+ * do. All optional; absent fields mean the documented defaults.
+ */
+export interface ReconOptions {
+  /**
+   * Allow the gene root to be placed at any species node for free. `false`
+   * (the default) anchors the root at the species root, which keeps absolute
+   * event counts comparable with standard tools.
+   */
+  freeRoot?: boolean;
+  /** Extra cost charged when the (free) root placement implies a transfer. Default 0. */
+  rootTransferCost?: number;
+  /**
+   * Tie-break priority among equal-cost event classes at one cell. Absent =
+   * the documented `duplication > speciation > transfer`. Microbial studies
+   * often want transfer first, so the order is user-selectable.
+   */
+  tiePriority?: ReconEventType[];
+}
+
+/**
+ * Which mapping lines the reconciliation canvas draws.
+ *
+ * `tips` (the default) shows only tip mappings — the anchors produced by label
+ * matching; `internal` only the inferred/edited internal placements; `all`
+ * everything. Selected/hovered lines are always shown regardless of scope.
+ */
+export type MappingScope = 'tips' | 'internal' | 'all';
+
+/**
+ * Transient reconciliation-canvas display options. Pure UI state: never written
+ * into the Project, never part of undo/redo or autosave.
+ */
+export interface ReconViewOptions {
+  mappingScope: MappingScope;
+  showLabels: boolean;
+  showEventGlyphs: boolean;
+  showLosses: boolean;
+  showMappings: boolean;
+  /** Mirror one shared scale across both panes (pan stays independent). */
+  syncZoom: boolean;
+  /** Restrict drawn mapping lines to one event class, unresolved only, or all. */
+  eventFilter: ReconEventType | 'unresolved' | 'all';
+}
+
+export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
+  mappingScope: 'tips',
+  showLabels: true,
+  showEventGlyphs: true,
+  showLosses: true,
+  showMappings: true,
+  syncZoom: true,
+  eventFilter: 'all',
+};
+
+/** Which section of the reconciliation left panel the rail currently shows. */
+export type ReconSection = 'trees' | 'scenario' | 'validation' | 'view';
 
 export interface LayoutSettings {
   mode: LayoutMode;
@@ -347,13 +538,39 @@ export interface LayoutSettings {
   hGap: number;
   /** Spacing between adjacent leaves / siblings (px). */
   vGap: number;
+  /**
+   * Explicit length of the time axis in px for time-calibrated layouts.
+   * Decoupled from `hGap`: deriving the axis from `root.height × hGap` ties
+   * px-per-Ma to the topological depth of the sampling, which makes deep-time
+   * figures mathematically unreadable and non-comparable across trees. When
+   * absent the legacy `root.height × max(20, hGap)` behaviour is kept.
+   */
+  timeAxisLength?: number;
+  /** Depth mapping for the time axis. 'log' maps age as log10(1 + age/t0). */
+  timeScale?: TimeScaleKind;
+  /** Log-origin t0 (in time units) for the 'log' mapping. Default 1. */
+  timeLogOrigin?: number;
+  /**
+   * An optional second unit (e.g. "年" next to "Ma") rendered beside axis
+   * tick labels so a deep-time figure is not misread in the wrong magnitude.
+   */
+  secondTimeUnit?: string;
   /** Unit label for node ages in the time-calibrated layout (e.g. "Ma"). */
   timeUnit?: string;
   /** Support threshold (0–100); branches below this are drawn dashed/lighter. */
   supportThreshold?: number;
   /** When true, nodes with support below the threshold are auto-collapsed. */
   collapseBelowThreshold?: boolean;
+  /**
+   * Screen-constant label rendering (Level-of-Detail): when zoomed out below
+   * the readable threshold, labels switch to a screen-fixed size instead of
+   * vanishing with the world-space scale.
+   */
+  labelLod?: boolean;
 }
+
+/** Mapping from age to pixel depth on a time axis. */
+export type TimeScaleKind = 'linear' | 'sqrt' | 'log';
 
 export interface CanvasSettings {
   width: number;
@@ -366,6 +583,57 @@ export interface StyleDefaults {
   branch: BranchStyle;
   edge: EdgeStyle;
   branchGradient: BranchGradient;
+}
+
+/**
+ * Where the pieces of this document came from. A publishable hypothesis
+ * document must record its provenance: which tool produced the topology, what
+ * the branch lengths / ages / traits were derived from, and by whom.
+ */
+export interface ProjectProvenance {
+  topologySource?: string;
+  lengthSource?: string;
+  dateSource?: string;
+  traitSource?: string;
+  methodsNote?: string;
+  createdUtc?: string;
+  modifiedUtc?: string;
+}
+
+/** What kind of stored analysis run this is. */
+export type AnalysisKind =
+  | 'parsimony'
+  | 'asr'
+  | 'correlation'
+  | 'consistency'
+  | 'blombergK'
+  | 'phylosignal'
+  | 'treeDistance'
+  | 'other';
+
+/**
+ * A first-class, retained analysis run. Inference results that only live in
+ * component state cannot be cited, compared or exported — so completed runs
+ * are appended here with their method, parameters, input fingerprint and the
+ * software version, and become part of the document.
+ */
+export interface AnalysisResult {
+  id: string;
+  kind: AnalysisKind;
+  /** Human-readable name shown in the run history list. */
+  title?: string;
+  characterIds?: string[];
+  /** Fingerprint of the inputs (characters + relevant node states + costs). */
+  fingerprint: string;
+  /** Method name exactly as it should be cited. */
+  method: string;
+  params?: Record<string, string | number | boolean | null>;
+  /** Application version that produced the result. */
+  version: string;
+  createdAt: string;
+  payload: unknown;
+  /** Pinned results do not go stale when unrelated parts of the document change. */
+  pinned?: boolean;
 }
 
 export interface Project {
@@ -396,6 +664,28 @@ export interface Project {
   geneTrees?: GeneTreeEntry[];
   /** Costs for the DTL dynamic-programming optimum. */
   reconCosts?: ReconCosts;
+  /** DTL solver options (free root, tie priority, …). */
+  reconOptions?: ReconOptions;
+  /** User-defined event types extending the built-in catalogue (see model/events.ts). */
+  customEventTypes?: CustomEventType[];
+  /** Retained analysis runs (see AnalysisResult). */
+  analysisResults?: AnalysisResult[];
+  /** Structured provenance record for this document. */
+  provenance?: ProjectProvenance;
+  /**
+   * Absolute path this document was opened from / last saved to. Present only
+   * when the app can write it back in place (native build); ⌘S saves in place
+   * when set, ⌘⇧S always asks.
+   */
+  sourcePath?: string;
+  /** ISO timestamp of the last successful disk save. */
+  savedAt?: string;
+  /** Document revision at the last successful disk save (dirty = current ≠ saved). */
+  savedRevision?: number;
+  /** ISO timestamp of the last modification. */
+  modifiedAt?: string;
+  /** Application version that last wrote this document. */
+  appVersion?: string;
   /**
    * Stable id into the built-in sample catalogue (`sampleTree.ts`), set when the
    * document was created from a sample card. It lets the app rebuild a still
@@ -406,7 +696,44 @@ export interface Project {
   sampleId?: string;
 }
 
-export const PROJECT_VERSION = '0.1.0';
+/**
+ * A user-defined event type. Extends the built-in catalogue so a figure is not
+ * locked to the author's 15 built-ins — microbial / deep-time semantics
+ * (genome reduction, plasmid gain, CRISPR acquisition, …) can be first-class.
+ * Loaded from `project.customEventTypes`, importable/exportable as a JSON
+ * ontology file.
+ */
+export interface CustomEventType {
+  id: string;
+  label: string;
+  labelEn: string;
+  group: string;
+  groupEn: string;
+  /** Two-letter code shown inside badges when text is on. */
+  code: string;
+  color: string;
+  target: 'node' | 'branch' | 'both';
+  /** Badge outline shape; defaults to the catalogue default. */
+  shape?: EventMarkerShape;
+}
+
+/**
+ * Schema version of the project file format. Kept in lock-step with the
+ * application minor version (see README "Project file format" for the
+ * compatibility matrix): a 0.1.0 file migrates forward through `MIGRATIONS`
+ * (see io/projectIO.ts).
+ */
+export const PROJECT_VERSION = '0.2.0';
+
+/**
+ * Application version. Injected at build time from package.json by Vite
+ * (`define.__APP_VERSION__` in vite.config.ts) so there is exactly ONE source
+ * of truth; the literal below is only a fallback for non-Vite consumers
+ * (tests run through Vitest, which shares the define).
+ */
+declare const __APP_VERSION__: string | undefined;
+export const APP_VERSION: string =
+  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.2.0';
 
 export const DEFAULT_NODE_STYLE: NodeStyle = {
   shape: 'circle',

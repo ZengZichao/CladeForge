@@ -1399,7 +1399,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
       expect(oracle, c.name).not.toBe('over-budget');
       const exact = oracle as BruteMk;
 
-      const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+      const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' });
       expect(app, c.name).not.toBeNull();
       const result = app as NonNullable<typeof app>;
       expect(
@@ -1448,7 +1448,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
         const oracle = bruteMk(flat, char.states.length, obs, rate);
         if (oracle === 'over-budget') continue;
         const exact = oracle as BruteMk;
-        const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+        const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' });
         expect(app, `${descriptor.id}/${char.name}`).not.toBeNull();
         const result = app as NonNullable<typeof app>;
         expect(flat.substituted, `${descriptor.id}: branch lengths explicit`).toBe(0);
@@ -1488,7 +1488,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
     const flat = flatten(project);
     const obs = observations(flat, project, char);
     const exact = bruteMk(flat, 2, obs, appRate(flat)) as BruteMk;
-    const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS) as NonNullable<ReturnType<typeof reconstructMk>>;
+    const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' }) as NonNullable<ReturnType<typeof reconstructMk>>;
     for (const v of flat.ids.map((_, i) => i)) {
       const row = app.probs.get(flat.ids[v]) as number[];
       expect(maxAbsDiff(row, exact.probs[v])).toBeLessThan(1e-9);
@@ -1636,7 +1636,7 @@ describe('randomised instances vs the two parsimony and Mk oracles', () => {
       const oracle = bruteMk(flat, k, obs, rate);
       if (oracle === 'over-budget') continue;
       const exact: BruteMk = oracle;
-      const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+      const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' });
       expect(app, `trial ${trial}`).not.toBeNull();
       const result = app as NonNullable<typeof app>;
       let localWorst = 0;
@@ -2178,7 +2178,7 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
         const obs = observations(flat, project, char);
         const rMean = appRate(flat);
         const atMean = pruneMk(flat, k, obs, rMean);
-        const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS) as NonNullable<
+        const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' }) as NonNullable<
           ReturnType<typeof reconstructMk>
         >;
         expect(flat.substituted, `${descriptor.id}: branch lengths explicit`).toBe(0);
@@ -2249,17 +2249,23 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
     });
     expect(worst).toBeLessThan(1e-9);
 
-    // and what the app itself reports (at r = 1/mean) differs from that optimum
-    const app = reconstructMk(sample, char, DEFAULT_ASR_OPTIONS) as NonNullable<ReturnType<typeof reconstructMk>>;
-    let appChanges = 0;
-    let appShift = 0;
+    // The app's ML fit must reproduce the oracle's ML rate and, at that rate,
+    // the exact ML marginals — this is the productised path (B3/M1): the number
+    // is now fitted, reported, and independently checkable.
+    const app = reconstructMk(sample, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'ml' }) as NonNullable<ReturnType<typeof reconstructMk>>;
+    expect(
+      Math.abs((app.rate.rate - ml.rate) / ml.rate),
+      'app ML rate vs oracle ML rate (relative)',
+    ).toBeLessThan(1e-3);
+    let appWorst = 0;
     flat.ids.forEach((id, v) => {
       const p = app.probs.get(id) as number[];
-      if (peaksDiffer(p, bf.probs[v])) appChanges += 1;
-      appShift = Math.max(appShift, maxAbsDiff(p, bf.probs[v]));
+      appWorst = Math.max(appWorst, maxAbsDiff(p, bf.probs[v]));
     });
+    expect(appWorst, 'app posteriors at its own ML rate vs exact ML marginals').toBeLessThan(1e-6);
+    expect(app.rate.logLikelihood, 'app lnL vs oracle lnL').toBeCloseTo(ml.logLik, 6);
     record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'ml-pruner-vs-exact', worst < 1e-9 ? 'exact' : 'OFF', `r_ML = ${ml.rate.toPrecision(4)}, assignments = ${bf.explored}`);
-    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'app-at-1-over-mean-vs-ML-exact', appChanges, `nodes changing marginal state; max |Δp| = ${appShift.toPrecision(4)}`);
+    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'app-ML-vs-exact', `max |Δp| = ${appWorst.toExponential(2)}`, `r_ML(app) = ${app.rate.rate.toPrecision(6)}, lnL(app) = ${app.rate.logLikelihood?.toPrecision(9)}`);
   });
 });
 

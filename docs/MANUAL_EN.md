@@ -431,7 +431,7 @@ Character correlation is reported in two clearly separated layers, because an ov
 
 A high overlap says the pair is worth investigating — not that it is significant, and not that it is causal.
 
-**Tree-constrained permutation test.** Click **Run tree-constrained permutation test** to get an actual p-value. The states of character B are re-shuffled across the tips that are scored for B, preserving B's marginal state frequencies and its missing-data pattern; B's most-parsimonious change-branch set is then recomputed on the same topology with the same step matrix, and the statistic is the same Jaccard overlap. The p-value is one-sided:
+**Tree-constrained permutation test.** Click **Run tree-constrained permutation test** to get an actual p-value. The tip states of BOTH characters are re-drawn — each character's states are re-shuffled independently across the tips scored for it, preserving both marginal state frequencies and both missing-data patterns — and both most-parsimonious change-branch sets are recomputed on the same topology with the same step matrices. The statistic is the same Jaccard overlap. (A replicate is a draw from the JOINT null, not a shuffle around one frozen character; freezing character A would make the p-value depend on which character the caller passed first.) The wording "two-sided" in the method name refers to the two characters both being re-drawn, NOT to a two-sided test: the p-value is one-sided (upper tail):
 
 ```
 p = (1 + number of replicates ≥ observed) / (permutations + 1)
@@ -439,9 +439,9 @@ p = (1 + number of replicates ≥ observed) / (permutations + 1)
 
 By default 999 permutations run, so the smallest reportable value is printed as `p < 0.0010` rather than `p = 0`. The generator is seeded, so re-running on an unchanged project returns the same numbers, and the mean of the permuted null distribution is reported so you can see how far the observation sits from the null centre.
 
-**Multiple testing.** The 24 pairs with the strongest overlap enter the tested family, and all p-values in that family are **Holm–Bonferroni** adjusted. Only the adjusted p supports a "significant (≤ 0.05)" verdict; the raw p is still shown, clearly labelled. Pairs beyond the cap are reported as skipped and receive no verdict.
+**Multiple testing.** The corrected family is every pair a statistic exists for (membership never depends on the observed score or a p-value); when a compute cap bites it cuts on a DETERMINISTIC pair key, and the dialog prints "tested X of Y pairs (deterministic subset)". All p-values in the family are corrected together with **Holm–Bonferroni** (m = the pairs actually tested). Only the corrected p supports a "significant (≤ 0.05)" verdict; the raw p is still shown, clearly labelled.
 
-**Limits.** A pair cannot be tested when fewer than 3 tips are scored for it, or when the tree is large enough that the permutation work budget leaves too few replicates; such pairs stay descriptive. This test permutes observations, not evolutionary pathways, and it is **not** Pagel's (1994) likelihood-ratio test of correlated transition rates, which CladeForge does not implement.
+**Limits.** A pair cannot be tested when fewer than 3 tips are scored for it, or when the tree is large enough that the permutation work budget leaves too few replicates; such pairs stay descriptive. The corrected family is every pair a statistic exists for; when a compute cap bites, it cuts on a DETERMINISTIC pair key (never on the observed score), and the dialog prints "tested X of Y pairs". This test permutes observations, not evolutionary pathways, and it is **not** Pagel's (1994) likelihood-ratio test of correlated transition rates, which CladeForge does not implement.
 
 ### Tree Summary Statistics
 
@@ -451,7 +451,7 @@ By default 999 permutations run, so the smallest reportable value is printed as 
 
 ### Continuous Characters
 
-- **Blomberg's K** — a *point estimate* relative to Brownian motion, where BM equals 1: K > 1 means the trait is more clustered than BM predicts, K < 1 more dispersed. CladeForge runs no permutation and no BM-simulation test, so the application draws no evolutionary conclusion from the number: the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly.
+- **Blomberg's K** — a *point estimate* relative to Brownian motion, where BM equals 1: K > 1 means the trait is more clustered than BM predicts, K < 1 more dispersed. A seeded Brownian-motion simulation on the same tree (button "Simulate BM null") gives a two-sided p-value; without it, the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly. A real zero-length branch (synchronous divergence) is used AS zero and reported separately from imputed ones. Separately: a tree that is not fully binary inflates CI/RI, and the panel says so.
 - **Branch-length coverage** travels with every K. A fully measured tree reports that all branches use the supplied lengths; a partially measured one warns that the remaining branches were imputed as 1, which makes the value a *topological* (cladogram-scale) K rather than a time-scaled one — a difference that matters when comparing K across trees.
 - A K is only produced when at least one continuous character is scored. When it cannot be computed, the panel names the reason instead of showing a number.
 
@@ -513,11 +513,18 @@ The module keeps running tallies for the active gene tree as you edit: speciatio
 
 **Requirements:** The solver requires binary gene trees. Polytomies break the lineage bookkeeping — resolve them first. Species trees may have any arity.
 
-### Reconciliation View
+### Reconciliation View (a workspace of its own)
 
-Click **Enter reconciliation view** for a side-by-side display: the species tree on the left, the gene tree on the right, and event-coloured mapping lines between them. The fit includes the taxon labels on both sides, so names are no longer clipped by the pane edge. A compact σ / δ / τ / λ summary bar at the bottom reports the active scenario's counts. Click a gene node to inspect and edit its DTL assumption. Alt+click a species node to set the mapping of the selected gene node. **Esc** leaves the view; the header's view-mode switch does the same.
+Click **Reconciliation view** in the header (or any entry in the Reconcile module) to enter the reconciliation **workspace** — a second, complete workspace with its own rail, left panel, inspector, toolbar and status bar rather than a swapped-in canvas:
 
-The reconciliation inspector carries the species-tree mapping as a dropdown, the event type (with a control to clear it again), the loss count on the incoming branch, the node's confidence, support value and supporting/contradicting evidence, and for a tip-bearing clade how many tips it spans.
+- **Left:** the reconciliation rail (Trees / Scenario / Validation / View). The *Scenario* section carries a searchable, filterable **assumption list** (all / unresolved / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom.
+- **Centre:** a toolbar row (active gene tree, Fit both, sync zoom, mapping scope), two titled panes (species tree · analysis cladogram; gene tree · read-only, each with node count, zoom readout and per-pane Fit / 1:1), the **mapping bridge** (event-coloured mapping lines stay in the empty bridge between the trees instead of painting over nodes and labels), and a legend row.
+- **Right:** the inspector shows one of four states — nothing selected → scenario overview (completeness, event tallies, data quality, legend, quick actions); one gene node → the DTL assumption editor (with previous/next unresolved navigation and "centre the target node in the species pane"); one species node → the species-node details plus the gene lineages mapped here; several gene nodes → a batch summary with batch clearing.
+- **Bottom status bar:** tip mappings n/N, internal resolved n/N, unresolved, errors/notes, σ/δ/τ/λ and both zoom readouts; the segments jump to the matching panel.
+
+Mapping lines default to **tip mappings only** (the label-matched anchors); internal mappings appear when the scope changes or when the relevant gene node is selected / hovered. The selected line is emphasised with end-point rings while the rest fade. Fit re-applies automatically on window or panel resize while fit mode is active; labels hide below a readability threshold (hover a node for its name). Responsive tiers: ≥1440 both panels inline; 1200–1439 the right panel is a drawer (open via the toolbar's "Scenario overview", auto-opened on your first selection); 1024–1199 both are drawers. The canvas never overflows horizontally.
+
+Ways in: the **Reconcile** sample card (gene-family reconciliation) lands here in one click; the reconciliation empty state offers build / create-from-species / import / **load the reconciliation sample**; the command palette (⌘K) has "Load reconciliation sample". Deleting the last gene tree keeps you in the (empty) reconciliation workspace — no more standard canvas under a reconciliation toolbar; undo restores the tree. **Esc** or the header mode switch leaves the workspace. The reconciliation workspace offers no "add children" action and no species-tree topology context menu — the gene tree is read-only, and structural edits belong to the standard workspace.
 
 ### Validation
 
@@ -693,30 +700,40 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 |----------|--------|
 | ⌘Z / Ctrl+Z | Undo |
 | ⌘⇧Z / Ctrl+Y | Redo |
-| ⌘S / Ctrl+S | Save project |
+| ⌘S / Ctrl+S | Save project (in place when a path is known) |
+| ⌘⇧S | Save as… |
 | ⌘O / Ctrl+O | Open project (`.cladeforge.json`) — import a tree from the File menu, or by dropping a file |
 | ⌘T / ⌘N | New tab |
-| ⌘F / Ctrl+F | Search nodes |
+| ⌘W | Close tab |
+| ⌘A | Select all tips |
+| ⌘F / Ctrl+F | Search nodes · in the reconciliation view this only points at 场景 › 假设清单 |
 | ⌘⇧F | Fit to window |
+| ⌘0 | Fit to window |
 | ⌘K | Command palette |
-| ⌘? | Shortcut reference |
+| ⌘? / ⌘/ | Shortcut reference |
 | ⌘= / ⌘- | Zoom in / out |
 | ⌘. | Collapse / expand side panels |
+| ⌘1 … ⌘7 | Jump to module 1–7 |
 
 ### Canvas
 
 | Shortcut | Action |
 |----------|--------|
 | Delete / Backspace | Delete the selected nodes, or the selected custom edge. Risky deletions ask for confirmation, and the toast offers an Undo that reverts that deletion |
-| Esc | Clear selection / abort gesture / leave the reconciliation view |
+| F2 | Rename selected node |
+| Esc | Clear selection / abort gesture |
+| Esc | Leave the reconciliation view (reconciliation view only) |
 | Arrow keys | Nudge the selected nodes by 1px (Shift = 10px). In rectangular layouts movement is constrained to the tree's depth axis, so the arrows across that axis do nothing |
 | Alt + ← / ↑ · Alt + → / ↓ | Move the selection to the previous / next node in display order, wrapping at either end |
-| Wheel | Zoom canvas |
+| Wheel | Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan) |
 | Space / middle-drag | Pan canvas |
+| Shift/Alt + background drag | Marquee-select nodes |
 | Drag node | Move node |
 | Alt + drag onto node | Reparent |
 | Drag port dot | Create custom link |
 | Double-click node | Rename |
+| ⇧F10 | Open the node context menu |
+| Click the collapse arrow | Expand a collapsed branch |
 | Shift + click | Multi-select (2 selected shows MRCA) |
 
 ### Command Palette
@@ -736,9 +753,9 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 
 ## 14. Project File Format
 
-CladeForge projects are stored as JSON files with the `.cladeforge.json` extension. The current schema version is **0.1.0**.
+CladeForge projects are stored as JSON files with the `.cladeforge.json` extension. The current schema version is **0.2.0** (kept in lock-step with the application minor version; see `docs/FORMAT.md` for the machine-readable schema, a field-by-field reference and a minimal 20-line example file).
 
-The file is an envelope rather than a bare project: `app` (`"CladeForge"`), `version`, and `project` (the document described below). Reading runs an explicit, ordered version-migration step, which exists for future schema changes: `0.1.0` is the initial schema, so no step applies to a file written by this release, while a file stamped newer than this build is opened on a best-effort basis and tells you so. The envelope deliberately keeps the version the document was actually validated against rather than re-stamping it with this build's version, so a partially understood file cannot come back claiming to be migrated.
+The file is an envelope rather than a bare project: `app` (`"CladeForge"`), `version`, and `project` (the document described below). Reading runs an explicit, ordered version-migration step: a `0.1.0` file migrates forward to `0.2.0` (the new fields — support kind/scale, node-age intervals, tip annotations, hypothesis-layer statements, analysis results, provenance, save-path memory — all backfill with defaults), while a file stamped newer than this build is opened on a best-effort basis and tells you so. The envelope deliberately keeps the version the document was actually validated against rather than re-stamping it with this build's version, so a partially understood file cannot come back claiming to be migrated.
 
 ### Structure
 

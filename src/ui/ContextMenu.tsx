@@ -1,7 +1,7 @@
 // Right-click context menu. Actions depend on what was clicked (node, custom
 // edge, or empty canvas).
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import {
   addChildrenSpaced,
@@ -59,6 +59,19 @@ export function ContextMenu({
   const selectEdge = useStore((s) => s.selectEdge);
   const clearSelection = useStore((s) => s.clearSelection);
 
+  // Keyboard operation: the menu carries the ONLY entry points for insert-parent
+  // / rerooting / ladderize, so a keyboard user needs it fully — open, arrow,
+  // Enter. The container takes focus on mount; ↑/↓ move across the actionable
+  // items; Enter/Space activate; Escape closes.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [cursor, setCursor] = useState(0);
+  useEffect(() => {
+    listRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    setCursor((c) => Math.min(c, Math.max(0, actionable.length - 1)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
   useEffect(() => {
     const onDoc = () => onClose();
     // Escape while an IME candidate list is open cancels the composition,
@@ -88,11 +101,30 @@ export function ContextMenu({
       {
         label: S.context.deleteEdge,
         danger: true,
+        // PM-20: a custom edge is an asserted reticulation CLAIM with its own
+        // note/kind — deleting it silently was the one destructive action with
+        // no safety net. Route through the delete guard so the toast carries
+        // the same Undo affordance node deletion has.
         onClick: run(() => {
-          apply((d) => {
-            d.customEdges = d.customEdges.filter((e) => e.id !== edgeId);
+          const edge = project.customEdges.find((e) => e.id === edgeId);
+          const label = edge?.label || edge?.kind || tr('未命名关联线', 'unnamed edge');
+          // One undo-able step with an explicit confirmation toast (PM-20).
+          requestConfirm({
+            key: 'delete-edge',
+            title: S.context.deleteEdge,
+            message: tr(
+              `将删除关联线「${label}」及其注记。该操作可撤销。`,
+              `This deletes the custom edge "${label}" and its note. The action is undoable.`,
+            ),
+            confirmLabel: S.context.deleteEdge,
+            danger: true,
+            onConfirm: () => {
+              apply((d) => {
+                d.customEdges = d.customEdges.filter((e) => e.id !== edgeId);
+              });
+              selectEdge(null);
+            },
           });
-          selectEdge(null);
         }),
       },
     ];
@@ -103,7 +135,11 @@ export function ContextMenu({
       { label: S.context.addBinary, onClick: run(() => apply((d) => addChildrenSpaced(d, id, 2))) },
       { label: S.context.addTernary, onClick: run(() => apply((d) => addChildrenSpaced(d, id, 3))) },
       { label: S.context.addMulti, onClick: run(() => onAddChildrenDialog(id)) },
-      { label: S.context.addSibling, onClick: run(() => apply((d) => addSiblingSpaced(d, id))) },
+      // PM-19: the root has no sibling — the item used to render there and do
+      // NOTHING on click. Hidden rather than disabled-and-silent.
+      ...(node && node.parentId !== null
+        ? [{ label: S.context.addSibling, onClick: run(() => apply((d) => addSiblingSpaced(d, id))) }]
+        : []),
       { sep: true },
       { label: S.context.insertParent, onClick: run(() => apply((d) => insertParent(d, id))) },
     ];
@@ -233,6 +269,7 @@ export function ContextMenu({
   }
 
   const left = Math.min(target.x, window.innerWidth - 190);
+  const actionable = items.filter((it) => !it.sep && !it.disabled);
   const top = Math.min(target.y, window.innerHeight - (items.length * 34 + 12));
   const contextLabel = target.edgeId
     ? S.toolbar.contextEdge
@@ -240,10 +277,32 @@ export function ContextMenu({
       ? S.toolbar.contextNode
       : S.toolbar.contextCanvas;
 
+  const actionableIndex = (label: string | undefined): number =>
+    actionable.findIndex((a) => a.label === label);
+
   return (
     <div
+      ref={listRef}
       className="context-menu"
-      style={{ left, top }}
+      style={{ left, top, outline: 'none' }}
+      role="menu"
+      aria-label={contextLabel}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          e.stopPropagation();
+          setCursor((c) => {
+            const n = actionable.length;
+            if (n === 0) return 0;
+            return e.key === 'ArrowDown' ? (c + 1) % n : (c - 1 + n) % n;
+          });
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const item = actionable[cursor];
+          if (item?.onClick) item.onClick();
+        }
+      }}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div className="context-menu-label">{contextLabel}</div>
@@ -254,12 +313,24 @@ export function ContextMenu({
           <button
             key={it.label}
             className="menu-item"
-            style={it.danger ? { color: 'var(--danger)' } : undefined}
+            role="menuitem"
+            aria-disabled={it.disabled || undefined}
+            style={{
+              ...(it.danger ? { color: 'var(--danger)' } : undefined),
+              ...(it.disabled ? { opacity: 0.5 } : {}),
+            }}
             disabled={it.disabled}
             title={it.title}
             onClick={it.onClick}
+            onMouseEnter={() => {
+              const idx = actionableIndex(it.label);
+              if (idx >= 0) setCursor(idx);
+            }}
           >
-            <span>{it.label}</span>
+            <span>
+              {actionableIndex(it.label) === cursor && !it.disabled ? '▸ ' : ''}
+              {it.label}
+            </span>
           </button>
         ),
       )}

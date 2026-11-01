@@ -19,7 +19,7 @@
 
 import { serializeNewick } from './newick';
 import { tipNames } from './nexus';
-import type { LayoutType, NodeId, Project } from '../model/types';
+import { APP_VERSION, type LayoutType, type NodeId, type Project } from '../model/types';
 
 /** Escape a string for a double-quoted R literal. */
 function rStr(s: string): string {
@@ -160,6 +160,11 @@ export function buildRScript(project: Project): string {
   // about the lengths, not the parser.
   const tree = apeTree(project, tipNames(project));
   const plot = apePlotOptions(project.layout.type);
+  // The rate statement the header prints: the app fits ML by default now, but
+  // a saved result may still have used the moment convention — say which.
+  const asrRateNote = project.analysisResults?.some((r) => r.kind === 'asr' && r.params?.['rateMethod'] === 'moment')
+    ? 'moment estimate 1/mean(branch length) — a convention, not an ML fit; recomputing with ape::ace will differ'
+    : 'maximum-likelihood fit (1-D profile over the pruning likelihood)';
 
   // Character payload as R list(...) literals. The keys of each `tips` vector are
   // the SAME de-duplicated names `tip.label` was written with, so a state can
@@ -236,6 +241,23 @@ export function buildRScript(project: Project): string {
 # CladeForge reproducible-analysis script
 # Project : ${project.name.replace(/["\\\n]/g, ' ')}
 # Format  : CladeForge project v${project.version}
+# Software: CladeForge ${APP_VERSION} (this header is the provenance stamp a
+#           reproducibility checklist asks for: software version, generation
+#           time and the analysis parameters are printed beside the numbers)
+# Generated: ${new Date().toISOString()}
+#
+# PARAMETER SUMMARY (what the app used):
+#   * parsimony: tie-break = parent-state first, then tip frequency, then
+#     declaration order; the reported single path is ONE of possibly many
+#     equally parsimonious reconstructions.
+#   * Mk: rate ${'${asrRateNote}'}; display threshold applied post hoc; the
+#     posterior is marginal (per-node), NOT joint.
+#   * The R implementation below computes the likelihood in ORDINARY space
+#     while the app runs in log-space: values agree to floating-point noise on
+#     modest trees but can drift on very large or very unbalanced ones.
+#   * Node ancestral states asserted by the user in CladeForge are IGNORED by
+#     the parsimony baseline (independent reference by design); the R script
+#     reproduces that baseline, not the user's hypotheses.
 #
 # What this script reproduces, and what it does not:
 #   REPRODUCED (same algorithms as the application):

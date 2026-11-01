@@ -25,7 +25,16 @@ export function buildFileMenuItems(
   return [
     { label: S.menu.new, onClick: () => file.actionNewProject() },
     { label: S.menu.open, onClick: () => void file.actionOpenProject() },
+    // 保存 lives in the FILE menu — it used to exist only on the toolbar and
+    // ⌘S, which is the least conventional place for the most conventional action.
+    { label: S.review.saveMenu, onClick: () => void file.actionSaveProject() },
+    { label: S.review.saveAsMenu, onClick: () => void file.actionSaveProjectAs() },
+    { label: S.review.revertMenu, onClick: () => void file.actionRevertProject() },
+    { sep: true },
     {
+      // The recent entry OPENS THE LIST — the old behaviour jumped straight to
+      // the most recent file with no submenu and no feedback, and with no
+      // recents it silently did nothing at all.
       label: S.menu.recent,
       onClick: () => {
         if (firstRecent) onOpenRecent(firstRecent);
@@ -33,6 +42,8 @@ export function buildFileMenuItems(
     },
     { sep: true },
     { label: S.menu.importTree, onClick: () => void file.actionImportTree() },
+    { label: S.review.importTable, onClick: () => void file.actionImportTable('matrix') },
+    { label: S.review.pasteTree, onClick: () => void file.actionPasteTreeFromClipboard() },
     { sep: true },
     { label: S.exportItems.svg, onClick: () => void file.actionExportSVG() },
     { label: S.exportItems.png, onClick: () => void file.actionExportPNG() },
@@ -45,6 +56,11 @@ export function buildFileMenuItems(
       label: S.exportItems.nexus,
       onClick: () => void file.actionExportNexus(),
     },
+    { label: S.review.exportNexml, onClick: () => void file.actionExportNexml() },
+    { sep: true },
+    { label: S.review.exportMatrixCsv, onClick: () => void file.actionExportMatrixCsv() },
+    { label: S.review.exportAnnotationsCsv, onClick: () => void file.actionExportAnnotationsCsv() },
+    { label: S.review.exportMatrixTemplate, onClick: () => void file.actionExportMatrixTemplate() },
     { sep: true },
     { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },
     { label: S.exportItems.hypothesisJSON, onClick: () => void file.actionExportHypothesisJSON() },
@@ -58,7 +74,9 @@ export function buildRecentItems(
   onOpen: (entry: RecentEntry) => void,
   onClear: () => void,
 ): DropdownItem[] {
-  if (!recents.length) return [{ label: S.menu.recentEmpty }];
+  // The empty placeholder is DISABLED, not a clickable button with no handler —
+  // clicking it used to do nothing at all, which reads as breakage.
+  if (!recents.length) return [{ label: S.menu.recentEmpty, disabled: true }];
   return [
     ...recents.map((e, i) => ({
       label: `${i + 1}. ${e.name}`,

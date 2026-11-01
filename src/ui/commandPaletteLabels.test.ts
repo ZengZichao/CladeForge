@@ -157,9 +157,12 @@ describe('palette labels track the live state', () => {
     const item = host!.querySelector('#cmd-reconView') as HTMLElement;
     expect(useStore.getState().reconMode).toBe(false);
     act(() => item.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    // No gene tree in this document, so the toggle path reports rather than acts.
-    expect(useStore.getState().reconMode).toBe(false);
-    const toasts = useToasts.getState().toasts;
-    expect(toasts[toasts.length - 1]?.message).toBe(S.recon.empty);
+    // With no gene tree the workspace now OPENS into its empty state instead of
+    // toasting and doing nothing (2026-10-31 review, R-16) — the dead-end entry
+    // path is gone, so the click must flip the mode.
+    expect(useStore.getState().reconMode).toBe(true);
+    act(() => {
+      useStore.getState().exitReconWorkspace();
+    });
   });
 });

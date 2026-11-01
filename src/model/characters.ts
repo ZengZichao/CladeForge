@@ -317,7 +317,13 @@ export const MAX_DISTINGUISHABLE_STATES = 39;
 /** A warning once a character outgrows the palette, or null while it is safe. */
 export function stateColorLimitWarning(stateCount: number): string | null {
   if (stateCount <= MAX_DISTINGUISHABLE_STATES) return null;
-  return `该性状有 ${stateCount} 个状态，超出配色可区分的上限（约 ${MAX_DISTINGUISHABLE_STATES} 个）：第 ${MAX_DISTINGUISHABLE_STATES + 1} 个之后的派生色两两差异已小于肉眼可辨的范围，图例与分支着色可能被误读。建议改用直接标注、图案填充或合并状态。`;
+  // Bilingual through the shared string table — this text reaches the character
+  // panel directly, and a hardcoded Chinese string in an English UI is exactly
+  // the drift the locale parity machinery exists to prevent.
+  return tr(
+    `该性状有 ${stateCount} 个状态，超出配色可区分的上限（约 ${MAX_DISTINGUISHABLE_STATES} 个）：第 ${MAX_DISTINGUISHABLE_STATES + 1} 个之后的派生色两两差异已小于肉眼可辨的范围，图例与分支着色可能被误读。建议改用直接标注、图案填充或合并状态。`,
+    `This character has ${stateCount} states, above the distinguishable-colour limit (~${MAX_DISTINGUISHABLE_STATES}): derived colours after the first ${MAX_DISTINGUISHABLE_STATES} differ by less than the eye can tell, so the legend and branch colours can be misread. Use direct labels, pattern fills, or merge states instead.`,
+  );
 }
 
 /** Palette QA: worst pairwise CIE76 distance among the first `count` colours. */

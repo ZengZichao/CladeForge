@@ -101,6 +101,16 @@ export const NodeView = memo(function NodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.label);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Screen-space hit floor: the DOM hit circle is in WORLD units, so at 0.2×
+  // zoom a 14px marker gave a 5.6px target — under every minimum-click standard.
+  // The radius never drops below a 10-SCREEN-px floor; the drag layer's own
+  // grid already works in screen space, and this makes the DOM agree with it.
+  const scale = useStore((s) => s.view.scale);
+  const hitRadius = Math.max(style.size + 8, 10 / Math.max(scale, 0.01));
+  const toggleCollapse = () => apply((d) => {
+    const n = d.nodes[node.id];
+    if (n && n.childrenIds.length > 0) n.collapsed = !n.collapsed;
+  });
 
   useEffect(() => {
     if (editing) {
@@ -110,6 +120,13 @@ export const NodeView = memo(function NodeView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
+  // F2 (requestRename) opens this node's editor — the keyboard path to the
+  // double-click-only rename.
+  const renameRequest = useStore((s) => s.renameRequest);
+  useEffect(() => {
+    if (renameRequest?.id === node.id) setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renameRequest?.seq]);
 
   const commitRename = () => {
     setEditing(false);
@@ -163,6 +180,9 @@ export const NodeView = memo(function NodeView({
       aria-label={ariaLabel}
       aria-selected={selected || undefined}
       aria-expanded={node.collapsed ? false : node.childrenIds.length > 0 ? true : undefined}
+      // Roving tab index: the selection carries keyboard focus, so Tab reaches
+      // the tree canvas as a real stop and Alt+arrows walk the tree from it.
+      tabIndex={selected ? 0 : -1}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onDoubleClick={(e) => {
@@ -177,7 +197,7 @@ export const NodeView = memo(function NodeView({
           at the bottom of the group so the marker, label and port keep their own
           (smaller) hit testing on top. */}
       <circle
-        r={style.size + 8}
+        r={hitRadius}
         fill="transparent"
         pointerEvents="all"
         data-role="node"
@@ -190,13 +210,13 @@ export const NodeView = memo(function NodeView({
           Together they create the "glow + ring" effect. */}
       {selected && !isDropTarget && (
         <>
-          <circle r={style.size + 8} className="node-halo" />
+          <circle r={hitRadius} className="node-halo" />
           <circle r={style.size + 4} className="node-ring" />
         </>
       )}
       {isDropTarget && (
         <>
-          <circle r={style.size + 8} className="node-halo-drop" />
+          <circle r={hitRadius} className="node-halo-drop" />
           <circle r={style.size + 4} className="node-ring-drop" />
         </>
       )}
@@ -207,12 +227,22 @@ export const NodeView = memo(function NodeView({
       <Marker style={style} role="node" id={node.id} fill={markerFill} stroke={markerStroke} dashed={markerDashed} />
 
       {node.collapsed && node.childrenIds.length > 0 && (
+        // The collapse arrow used to carry data-role="node", so the FIRST thing
+        // a user tried with it (click the triangle to expand) selected or began
+        // dragging the node instead. It is now its own toggle target.
         <path
           d={`M ${style.size + 2} ${-4} L ${style.size + 10} 0 L ${style.size + 2} 4 Z`}
           fill={style.stroke}
-          data-role="node"
+          data-role="collapse-toggle"
           data-node-id={node.id}
-        />
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCollapse();
+          }}
+          style={{ cursor: 'pointer' }}
+        >
+          <title>{tr('点击展开此枝', 'Click to expand this branch')}</title>
+        </path>
       )}
 
       {showLabel && !editing && (

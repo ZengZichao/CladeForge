@@ -101,16 +101,85 @@ fn static_roots() -> Vec<PathBuf> {
     roots.into_iter().collect()
 }
 
-/// Folders the user approved for this run by choosing a file inside one of them
-/// in the native open/save dialog.
+/// Folders the user approved by choosing a file inside one of them in the
+/// native open/save dialog.
 ///
-/// Process memory only: it dies with the app, so a folder approved once does not
-/// quietly become a permanent capability, and nothing is written to disk that a
-/// later build could read back as an approval.
+/// The set is persisted to a plain file under the OS config dir
+/// (`$XDG_CONFIG_HOME/app.cladeforge.desktop` / `~/Library/Application
+/// Support/...` / `%APPDATA%\...`), because the review flagged the real
+/// workflow break: a科研 user's working folders (`~/research/...`, a NAS mount)
+/// are NOT under Documents, and re-approving them after every app restart made
+/// "recent files" useless. Persistence is guarded by the same
+/// [`widening_is_safe`] policy as the in-memory path — nothing a person did not
+/// pick in a dialog is ever recorded, hidden folders directly inside the home
+/// are still refused, and the file only ever CONTAINS canonical directory
+/// paths, so a tampered entry can at worst point somewhere that must also
+/// pass `validate_path`'s symlink/traversal checks before any IO happens.
 static APPROVED_ROOTS: OnceLock<Mutex<BTreeSet<PathBuf>>> = OnceLock::new();
 
+/// Where the persisted approvals live, or None when the OS gives no config dir.
+fn approved_roots_file() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("XDG_CONFIG_HOME") {
+        if !dir.trim().is_empty() {
+            return Some(PathBuf::from(dir).join("app.cladeforge.desktop").join("approved-roots.txt"));
+        }
+    }
+    if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+        if !home.trim().is_empty() {
+            let base = if cfg!(target_os = "macos") {
+                PathBuf::from(home).join("Library").join("Application Support")
+            } else if cfg!(target_os = "windows") {
+                std::env::var("APPDATA").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from(&home))
+            } else {
+                PathBuf::from(home).join(".config")
+            };
+            return Some(base.join("app.cladeforge.desktop").join("approved-roots.txt"));
+        }
+    }
+    None
+}
+
+fn load_approved_roots() -> BTreeSet<PathBuf> {
+    let mut out = BTreeSet::new();
+    if let Some(path) = approved_roots_file() {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let p = PathBuf::from(line);
+                // Re-run the admission policy on load: a folder that was safe
+                // when approved but has since become a symlink into the home
+                // (or was hand-added to the file) is dropped, not honoured.
+                if widening_is_safe(&p) && p.is_dir() {
+                    out.insert(p);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn persist_approved_roots(guard: &BTreeSet<PathBuf>) {
+    let Some(path) = approved_roots_file() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut body = String::from("# CladeForge dialog-approved working folders (one canonical path per line)\n");
+    for root in guard {
+        body.push_str(&root.to_string_lossy());
+        body.push('\n');
+    }
+    // Atomic-enough for this file: temp + rename on the same volume.
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, body).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    }
+}
+
 fn approved_store() -> &'static Mutex<BTreeSet<PathBuf>> {
-    APPROVED_ROOTS.get_or_init(|| Mutex::new(BTreeSet::new()))
+    APPROVED_ROOTS.get_or_init(|| Mutex::new(load_approved_roots()))
 }
 
 fn approved_roots() -> Vec<PathBuf> {
@@ -124,15 +193,18 @@ fn approved_roots() -> Vec<PathBuf> {
 }
 
 /// Remember the folder a person just picked a file in, if remembering it is safe.
+/// The set is persisted so the approval survives an app restart (review PM-53).
 fn remember_approved_root(dir: &Path) {
     if !widening_is_safe(dir) {
         return;
     }
     let canonical = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    approved_store()
+    let mut guard = approved_store()
         .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(canonical);
+        .unwrap_or_else(PoisonError::into_inner);
+    if guard.insert(canonical) {
+        persist_approved_roots(&guard);
+    }
 }
 
 /// Approving one file must not hand the whole policy back.
@@ -202,7 +274,7 @@ fn refusal(path: &Path) -> String {
             .join(", ")
     };
     format!(
-        "Refusing {}: it is outside the folders CladeForge may access ({}). To work somewhere else, choose the file with the open or save dialog: the folder you pick is then allowed for the rest of this session.",
+        "Refusing {}: it is outside the folders CladeForge may access ({}). To work somewhere else, choose the file with the open or save dialog: the folder you pick is then allowed, and the approval is remembered across app restarts.",
         describe(path),
         listed
     )

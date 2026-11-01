@@ -67,7 +67,6 @@ import { Section } from './Section';
 import { stateLabel } from '../model/characters';
 import { parsimony, type ParsimonyResult } from '../model/parsimony';
 import { EventEditor } from './EventEditor';
-import { GeneAssumptionInspector } from './ReconInspector';
 import { requestDeletion } from './deleteGuard';
 import { S, tr, selectedCount } from './strings';
 import { notify } from './toast';
@@ -201,8 +200,56 @@ function NodeCharRow({
           <Field label={S.confidence.against}>
             <TextField value={meta?.against ?? ''} onCommit={(v) => cm({ against: v })} />
           </Field>
+          {/* Evidence pointers (I7): an accession / DOI beside the claim is what
+              turns "the posteriors say X" into something a reviewer can check. */}
+          <Field label={tr('凭证 accession', 'Evidence accession')}>
+            <TextField value={meta?.accession ?? ''} onCommit={(v) => cm({ accession: v })} />
+          </Field>
+          <Field label={tr('凭证 DOI/URL', 'Evidence DOI/URL')}>
+            <TextField value={meta?.doi ?? ''} onCommit={(v) => cm({ doi: v })} />
+          </Field>
         </div>
       )}
+    </>
+  );
+}
+
+// --- Tip annotations (structured metadata) -----------------------------------
+
+/** Editable rows for the node's structured annotations (host / country /
+ *  accession / date / lineage …). Written by the CSV annotation-table join;
+ *  stored on `node.annotations`, not the free-form meta bag, so it is
+ *  queryable and exports with the annotations CSV. */
+function AnnotationRows({
+  node,
+  apply,
+}: {
+  node: TreeNode;
+  apply: Apply;
+}) {
+  const entries = Object.entries(node.annotations ?? {});
+  if (entries.length === 0) return null;
+  return (
+    <>
+      {entries.map(([key, value]) => (
+        <Field key={key} label={key}>
+          <TextField
+            value={String(value)}
+            onCommit={(v) =>
+              apply((d) => {
+                const n = d.nodes[node.id];
+                if (!n) return;
+                if (v.trim() === '') delete n.annotations?.[key];
+                else {
+                  if (!n.annotations) n.annotations = {};
+                  const num = Number(v);
+                  n.annotations[key] = Number.isFinite(num) && v.trim() !== '' ? num : v;
+                }
+              })
+            }
+          />
+        </Field>
+      ))}
     </>
   );
 }
@@ -449,6 +496,10 @@ function NodePanel({
         <Field label={S.node.name}>
           <TextField value={node.label} onCommit={(v) => apply((d) => renameNode(d, id, v))} />
         </Field>
+        {/* Structured tip metadata (joined from a CSV table) renders right
+            under the name: accession, host, country, date, lineage — the
+            per-isolate record a microbial figure needs. */}
+        <AnnotationRows node={node} apply={apply} />
         <Field label={S.node.hypothesisNote}>
           <TextField
             value={node.hypothesisNote ?? ''}
@@ -480,17 +531,48 @@ function NodePanel({
             // a 0.95 value; show it only once the value is clearly a percentage.
             unit={node.support !== undefined && node.support > 1 ? '%' : undefined}
             unitTitle={tr(
-              '支持率：可填 0–1 或 0–100（百分数），不做自动换算',
-              'Support: enter 0–1 or 0–100 (percentage) — no automatic conversion',
+              '支持值：可填 0–1 或 0–100，刻度（scale）随值一起保存；消费方按 scale 判读，绝不猜',
+              'Support: enter 0–1 or 0–100; the scale is stored with the value and consumers read it — never guess',
             )}
             hint={tr('0–1 或 0–100', '0–1 or 0–100')}
             onCommit={(v) =>
               apply((d) => {
                 const n = d.nodes[id];
-                if (n) n.support = v;
+                if (n) {
+                  n.support = v;
+                  // A hand-set value keeps its scale; when the number makes the
+                  // stored scale impossible (0–1 declared percent), correct it.
+                  if (v !== undefined) {
+                    if (v > 1) n.supportScale = 'percent';
+                    else if (!n.supportScale) n.supportScale = 'fraction';
+                  }
+                }
               })
             }
           />
+        </Field>
+        {/* The metadata that makes the number interpretable: what it measures
+            and on which scale. Defaulted heuristically at import, editable here. */}
+        <Field label={tr('支持值类型', 'Support kind')}>
+          <select
+            value={node.supportKind ?? 'other'}
+            onChange={(e) =>
+              apply((d) => {
+                const n = d.nodes[id];
+                if (n) {
+                  n.supportKind = e.target.value as 'bootstrap' | 'posterior' | 'sh-alrt' | 'consensus-frequency' | 'other';
+                  if (n.supportKind === 'posterior') n.supportScale = 'fraction';
+                  if (n.supportKind === 'bootstrap' || n.supportKind === 'sh-alrt' || n.supportKind === 'consensus-frequency') n.supportScale = 'percent';
+                }
+              })
+            }
+          >
+            <option value="bootstrap">{tr('bootstrap（0–100）', 'bootstrap (0–100)')}</option>
+            <option value="posterior">{tr('后验概率（0–1）', 'posterior probability (0–1)')}</option>
+            <option value="sh-alrt">SH-aLRT（0–100）</option>
+            <option value="consensus-frequency">{tr('共识频率（0–100）', 'consensus frequency (0–100)')}</option>
+            <option value="other">{tr('其他 / 未声明', 'other / undeclared')}</option>
+          </select>
         </Field>
         <Field label={S.node.age}>
           <NumberField
@@ -1077,17 +1159,11 @@ export function PropertiesPanel() {
   const project = useStore((s) => s.project);
   const selection = useStore((s) => s.selection);
   const selectedEdgeId = useStore((s) => s.selectedEdgeId);
-  // Reconciliation mode swaps the inspector to DTL assumption editing.
-  const reconMode = useStore((s) => s.reconMode);
-  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
-  const geneSelection = useStore((s) => s.geneSelection);
-
   const [search, setSearch] = useState('');
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [showNoResults, setShowNoResults] = useState(false);
 
   const hasSelection = selection.length > 0 || Boolean(selectedEdgeId);
-  const reconEditActive = reconMode && Boolean(activeGeneTreeId) && geneSelection.length > 0;
 
   // PERF: run parsimony ONCE per (character data, character) and share the result
   // across every node's suggestion row — the previous per-node recompute was
@@ -1112,23 +1188,10 @@ export function PropertiesPanel() {
   }, [charData]);
 
   const content = useMemo(() => {
-    // Reconciliation inspector takes priority while a gene node is selected.
-    if (reconMode && activeGeneTreeId) {
-      if (geneSelection.length === 1) {
-        return (
-          <GeneAssumptionInspector
-            geneTreeId={activeGeneTreeId}
-            geneNodeId={geneSelection[0]}
-          />
-        );
-      }
-      return (
-        <div className="panel-section">
-          <h3>{S.reconInspector.title}</h3>
-          <div className="hint">{S.reconInspector.emptyHint}</div>
-        </div>
-      );
-    }
+    // NOTE: the reconciliation inspector does NOT live here any more — the
+    // reconciliation workspace renders its own four-state `ReconInspector`.
+    // This panel is the STANDARD inspector only, which also removes the old
+    // half-finished `reconEditActive` flag (it was computed and never used).
     if (selectedEdgeId) {
       const edge = project.customEdges.find((e) => e.id === selectedEdgeId);
       // key={edge.id} forces React to remount EdgePanel (and its buffered
@@ -1165,7 +1228,7 @@ export function PropertiesPanel() {
         <div className="hint">{S.inspector.emptyHint}</div>
       </div>
     );
-  }, [project, apply, selection, selectedEdgeId, search, parsimonyResults, reconMode, activeGeneTreeId, geneSelection]);
+  }, [project, apply, selection, selectedEdgeId, search, parsimonyResults]);
 
   // After rendering, detect whether any Section survived the keyword filter;
   // if not, show a "no matching property" hint with a pointer to the global
@@ -1198,21 +1261,17 @@ export function PropertiesPanel() {
       {/* Save semantics, stated where the confusion happens. Every inspector
           edit commits immediately (and the app auto-saves); the toolbar Save
           writes the project FILE. A first-time user should not have to wonder
-          whether an edited Age needs a Save click. Hidden in reconciliation
-          mode, whose inspector is a different fixed form. */}
-      {!reconMode && (
-        <div className="inspector-autosave-hint" role="note">
-          {tr(
-            '属性修改即时生效并自动保存；工具栏 Save 按钮用于保存/导出项目文件。',
-            'Edits apply instantly and are auto-saved. The toolbar Save button saves/exports the project file.',
-          )}
-        </div>
-      )}
+          whether an edited Age needs a Save click. (The reconciliation view has
+          its own inspector and never mounts this panel.) */}
+      <div className="inspector-autosave-hint" role="note">
+        {tr(
+          '属性修改即时生效并自动保存；工具栏 Save 按钮用于保存/导出项目文件。',
+          'Edits apply instantly and are auto-saved. The toolbar Save button saves/exports the project file.',
+        )}
+      </div>
 
-      {/* Inspector search: live-filters sections by title AND field keywords.
-          Hidden in reconciliation mode — the DTL inspector is a fixed form. */}
-      {!reconMode && (
-        <div className="inspector-search">
+      {/* Inspector search: live-filters sections by title AND field keywords. */}
+      <div className="inspector-search">
           <MagnifyingGlassIcon />
           <input
             id="inspector-search"
@@ -1222,8 +1281,7 @@ export function PropertiesPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-        </div>
-      )}
+      </div>
 
       {/* Panel content */}
       <div ref={contentRef}>{content}</div>

@@ -25,6 +25,13 @@ interface EdgeViewProps {
    * data". Hiding the branch instead would erase topology.
    */
   unmeasured?: boolean;
+  /**
+   * Low-support branch (below the document's support threshold): rendered at
+   * reduced opacity so the weakly-supported spine reads at a glance — the
+   * exporter applies the same rule, which is what makes the threshold control
+   * honest on both sides of the screen/export boundary.
+   */
+  dimmed?: boolean;
 }
 
 export const EdgeView = memo(function EdgeView({
@@ -34,6 +41,7 @@ export const EdgeView = memo(function EdgeView({
   layoutType,
   style,
   unmeasured,
+  dimmed,
 }: EdgeViewProps) {
   const d = branchPath(from, to, orientation, layoutType, style.shape);
   const caps = branchCaps(style.shape);
@@ -48,6 +56,7 @@ export const EdgeView = memo(function EdgeView({
         strokeDasharray={dashArray(style.dash, style.width)}
         strokeLinejoin={caps.linejoin}
         strokeLinecap={caps.linecap}
+        opacity={dimmed ? 0.45 : undefined}
       />
       {mark && (
         <path

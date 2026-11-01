@@ -19,6 +19,7 @@ import { RECENTS_CHANGED_EVENT, readRecents, clearRecents, type RecentEntry } fr
 import { Dropdown, type DropdownItem } from './Dropdown';
 import { buildFileMenuItems, buildRecentItems } from './fileMenu';
 import { S, tr } from './strings';
+import { notify } from './toast';
 
 interface PanelPos {
   top: number;
@@ -160,6 +161,25 @@ export function MenuBar({
         'Workflow tour: Traits → Hypotheses → Analysis → Export',
       ),
       onClick: onOpenWorkflowTour,
+    },
+    { sep: true },
+    // In-app feedback channel: the manual said "file an issue" without a URL,
+    // so a stuck user had no path back to the author. The URL is copied to the
+    // clipboard (the webview cannot open a browser without an extra plugin).
+    {
+      label: S.review.reportIssue,
+      onClick: () => {
+        const url = 'https://github.com/zengzichao/CladeForge/issues/new?template=bug_report.md';
+        void import('../io/clipboardIO').then(({ writeClipboardText }) =>
+          writeClipboardText(url),
+        );
+        notify.info(
+          tr(
+            `问题反馈地址已复制：${url}`,
+            `Issue URL copied: ${url}`,
+          ),
+        );
+      },
     },
     { sep: true },
     { label: S.menu.about, onClick: onOpenAbout },

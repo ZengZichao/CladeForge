@@ -79,8 +79,18 @@ END;`;
     // A document that never declared a rootedness marker keeps the CladeForge
     // convention ([&R]); declaring [&U] must survive the round-trip (see below).
     expect(out).toContain('TREE tree1 = [&R]');
-    expect(out).toContain('(A,B)R;');
-    // The serialised output must parse again without errors.
+    // Trees reference the TRANSLATE indices; the table carries the names.
+    expect(out).toContain('(1,2)R;');
+    expect(out).toMatch(/TRANSLATE[\s\S]*1 A/);
+    expect(out).toMatch(/TRANSLATE[\s\S]*2 B/);
+    // The serialised output must parse again without errors — and the
+    // round-trip restores the original tip names through the translate table.
+    const again = parseNexus(out);
+    const labels = Object.values(again.nodes)
+      .filter((n) => n.childrenIds.length === 0)
+      .map((n) => n.label)
+      .sort();
+    expect(labels).toEqual(['A', 'B']);
     expect(() => parseNexus(out)).not.toThrow();
   });
 

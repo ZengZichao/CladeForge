@@ -240,7 +240,10 @@ function solvePair(
   makeTree(species, species.rootId, spSpec);
   const gene = createEmptyProject();
   makeTree(gene, gene.rootId, gSpec);
-  const r = solveDtl(species, gene, costs);
+  // These instances were hand-checked under the free-root convention, which the
+  // solver now keeps behind an explicit option (the default anchors the root at
+  // the species root). Pin the convention the numbers were checked against.
+  const r = solveDtl(species, gene, costs, undefined, { allowFreeRoot: true });
   if (!r.scenario) throw new Error(`solver refused ${spSpec} × ${gSpec}: ${r.error}`);
   return { species, gene, dp: r.scenario };
 }
@@ -514,7 +517,7 @@ describe('solveDtl', () => {
 
   it('refuses a pathologically deep gene tree with a readable error', () => {
     const species = makePectinate(50);
-    const gene = makePectinate(420, 50); // 420 nested levels over 50 species
+    const gene = makePectinate(1600, 50); // 1600 nested levels over 50 species
     let r: ReturnType<typeof solveDtl> | null = null;
     expect(() => {
       r = solveDtl(species, gene, NO_TRANSFER);
@@ -522,7 +525,7 @@ describe('solveDtl', () => {
     expect(r!.error).toBeTruthy();
     expect(r!.error).toMatch(/过深|deeper than/);
     // A tree just under the guard still solves.
-    const ok = solveDtl(species, makePectinate(300, 50), NO_TRANSFER);
+    const ok = solveDtl(species, makePectinate(1200, 50), NO_TRANSFER);
     expect(ok.error).toBeUndefined();
     expect(ok.scenario).toBeTruthy();
   });
