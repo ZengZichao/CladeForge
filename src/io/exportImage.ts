@@ -493,7 +493,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       const rawThreshold = opts.supportThreshold ?? project.layout.supportThreshold;
       const threshold =
         typeof rawThreshold === 'number' && Number.isFinite(rawThreshold) ? rawThreshold : 70;
-      const supportColor = supportPercent(node) < threshold ? FIG_AXIS : '#1d1d1f';
+      // The `typeof support === 'number' && isFinite` guard above also makes
+      // supportPercent(total) finite here, so the comparison is safe.
+      const supportColor = (supportPercent(node) ?? 0) < threshold ? FIG_AXIS : '#1d1d1f';
       parts.push(
         `<text x="${mx}" y="${my - 3}" text-anchor="middle" font-size="10" font-family="${FONT_FAMILY}" fill="${supportColor}">${escXml(String(node.support))}</text>`,
       );

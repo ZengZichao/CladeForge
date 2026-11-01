@@ -21,6 +21,11 @@ describe('export ↔ canvas structure agreement', () => {
     p.nodes[a1].label = 'w';
     p.nodes[a2].label = 'x';
     p.nodes[b].label = 'y';
+    // A collapsed CLADE, not a collapsed leaf: only an internal node hides
+    // descendants, so only it can carry the "+N hidden tips" disclosure.
+    const [w1, w2] = addChildren(p, a1, 2);
+    p.nodes[w1].label = 'w1';
+    p.nodes[w2].label = 'w2';
     for (const id of [a1, a2, a, b]) setBranchLength(p, id, 1);
     p.nodes[a1].collapsed = true;
     const char = newCharacter('t');
@@ -44,6 +49,7 @@ describe('export ↔ canvas structure agreement', () => {
     // marks — the review's most damning export/canvas divergence.
     // `b`'s subtree below a is measured; the ROOT's own edge is absent, so no
     // unmeasured branch exists here — assert the mechanism via a missing length.
+    const a2 = Object.values(project.nodes).find((n) => n.label === 'x')!.id;
     project.nodes[a2].branchLength = undefined;
     const withGap = buildSVG(project, {}).svg;
     expect(withGap).toMatch(/stroke-dasharray="4 3"/);
@@ -65,12 +71,14 @@ describe('export ↔ canvas structure agreement', () => {
   it('the scale bar appears on a phylogram and not on a cladogram', () => {
     const p = buildDoc();
     p.layout.type = 'rectangular-phylogram';
-    expect(buildSVG(p, {}).svg).toMatch(/Scale|scale|——|—/);
+    // The bar renders as a 2px rule with end ticks plus a numeric label —
+    // assert that structure, not a "Scale" word the figure never draws.
+    const phylo = buildSVG(p, {}).svg;
+    const barRules = phylo.match(/<line[^>]*stroke="#1d1d1f" stroke-width="2"/g) ?? [];
+    expect(barRules.length).toBeGreaterThanOrEqual(3); // bar + two end ticks
     p.layout.type = 'rectangular-cladogram';
     const clad = buildSVG(p, {}).svg;
-    // The bar is conditional on layout.type; a cheap structural proxy is that
-    // the cladogram SVG is not LONGER from an axis block. Assert the option
-    // plumbing instead of the exact geometry.
+    expect((clad.match(/<line[^>]*stroke="#1d1d1f" stroke-width="2"/g) ?? []).length).toBe(0);
     expect(clad.length).toBeGreaterThan(0);
   });
 

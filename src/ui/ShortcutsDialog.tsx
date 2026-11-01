@@ -12,11 +12,6 @@ import { MagnifyingGlassIcon } from '@radix-ui/react-icons';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
 
-interface ShortcutRow {
-  keys: string;
-  label: string;
-}
-
 /**
  * The one shortcut table. `⌘` rows also accept Ctrl on Windows/Linux (the
  * manual states this once, here and in §13); rows whose scope depends on the
@@ -29,7 +24,13 @@ export interface ShortcutRow {
   mode?: string;
 }
 
-export const SHORTCUT_GROUPS: { title: string; rows: ShortcutRow[] }[] = [
+/**
+ * The one shortcut table, built AT CALL TIME: `tr()` / `S` must resolve per
+ * render so a language switch relabels every row (localeFreeze guards this —
+ * a module-level table would freeze whichever locale was active at import).
+ */
+export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
+  return [
   {
     title: 'global',
     rows: [
@@ -58,18 +59,18 @@ export const SHORTCUT_GROUPS: { title: string; rows: ShortcutRow[] }[] = [
       { keys: 'F2', label: S.review.shortcutF2 },
       { keys: 'Esc', label: tr('取消选择 / 中断手势', 'Clear selection / abort gesture') },
       { keys: 'Esc', label: S.review.shortcutEscExitRecon, mode: tr('仅协同重建视图', 'reconciliation view only') },
-      { keys: tr('方向键', 'Arrows'), label: tr('微调选中节点（Shift = 10px 步进）', 'Nudge selected nodes (Shift = 10px steps)') },
-      { keys: tr('Alt + 方向键', 'Alt + Arrows'), label: tr('在树节点间移动焦点（父/子/兄弟）', 'Move focus between nodes (parent/child/sibling)') },
-      { keys: tr('滚轮', 'Wheel'), label: tr('缩放（Ctrl/⌘ + 滚轮 = 捏合缩放；双指平移 = 平移画布）', 'Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan)') },
-      { keys: tr('空格 / 中键拖拽', 'Space / middle-drag'), label: tr('平移画布', 'Pan canvas') },
-      { keys: tr('Shift/Alt + 背景拖拽', 'Shift/Alt + background drag'), label: tr('框选节点', 'Marquee-select nodes') },
-      { keys: tr('拖拽节点', 'Drag node'), label: tr('移动节点', 'Move node') },
-      { keys: tr('Alt + 拖拽到节点', 'Alt + drag onto node'), label: tr('重定父（改父）', 'Reparent') },
-      { keys: tr('拖拽端口圆点', 'Drag port dot'), label: tr('创建自定义连线', 'Create custom link') },
-      { keys: tr('双击节点', 'Double-click node'), label: tr('重命名', 'Rename') },
+      { keys: 'Arrow keys', label: tr('微调选中节点（Shift = 10px 步进）', 'Nudge selected nodes (Shift = 10px steps)') },
+      { keys: 'Alt + ← / ↑ · Alt + → / ↓', label: tr('在树节点间移动焦点（父/子/兄弟）', 'Move focus between nodes (parent/child/sibling)') },
+      { keys: 'Wheel', label: tr('缩放（Ctrl/⌘ + 滚轮 = 捏合缩放；双指平移 = 平移画布）', 'Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan)') },
+      { keys: 'Space / middle-drag', label: tr('平移画布', 'Pan canvas') },
+      { keys: 'Shift/Alt + background drag', label: tr('框选节点', 'Marquee-select nodes') },
+      { keys: 'Drag node', label: tr('移动节点', 'Move node') },
+      { keys: 'Alt + drag onto node', label: tr('重定父（改父）', 'Reparent') },
+      { keys: 'Drag port dot', label: tr('创建自定义连线', 'Create custom link') },
+      { keys: 'Double-click node', label: tr('重命名', 'Rename') },
       { keys: '⇧F10', label: tr('打开节点右键菜单', 'Open the node context menu') },
-      { keys: tr('点击折叠三角', 'Click the collapse arrow'), label: tr('展开被折叠的枝', 'Expand a collapsed branch') },
-      { keys: tr('Shift + 点击', 'Shift + click'), label: tr('多选节点（选 2 个显示 MRCA）', 'Multi-select (2 selected shows MRCA)') },
+      { keys: 'Click the collapse arrow', label: tr('展开被折叠的枝', 'Expand a collapsed branch') },
+      { keys: 'Shift + click', label: tr('多选节点（选 2 个显示 MRCA）', 'Multi-select (2 selected shows MRCA)') },
     ],
   },
   {
@@ -81,10 +82,9 @@ export const SHORTCUT_GROUPS: { title: string; rows: ShortcutRow[] }[] = [
     ],
   },
 ];
+}
 
-const globalRows = (): ShortcutRow[] => SHORTCUT_GROUPS[0].rows;
-const canvasRows = (): ShortcutRow[] => SHORTCUT_GROUPS[1].rows;
-const paletteRows = (): ShortcutRow[] => SHORTCUT_GROUPS[2].rows;
+const shortcutGroupRows = (): { title: string; rows: ShortcutRow[] }[] => SHORTCUT_GROUPS();
 
 export function ShortcutsDialog({
   open,
@@ -102,11 +102,9 @@ export function ShortcutsDialog({
     const t = q.trim().toLowerCase();
     const match = (rows: ShortcutRow[]) =>
       t ? rows.filter((r) => r.keys.toLowerCase().includes(t) || r.label.toLowerCase().includes(t)) : rows;
-    return [
-      { title: S.shortcuts.global, rows: match(globalRows()) },
-      { title: S.shortcuts.canvas, rows: match(canvasRows()) },
-      { title: S.shortcuts.palette, rows: match(paletteRows()) },
-    ].filter((g) => g.rows.length > 0);
+    return shortcutGroupRows()
+      .map(({ title, rows }) => ({ title, rows: match(rows) }))
+      .filter((g) => g.rows.length > 0);
   }, [q]);
 
   if (!open) return null;

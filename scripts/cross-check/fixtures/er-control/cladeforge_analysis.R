@@ -1,7 +1,24 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
 # Project : ER control
-# Format  : CladeForge project v0.1.0
+# Format  : CladeForge project v0.2.0
+# Software: CladeForge 0.2.0 (this header is the provenance stamp a
+#           reproducibility checklist asks for: software version, generation
+#           time and the analysis parameters are printed beside the numbers)
+# Generated: 2026-11-01T09:41:59.567Z
+#
+# PARAMETER SUMMARY (what the app used):
+#   * parsimony: tie-break = parent-state first, then tip frequency, then
+#     declaration order; the reported single path is ONE of possibly many
+#     equally parsimonious reconstructions.
+#   * Mk: rate ${asrRateNote}; display threshold applied post hoc; the
+#     posterior is marginal (per-node), NOT joint.
+#   * The R implementation below computes the likelihood in ORDINARY space
+#     while the app runs in log-space: values agree to floating-point noise on
+#     modest trees but can drift on very large or very unbalanced ones.
+#   * Node ancestral states asserted by the user in CladeForge are IGNORED by
+#     the parsimony baseline (independent reference by design); the R script
+#     reproduces that baseline, not the user's hypotheses.
 #
 # What this script reproduces, and what it does not:
 #   REPRODUCED (same algorithms as the application):

@@ -391,8 +391,17 @@ export const MISSING_STATE_CODES: readonly string[] = ['?', '-'];
  */
 export function isObservedState(
   character: Character,
-  value: string | number | undefined,
+  value: string | number | string[] | undefined,
 ): value is string {
+  // A polymorphic assignment (a set) is observed when it is non-empty and
+  // every member is a declared state id; the statistics layer treats it as
+  // real evidence, never as missing data.
+  if (Array.isArray(value)) {
+    return (
+      value.length > 0 &&
+      value.every((id) => typeof id === 'string' && character.states.some((s) => s.id === id))
+    );
+  }
   if (typeof value !== 'string') return false;
   if (MISSING_STATE_CODES.includes(value)) return false;
   return character.states.some((s) => s.id === value);
@@ -409,15 +418,31 @@ export function missingCodeCount(project: Project, character: Character): number
 }
 
 /** Human-readable label for a node's value under a character. */
-export function stateLabel(character: Character, value: string | number | undefined): string | undefined {
+export function stateLabel(
+  character: Character,
+  value: string | number | string[] | undefined,
+): string | undefined {
   if (value === undefined) return undefined;
   if (character.type === 'continuous') return String(value);
+  // Polymorphic sets display as '/'-joined labels, matching layerDiff tables.
+  if (Array.isArray(value)) {
+    if (value.length === 0) return undefined;
+    const labels = value.map((id) => character.states.find((s) => s.id === id)?.label ?? String(id));
+    return labels.join('/');
+  }
   return character.states.find((s) => s.id === value)?.label;
 }
 
-function discreteColor(character: Character, value: string | number | undefined): string | undefined {
+function discreteColor(
+  character: Character,
+  value: string | number | string[] | undefined,
+): string | undefined {
   if (value === undefined) return undefined;
-  return character.states.find((s) => s.id === value)?.color;
+  // A polymorphic set paints with its FIRST declared member's swatch (deterministic,
+  // matches the set's display order).
+  const first = Array.isArray(value) ? value[0] : value;
+  if (first === undefined) return undefined;
+  return character.states.find((s) => s.id === first)?.color;
 }
 
 export interface NumRange {
@@ -448,7 +473,7 @@ export function continuousRange(project: Project, character: Character): NumRang
  */
 export function characterValueColor(
   character: Character,
-  value: string | number | undefined,
+  value: string | number | string[] | undefined,
   range?: NumRange,
 ): string | undefined {
   if (value === undefined) return undefined;
@@ -504,7 +529,7 @@ export function detectTransitions(
   visible?: Set<NodeId>,
 ): Transition[] {
   const continuous = character.type === 'continuous';
-  const observed = (v: string | number | undefined): string | number | undefined =>
+  const observed = (v: string | number | string[] | undefined): string | number | undefined =>
     continuous
       ? typeof v === 'number' && Number.isFinite(v)
         ? v

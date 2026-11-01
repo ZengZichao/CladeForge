@@ -15,6 +15,7 @@ import type {
   EvolutionaryEvent,
   HypothesisLayer,
   HypothesisMeta,
+  NodeId,
   Project,
   StoredLayer,
 } from './types';

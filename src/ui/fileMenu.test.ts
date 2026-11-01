@@ -19,7 +19,18 @@ const { calls } = recorder;
 vi.mock('../io/fileActions', () => ({
   actionNewProject: recorder.noop('actionNewProject'),
   actionOpenProject: recorder.noop('actionOpenProject'),
+  // 3d03bdc added the lifecycle trio (保存/另存为/回退) to the FILE menu —
+  // see fileMenu.ts; the mock has to cover them.
+  actionSaveProject: recorder.noop('actionSaveProject'),
+  actionSaveProjectAs: recorder.noop('actionSaveProjectAs'),
+  actionRevertProject: recorder.noop('actionRevertProject'),
   actionImportTree: recorder.noop('actionImportTree'),
+  actionImportTable: recorder.noop('actionImportTable'),
+  actionPasteTreeFromClipboard: recorder.noop('actionPasteTreeFromClipboard'),
+  actionExportNexml: recorder.noop('actionExportNexml'),
+  actionExportMatrixCsv: recorder.noop('actionExportMatrixCsv'),
+  actionExportAnnotationsCsv: recorder.noop('actionExportAnnotationsCsv'),
+  actionExportMatrixTemplate: recorder.noop('actionExportMatrixTemplate'),
   actionExportSVG: recorder.noop('actionExportSVG'),
   actionExportPNG: recorder.noop('actionExportPNG'),
   actionExportPDF: recorder.noop('actionExportPDF'),
@@ -64,6 +75,13 @@ describe('buildFileMenuItems', () => {
     invokeAsClick(items);
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
+      // 导入表格 intentionally passes its documented target ('matrix'), never
+      // the event — the invariant under test is "no handler forwards the click
+      // event / an options bag", so the one string literal is allowed.
+      if (call.name === 'actionImportTable') {
+        expect(call.args, 'actionImportTable passes the documented mode').toEqual(['matrix']);
+        continue;
+      }
       expect(call.args, `${call.name} received ${call.args.length} argument(s)`).toEqual([]);
     }
   });
@@ -89,12 +107,21 @@ describe('buildFileMenuItems', () => {
     const labels = buildFileMenuItems(recent, () => undefined).map((it) =>
       it.sep ? '|' : it.label,
     );
+    // 3d03bdc grew the menu: the lifecycle trio after 打开, 导入表格/剪贴板导树
+    // after 导入树, NeXML after Nexus, and the three CSV exports before the
+    // narrative group — order here mirrors fileMenu.ts.
     expect(labels).toEqual([
       S.menu.new,
       S.menu.open,
+      S.review.saveMenu,
+      S.review.saveAsMenu,
+      S.review.revertMenu,
+      '|',
       S.menu.recent,
       '|',
       S.menu.importTree,
+      S.review.importTable,
+      S.review.pasteTree,
       '|',
       S.exportItems.svg,
       S.exportItems.png,
@@ -102,6 +129,11 @@ describe('buildFileMenuItems', () => {
       '|',
       S.exportItems.newick,
       S.exportItems.nexus,
+      S.review.exportNexml,
+      '|',
+      S.review.exportMatrixCsv,
+      S.review.exportAnnotationsCsv,
+      S.review.exportMatrixTemplate,
       '|',
       S.exportItems.narrative,
       S.exportItems.hypothesisJSON,
@@ -114,8 +146,10 @@ describe('buildFileMenuItems', () => {
     const items = buildRecentItems([recent, { name: 'other.nwk', kind: 'tree' }], (e) => opened.push(e), () => undefined);
     invokeAsClick(items);
     expect(opened.map((e) => e.name)).toEqual([recent.name, 'other.nwk']);
+    // The empty placeholder is now DISABLED (fileMenu.ts) so it cannot be
+    // clicked into nothing.
     expect(buildRecentItems([], () => undefined, () => undefined)).toEqual([
-      { label: S.menu.recentEmpty },
+      { label: S.menu.recentEmpty, disabled: true },
     ]);
   });
 });

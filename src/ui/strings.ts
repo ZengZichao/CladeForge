@@ -712,9 +712,10 @@ const zh = {
     // One-click switch offered by the Time panel when the layout is not the
     // geological time chart yet (mirrors the 样式 module's 树形 selector).
     switchToTimeChart: '切换到地质时间图',
-    // Geological-era display level: eons (宙), periods (纪) or both.
+    // Geological-era display level: eons (宙), eras (代), periods (纪) or both.
     eraLevelLabel: '显示级别',
     eraLevelEon: '仅显示宙',
+    eraLevelEra: '仅显示代',
     eraLevelPeriod: '仅显示纪',
     eraLevelBoth: '宙、纪都显示',
     // Shown when time-calibrated layout is active but some nodes lack ages.
@@ -1875,6 +1876,7 @@ const en: Strings = {
     switchToTimeChart: 'Switch to geological time chart',
     eraLevelLabel: 'Display level',
     eraLevelEon: 'Eons only',
+    eraLevelEra: 'Eras only',
     eraLevelPeriod: 'Periods only',
     eraLevelBoth: 'Eons and periods',
     // Shown when time-calibrated layout is active but some nodes lack ages.

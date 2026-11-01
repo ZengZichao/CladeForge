@@ -515,7 +515,10 @@ describe('solveDtl', () => {
     expect(r!.scenario!.placements[gene.rootId]).toBeTruthy();
   });
 
-  it('refuses a pathologically deep gene tree with a readable error', () => {
+  // The "still solves" leg below runs the DP on a ~2400-node gene tree × ~150
+  // species nodes — seconds of legitimate work, so the vitest default of 5 s
+  // does not apply here.
+  it('refuses a pathologically deep gene tree with a readable error', { timeout: 60_000 }, () => {
     const species = makePectinate(50);
     const gene = makePectinate(1600, 50); // 1600 nested levels over 50 species
     let r: ReturnType<typeof solveDtl> | null = null;

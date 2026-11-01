@@ -197,9 +197,16 @@ describe('workflow tour (BUG-11)', () => {
       }),
     );
 
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 5');
-    expect(host!.querySelector('.tour-title')?.textContent).toContain('编码性状');
+    // The tour gained "Step 0 · bring your own tree" (no target/module), so
+    // the counter runs 1 / 6 and the first advance reaches Traits.
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 6');
+    expect(host!.querySelector('.tour-title')?.textContent).toContain('把你的树放进来');
+    expect(visited).toEqual([]);
+
+    click(/^下一步$/);
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('2 / 6');
     expect(visited).toEqual(['traits']);
+    expect(host!.querySelector('.tour-title')?.textContent).toContain('编码性状');
 
     click(/^下一步$/);
     expect(visited).toEqual(['traits', 'layers']);
@@ -212,7 +219,7 @@ describe('workflow tour (BUG-11)', () => {
     expect(visited).toEqual(['traits', 'layers', 'analysis', 'export']);
 
     // Final card: replay / shortcut reference / done.
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('5 / 5');
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('6 / 6');
     expect([...host!.querySelectorAll('.tour-actions .btn')].map((b) => b.textContent)).toEqual([
       '重放',
       '快捷键速查',
@@ -277,13 +284,16 @@ describe('workflow tour (BUG-11)', () => {
         },
       }),
     );
+    // Six cards now (Step 0 brought its own tree in), so five advances land
+    // on the final card.
     click(/^下一步$/);
     click(/^下一步$/);
     click(/^下一步$/);
     click(/^下一步$/);
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('5 / 5');
+    click(/^下一步$/);
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('6 / 6');
     click(/^重放$/);
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 5');
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 6');
     expect(closed).toBe(0);
     expect(localStorage.getItem(LS_WORKFLOW_TOUR)).toBeNull();
   });

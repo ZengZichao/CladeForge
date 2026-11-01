@@ -164,12 +164,14 @@ describe('consensus — rooted-clade correctness', () => {
       const majority = cladeStrings(buildConsensusTree(trees, 'majority')!);
       for (const c of strict) expect(majority.has(c)).toBe(true);
 
-      // Support percentages must equal the observed clade frequencies.
+      // Support percentages must equal the observed clade frequencies — at
+      // full precision since the review rework (a rounded `1` collides with
+      // the legacy "≤1 means fraction" heuristic; integers are a display concern).
       const tips = cladeSetsOf(trees[0]).tips;
       for (const rec of cladeSupports(trees, tips)) {
         const observed = trees.filter((t) => cladeStrings(t).has([...rec.tips].sort().join('+')));
         expect(rec.count).toBe(observed.length);
-        expect(rec.support).toBe(Math.round((100 * observed.length) / trees.length));
+        expect(rec.support).toBeCloseTo((100 * observed.length) / trees.length, 10);
       }
     }
   });

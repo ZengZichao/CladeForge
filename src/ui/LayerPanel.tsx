@@ -30,12 +30,26 @@ import { requestConfirm } from './confirmDialog';
 import { useDialogFocus } from './useDialogFocus';
 import type { HypothesisStatus } from '../model/types';
 
-const STATUS_LABEL: Record<HypothesisStatus, string> = {
-  draft: S.review.layerStatusDraft,
-  tested: S.review.layerStatusTested,
-  supported: S.review.layerStatusSupported,
-  refuted: S.review.layerStatusRefuted,
-};
+/** Hypothesis statuses in dropdown order (keys of the old STATUS_LABEL record). */
+const LAYER_STATUSES: HypothesisStatus[] = ['draft', 'tested', 'supported', 'refuted'];
+
+/**
+ * Status labels resolve `S` AT CALL TIME. A module-level `Record` would freeze
+ * them to whichever locale was active at import and never follow a language
+ * switch (localeFreeze.test.ts guards exactly this).
+ */
+function statusLabel(status: HypothesisStatus): string {
+  switch (status) {
+    case 'draft':
+      return S.review.layerStatusDraft;
+    case 'tested':
+      return S.review.layerStatusTested;
+    case 'supported':
+      return S.review.layerStatusSupported;
+    case 'refuted':
+      return S.review.layerStatusRefuted;
+  }
+}
 
 /** The A/B compare view (a small dialog over the canvas). */
 function LayerCompareDialog({
@@ -200,7 +214,7 @@ export function LayerPanel() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <strong style={{ fontSize: 12 }}>{l.name}</strong>
                 {l.status && (
-                  <span style={{ fontSize: 11, opacity: 0.8 }}>{STATUS_LABEL[l.status]}</span>
+                  <span style={{ fontSize: 11, opacity: 0.8 }}>{statusLabel(l.status)}</span>
                 )}
               </div>
               {l.statement && (
@@ -266,9 +280,9 @@ export function LayerPanel() {
                 })
               }
             >
-              {(Object.keys(STATUS_LABEL) as HypothesisStatus[]).map((k) => (
+              {LAYER_STATUSES.map((k) => (
                 <option key={k} value={k}>
-                  {STATUS_LABEL[k]}
+                  {statusLabel(k)}
                 </option>
               ))}
             </select>

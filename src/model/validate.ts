@@ -175,11 +175,11 @@ export function validateProject(project: Project): ValidationResult {
   const characterIds = new Set(project.characters.map((c) => c.id));
   const dropStaleAssignments = (
     holderId: NodeId,
-    states: Record<string, string | number> | undefined,
+    states: Record<string, string | number | string[]> | undefined,
     meta: Record<string, unknown> | undefined,
   ): void => {
     for (const key of Object.keys(states ?? {})) {
-      if (!characterIds.has(key)) delete (states as Record<string, string | number>)[key];
+      if (!characterIds.has(key)) delete (states as Record<string, string | number | string[]>)[key];
     }
     for (const key of Object.keys(meta ?? {})) {
       if (!characterIds.has(key)) delete (meta as Record<string, unknown>)[key];

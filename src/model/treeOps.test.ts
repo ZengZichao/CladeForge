@@ -946,8 +946,11 @@ describe('character cleanup', () => {
     expect(res.ok).toBe(true);
     expect(res.clearedAssignments).toBeGreaterThanOrEqual(2);
     expect(p.characters[0].states.map((s) => s.id)).toEqual(['s2']);
-    expect(p.characters[0].costMatrix).toBeUndefined();
-    expect(res.costMatrixDiscarded).toBe(true);
+    // Review rework: a removal SHRINKS the hand-built matrix (drops its
+    // row/column) instead of resetting it, so only the removed state's costs go.
+    expect(p.characters[0].costMatrix).toEqual([[0]]);
+    expect(res.costMatrixDiscarded).toBe(false);
+    expect(res.costMatrixResized).toBe(true);
     expect(p.nodes[p.rootId].charMeta).toBeUndefined();
     // Switching layers must not resurrect the deleted state's assignment.
     applyLayer(p, p.layerStore.other);
@@ -967,11 +970,16 @@ describe('character cleanup', () => {
     expect(p.characters[0].costMatrix).toBeDefined();
   });
 
-  it('adding a state reports that a hand-built step matrix was reset', () => {
+  it('adding a state keeps a hand-built step matrix (resized) and reports the resize', () => {
     const { p, ch } = scored();
     const res = addCharacterState(p, 'ch', { id: 's3', label: 'Air', color: '#abc' });
     expect(res.ok).toBe(true);
-    expect(res.costMatrixDiscarded).toBe(true);
+    // Review rework: the matrix is resized (a row/column of Fitch-default costs
+    // inserted) rather than dropped, so a weighted analysis survives; the
+    // result tells the UI to mention it instead of reporting a discard.
+    expect(res.costMatrixResized).toBe(true);
+    expect(res.costMatrixDiscarded).toBe(false);
+    expect(p.characters[0].costMatrix).toEqual([[0, 1, 1], [1, 0, 1], [1, 1, 0]]);
     expect(p.characters[0].states).toHaveLength(3);
     const silent = addCharacterState(p, 'nope', { id: 's4', label: 'x', color: '#000' });
     expect(silent.reason).toBe('character-missing');
@@ -1014,7 +1022,15 @@ describe('character cleanup', () => {
       },
     };
     p.nodes[p.rootId].charMeta = { ch: { confidence: 'low' }, ghostChar: { confidence: 'high' } };
-    expect(pruneLayerStore(p)).toBe(true);
+    // Review rework: pruning is counted and the summary is surfaced on load
+    // instead of dropping records silently.
+    expect(pruneLayerStore(p)).toEqual({
+      states: 1,
+      meta: 1,
+      notes: 0,
+      events: 0,
+      changed: true,
+    });
     expect(p.layerStore.other.states[p.rootId]).toEqual({ ch: 's1' });
     expect(Object.keys(p.layerStore.other.meta[p.rootId])).toEqual(['ch']);
     // The active layer's own orphan meta is cleaned by the same load path.

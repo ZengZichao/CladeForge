@@ -82,6 +82,14 @@ describe('scientific invariants the reviews asked to pin', () => {
     tips.forEach((t, i) => {
       t.charStates = { [charC.id]: i * 1.7 + 0.3 };
     });
+    // K's rescale invariance holds for a FULLY measured tree: a branch without
+    // a usable length is imputed to the fixed value 1 (counted, not hidden),
+    // so scaling only the measured subset would change the tree's proportions
+    // — a documented exception, not an invariance violation. Measure every
+    // branch before scaling.
+    for (const n of Object.values(p.nodes)) {
+      if (n.parentId !== null && typeof n.branchLength !== 'number') n.branchLength = 1;
+    }
     const k1 = blombergK(p, charC)?.k;
     for (const n of Object.values(p.nodes)) {
       if (typeof n.branchLength === 'number') n.branchLength *= 13;

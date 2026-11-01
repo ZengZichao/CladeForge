@@ -44,6 +44,8 @@ export type LayoutIssueKind =
   | 'time-no-ages'
   /** The circular layout does not consume ages at all. */
   | 'circular-ignores-ages'
+  /** The circular layout maps radii by node age (the time wheel). */
+  | 'circular-time-radii'
   /** Child references revisit nodes, so the reachable structure is not a tree. */
   | 'cyclic-children'
   | 'invalid-pinned-position';

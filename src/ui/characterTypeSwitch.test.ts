@@ -151,7 +151,10 @@ describe('the type switch does what its wording says', () => {
     chooseType(openTypeSelect(), 'continuous');
     act(() => s().undo());
     expect(charOf(characterId).type).toBe('discrete');
-    expect(s().past).toHaveLength(0);
+    // PM-23: loadProject keeps ONE undo step pointing back at the swapped-out
+    // document, so after undoing the switch the single remaining entry is that
+    // import step — the switch itself is fully reverted.
+    expect(s().past).toHaveLength(1);
   });
 
   it('the panel says the assignments are kept where the choice is made', () => {

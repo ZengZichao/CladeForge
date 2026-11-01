@@ -341,6 +341,8 @@ export interface UISlice {
   eraLevel: EraLevel;
   /** A node the canvas should pan to (bumped `seq` re-triggers the same id). */
   focusTarget: { id: NodeId; seq: number } | null;
+  /** A node whose label the canvas should switch into inline rename (bumped `seq` re-triggers). */
+  renameRequest: { id: NodeId; seq: number } | null;
   /** Probabilistic ancestral-state reconstruction for the active character (transient). */
   asr: AsrResult | null;
   /** ASR model and display threshold options. */

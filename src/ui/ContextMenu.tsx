@@ -69,10 +69,6 @@ export function ContextMenu({
     listRef.current?.focus();
   }, []);
   useEffect(() => {
-    setCursor((c) => Math.min(c, Math.max(0, actionable.length - 1)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length]);
-  useEffect(() => {
     const onDoc = () => onClose();
     // Escape while an IME candidate list is open cancels the composition,
     // it must not also dismiss the context menu behind it.
@@ -270,6 +266,11 @@ export function ContextMenu({
 
   const left = Math.min(target.x, window.innerWidth - 190);
   const actionable = items.filter((it) => !it.sep && !it.disabled);
+  // Keep the keyboard cursor inside the actionable list when the items change
+  // (the component instance can be reused across targets).
+  useEffect(() => {
+    setCursor((c) => Math.min(c, Math.max(0, actionable.length - 1)));
+  }, [actionable.length]);
   const top = Math.min(target.y, window.innerHeight - (items.length * 34 + 12));
   const contextLabel = target.edgeId
     ? S.toolbar.contextEdge

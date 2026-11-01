@@ -89,6 +89,12 @@ const EMPTY: ParsimonyResult = {
 /** Equality tolerance for co-optimality tests with non-integer step matrices. */
 const COST_EPS = 1e-9;
 function costEquals(a: number, b: number): boolean {
+  // Relative epsilon only over FINITE costs. `a === b` lets the two INF rows
+  // (forbidden / unreachable states) stay tied; falling through to the relative
+  // test would make |INF − 0| <= 1e-9·max(1, INF, 0) true — every impossible
+  // state would then join the tie set and tips would report themselves
+  // ambiguous (the oracle suite caught exactly that).
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return a === b;
   return Math.abs(a - b) <= COST_EPS * Math.max(1, Math.abs(a), Math.abs(b));
 }
 

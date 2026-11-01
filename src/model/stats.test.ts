@@ -960,11 +960,15 @@ describe('scaling guards — counted node visits and ancestor walks', () => {
 
   for (const shape of ['balanced', 'pectinate'] as const) {
     it(`${shape}: every stage's counted work scales with the tree, not with it squared`, () => {
-      // Measured here, both shapes identically: 2 000 → 8 000 tips is 3 999 →
-      // 15 999 nodes, and the node visits go layout 7 999 → 31 999, parsimony
-      // 11 995 → 47 995, Mk ASR 11 995 → 47 995, treeSummary 7 999 → 31 999:
-      // ×4.00 for ×4.00 nodes, with 0 parent hops and 2 height writes per node in
-      // the layout. A quadratic stage would have shown ×16 and tripped this test.
+      // Both shapes identically: 2 000 → 8 000 tips is 3 999 → 15 999 nodes and
+      // every stage's node visits go ×4.00 for ×4.00 nodes; a quadratic stage
+      // would show ×16 and trip this test. Since the review rework Mk ASR
+      // evaluates the pruning likelihood a constant number of times (the ML
+      // rate grid + golden refinement, the profile-likelihood CI and the 2×
+      // sensitivity pass — all independent of n), its visits carry a ~430×
+      // larger CONSTANT than the single-pass stages; the ×4 ratio below is
+      // exactly what pins that the extra work is a constant multiplier and
+      // not a per-node re-walk.
       const small = workOf(shape, 2000);
       const big = workOf(shape, 8000);
       const nodeRatio = big.nodes / small.nodes;
@@ -982,7 +986,7 @@ describe('scaling guards — counted node visits and ancestor walks', () => {
       // bottom-up sweep) is the whole bill.
       expect(big.stages.layout.parentHops).toBe(0);
       expect(big.stages.layout.heightWrites).toBe(2 * big.nodes);
-    });
+    }, 180_000);
   }
 
   it('counts the ancestor walk the guard exists to keep out', () => {
@@ -1001,17 +1005,24 @@ describe('scaling guards — counted node visits and ancestor walks', () => {
 
   it('parses, lays out and scores a 2 000-tip tree with a linear node budget', () => {
     // Read from the counters rather than a stopwatch: the node budget is what the
-    // per-stage ceiling is really about.
+    // per-stage ceiling is really about. The single-pass stages must stay within
+    // a handful of reads per node; Mk ASR carries the ML profile fit (review
+    // rework, B3), which evaluates the likelihood a constant ~200 times (rate
+    // grid + golden refinement + profile-CI bisection + 2× sensitivity) — still
+    // a fixed multiplier, so its budget is that multiplier per node, and the
+    // 2 000 → 8 000 ratio guard above pins the linearity.
+    const MK_PROFILE_BUDGET_PER_NODE = 512;
     for (const shape of ['balanced', 'pectinate'] as const) {
       const { project, character } = benchProject(shape, 2000);
       const { nodes, stages } = workOf(shape, 2000);
       for (const [stage, work] of Object.entries(stages)) {
-        expect(work.visits, `${stage} on ${shape}`).toBeLessThanOrEqual(6 * nodes);
+        const perNode = stage === 'mkAsr' ? MK_PROFILE_BUDGET_PER_NODE : 6;
+        expect(work.visits, `${stage} on ${shape}`).toBeLessThanOrEqual(perNode * nodes);
       }
       expect(parsimony(project, character).cost).toBeGreaterThan(0);
       expect(treeSummary(project).tipCount).toBe(2000);
     }
-  });
+  }, 180_000);
 
   /**
    * Best-of-N (minimum) rather than median. A wall-clock sample is contaminated by
@@ -1225,7 +1236,11 @@ describe("Blomberg's K — E[K] ~ 1 under Brownian motion", () => {
 
   it('reproduces the published hand-derived value 63/55', () => {
     // The calibration anchor: the ultrametric case has to stay exactly here.
-    const p = parseNewick('((A:1,B:1):0,(C:1,D:1):0)R;');
+    // The tree is the depth-2 ultrametric one whose 63/55 derivation the
+    // "hand-derived" describe above works out (root→clade 1, clade→tip 1);
+    // with zero-length internal branches C collapses to the identity and K
+    // is exactly 1, which is a different (trivial) anchor.
+    const p = parseNewick('((A:1,B:1):1,(C:1,D:1):1)R;');
     const ch: Character = { id: 'cont', name: 'size', type: 'continuous', states: [] };
     p.characters = [ch];
     const vals = [1, 2, 3, 5];

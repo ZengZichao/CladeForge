@@ -85,8 +85,10 @@ describe('the time-chart layout is proposed, never imposed', () => {
     mountCanvas();
     // Mounting only PROPOSES: the layout stays exactly as the document set it…
     expect(useStore.getState().project.layout.type).toBe('rectangular-cladogram');
-    // …and no edit reaches the undo stack on its own.
-    expect(useStore.getState().past).toHaveLength(0);
+    // …and no edit reaches the undo stack on its own. `past` holds exactly
+    // the ONE import-undo step loadProject retains (PM-23) — the proposal
+    // itself pushed nothing.
+    expect(useStore.getState().past).toHaveLength(1);
   });
 
   it('the offer is an informative message with a one-click switch', () => {
@@ -124,7 +126,9 @@ describe('the time-chart layout is proposed, never imposed', () => {
       act(() => root!.render(createElement(TreeCanvas)));
     }
     expect(useStore.getState().project.layout.type).toBe(chosen);
-    expect(useStore.getState().past).toHaveLength(0);
+    // One entry in past (the retained import step, PM-23) and the undone
+    // layout change sits in future.
+    expect(useStore.getState().past).toHaveLength(1);
     expect(useStore.getState().future).toHaveLength(1);
 
     // …and undoing again after redo still lands back on the user's choice.

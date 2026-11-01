@@ -78,8 +78,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    define: {
-      __APP_VERSION__: JSON.stringify(pkg.version),
-    },
+    // `__APP_VERSION__` reaches the tests through the TOP-LEVEL `define` above
+    // (Vitest processes the same config through Vite). Vitest 4's own
+    // `test.define` slot no longer exists in its config types.
   },
 });

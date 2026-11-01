@@ -549,7 +549,11 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
         {continuousResults.length > 0 && (
           <div className="panel-section">
             <h3>{S.analysis.continuousSection}</h3>
-            {continuousResults.map(({ character: c, result, reason }) => (
+            {continuousResults.map(({ character: c, result, reason }) => {
+              // Bind once: the guard below must narrow ONE value, not two
+              // independent `kNulls[c.id]` lookups that TS cannot correlate.
+              const knull = kNulls[c.id];
+              return (
               <div key={c.id} className="field">
                 <label>{c.name}</label>
                 <span>
@@ -583,15 +587,16 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => runKNull(c.id)}>
                       {tr('模拟 BM 零分布', 'Simulate BM null')}
                     </button>
-                    {kNulls[c.id] && (
+                    {knull && (
                       <span style={{ fontSize: 12 }}>
-                        p ≈ {kNulls[c.id].pValue.toFixed(3)} ({kNulls[c.id].replicates}×)
+                        p ≈ {knull.pValue.toFixed(3)} ({knull.replicates}×)
                       </span>
                     )}
                   </span>
                 )}
               </div>
-            ))}
+              );
+            })}
             <div className="hint">{S.analysis.blombergKHint}</div>
             <div className="hint">{S.analysis.blombergKNoTest}</div>
           </div>

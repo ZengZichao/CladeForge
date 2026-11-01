@@ -1148,7 +1148,9 @@ export function characterDataSignature(project: Project): string {
       const s = n.charStates?.[c.id];
       if (s === undefined) { mix(0); continue; }
       if (typeof s === 'number') { mix(Math.round(s * 1000)); continue; }
-      mix(hashString(s));
+      // A polymorphic set hashes as its '/'-joined display form, consistent
+      // with every other set rendering.
+      mix(hashString(Array.isArray(s) ? s.join('/') : s));
     }
   }
   return String(h);

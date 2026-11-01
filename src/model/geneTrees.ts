@@ -18,7 +18,7 @@ import type {
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
 import { newId, rerootAtNode } from './treeOps';
-import { solveDtl, type DtlOptions, type DtlScenario } from './dtl';
+import { solveDtl, type DtlOptions, type DtlScenario, type DtlSolveResult } from './dtl';
 import type { TipMapping } from './reconciliation';
 
 /**

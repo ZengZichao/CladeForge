@@ -411,6 +411,24 @@ export function solveDtl(
   let cellDepth = 0;
   let depthExceeded = false;
 
+  // Cheap pre-pass: refuse a pathologically nested gene tree BEFORE the DP
+  // spends seconds computing cells it can never use (the in-DP counter below
+  // stays as the belt-and-braces for mid-solve recursion, e.g. rerooted or
+  // polytomy-resolved inputs whose shape is only known after preprocessing).
+  const geneNestingDepth = (): number => {
+    let max = 0;
+    const stack: Array<{ id: NodeId; d: number }> = [{ id: gene.rootId, d: 1 }];
+    const visited = new Set<NodeId>();
+    while (stack.length) {
+      const { id, d } = stack.pop() as { id: NodeId; d: number };
+      if (d > max) max = d;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      for (const c of kidsOf.get(id) ?? []) stack.push({ id: c, d: d + 1 });
+    }
+    return max;
+  };
+
   function cellFor(g: NodeId, s: NodeId): Cell {
     const k = key(g, s);
     const cached = M.get(k);
@@ -586,6 +604,17 @@ export function solveDtl(
     }
     Out.set(k, best);
     return best;
+  }
+
+  // Reject before spending the DP: a pre-processed gene tree whose nesting is
+  // already past the cell-recursion ceiling can only end in depthExceeded.
+  if (geneNestingDepth() > MAX_CELL_DEPTH) {
+    return {
+      error: tr(
+        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出。请先分解该基因家族、解析多歧枝，或使用「解析多歧枝」对深层枝做随机二叉化`,
+        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family, resolve polytomies, or random-binary-resolve the deep branches first`,
+      ),
+    };
   }
 
   const rootCell = cellFor(gene.rootId, species.rootId);

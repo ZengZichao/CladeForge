@@ -326,6 +326,9 @@ function LeftPanelContent({
   onCopySpeciesTree: () => void;
   onEditGeneTree: (id: string) => void;
 }) {
+  // One-shot guard for the PM-13 recon handoff: entering the workspace swaps
+  // the whole tree, so the flag resets with this component.
+  const reconEnterRequested = useRef(false);
   switch (module) {
     case 'traits':
       return (
@@ -473,9 +476,6 @@ export function StandardWorkspace({
   }, []);
 
   const canvasHostRef = useRef<HTMLDivElement>(null);
-  // One-shot guard for the PM-13 recon handoff: entering the workspace swaps
-  // the whole tree, so the flag resets with this component.
-  const reconEnterRequested = useRef(false);
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
@@ -508,8 +508,9 @@ export function StandardWorkspace({
   // without this the keyboard user was excluded from core editing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'F10' || !e.shiftKey) return;
-      if (e.key === 'F10' && !(e.shiftKey || e.key === 'ContextMenu')) return;
+      // Shift+F10, or the dedicated ContextMenu key, opens the node menu.
+      const isContextMenuKey = e.key === 'ContextMenu';
+      if (!isContextMenuKey && (e.key !== 'F10' || !e.shiftKey)) return;
       const st = useStore.getState();
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;

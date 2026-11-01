@@ -210,11 +210,24 @@ describe('label stagger — no two rendered labels overlap', () => {
     }
   });
 
-  it('does not stagger the circular layout, whose radial labels are already placed apart', () => {
+  it('keeps circular-layout labels disjoint, staggering only when the age wheel squeezes them', () => {
+    // Under the age-wheel circular layout radii follow node AGES, so two taxa
+    // at close angles AND close ages can land close enough to need a stagger —
+    // "radial labels never collide" stopped being a guarantee. The contract
+    // that still holds: whatever the planner decides, the RENDERED labels do
+    // not overlap (and when no squeeze exists, nothing is nudged).
     const project = cetacean('circular');
     const layout = computeLayout(project);
     const plan = getCanvasCollisionPlan(project, AXIS)!;
-    for (const nudge of plan.nudges.values()) expect(nudge).toBe(0);
+    const boxes = staggeredLabelBoxes(project, layout, plan.nudges);
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        expect(
+          boxesIntersect(boxes[i].box, boxes[j].box),
+          `${boxes[i].label} × ${boxes[j].label}`,
+        ).toBe(false);
+      }
+    }
   });
 
   it('is deterministic', () => {

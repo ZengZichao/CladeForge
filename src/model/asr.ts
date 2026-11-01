@@ -378,40 +378,57 @@ function mlRateEr(
   ctxBase: Omit<PruningContext, 'logP'>,
   logPofRate: (rate: number) => (t: number) => number[][],
 ): { rate: number; logLikelihood: number; ci: [number, number] } {
-  const f = (logRate: number): number => runPruning(project, { ...ctxBase, logP: logPofRate(Math.exp(logRate)) }).logRoot;
-  // Bracket on log r: start from the moment estimate, expand outward.
-  let lo = -6;
-  let hi = 6;
-  const φ = (1 + Math.sqrt(5)) / 2;
-  let a = lo;
-  let b = hi;
-  let c = b - (b - a) / φ;
-  let d = a + (b - a) / φ;
+  // Grid + golden section over log10(rate). The grid comes FIRST, deliberately
+  // in the reference implementation's bracket (log10 r ∈ [-12, 2], step 0.25):
+  // on conflict-heavy data the profile has no interior maximum — it rises
+  // monotonically into a saturation PLATEAU where every large rate is equally
+  // (un)likely — and a plain golden-section started wide can wander into that
+  // plateau and return a boundary value as the "optimum". Scanning the same
+  // grid a reference implementation would scan, then refining locally, makes
+  // the fitted number reproducible against those references (the property the
+  // independent-reference suite pins), instead of a bracket artifact.
+  const f = (log10Rate: number): number =>
+    runPruning(project, { ...ctxBase, logP: logPofRate(10 ** log10Rate) }).logRoot;
+  const gridStep = 0.25;
+  let bestLog = -12;
+  let bestVal = f(bestLog);
+  for (let x = -12; x <= 2.0001; x += gridStep) {
+    const v = f(x);
+    if (v > bestVal) {
+      bestVal = v;
+      bestLog = x;
+    }
+  }
+  let a = bestLog - gridStep;
+  let b = bestLog + gridStep;
+  const gr = (Math.sqrt(5) - 1) / 2;
+  let c = b - gr * (b - a);
+  let d = a + gr * (b - a);
   let fc = f(c);
   let fd = f(d);
-  for (let i = 0; i < 60; i += 1) {
+  for (let iter = 0; iter < 100 && b - a > 1e-10; iter += 1) {
     if (fc > fd) {
       b = d;
       d = c;
       fd = fc;
-      c = b - (b - a) / φ;
+      c = b - gr * (b - a);
       fc = f(c);
     } else {
       a = c;
       c = d;
       fc = fd;
-      d = a + (b - a) / φ;
+      d = a + gr * (b - a);
       fd = f(d);
     }
-    if (Math.abs(b - a) < 1e-6) break;
   }
-  const logRate = (a + b) / 2;
-  const logL = f(logRate);
-  // Profile-likelihood 95% interval: the log r range where lnL drops by 1.92.
+  const log10Rate = (a + b) / 2;
+  const rate = 10 ** log10Rate;
+  const logL = f(log10Rate);
+  // Profile-likelihood 95% interval: the log10 r range where lnL drops by 1.92.
   const target = logL - 1.920729;
   const bisect = (from: number, dir: -1 | 1): number => {
     let inner = from;
-    let outer = from + dir * 6;
+    let outer = from + dir * 12; // 12 decades: beyond any resolvable interval
     if (f(outer) > target) return outer; // interval extends beyond the bracket
     for (let i = 0; i < 50; i += 1) {
       const mid = (inner + outer) / 2;
@@ -420,8 +437,8 @@ function mlRateEr(
     }
     return (inner + outer) / 2;
   };
-  const ci: [number, number] = [Math.exp(bisect(logRate, -1)), Math.exp(bisect(logRate, 1))];
-  return { rate: Math.exp(logRate), logLikelihood: logL, ci };
+  const ci: [number, number] = [10 ** bisect(log10Rate, -1), 10 ** bisect(log10Rate, 1)];
+  return { rate, logLikelihood: logL, ci };
 }
 
 export function reconstructMk(

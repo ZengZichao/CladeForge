@@ -276,8 +276,8 @@ describe('asr — display threshold', () => {
 
   it('a raised threshold strictly shrinks the displayed state set', () => {
     const { p, c, x, y } = conflictTree();
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1 })!;
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.6 })!;
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.6, maxMissingBranchFraction: 1 })!;
 
     // At 0.1 the uncertain root still shows both states…
     expect(low.display.get(p.rootId)!.shown).toEqual([0, 1]);
@@ -301,8 +301,8 @@ describe('asr — display threshold', () => {
 
   it('does not alter the posterior: the threshold is presentation-only', () => {
     const { p, c, x, y } = conflictTree();
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.05 })!;
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.9 })!;
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.05, maxMissingBranchFraction: 1 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.9, maxMissingBranchFraction: 1 })!;
     expect([...high.display.keys()].sort()).toEqual([...high.probs.keys()].sort());
     for (const [id, probs] of low.probs) {
       expect(high.probs.get(id)).toEqual(probs); // identical numbers, not rescaled
@@ -329,13 +329,16 @@ describe('asr — display threshold', () => {
     p.characters.push(c);
     for (const id of [a1, a2, b1, b2]) p.nodes[id].charStates = { c1: 'a' };
 
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1 })!;
+    // Pins the MOMENT-rate convention (the comment below reasons from it): the
+    // default rateMethod is now 'ml', and on an all-equal tree the ML fit runs
+    // to zero, which is not what this threshold-display leg is about.
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1, rateMethod: 'moment', maxMissingBranchFraction: 1 })!;
     const rootLow = low.display.get(p.rootId)!;
     expect(low.probs.get(p.rootId)![1]).toBeGreaterThan(0.4); // real rival mass
     expect(rootLow.shown).toEqual([0, 1]); // drawn as a split pie
     expect(rootLow.solidIndex).toBe(-1);
 
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.5 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.5, rateMethod: 'moment', maxMissingBranchFraction: 1 })!;
     const rootHigh = high.display.get(p.rootId)!;
     expect(rootHigh.shown).toEqual([0]); // the 0.46 contender is cut
     expect(rootHigh.solidIndex).toBe(0); // ≥ 1 − 0.5 of the mass → solid disc
@@ -344,7 +347,7 @@ describe('asr — display threshold', () => {
 
   it('treats a non-finite threshold as no cut-off rather than as everything', () => {
     const { p, c } = conflictTree();
-    const res = reconstructMk(p, c, { model: 'ER', threshold: Number.NaN })!;
+    const res = reconstructMk(p, c, { model: 'ER', threshold: Number.NaN, maxMissingBranchFraction: 1 })!;
     expect(res.display.get(p.rootId)!.shown).toEqual([0, 1]);
     expect(applyDisplayThreshold([0.7, 0.3], ['a', 'b'], Number.POSITIVE_INFINITY).shown).toEqual([0, 1]);
     expect(applyDisplayThreshold([0.7, 0.3], ['a', 'b'], 0.5).shown).toEqual([0]);

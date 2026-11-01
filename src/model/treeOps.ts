@@ -614,12 +614,16 @@ function mergeNodeRecord<T>(
   const src = records[from];
   if (!src) return;
   const dst = records[to];
-  if (!dst) records[to] = src;
-  else {
+  if (dst === undefined || dst === null) records[to] = src;
+  else if (typeof dst === 'object' && typeof src === 'object') {
     for (const [k, v] of Object.entries(src)) {
       if (!(k in (dst as Record<string, unknown>))) (dst as Record<string, unknown>)[k] = v;
     }
   }
+  // Both values scalar (a hypothesis note is a plain string): the survivor's
+  // own note is the more specific statement and wins the merge. Iterating a
+  // string's entries here (Object.entries("note") → "0","1",…) would crash the
+  // `in` check below, so scalars are handled before that path.
   delete records[from];
 }
 

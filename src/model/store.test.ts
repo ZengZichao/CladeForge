@@ -53,7 +53,10 @@ describe('store undo/redo', () => {
 
   it('apply records history and undo/redo restore state', () => {
     const rootId = s().project.rootId;
-    expect(s().past).toHaveLength(0);
+    // PM-23: a document load keeps ONE undo step pointing at the outgoing
+    // document (⌘Z right after an import restores it), so the freshly loaded
+    // document starts with exactly that step rather than an empty stack.
+    expect(s().past).toHaveLength(1);
 
     s().apply((d) => addChildren(d, rootId, 2));
     expect(Object.keys(s().project.nodes)).toHaveLength(3);

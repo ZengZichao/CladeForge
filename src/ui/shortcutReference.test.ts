@@ -11,7 +11,7 @@ import { SHORTCUT_GROUPS } from './ShortcutsDialog';
 describe('shortcut reference single-source', () => {
   it('has no duplicate key rows and no empty entries', () => {
     const seen = new Set<string>();
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of SHORTCUT_GROUPS()) {
       expect(group.rows.length, group.title).toBeGreaterThan(0);
       for (const row of group.rows) {
         expect(row.keys.trim().length, `${group.title}: ${row.label}`).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ describe('shortcut reference single-source', () => {
   it('every dialog row appears in the manual shortcut table', () => {
     const manual = readFileSync(new URL('../../docs/MANUAL_EN.md', import.meta.url), 'utf8');
     const missing: string[] = [];
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of SHORTCUT_GROUPS()) {
       for (const row of group.rows) {
         // The manual writes the key column in backticks; match either the full
         // key string or its ⌘-stripped Ctrl equivalent.

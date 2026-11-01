@@ -976,9 +976,10 @@ export function applyMatrixToProject(
       };
       const assignment = bag.__assignments?.[label];
       const value = bag.__values?.[label];
-      if (assignment === undefined && value === undefined) continue;
+      const assigned = assignment ?? value;
+      if (assigned === undefined) continue;
       if (!node.charStates) node.charStates = {};
-      node.charStates[ch.id] = assignment ?? value;
+      node.charStates[ch.id] = assigned;
     }
   }
   // The transient assignment buckets never belong in the document.
