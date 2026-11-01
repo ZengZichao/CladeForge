@@ -231,8 +231,10 @@ describe('newick', () => {
   });
 
   it('guards the parse entry point against empty / runaway input', () => {
-    expect(() => parseNewickTrees('')).toThrow(/empty/i);
-    expect(() => parseNewickTrees('   \n ')).toThrow(/empty/i);
+    // The empty-input error is user-facing and localised (tr()); match both
+    // locales so the guard, not the UI language, is what the test pins.
+    expect(() => parseNewickTrees('')).toThrow(/empty|为空/i);
+    expect(() => parseNewickTrees('   \n ')).toThrow(/empty|为空/i);
     // The ceiling is far above any real tree (10 000 tips ≈ 250 kB) but finite.
     expect(MAX_TREE_CHARS).toBeGreaterThan(1024 * 1024);
   });

@@ -23,6 +23,8 @@ describe('asr (Mk marginal reconstruction)', () => {
     const [x, y] = addChildren(p, p.rootId, 2);
     const c = twoState();
     p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
     p.nodes[x].charStates = { c1: 'a' };
     p.nodes[y].charStates = { c1: 'a' };
 
@@ -41,12 +43,37 @@ describe('asr (Mk marginal reconstruction)', () => {
     const [x, y] = addChildren(p, p.rootId, 2);
     const c = twoState();
     p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
     p.nodes[x].charStates = { c1: 'a' };
     p.nodes[y].charStates = { c1: 'b' };
 
     const rootP = reconstructMk(p, c)!.probs.get(p.rootId)!;
     expect(rootP[0]).toBeCloseTo(0.5, 3);
     expect(rootP[1]).toBeCloseTo(0.5, 3);
+  });
+
+  it('fits the rate by maximum likelihood and reports lnL and a profile interval', () => {
+    const p = createEmptyProject();
+    const [x, y] = addChildren(p, p.rootId, 2);
+    const c = twoState();
+    p.characters.push(c);
+    p.nodes[x].branchLength = 0.1;
+    p.nodes[y].branchLength = 0.1;
+    p.nodes[x].charStates = { c1: 'a' };
+    p.nodes[y].charStates = { c1: 'a' };
+    const res = reconstructMk(p, c)!;
+    expect(res.rate.method).toBe('ml');
+    expect(res.rate.rate).toBeGreaterThan(0);
+    expect(res.rate.logLikelihood).toBeTypeOf('number');
+    expect(res.rate.logLikelihoodCi).toBeDefined();
+    // Unanimous data with short branches: the ML rate should be small
+    // (little change on the tree), not the fixed k·r·t = 2 of the moment rule.
+    expect(res.rate.sensitivity).toBeDefined();
+    // And the moment convention stays available and labelled.
+    const moment = reconstructMk(p, c, { model: 'ER', threshold: 0.1, rateMethod: 'moment' })!;
+    expect(moment.rate.method).toBe('moment');
+    expect(moment.rate.logLikelihood).toBeUndefined();
   });
 });
 
@@ -110,7 +137,26 @@ describe('asr — branch-length degradation warnings', () => {
     return { p, tips, nonRoot };
   }
 
-  const warn = (p: Project, c: Character) => reconstructMk(p, c)!.warnings;
+  // The missing-branch guard refuses runs whose length data is mostly absent;
+  // these tests exercise the per-class warnings, so they explicitly continue.
+  const warn = (p: Project, c: Character) =>
+    reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!.warnings;
+
+  it('refuses a reconstruction when branch lengths are mostly missing', () => {
+    const { p, tips } = fifteenNodeTree();
+    const c = twoState();
+    p.characters.push(c);
+    // A pure cladogram: no length anywhere. There is no rate information, so
+    // the default is to refuse rather than to invent 1s and present a result.
+    for (const id of tips) delete p.nodes[id].branchLength;
+    for (const id of tips) p.nodes[id].charStates = { c1: 'a' };
+    const res = reconstructMk(p, c)!;
+    expect(res.probs.size).toBe(0);
+    expect(res.warnings.some((w) => w.kind === 'missing-branch-lengths-refused')).toBe(true);
+    // …and the explicit fallback still runs it as a unit-length topology model.
+    const forced = reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!;
+    expect(forced.probs.size).toBeGreaterThan(0);
+  });
 
   it('counts NODES, not branch-length lookups', () => {
     // The count is of NODES, not of lookups: a 15-node tree with 4 unset branch
@@ -230,16 +276,19 @@ describe('asr — display threshold', () => {
 
   it('a raised threshold strictly shrinks the displayed state set', () => {
     const { p, c, x, y } = conflictTree();
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1 })!;
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.6 })!;
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1, maxMissingBranchFraction: 1 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.6, maxMissingBranchFraction: 1 })!;
 
     // At 0.1 the uncertain root still shows both states…
     expect(low.display.get(p.rootId)!.shown).toEqual([0, 1]);
     expect(low.display.get(p.rootId)!.stateIds).toEqual(['a', 'b']);
     expect(low.display.get(p.rootId)!.unsupported).toBe(false);
-    // …at 0.6 neither half of a 50/50 survives, so the node claims nothing.
+    expect(low.display.get(p.rootId)!.uncertain).toBe(false);
+    // …at 0.6 neither half of a 50/50 survives. That is UNCERTAINTY — the
+    // posterior is real but diffuse — not "no data", and the display says so.
     expect(high.display.get(p.rootId)!.shown).toEqual([]);
-    expect(high.display.get(p.rootId)!.unsupported).toBe(true);
+    expect(high.display.get(p.rootId)!.unsupported).toBe(false);
+    expect(high.display.get(p.rootId)!.uncertain).toBe(true);
     // Strictly monotone: every node shows at least as much at the lower cut.
     for (const [id, node] of low.display) {
       expect(high.display.get(id)!.shown.length).toBeLessThanOrEqual(node.shown.length);
@@ -252,8 +301,8 @@ describe('asr — display threshold', () => {
 
   it('does not alter the posterior: the threshold is presentation-only', () => {
     const { p, c, x, y } = conflictTree();
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.05 })!;
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.9 })!;
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.05, maxMissingBranchFraction: 1 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.9, maxMissingBranchFraction: 1 })!;
     expect([...high.display.keys()].sort()).toEqual([...high.probs.keys()].sort());
     for (const [id, probs] of low.probs) {
       expect(high.probs.get(id)).toEqual(probs); // identical numbers, not rescaled
@@ -280,13 +329,16 @@ describe('asr — display threshold', () => {
     p.characters.push(c);
     for (const id of [a1, a2, b1, b2]) p.nodes[id].charStates = { c1: 'a' };
 
-    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1 })!;
+    // Pins the MOMENT-rate convention (the comment below reasons from it): the
+    // default rateMethod is now 'ml', and on an all-equal tree the ML fit runs
+    // to zero, which is not what this threshold-display leg is about.
+    const low = reconstructMk(p, c, { model: 'ER', threshold: 0.1, rateMethod: 'moment', maxMissingBranchFraction: 1 })!;
     const rootLow = low.display.get(p.rootId)!;
     expect(low.probs.get(p.rootId)![1]).toBeGreaterThan(0.4); // real rival mass
     expect(rootLow.shown).toEqual([0, 1]); // drawn as a split pie
     expect(rootLow.solidIndex).toBe(-1);
 
-    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.5 })!;
+    const high = reconstructMk(p, c, { model: 'ER', threshold: 0.5, rateMethod: 'moment', maxMissingBranchFraction: 1 })!;
     const rootHigh = high.display.get(p.rootId)!;
     expect(rootHigh.shown).toEqual([0]); // the 0.46 contender is cut
     expect(rootHigh.solidIndex).toBe(0); // ≥ 1 − 0.5 of the mass → solid disc
@@ -295,7 +347,7 @@ describe('asr — display threshold', () => {
 
   it('treats a non-finite threshold as no cut-off rather than as everything', () => {
     const { p, c } = conflictTree();
-    const res = reconstructMk(p, c, { model: 'ER', threshold: Number.NaN })!;
+    const res = reconstructMk(p, c, { model: 'ER', threshold: Number.NaN, maxMissingBranchFraction: 1 })!;
     expect(res.display.get(p.rootId)!.shown).toEqual([0, 1]);
     expect(applyDisplayThreshold([0.7, 0.3], ['a', 'b'], Number.POSITIVE_INFINITY).shown).toEqual([0, 1]);
     expect(applyDisplayThreshold([0.7, 0.3], ['a', 'b'], 0.5).shown).toEqual([0]);

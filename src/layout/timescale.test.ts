@@ -55,7 +55,10 @@ describe('timescale', () => {
     // were Ma would sit three orders of magnitude off.
     const ka = buildTimeAxis(4_600_000, (age) => age, 'LR', 'ka', 0, 10);
     expect(ka.maFactor).toBe(1e-3);
-    const phanerozoic = ka.eons.find((e) => e.color === '#bbf7d0');
+    // Review rework: eon colours no longer share any hex with the period
+    // palette (four of them were repainted), so the Phanerozoic band is
+    // found by its own colour now.
+    const phanerozoic = ka.eons.find((e) => e.color === '#7fd4b8');
     expect(phanerozoic).toBeDefined();
     expect(Math.max(phanerozoic!.a, phanerozoic!.b)).toBeCloseTo(538_800, 6);
     expect(ka.bandsMeaningful).toBe(true);

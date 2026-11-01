@@ -28,6 +28,7 @@ import {
   nodeCharacterColor,
 } from '../model/characters';
 import { EdgeView } from './EdgeView';
+import { supportPercent } from '../model/treeOps';
 import { labelAngleOf } from './labels';
 import { hasScaleBar, unmeasuredNodeIds } from './branchFlags';
 import { CustomEdgeView } from './CustomEdgeView';
@@ -45,11 +46,13 @@ import { removeCustomEdge } from '../model/treeOps';
 import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO } from './colors';
 import { importTreeText } from '../io/fileActions';
 import { createSampleProject, SAMPLE_PROJECTS } from '../model/sampleTree';
+import { openSample } from '../ui/sampleOpener';
 import { requestDeletion } from '../ui/deleteGuard';
 import { CanvasLegend } from '../ui/CanvasLegend';
 import { isImeComposing } from '../ui/imeGuard';
 import { modalIsOpen } from '../ui/useDialogFocus';
 import { notify } from '../ui/toast';
+import { requestConfirm } from '../ui/confirmDialog';
 import { S, tr } from '../ui/strings';
 // Shared, never-empty layout display name (BUG-5): the proposal below quotes
 // the current layout, and that name must never be an empty string even when a
@@ -206,8 +209,11 @@ export function TreeCanvas() {
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
-  const { onPointerDown, onPointerMove, onPointerUp, cancelGesture, connect, dropTargetId, snapGuide } =
+  const { onPointerDown, onPointerMove, onPointerUp, cancelGesture, connect, dropTargetId, snapGuide, marquee } =
     useCanvasGestures(svgRef, layoutRef, spaceHeld);
+  // Drop-zone feedback (PM-04/06): the overlay must be visible WHILE dragging,
+  // or the user gets no signal that the canvas accepts files at all.
+  const [dragActive, setDragActive] = useState(false);
 
   // --- viewport measurement ---
   useEffect(() => {
@@ -269,15 +275,35 @@ export function TreeCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTarget]);
 
-  // --- wheel zoom (non-passive so preventDefault works) ---
+  // --- wheel zoom / trackpad pan (non-passive so preventDefault works) ---
+  // Trackpad semantics (FigTree / iTOL / every map app): Ctrl-held wheels and
+  // pinch gestures ZOOM; a plain two-finger scroll PANS (deltaX moves
+  // horizontally — on the old handler every trackpad swipe zoomed, and macOS
+  // users read the canvas as "not native" within seconds).
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
+      const st = useStore.getState();
+      const pinch = e.ctrlKey || e.metaKey;
+      if (!pinch && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // Horizontal two-finger pan, in screen px.
+        setView({ ...st.view, tx: st.view.tx - e.deltaX, ty: st.view.ty });
+        return;
+      }
+      if (!pinch && !e.shiftKey && e.deltaMode === 0 && Math.abs(e.deltaY) > 0 && e.deltaX === 0) {
+        // Plain vertical wheel: keep the classic zoom (mouse users expect it),
+        // but give trackpad-class small deltas a proportional pan instead of
+        // 10% zoom steps per pixel-row.
+        if (Math.abs(e.deltaY) < 12) {
+          setView({ ...st.view, tx: st.view.tx, ty: st.view.ty - e.deltaY });
+          return;
+        }
+      }
       const screen = eventScreenPoint(svg, e);
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      setView(zoomAt(useStore.getState().view, screen, factor));
+      setView(zoomAt(st.view, screen, factor));
     },
     [setView],
   );
@@ -323,11 +349,23 @@ export function TreeCanvas() {
         );
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.selectedEdgeId) {
         // A selected custom (horizontal-transfer) edge is deletable via the
-        // keyboard too, so the shortcut does not depend on finding the edge in the
-        // inspector first.
+        // keyboard too — through the SAME confirm guard as the context menu
+        // (PM-20), so the keyboard is never the unguarded path.
         e.preventDefault();
         const edgeId = st.selectedEdgeId;
-        apply((d) => removeCustomEdge(d, edgeId));
+        const edge = project.customEdges.find((x) => x.id === edgeId);
+        const label = edge?.label || edge?.kind || tr('未命名关联线', 'unnamed edge');
+        requestConfirm({
+          key: 'delete-edge-kbd',
+          title: S.edge.delete,
+          message: tr(
+            `将删除关联线「${label}」及其注记。该操作可撤销。`,
+            `This deletes the custom edge "${label}" and its note. The action is undoable.`,
+          ),
+          confirmLabel: S.edge.delete,
+          danger: true,
+          onConfirm: () => apply((d) => removeCustomEdge(d, edgeId)),
+        });
       } else if (e.key === 'Escape') {
         endNudgeGesture();
         cancelGesture();
@@ -566,16 +604,79 @@ export function TreeCanvas() {
       ref={wrapRef}
       style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
       onDragOver={(e) => {
-        if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+          setDragActive(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.relatedTarget === null) setDragActive(false);
       }}
       onDrop={(e) => {
         e.preventDefault();
+        setDragActive(false);
         const files = Array.from(e.dataTransfer?.files ?? []);
-        const treeFile = files.find((f) => /\.(nwk|newick|tree|tre|nex|nexus)$/i.test(f.name));
-        if (!treeFile) return;
-        void treeFile.text().then((text) => importTreeText(text, treeFile.name));
+        const projectFile = files.find((f) => /\.cladeforge\.json$|\.json$/i.test(f.name));
+        const treeFiles = files.filter((f) => /\.(nwk|newick|tree|tre|nex|nexus)$/i.test(f.name));
+        if (projectFile) {
+          // A project (.cladeforge.json) dropped on the canvas opens as a tab —
+          // the review's PM-06: the project format used to be un-droppable.
+          void projectFile.text().then((text) => {
+            void import('../io/fileActions').then(({ actionOpenProjectText }) =>
+              actionOpenProjectText(text, projectFile.name),
+            );
+          });
+          return;
+        }
+        if (treeFiles.length > 0) {
+          // Every dropped tree imports (PM-05: the old code took the FIRST
+          // match and silently dropped the rest — batch gene-tree imports are
+          // exactly the multi-file case).
+          for (const f of treeFiles) {
+            void f.text().then((text) => importTreeText(text, f.name));
+          }
+          return;
+        }
+        // PM-04: dropping an unsupported file used to be a SILENT no-op. Name
+        // what was rejected and what to do instead.
+        const rejected = files.map((f) => f.name).slice(0, 3).join(', ');
+        notify.error(
+          tr(
+            `暂不支持拖入的文件（${rejected || '未知'}）：请拖入 .nwk/.newick/.tree/.tre/.nex/.nexus 树文件或 .cladeforge.json 项目；CSV/TSV 性状表请用 文件 › 导入表格`,
+            `Unsupported dropped file(s) (${rejected || 'unknown'}): drop a .nwk/.newick/.tree/.tre/.nex/.nexus tree or a .cladeforge.json project; CSV/TSV tables go through File › Import table`,
+          ),
+        );
       }}
     >
+      {dragActive && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            background: 'var(--accent, #2563eb)',
+            opacity: 0.08,
+            zIndex: 5,
+          }}
+        >
+          <span
+            style={{
+              pointerEvents: 'none',
+              fontSize: 13,
+              background: 'var(--surface, #fff)',
+              padding: '6px 12px',
+              borderRadius: 6,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              opacity: 1,
+            }}
+          >
+            {tr('松开以导入：树文件（.nwk/.nex）或项目（.cladeforge.json）', 'Drop to import: a tree file (.nwk/.nex) or a project (.cladeforge.json)')}
+          </span>
+        </div>
+      )}
       <svg
         ref={svgRef}
         width={size.w}
@@ -625,8 +726,7 @@ export function TreeCanvas() {
               eraLevel={eraLevel}
               envEvents={project.environmentalEvents}
             />
-          )}
-          {mrcaPath &&
+          )}          {mrcaPath &&
             branches
               .filter((b) => mrcaPath.branches.has(b.node.id))
               .map((b) => (
@@ -669,6 +769,19 @@ export function TreeCanvas() {
               : color === DEFAULT_BRANCH_STYLE.color
                 ? 'var(--c-default-branch)'
                 : color;
+            // Support-threshold dimming: branches whose (scale-aware) support
+            // falls below the document's threshold draw dashed and lighter —
+            // the SAME rule the exporter applies, so "I dimmed it on screen"
+            // finally matches "I dimmed it in the figure". The hidden
+            // "non-functional" control in the style panel becomes real.
+            const threshold = typeof project.layout.supportThreshold === 'number'
+              ? project.layout.supportThreshold
+              : undefined;
+            const belowSupport =
+              threshold !== undefined &&
+              typeof b.node.support === 'number' &&
+              b.node.childrenIds.length > 0 &&
+              (supportPercent(b.node) ?? 100) < threshold;
             return (
               <EdgeView
                 key={`b-${b.node.id}`}
@@ -676,8 +789,15 @@ export function TreeCanvas() {
                 to={b.to}
                 orientation={project.layout.orientation}
                 layoutType={project.layout.type}
-                style={renderedColor === bs.color ? bs : { ...bs, color: renderedColor }}
+                style={
+                  belowSupport
+                    ? { ...bs, color: renderedColor, dash: bs.dash === 'solid' ? 'dashed' : bs.dash }
+                    : renderedColor === bs.color
+                      ? bs
+                      : { ...bs, color: renderedColor }
+                }
                 unmeasured={unmeasured.has(b.node.id)}
+                dimmed={belowSupport}
               />
             );
           })}
@@ -853,7 +973,24 @@ export function TreeCanvas() {
               color={project.defaults.edge.color}
             />
           )}
-        </g>
+        
+      {/* Rubber-band (marquee) selection rectangle — SCREEN space, outside the
+          world transform, so its coordinates match the gesture's screen px. */}
+      {marquee && (
+        <rect
+          x={marquee.x}
+          y={marquee.y}
+          width={marquee.w}
+          height={marquee.h}
+          fill="var(--accent)"
+          fillOpacity={0.08}
+          stroke="var(--accent)"
+          strokeWidth={1}
+          strokeDasharray="4 3"
+          pointerEvents="none"
+        />
+      )}
+</g>
       </svg>
       <Minimap layout={layout} nodes={project.nodes} view={view} size={size} setView={setView} />
       {/* On-canvas colour legend */}
@@ -899,8 +1036,13 @@ export function TreeCanvas() {
                   key={s.id}
                   className="sample-card"
                   title={tr(s.desc, s.descEn)}
-                  onClick={() => openInNewTab(s.build())}
+                  onClick={() => openSample(s)}
                 >
+                  {/* Reconciliation samples land in the recon workspace with one
+                      click (§7.4) — the badge says so before the click. */}
+                  {s.entryView === 'recon' && (
+                    <span className="sample-card-badge">{S.recon.sampleBadge}</span>
+                  )}
                   <span className="sample-card-label">{tr(s.label, s.labelEn)}</span>
                   <span className="sample-card-desc">{tr(s.desc, s.descEn)}</span>
                 </button>

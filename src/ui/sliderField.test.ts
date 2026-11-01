@@ -35,9 +35,18 @@ function Harness() {
 
 let host: HTMLDivElement;
 let root: Root;
+/**
+ * Undo depth right after the beforeEach load. PM-23 (store.ts) makes
+ * `loadProject` keep ONE undo step pointing at the outgoing document, so the
+ * assertions below compare DELTAS against this baseline instead of absolute
+ * counts — the invariant under test is "how many steps the slider interaction
+ * itself costs".
+ */
+let pastBaseline: number;
 
 beforeEach(() => {
   useStore.getState().loadProject(createEmptyProject('slider'));
+  pastBaseline = useStore.getState().past.length;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -88,12 +97,12 @@ describe('SliderNumberField', () => {
     });
     expect(width()).toBe(12);
     // Live previews must not flood the undo budget.
-    expect(useStore.getState().past).toHaveLength(0);
+    expect(useStore.getState().past).toHaveLength(pastBaseline);
 
     act(() => {
       slider.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(useStore.getState().past).toHaveLength(1);
+    expect(useStore.getState().past).toHaveLength(pastBaseline + 1);
 
     act(() => useStore.getState().undo());
     expect(width()).toBe(initial);
@@ -109,6 +118,7 @@ describe('SliderNumberField', () => {
       input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     });
     expect(width()).toBe(16);
-    expect(useStore.getState().past).toHaveLength(1);
+    // Exactly one undo step for the commit, on top of the load baseline.
+    expect(useStore.getState().past).toHaveLength(pastBaseline + 1);
   });
 });

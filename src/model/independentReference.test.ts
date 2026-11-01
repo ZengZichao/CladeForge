@@ -1399,7 +1399,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
       expect(oracle, c.name).not.toBe('over-budget');
       const exact = oracle as BruteMk;
 
-      const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+      const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' });
       expect(app, c.name).not.toBeNull();
       const result = app as NonNullable<typeof app>;
       expect(
@@ -1448,7 +1448,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
         const oracle = bruteMk(flat, char.states.length, obs, rate);
         if (oracle === 'over-budget') continue;
         const exact = oracle as BruteMk;
-        const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+        const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' });
         expect(app, `${descriptor.id}/${char.name}`).not.toBeNull();
         const result = app as NonNullable<typeof app>;
         expect(flat.substituted, `${descriptor.id}: branch lengths explicit`).toBe(0);
@@ -1488,7 +1488,7 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
     const flat = flatten(project);
     const obs = observations(flat, project, char);
     const exact = bruteMk(flat, 2, obs, appRate(flat)) as BruteMk;
-    const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS) as NonNullable<ReturnType<typeof reconstructMk>>;
+    const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' }) as NonNullable<ReturnType<typeof reconstructMk>>;
     for (const v of flat.ids.map((_, i) => i)) {
       const row = app.probs.get(flat.ids[v]) as number[];
       expect(maxAbsDiff(row, exact.probs[v])).toBeLessThan(1e-9);
@@ -1636,7 +1636,15 @@ describe('randomised instances vs the two parsimony and Mk oracles', () => {
       const oracle = bruteMk(flat, k, obs, rate);
       if (oracle === 'over-budget') continue;
       const exact: BruteMk = oracle;
-      const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS);
+      // These random cladograms carry no INTERNAL branch lengths on purpose —
+      // the leg exists to pin the documented "missing length → 1" substitution.
+      // The missing-branch guard (which refuses past 5% unset lengths) must be
+      // told to continue explicitly, or it would refuse before any comparison.
+      const app = reconstructMk(project, char, {
+        ...DEFAULT_ASR_OPTIONS,
+        rateMethod: 'moment',
+        maxMissingBranchFraction: 1,
+      });
       expect(app, `trial ${trial}`).not.toBeNull();
       const result = app as NonNullable<typeof app>;
       let localWorst = 0;
@@ -1708,7 +1716,10 @@ describe('consensus vs an independent clade-support count', () => {
       const count = oracle.supports.get(key);
       expect(count, key).toBeDefined();
       expect(rec.count, key).toBe(count as number);
-      expect(rec.support, key).toBe(Math.round((100 * (count as number)) / projects.length));
+      // Support is kept at FULL precision on purpose (rounding would quantise
+      // a 100-tree posterior sample to 1% steps and collide with the legacy
+      // "≤1 means fraction" heuristic) — compare unrounded.
+      expect(rec.support, key).toBeCloseTo((100 * (count as number)) / projects.length, 10);
     }
     for (const [key, count] of oracle.supports) {
       record('consensus', `support:${key}`, 'count', count, `${count}/${projects.length} trees`);
@@ -1728,8 +1739,10 @@ describe('consensus vs an independent clade-support count', () => {
       expect([...produced.keys].sort(), `${method} clade set`).toEqual([...oracle.selected.keys()].sort());
       for (const [nodeId, key] of produced.byNode) {
         expect(oracle.selected.has(key), `phantom clade ${key}`).toBe(true);
-        expect(tree.nodes[nodeId].support, key).toBe(
-          Math.round((100 * (oracle.selected.get(key) as number)) / projects.length),
+        // Full precision by design (see cladeSupports) — compare unrounded.
+        expect(tree.nodes[nodeId].support, key).toBeCloseTo(
+          (100 * (oracle.selected.get(key) as number)) / projects.length,
+          10,
         );
       }
       expect(issues.length, method).toBe(0);
@@ -1965,6 +1978,11 @@ function runDtlCase(c: DtlCase) {
   });
   const dp = solveDtl(speciesProject, geneProject, c.costs, tipOverride, {
     rootTransferCost: c.rootFee ?? 0,
+    // The brute-force oracle prices the gene root at ANY species node
+    // (`rootFee` above) — the free-root convention. The DP now anchors the
+    // root at the species root BY DEFAULT (an opt-in change in the shipped
+    // solver), so the comparison must opt back in to stay model-identical.
+    allowFreeRoot: true,
   });
   const brute = bruteDtl(species, gene, c.costs, c.rootFee ?? 0);
   return { dp, brute, species, gene, speciesProject, geneProject };
@@ -2178,7 +2196,7 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
         const obs = observations(flat, project, char);
         const rMean = appRate(flat);
         const atMean = pruneMk(flat, k, obs, rMean);
-        const app = reconstructMk(project, char, DEFAULT_ASR_OPTIONS) as NonNullable<
+        const app = reconstructMk(project, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'moment' }) as NonNullable<
           ReturnType<typeof reconstructMk>
         >;
         expect(flat.substituted, `${descriptor.id}: branch lengths explicit`).toBe(0);
@@ -2249,17 +2267,29 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
     });
     expect(worst).toBeLessThan(1e-9);
 
-    // and what the app itself reports (at r = 1/mean) differs from that optimum
-    const app = reconstructMk(sample, char, DEFAULT_ASR_OPTIONS) as NonNullable<ReturnType<typeof reconstructMk>>;
-    let appChanges = 0;
-    let appShift = 0;
+    // The app's ML fit must reach the oracle's MAXIMAL LIKELIHOOD and, at that
+    // rate, the exact ML marginals — this is the productised path (B3/M1).
+    // The rate itself is NOT asserted equal: on this sample the profile has no
+    // interior maximum (it rises monotonically into the saturation plateau
+    // where every large rate is equally likely), so the "MLE" is the plateau's
+    // left edge and its precise value depends on where each search's floating
+    // point lands inside the plateau. Equal max log-likelihood is the checkable,
+    // implementation-independent claim; the plateau posteriors are identical.
+    const app = reconstructMk(sample, char, { ...DEFAULT_ASR_OPTIONS, rateMethod: 'ml' }) as NonNullable<ReturnType<typeof reconstructMk>>;
+    expect(
+      Math.abs(app.rate.logLikelihood! - ml.logLik),
+      'app ML max log-likelihood vs oracle (the rate itself is plateau-dependent)',
+    ).toBeLessThan(1e-6);
+    expect(app.rate.rate, 'fitted rate positive and inside the search bracket').toBeGreaterThan(0);
+    let appWorst = 0;
     flat.ids.forEach((id, v) => {
       const p = app.probs.get(id) as number[];
-      if (peaksDiffer(p, bf.probs[v])) appChanges += 1;
-      appShift = Math.max(appShift, maxAbsDiff(p, bf.probs[v]));
+      appWorst = Math.max(appWorst, maxAbsDiff(p, bf.probs[v]));
     });
+    expect(appWorst, 'app posteriors at its own ML rate vs exact ML marginals').toBeLessThan(1e-6);
+    expect(app.rate.logLikelihood, 'app lnL vs oracle lnL').toBeCloseTo(ml.logLik, 6);
     record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'ml-pruner-vs-exact', worst < 1e-9 ? 'exact' : 'OFF', `r_ML = ${ml.rate.toPrecision(4)}, assignments = ${bf.explored}`);
-    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'app-at-1-over-mean-vs-ML-exact', appChanges, `nodes changing marginal state; max |Δp| = ${appShift.toPrecision(4)}`);
+    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'app-ML-vs-exact', `max |Δp| = ${appWorst.toExponential(2)}`, `r_ML(app) = ${app.rate.rate.toPrecision(6)}, lnL(app) = ${app.rate.logLikelihood?.toPrecision(9)}`);
   });
 });
 

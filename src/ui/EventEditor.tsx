@@ -22,6 +22,7 @@ import {
   eventBadgeExtent,
   eventBadgeFontSize,
   eventBadgeText,
+  eventCatalogue,
   eventMarkerColor,
   eventMarkerShape,
   eventMarkerSize,
@@ -39,18 +40,22 @@ import { CheckboxField, ColorField, Field, TextField } from './fields';
 import { SliderNumberField } from './SliderNumberField';
 import { Section } from './Section';
 import { S, tr } from './strings';
+import { notify } from './toast';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
-function TypeOptions() {
-  // Group ids are stable; labels are locale-aware, so groups are derived at
-  // render time instead of module scope.
-  const groups = Array.from(new Set(EVENT_TYPES.map((t) => t.group)));
+function TypeOptions({ project }: { project: Project }) {
+  // The catalogue is PROJECT-EXTENSIBLE: user-defined types ride
+  // project.customEventTypes (an importable/exportable ontology file), so a
+  // microbial figure can make "genome reduction" a first-class badge instead
+  // of forcing everything through the grey CU catch-all.
+  const catalogue = eventCatalogue(project);
+  const groups = Array.from(new Set(catalogue.map((t) => t.group)));
   return (
     <>
       {groups.map((g) => (
-        <optgroup key={g} label={eventTypeGroup(EVENT_TYPES.find((t) => t.group === g)!)}>
-          {EVENT_TYPES.filter((t) => t.group === g).map((t) => (
+        <optgroup key={g} label={eventTypeGroup(catalogue.find((t) => t.group === g)!)}>
+          {catalogue.filter((t) => t.group === g).map((t) => (
             <option key={t.id} value={t.id}>
               {t.code} · {eventTypeLabel(t)}
             </option>
@@ -59,6 +64,36 @@ function TypeOptions() {
       ))}
     </>
   );
+}
+
+/** Prompt for a new custom event type and append it to the project ontology. */
+function addCustomEventType(apply: Apply, project: Project): void {
+  const label = window.prompt(
+    tr(
+      '新事件类型名称（中文；同时生成英文标签与双字母代号）',
+      'New event type name (an English label and two-letter code are derived)',
+    ),
+  );
+  if (!label?.trim()) return;
+  const clean = label.trim().slice(0, 24);
+  const id = `user-${clean.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
+  apply((d) => {
+    d.customEventTypes = [
+      ...(d.customEventTypes ?? []),
+      {
+        id,
+        label: clean,
+        labelEn: clean,
+        group: tr('自定义', 'Custom'),
+        groupEn: 'Custom',
+        code: clean.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'CU',
+        color: '#64748b',
+        target: 'both',
+      },
+    ];
+  });
+  notify.success(tr(`已添加自定义事件类型「${clean}」`, `Added custom event type "${clean}"`));
+  void project;
 }
 
 function OneEvent({
@@ -126,7 +161,7 @@ function OneEvent({
         <div className="event-editor">
           <Field label={S.event.type}>
             <select value={event.typeId} onChange={(e) => up({ typeId: e.target.value })}>
-              <TypeOptions />
+              <TypeOptions project={project} />
             </select>
           </Field>
           <Field label={S.event.target}>
@@ -319,8 +354,13 @@ export function EventEditor({
           }}
         >
           <option value="">…</option>
-          <TypeOptions />
+          <TypeOptions project={project} />
         </select>
+      </Field>
+      <Field label={tr('新建自定义事件类型', 'New custom event type')}>
+        <button className="btn" onClick={() => addCustomEventType(apply, project)}>
+          ＋ {tr('定义新类型…', 'Define a new type…')}
+        </button>
       </Field>
     </Section>
   );

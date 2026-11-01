@@ -123,7 +123,7 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
             className="btn"
             disabled={asrDisabled}
             title={S.character.asrHint}
-            onClick={runAsr}
+            onClick={() => runAsr()}
           >
             {S.analysisMenu.asr}
           </button>

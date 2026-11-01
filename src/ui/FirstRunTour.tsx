@@ -41,6 +41,14 @@ interface TourStep {
 function getBasicsSteps(): TourStep[] {
   return [
     {
+      // Step 0 — the capability boundary. The inference UI has real statistical
+      // vocabulary, so the FIRST thing a new user must learn is what the app
+      // does NOT do; one acknowledged read is recorded in localStorage.
+      target: null,
+      title: S.review.boundaryTitle,
+      desc: S.review.boundaryStatement,
+    },
+    {
       target: '.canvas-host',
       title: S.tour.step1Title,
       desc: S.tour.step1Desc,
@@ -65,6 +73,17 @@ function getBasicsSteps(): TourStep[] {
 
 function getWorkflowSteps(): TourStep[] {
   return [
+    {
+      // Step 0 — bring your own tree. The workflow tour used to start at
+      // Traits, which presumes a tree already sits in the document; the first
+      // real action is getting one in (file, drop, or clipboard).
+      target: '.canvas-host',
+      title: tr('第 0 步 · 把你的树放进来', 'Step 0 · Bring your own tree'),
+      desc: tr(
+        '三种方式：文件 › 导入树、把 .nwk/.nex 文件拖进画布、或 文件 › 从剪贴板导入树。没有树时也可以先打开一个示例（帮助 › 新手指南）。',
+        'Three ways: File › Import tree, drop a .nwk/.nex file onto the canvas, or File › Paste tree from clipboard. With no tree yet, open a sample first (Help › Guide).',
+      ),
+    },
     {
       target: '.panel-left',
       module: 'traits',

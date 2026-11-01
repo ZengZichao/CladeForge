@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createEmptyProject, createAquaticSample } from './sampleTree';
-import { addCharacter, addChildren, removeCharacter, setNodeState } from './treeOps';
+import { addCharacter, addChildren, removeCharacter, rerootAtNode, setNodeState } from './treeOps';
 import { newCharacter } from './characters';
-import { addBlankLayer, duplicateActiveLayer, pruneLayerStore, switchLayer } from './layers';
+import { addBlankLayer, duplicateActiveLayer, layerDiff, layerRecordCounts, pruneLayerStore, switchLayer } from './layers';
+import { newEvent } from './events';
 
 describe('hypothesis layers', () => {
   it('isolates internal-node hypotheses across layers while sharing tips', () => {
@@ -100,7 +101,7 @@ describe('layer switching after a character deletion', () => {
       (n) => n.childrenIds.length === 0 && n.charStates?.[locomotion.id],
     );
     expect(scoredTips.length).toBe(4);
-    expect(pruneLayerStore(p)).toBe(false); // nothing left to prune
+    expect(pruneLayerStore(p).changed).toBe(false); // nothing left to prune
   });
 
   it('pruneLayerStore removes orphan keys a load may still carry, then converges', () => {
@@ -117,14 +118,87 @@ describe('layer switching after a character deletion', () => {
     p.layerStore[second].notes = { 'node-that-no-longer-exists': 'orphan note' };
     p.characters = [];
 
-    expect(pruneLayerStore(p)).toBe(true);
+    const summary = pruneLayerStore(p);
+    expect(summary.changed).toBe(true);
+    expect(summary.states).toBe(1);
+    expect(summary.meta).toBe(1);
+    expect(summary.notes).toBe(1);
     expect(p.layerStore[second].states[p.rootId]).toBeUndefined();
     expect(p.layerStore[second].meta[p.rootId]).toBeUndefined();
     expect(p.layerStore[second].notes).toEqual({});
-    expect(pruneLayerStore(p)).toBe(false); // idempotent
+    expect(pruneLayerStore(p).changed).toBe(false); // idempotent
 
     switchLayer(p, second);
     expect(p.nodes[p.rootId].charStates).toBeUndefined();
     expect(p.nodes[p.rootId].charMeta).toBeUndefined();
+  });
+
+  // Regression for the review finding "re-rooting silently destroys the events
+  // and notes of INACTIVE hypothesis layers": the splice-out of the old root
+  // used to migrate only the live layer's references, so a stored layer's
+  // events kept pointing at the dead node id and were pruned unread on the
+  // next load.
+  it('migrates stored-layer events and notes when a re-root splices the old root', () => {
+    const p = createEmptyProject();
+    const [a, b] = addChildren(p, p.rootId, 2);
+    const layer1 = p.activeLayerId;
+    const layer2 = duplicateActiveLayer(p, 'H2');
+
+    // Layer 2 owns an event on the root and a note on the root. Park it in the
+    // store by switching away.
+    switchLayer(p, layer2);
+    const ev = newEvent('hgt', 'node', p.rootId);
+    p.events = [ev];
+    p.nodes[a].hypothesisNote = 'H2 note on a';
+    p.nodes[p.rootId].hypothesisNote = 'H2 note on root';
+    switchLayer(p, layer1);
+    expect(p.layerStore[layer2].events.length).toBe(1);
+
+    // Re-root onto tip `b`: the old root has one child left, so it is spliced
+    // out and every reference on it must move to the survivor.
+    expect(rerootAtNode(p, b)).toBe(true);
+    const stored = p.layerStore[layer2];
+    expect(stored.events.length).toBe(1);
+    expect(p.nodes[stored.events[0].nodeId]).toBeDefined();
+    expect(stored.events[0].nodeId).toBe(a); // migrated off the dying root
+    const notes = stored.notes ?? {};
+    for (const nid of Object.keys(notes)) {
+      expect(p.nodes[nid]).toBeDefined();
+    }
+    expect(notes[a]).toBe('H2 note on a'); // survivor's own note wins the merge
+
+    // Loading the document back must not report anything pruned: nothing is
+    // dangling any more.
+    expect(pruneLayerStore(p).changed).toBe(false);
+  });
+
+  it('layerDiff reports state and event differences between two layers without mutating the document', () => {
+    const p = createEmptyProject();
+    const [a, b] = addChildren(p, p.rootId, 2);
+    const char = newCharacter('t');
+    addCharacter(p, char);
+    const [s0, s1] = char.states.map((s) => s.id);
+    setNodeState(p, p.rootId, char.id, s0);
+    const layer1 = p.activeLayerId;
+    const layer2 = duplicateActiveLayer(p, 'H2');
+    switchLayer(p, layer2);
+    setNodeState(p, p.rootId, char.id, s1);
+    setNodeState(p, a, char.id, s0); // stored as an internal hypothesis? a is a tip — ignored
+    const ev = newEvent('hgt', 'node', b);
+    p.events = [ev];
+    switchLayer(p, layer1);
+
+    const diff = layerDiff(p, layer1, layer2);
+    expect(diff.stateDiffs.length).toBe(1);
+    expect(diff.stateDiffs[0].nodeId).toBe(p.rootId);
+    expect(diff.stateDiffs[0].a).toBe(s0);
+    expect(diff.stateDiffs[0].b).toBe(s1);
+    expect(diff.eventsOnlyB.length).toBe(1);
+    expect(diff.eventsOnlyA.length).toBe(0);
+
+    const counts1 = layerRecordCounts(p, layer1);
+    const counts2 = layerRecordCounts(p, layer2);
+    expect(counts1.events).toBe(0);
+    expect(counts2.events).toBe(1);
   });
 });

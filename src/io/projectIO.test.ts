@@ -35,7 +35,9 @@ describe('project IO — DTL reconciliation fields', () => {
     });
     expect(back.reconCosts).toEqual({ dup: 2, transfer: 3, loss: 4 });
     // Saved version stamps the current schema.
-    expect(back.version).toBe('0.1.0');
+    // 0.2.0 is the schema baseline after the migration registry was seeded
+    // (0.1.0 → 0.2.0 in io/projectIO.ts); new saves stamp the current version.
+    expect(back.version).toBe('0.2.0');
   });
 
   it('opens a file with an unrecognised version stamp best-effort, backfilling reconciliation', () => {
@@ -49,11 +51,12 @@ describe('project IO — DTL reconciliation fields', () => {
 
     const { project, issues } = readProjectFile(wrapped);
     expect(project.geneTrees).toEqual([]);
-    expect(project.reconCosts).toEqual({ dup: 1, transfer: 2, loss: 1 });
-    // `0.1.0` is the schema baseline and the migration registry is empty: a file
-    // declaring any other version is announced as a best-effort open instead of
-    // silently upgraded.
-    expect(issues.join(' ')).toMatch(/0\.1\.0/);
+    // Intentional change (3d03bdc): unit DTL default costs — transfer no longer
+    // costs 2; the conservative `transfer = 2` stance moved to a named preset.
+    expect(project.reconCosts).toEqual({ dup: 1, transfer: 1, loss: 1 });
+    // A file declaring a version outside the migration registry is announced as
+    // a best-effort open under the current schema (0.2.0), not silently upgraded.
+    expect(issues.join(' ')).toMatch(/0\.2\.0/);
     // The declared version is kept, not silently upgraded in the document.
     expect(project.version).toBe('1.0');
 
@@ -65,7 +68,8 @@ describe('project IO — DTL reconciliation fields', () => {
     const p = createEmptyProject('costs');
     (p as unknown as Record<string, unknown>).reconCosts = { dup: 'x', transfer: -5 };
     const { project, issues } = readProjectFile(serializeProject(p));
-    expect(project.reconCosts).toEqual({ dup: 1, transfer: 2, loss: 1 });
+    // Unit default costs (3d03bdc): repair falls back to {dup:1, transfer:1, loss:1}.
+    expect(project.reconCosts).toEqual({ dup: 1, transfer: 1, loss: 1 });
     // The repair must be visible: a backfill that replaces junk silently leaves
     // the user no way to know their costs were not the ones applied.
     expect(issues.filter((i) => /dup|transfer/.test(i))).toHaveLength(2);
@@ -97,7 +101,8 @@ describe('project IO — DTL reconciliation fields', () => {
 
     it('leaves a file with no cost block alone (silent backfill)', () => {
       const { project, issues } = costsOf(undefined);
-      expect(project.reconCosts).toEqual({ dup: 1, transfer: 2, loss: 1 });
+      // Unit default costs (3d03bdc): silent backfill uses {dup:1, transfer:1, loss:1}.
+      expect(project.reconCosts).toEqual({ dup: 1, transfer: 1, loss: 1 });
       expect(issues).toEqual([]);
     });
   });
@@ -143,7 +148,8 @@ describe('project IO — DTL reconciliation fields', () => {
       const raw = JSON.parse(JSON.stringify(p));
       delete raw.version;
       const { project } = readProjectFile(JSON.stringify(raw));
-      expect(project.version).toBe('0.1.0');
+      // Current schema version is 0.2.0 since the migration registry was seeded.
+      expect(project.version).toBe('0.2.0');
     });
   });
 });

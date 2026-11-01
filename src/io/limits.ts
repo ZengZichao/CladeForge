@@ -8,6 +8,13 @@
 // The numbers are generous on purpose — a 10 000-tip Newick is ≈250 kB and a
 // full workspace JSON with 10 000 nodes is a few MB, so real documents stay
 // three to four orders of magnitude below the ceilings.
+//
+// Every message is bilingual THROUGH THE SHARED STRING TABLE: these errors are
+// interpolated verbatim into toasts, so an English-only string here would end
+// up as "导入失败: The input declares 12 trees…" — half-localised text is what
+// a user reads when the product feels careless.
+
+import { tr } from '../ui/strings';
 
 /** Largest tree text we are willing to tokenise (≈ 2 M nodes' worth of Newick). */
 export const MAX_TREE_CHARS = 64 * 1024 * 1024;
@@ -36,14 +43,20 @@ export const MAX_DOCUMENT_NODES = 4_000_000;
 export function assertTreeCount(count: number): void {
   if (count > MAX_TREES_PER_DOCUMENT) {
     throw new Error(
-      `The input declares ${count} trees, above the ${MAX_TREES_PER_DOCUMENT} allowed in one file.`,
+      tr(
+        `输入声明了 ${count} 棵树，超过单个文件允许的上限 ${MAX_TREES_PER_DOCUMENT} 棵。`,
+        `The input declares ${count} trees, above the ${MAX_TREES_PER_DOCUMENT} allowed in one file.`,
+      ),
     );
   }
 }
 
-function tooBig(kind: string, size: number, limit: number): string {
+function tooBig(kindZh: string, kindEn: string, size: number, limit: number): string {
   const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${kind} is ${mb(size)} — the limit is ${mb(limit)}. The file is almost certainly not a ${kind} (or is far too large to open safely).`;
+  return tr(
+    `${kindZh}为 ${mb(size)}，超出上限 ${mb(limit)}。这个文件几乎可以肯定不是${kindZh}（或大到无法安全打开）。`,
+    `${kindEn} is ${mb(size)} — the limit is ${mb(limit)}. The file is almost certainly not a ${kindEn} (or is far too large to open safely).`,
+  );
 }
 
 /**
@@ -60,14 +73,22 @@ export function stripBom(text: string): string {
 
 /** Reject absurd tree input before the tokeniser touches it. */
 export function assertTreeInput(text: string): void {
-  if (typeof text !== 'string' || text.trim() === '') throw new Error('Tree text is empty');
-  if (text.length > MAX_TREE_CHARS) throw new Error(tooBig('Newick/NEXUS input', text.length, MAX_TREE_CHARS));
+  if (typeof text !== 'string' || text.trim() === '') {
+    throw new Error(tr('树文件内容为空', 'Tree text is empty'));
+  }
+  if (text.length > MAX_TREE_CHARS) {
+    throw new Error(tooBig('Newick/NEXUS 输入', 'Newick/NEXUS input', text.length, MAX_TREE_CHARS));
+  }
 }
 
 /** Reject absurd project input before `JSON.parse`. */
 export function assertProjectInput(text: string): void {
-  if (typeof text !== 'string' || text.trim() === '') throw new Error('Project file is empty');
-  if (text.length > MAX_PROJECT_CHARS) throw new Error(tooBig('project file', text.length, MAX_PROJECT_CHARS));
+  if (typeof text !== 'string' || text.trim() === '') {
+    throw new Error(tr('项目文件内容为空', 'Project file is empty'));
+  }
+  if (text.length > MAX_PROJECT_CHARS) {
+    throw new Error(tooBig('项目文件', 'project file', text.length, MAX_PROJECT_CHARS));
+  }
 }
 
 /**
@@ -77,12 +98,18 @@ export function assertProjectInput(text: string): void {
 export function assertNodeCount(totalNodes: number, treeNodes = totalNodes): void {
   if (treeNodes > MAX_PARSED_NODES) {
     throw new Error(
-      `A single tree declares ${treeNodes} nodes, above the ${MAX_PARSED_NODES} limit; the input looks malformed.`,
+      tr(
+        `单棵树声明了 ${treeNodes} 个节点，超过上限 ${MAX_PARSED_NODES}；输入疑似已损坏。`,
+        `A single tree declares ${treeNodes} nodes, above the ${MAX_PARSED_NODES} limit; the input looks malformed.`,
+      ),
     );
   }
   if (totalNodes > MAX_DOCUMENT_NODES) {
     throw new Error(
-      `The input declares over ${MAX_DOCUMENT_NODES} nodes in total, above what one document may hold.`,
+      tr(
+        `输入共声明超过 ${MAX_DOCUMENT_NODES} 个节点，超出单个文档的上限。`,
+        `The input declares over ${MAX_DOCUMENT_NODES} nodes in total, above what one document may hold.`,
+      ),
     );
   }
 }

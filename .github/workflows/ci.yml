@@ -54,6 +54,18 @@ jobs:
       # built here too: a type-check plus unit tests would let a bundle that only
       # breaks in the production build pass CI.
       - run: npm run build
+      # The scaling benchmark joins the gate (review PM-88/§10.3): it ran only on
+      # a developer's machine, so the "10 000 tips" capacity claim had no
+      # automated witness and a perf regression shipped silently. Failures here
+      # are advisory output first (the numbers go to the run log); a hard
+      # threshold can be enabled once the baseline is re-measured on the runner.
+      - name: Tip-count scaling benchmark
+        # Through vite-node (the `bench` npm script): the benchmark imports the
+        # real TypeScript modules, which plain `node` cannot load. vite-node is
+        # an explicit devDependency — vitest 4 no longer carries it. Rounds and
+        # realizations are trimmed for the runner budget: the gate witnesses
+        # scaling behaviour, it does not need the developer-grade sample count.
+        run: BENCH_RUNS=2 BENCH_REALIZATIONS=2 npm run bench
 
   # The Rust side carries the app's actual security boundary — the path allow-list
   # in src-tauri/src/lib.rs — and no web job can reach it, so it is compiled and
@@ -133,6 +145,56 @@ jobs:
       # scope for this gate.
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  # Third-party numeric cross-check (review B6/E2/E3): the shipped fixtures were
+  # verified ONCE on a developer machine and then drifted — the agreement table
+  # referenced a character id that had been renamed, with nothing red anywhere.
+  # This job re-runs the R legs on every push so the shipped evidence cannot go
+  # stale again: fresh R + pinned ape/phangorn, regenerate the agreement table,
+  # and fail when a comparable row stops agreeing.
+  cross-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+      - name: Install phylogenetics packages
+        run: |
+          Rscript -e 'install.packages(c("ape", "phangorn"), repos = "https://cloud.r-project.org")'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Run the third-party cross-check
+        run: node scripts/cross-check/run-cross-check.mjs
+      - name: Fail on stale fixtures (manifest ↔ agreement consistency)
+        run: |
+          node -e "
+          const fs = require('fs');
+          const manifest = fs.readFileSync('scripts/cross-check/fixtures/manifest.tsv', 'utf8').trim().split(/\n/).slice(1);
+          const agreement = fs.readFileSync('scripts/cross-check/fixtures/ape-agreement.tsv', 'utf8').trim().split(/\n/).slice(1);
+          const ids = new Set(manifest.map((l) => l.split('\t').slice(0, 2).join(':')));
+          const bad = agreement.filter((l) => {
+            const [project, character] = l.split('\t');
+            // A '-' character marks a WHOLE-DOCUMENT leg (the Sankoff
+            // reproducibility check re-runs the entire project, not one
+            // character), so there is no manifest row to match by design.
+            if (character === '-') return false;
+            return !ids.has(project + ':' + character);
+          });
+          if (bad.length) {
+            console.error('STALE agreement rows reference unknown sample characters:\n' + bad.join('\n'));
+            process.exit(1);
+          }
+          const comparable = agreement.map((l) => Number(l.split('\t')[3])).filter((n) => !Number.isNaN(n));
+          if (!comparable.some((n) => n > 0)) {
+            console.error('No comparable agreement row ran — the cross-check produced no evidence.');
+            process.exit(1);
+          }
+          console.log('fixture consistency OK:', comparable.reduce((a, b) => a + b, 0), 'comparable rows agreed');
+          "
 
   # RustSec advisories, on a schedule rather than on every push. Dependabot
   # tracks Cargo.toml versions, but it does not open PRs for advisories against

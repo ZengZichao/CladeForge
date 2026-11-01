@@ -44,6 +44,8 @@ export type LayoutIssueKind =
   | 'time-no-ages'
   /** The circular layout does not consume ages at all. */
   | 'circular-ignores-ages'
+  /** The circular layout maps radii by node age (the time wheel). */
+  | 'circular-time-radii'
   /** Child references revisit nodes, so the reachable structure is not a tree. */
   | 'cyclic-children'
   | 'invalid-pinned-position';
@@ -213,11 +215,38 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
   const unknownAge = new Set<NodeId>();
 
   if (layout.type === 'circular') {
-    // The circular layout draws radii from TOPOLOGICAL depth only: switching a
-    // dated tree to it hides the whole time axis, so the fact is reported
-    // rather than left for the reader to notice.
+    // Circular time tree: when the tree carries ages, radii map AGE (root =
+    // outermost… no — root at centre is the convention) so the polar figure is
+    // a real chronogram; the polar time wheel is the standard presentation for
+    // large dated trees (outbreaks, deep-time clones). Angles stay equally
+    // spaced over tips. Without ages the radius falls back to topological
+    // depth and the honest degradation notice is kept.
     const dated = Object.values(project.nodes).filter((n) => (finiteAge(n) ?? 0) > 0).length;
-    if (dated > 0) {
+    let ageRadius: ((age: number) => number) | null = null;
+    let circMaxAge = 0;
+    for (const n of Object.values(project.nodes)) {
+      const a = finiteAge(n);
+      if (a !== undefined && a > circMaxAge) circMaxAge = a;
+    }
+    if (circMaxAge > 0) {
+      const maxRadius = Math.max(1, root.height) * depthGap;
+      const unitOf = (age: number): number => {
+        const kind = layout.timeScale ?? 'linear';
+        if (kind === 'sqrt') return Math.sqrt(Math.max(0, age));
+        if (kind === 'log') return Math.log10(1 + Math.max(0, age) / (layout.timeLogOrigin && layout.timeLogOrigin > 0 ? layout.timeLogOrigin : 1));
+        return age;
+      };
+      const unitMax = unitOf(circMaxAge);
+      ageRadius = (age) => (unitOf(Math.max(0, age)) / unitMax) * maxRadius;
+      issues.push({
+        kind: 'circular-time-radii',
+        count: dated,
+        message: tr(
+          `圆形布局已按年龄映射半径（时间轮）：圆心为根，半径∝(最大年龄 − 节点年龄)。角度仍按拓扑等分。`,
+          `The circular layout now maps radii by AGE (time wheel): centre = root, radius ∝ (max age − node age). Angles remain evenly spaced.`,
+        ),
+      });
+    } else if (dated > 0) {
       issues.push({
         kind: 'circular-ignores-ages',
         count: dated,
@@ -235,7 +264,11 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
       depths.set(hn.data.id, hn.depth);
       if (hn.depth > maxDepth) maxDepth = hn.depth;
       const angle = (hn.x ?? 0) - Math.PI / 2; // start at top
-      const r = hn.y ?? 0;
+      let r = hn.y ?? 0;
+      if (ageRadius) {
+        const a = finiteAge(hn.data);
+        r = a !== undefined ? ageRadius(a) : ((hn.depth / Math.max(1, root.height)) * radius);
+      }
       positions.set(hn.data.id, { x: r * Math.cos(angle), y: r * Math.sin(angle) });
     });
   } else {
@@ -312,11 +345,33 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
         if (a > maxAge) maxAge = a;
       });
       if (maxAge > 0) {
-        const depthPx = Math.max(1, root.height) * depthGap;
-        const pxPerUnit = depthPx / maxAge;
+        // The axis length is INDEPENDENT of the topological depth: deriving it
+        // from root.height × hGap tied px-per-My to how deeply the tree was
+        // sampled, which made every deep-time figure mathematically unreadable
+        // (4 000 My squeezed into the same pixels a 4-level topology gets) and
+        // the px-per-My non-comparable between trees. The explicit
+        // `timeAxisLength` setting wins; the legacy derivation stays as the
+        // fallback for documents that never set it.
+        // Non-linear depth mappings (sqrt / log) are the other half of the fix:
+        // a linear 4 Ga axis squeezes the entire Cenozoic into ~1% of the
+        // figure, which is exactly the range deep-time and microbial readers
+        // care about.
+        const scaleKind = layout.timeScale ?? 'linear';
+        const t0 = layout.timeLogOrigin && layout.timeLogOrigin > 0 ? layout.timeLogOrigin : 1;
+        const unitOf = (age: number): number => {
+          if (scaleKind === 'sqrt') return Math.sqrt(Math.max(0, age));
+          if (scaleKind === 'log') return Math.log10(1 + Math.max(0, age) / t0);
+          return age;
+        };
+        const unitMax = unitOf(maxAge);
+        const depthPx =
+          layout.timeAxisLength && layout.timeAxisLength > 0
+            ? layout.timeAxisLength
+            : Math.max(1, root.height) * depthGap;
+        const pxPerUnit = depthPx / Math.max(1e-9, unitMax);
         timeMaxAge = maxAge;
         // Oldest (largest age) sits at depth 0 (root side); present (age 0) is farthest.
-        timeDepthOf = (age) => (maxAge - age) * pxPerUnit;
+        timeDepthOf = (age) => (unitMax - unitOf(Math.max(0, age))) * pxPerUnit;
         // Undated nodes get the pseudo-age of their topological level, and are
         // flagged: reading an absent age as 0 (`age ?? 0`) would nail every undated
         // node — including whole internal clades — to the 0 Ma line and draw an

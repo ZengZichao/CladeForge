@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { useStore, isReconActive } from './store';
+import { useStore, isReconActive, hasActiveGeneTree } from './store';
+import { makeGeneTreeEntry } from './geneTrees';
 import { IDENTITY_VIEW } from './types';
 import { createEmptyProject, createDeepDomainSample } from './sampleTree';
 import { addChildren, deleteNode, moveNode } from './treeOps';
@@ -52,7 +53,10 @@ describe('store undo/redo', () => {
 
   it('apply records history and undo/redo restore state', () => {
     const rootId = s().project.rootId;
-    expect(s().past).toHaveLength(0);
+    // PM-23: a document load keeps ONE undo step pointing at the outgoing
+    // document (⌘Z right after an import restores it), so the freshly loaded
+    // document starts with exactly that step rather than an empty stack.
+    expect(s().past).toHaveLength(1);
 
     s().apply((d) => addChildren(d, rootId, 2));
     expect(Object.keys(s().project.nodes)).toHaveLength(3);
@@ -280,19 +284,21 @@ describe('isReconActive', () => {
     expect(isReconActive(shape({ reconMode: true, activeGeneTreeId: 'gone' }))).toBe(false);
   });
 
-  it('App’s keydown handler reads it from getState(), not from the render scope', () => {
-    // The handler is installed once with `[]` deps, so it reads the store on
-    // every keypress. Gating the "⌘F is unavailable in this view" notice on the
-    // render-scope `reconActive` would use a value frozen at its initial `false`
-    // inside that closure, leaving a branch that can never be taken.
+  it('App’s keydown handler reads the LIVE store, not a render-scope value', () => {
+    // The handler is installed once with `[]` deps, so any value closed over
+    // from the first render is frozen forever. The workspace switch is
+    // `reconMode` and the handler must read it through `useStore.getState()`
+    // (directly or via the `s` alias of the same call) — never a render-scope
+    // capture, or the "⌘F is unavailable here" branch could never fire.
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
     const start = app.indexOf('const onKey = (e: KeyboardEvent)');
     const end = app.indexOf("window.addEventListener('keydown', onKey)", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const handler = app.slice(start, end);
-    expect(handler).toContain('isReconActive(useStore.getState())');
-    const bare = handler.match(/(?<!is)[\b]reconActive\b/g) ?? [];
+    expect(handler).toContain('useStore.getState()');
+    expect(handler).toMatch(/reconMode/);
+    const bare = handler.match(/(?<![.\w])reconMode\b/g) ?? [];
     expect(bare, `render-scope reads inside the handler: ${bare.join(', ')}`).toEqual([]);
   });
 });
@@ -315,5 +321,120 @@ describe('newProject shares loadProject’s reset set', () => {
     expect(after.view).toEqual(IDENTITY_VIEW);
     expect(after.project.rootId).toBeTruthy();
     expect(after.past).toEqual([]);
+  });
+});
+
+// ── the reconciliation WORKSPACE state machine ──
+// One mode, one workspace: `reconMode` alone decides the workspace; the active
+// gene tree only decides content-vs-empty-state inside it. Deleting the last
+// gene tree must NOT flip the user back to the standard canvas (review R-03),
+// and undoing that deletion must restore a usable active tree.
+describe('recon workspace state', () => {
+  beforeEach(() => {
+    useStore.getState().loadProject(createEmptyProject());
+  });
+
+  function seedGeneTree(name = 'g'): string {
+    let id = '';
+    useStore.getState().apply((d) => {
+      const entry = makeGeneTreeEntry(createEmptyProject(name), name);
+      entry.doc.nodes[entry.doc.rootId].label = 'root';
+      const [child] = addChildren(entry.doc, entry.doc.rootId, 2);
+      void child;
+      d.geneTrees = [...(d.geneTrees ?? []), entry];
+      id = entry.id;
+    });
+    return id;
+  }
+
+  it('enterReconWorkspace picks the first gene tree when none is active', () => {
+    const id = seedGeneTree();
+    s().enterReconWorkspace();
+    expect(s().reconMode).toBe(true);
+    expect(s().activeGeneTreeId).toBe(id);
+    // §9.2 default: with content the rail opens on the SCENARIO section.
+    expect(s().reconSection).toBe('scenario');
+  });
+
+  it('enterReconWorkspace works with NO gene tree: the empty state is reachable', () => {
+    s().enterReconWorkspace();
+    expect(s().reconMode).toBe(true);
+    expect(s().activeGeneTreeId).toBeNull();
+    // Empty state: the rail opens on TREES, where the primary actions live.
+    expect(s().reconSection).toBe('trees');
+    // The workspace is still recon; content is what is empty.
+    expect(hasActiveGeneTree(s())).toBe(false);
+    expect(isReconActive(s())).toBe(false);
+    s().exitReconWorkspace();
+    expect(s().reconMode).toBe(false);
+  });
+
+  it('deleting the LAST gene tree keeps reconMode on and clears the pointer', () => {
+    const id = seedGeneTree();
+    s().enterReconWorkspace();
+    expect(s().activeGeneTreeId).toBe(id);
+    s().apply((d) => {
+      d.geneTrees = d.geneTrees?.filter((g) => g.id !== id);
+    });
+    expect(s().reconMode).toBe(true); // no more standard-canvas chimera
+    expect(s().activeGeneTreeId).toBeNull();
+    expect(s().geneSelection).toEqual([]);
+  });
+
+  it('undoing that deletion restores a usable active gene tree', () => {
+    const id = seedGeneTree();
+    s().enterReconWorkspace();
+    s().apply((d) => {
+      d.geneTrees = d.geneTrees?.filter((g) => g.id !== id);
+    });
+    expect(s().activeGeneTreeId).toBeNull();
+    s().undo();
+    expect(s().reconMode).toBe(true);
+    expect(s().activeGeneTreeId).toBe(id);
+    expect(hasActiveGeneTree(s())).toBe(true);
+  });
+
+  it('redo re-applies the deletion and lands on the empty state again', () => {
+    const id = seedGeneTree();
+    s().enterReconWorkspace();
+    s().apply((d) => {
+      d.geneTrees = d.geneTrees?.filter((g) => g.id !== id);
+    });
+    s().undo();
+    s().redo();
+    expect(s().reconMode).toBe(true);
+    expect(s().activeGeneTreeId).toBeNull();
+  });
+
+  it('stale gene selections are pruned when the active tree changes', () => {
+    const id = seedGeneTree();
+    s().setActiveGeneTree(id);
+    const nodeId = Object.keys(s().project.geneTrees![0].doc.nodes)[0];
+    s().selectGeneNode(nodeId);
+    expect(s().geneSelection).toEqual([nodeId]);
+    s().setActiveGeneTree(null);
+    expect(s().geneSelection).toEqual([]);
+  });
+
+  it('reconViewOptions and reconSection are pure UI state with defaults', () => {
+    s().setReconSection('scenario');
+    expect(s().reconSection).toBe('scenario');
+    s().setReconViewOptions({ mappingScope: 'all', showLabels: false });
+    expect(s().reconViewOptions.mappingScope).toBe('all');
+    expect(s().reconViewOptions.showLabels).toBe(false);
+    // Untouched keys keep their defaults.
+    expect(s().reconViewOptions.syncZoom).toBe(true);
+    // Loading a document resets them.
+    s().loadProject(createEmptyProject());
+    expect(s().reconSection).toBe('trees');
+  });
+
+  it('switching tabs restores reconMode but heals a stale gene pointer', () => {
+    const first = seedGeneTree('first');
+    useStore.getState().openInNewTab(createEmptyProject('other'));
+    expect(s().tabs).toHaveLength(2);
+    // Parked snapshots restore with healed pointers.
+    useStore.getState().switchTab(s().tabs[0]);
+    expect(s().activeGeneTreeId).toBe(first);
   });
 });

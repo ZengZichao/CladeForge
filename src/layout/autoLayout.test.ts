@@ -205,11 +205,14 @@ describe('computeLayout never invents branch lengths or ages', () => {
     expect(issues!.some((i) => i.kind === 'time-no-ages' && i.count === 3)).toBe(true);
   });
 
-  it('the circular layout says it does not consume the tree’s ages', () => {
+  it('the circular layout maps radii by age (time wheel) and says so', () => {
     const p = createSampleProject();
     p.layout.type = 'circular';
     const { issues } = computeLayout(p);
-    expect(issues!.some((i) => i.kind === 'circular-ignores-ages')).toBe(true);
+    // Review rework: a dated tree now drives the circular radii by age, so the
+    // old "ignores ages" warning is replaced by the time-wheel notice.
+    expect(issues!.some((i) => i.kind === 'circular-time-radii')).toBe(true);
+    expect(issues!.some((i) => i.kind === 'circular-ignores-ages')).toBe(false);
     // A cladogram with no ages gets no such warning.
     const q = createEmptyProject();
     addChildren(q, q.rootId, 2);

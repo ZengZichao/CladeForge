@@ -3,6 +3,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { readFileSync } from 'node:fs';
+
+// Single source of truth for the application version: package.json is read once
+// here and injected as the `__APP_VERSION__` global (src/model/types.ts consumes
+// it), so the UI, exports and stored analysis results all stamp the same version
+// the release pipeline publishes.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
 
 // GitHub Pages project sites are served from /<repo>/, not the domain root;
 // every asset URL in the built index.html must carry this prefix or the
@@ -18,6 +27,9 @@ const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   base: isTauriBuild ? '/' : '/CladeForge/',
   // Prevent Vite from clearing the screen so Tauri/Rust logs stay visible.
   clearScreen: false,
@@ -66,5 +78,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // `__APP_VERSION__` reaches the tests through the TOP-LEVEL `define` above
+    // (Vitest processes the same config through Vite). Vitest 4's own
+    // `test.define` slot no longer exists in its config types.
   },
 });

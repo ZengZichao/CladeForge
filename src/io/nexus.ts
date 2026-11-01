@@ -15,6 +15,8 @@
 
 import { newParseBudget, parseNewickTrees, serializeNewick } from './newick';
 import { costOf } from '../model/parsimony';
+import { MISSING_STATE_CODES, newCharacterState, stateColorFor } from '../model/characters';
+import { newId } from '../model/treeOps';
 import { tr } from '../ui/strings';
 import { assertTreeCount, assertTreeInput } from './limits';
 import type { Character, NodeId, Project, TreeNode } from '../model/types';
@@ -262,7 +264,68 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
     projects.push(project);
   });
   if (projects.length === 0) throw new Error('No TREE statement found in NEXUS TREES block');
+
+  // A file that carries BOTH trees and a character matrix gets the matrix
+  // attached to the first tree, joined by label — the "trees + traits travel
+  // together" shape of the MrBayes / Mesquite world. A partial join is
+  // reported, never hidden.
+  try {
+    const matrix = parseNexusMatrix(input);
+    issues.push(...matrix.issues, ...matrix.unsupported);
+    if (matrix.characters.length > 0) {
+      const target = projects[0];
+      const join = applyMatrixToProject(target, matrix);
+      if (join.matched > 0) {
+        target.characters = [...target.characters, ...matrix.characters];
+        issues.push(
+          tr(
+            `已从 DATA/CHARACTERS 块导入 ${matrix.characters.length} 个性状，${join.matched} 个尖端匹配成功${join.unmatchedLabels.length > 0 ? `；${join.unmatchedLabels.length} 个矩阵行未匹配到树上的末端（${join.unmatchedLabels.slice(0, 3).join('、')}）` : ''}`,
+            `Imported ${matrix.characters.length} character(s) from the DATA/CHARACTERS block; ${join.matched} tip(s) matched${join.unmatchedLabels.length > 0 ? `; ${join.unmatchedLabels.length} matrix row(s) matched no tip (${join.unmatchedLabels.slice(0, 3).join(', ')})` : ''}`,
+          ),
+        );
+      }
+    }
+  } catch {
+    // matrix reading is best-effort; the trees remain valid on its failure
+  }
   return { projects, issues };
+}
+
+/**
+ * Read a NEXUS file that may contain trees, a character matrix, or both.
+ * This is the single entry the import dialog should use: a matrix-only file
+ * (the usual MrBayes / PAUP morphology input) is no longer an error — it
+ * returns the characters so the caller can offer "import as character matrix".
+ */
+export function parseNexusFile(
+  input: string,
+  name = 'Imported tree',
+): { projects: Project[]; matrix: NexusMatrixResult | null; issues: string[] } {
+  const issues: string[] = [];
+  let projects: Project[] = [];
+  try {
+    const parsed = parseNexusTrees(input, name);
+    projects = parsed.projects;
+    issues.push(...parsed.issues);
+  } catch (e) {
+    issues.push(
+      tr(
+        `未找到可解析的 TREES 块（${e instanceof Error ? e.message : String(e)}）；尝试按性状矩阵导入`,
+        `No parsable TREES block (${e instanceof Error ? e.message : String(e)}); trying to read a character matrix`,
+      ),
+    );
+  }
+  let matrix: NexusMatrixResult | null = null;
+  try {
+    const m = parseNexusMatrix(input);
+    if (m.characters.length > 0 || m.unsupported.length > 0) matrix = m;
+  } catch {
+    matrix = null;
+  }
+  if (projects.length === 0 && !matrix) {
+    throw new Error('No TREES block found in NEXUS file');
+  }
+  return { projects, matrix, issues };
 }
 
 /** Read the FIRST tree of a NEXUS file (see `parseNexusTrees` for all of them). */
@@ -549,9 +612,17 @@ export function serializeNexus(project: Project, options: NexusExportOptions = D
   const names = tipNames(project);
   const leaves = leafNodes(project);
   const taxLabels = leaves.map((n) => nexusName(names.get(n.id) ?? n.id)).join(' ');
-  // The tree is serialised from a copy whose tip labels are the TAXLABELS, so
-  // TAXA / CHARACTERS / TREES can never disagree.
-  const newick = serializeNewick(projectWithTipNames(project, names));
+  // A TRANSLATE table (index → name) rides along, and the TREE statements
+  // reference the indices. Two reasons this is no longer optional:
+  //  1. the module itself recommends "read the exported node table or a NEXUS
+  //     TRANSLATE block" for names ape 5.8.1 mangles (quoted labels) — a
+  //     recommendation the file has to make true;
+  //  2. MrBayes / PAUP consumers key the translate table, not the literal names.
+  const translateRows = leaves
+    .map((n, i) => `    ${i + 1} ${nexusName(names.get(n.id) ?? n.id)}`)
+    .join(',\n');
+  const numbered = new Map(leaves.map((n, i) => [n.id, String(i + 1)] as const));
+  const newick = serializeNewick(projectWithTipNames(project, numbered));
   // Honour what the document says about its root instead of always claiming
   // [&R]: an [&U] import re-exported as rooted would let PAUP / MrBayes / RASP
   // polarise the characters on a wrong root. A document that never
@@ -567,6 +638,8 @@ export function serializeNexus(project: Project, options: NexusExportOptions = D
     'END;',
     '',
     'BEGIN TREES;',
+    '  TRANSLATE',
+    `${translateRows};`,
     `  TREE tree1 = ${rootFlag} ${newick}`,
     'END;',
     '',
@@ -586,4 +659,333 @@ export function serializeNexus(project: Project, options: NexusExportOptions = D
     blocks.push(buildBeastBlock(project));
   }
   return blocks.join('\n');
+}
+
+// --- DATA / CHARACTERS block reading -------------------------------------------
+// NEXUS used to be a one-way door: the writer emitted DATA/CHARACTERS/
+// ASSUMPTIONS blocks the reader never touched, so a matrix exported from this
+// app (or from Mesquite / PAUP / MrBayes) could not come back in — the "import"
+// silently kept only the topology. The parser below closes the loop.
+
+export interface NexusMatrixResult {
+  characters: Character[];
+  issues: string[];
+  /** TAXA the matrix carries (in declaration order). */
+  tipLabels: string[];
+  /** DATATYPEs found but not imported (e.g. DNA), with the reason. */
+  unsupported: string[];
+}
+
+interface MatrixBlock {
+  datatype: string;
+  symbols: string;
+  /** Declared taxon labels (from TAXLABELS), when the block declares them. */
+  declaredTaxa: string[];
+  /** taxon → the column tokens in file order (interleaved rows concatenated). */
+  rows: Map<string, string[]>;
+  stateLabels: Map<number, string[]>;
+  costMatrices: { applyTo: number[]; matrix: number[][] }[];
+  columns: number;
+}
+
+function blocksOf(input: string, kinds: string[]): { raw: string; masked: string }[] {
+  const maskedAll = maskNexus(input);
+  const out: { raw: string; masked: string }[] = [];
+  const re = new RegExp(`begin\\s+(${kinds.join('|')})\\s*;`, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(maskedAll))) {
+    const from = m.index + m[0].length;
+    const endM = /end\s*;/gi.exec(maskedAll.slice(from));
+    const to = endM ? from + endM.index : maskedAll.length;
+    out.push({ raw: input.slice(from, to), masked: maskedAll.slice(from, to) });
+    if (endM) re.lastIndex = to + endM[0].length;
+  }
+  return out;
+}
+
+function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
+  const datatypeM = /datatype\s*=\s*([A-Za-z]+)/i.exec(masked);
+  const datatype = (datatypeM?.[1] ?? 'STANDARD').toUpperCase();
+  const symbolsM = /symbols\s*=\s*"([^"]*)"/i.exec(masked);
+  const symbols = symbolsM?.[1] ?? '01';
+  const ncharM = /nchar\s*=\s*(\d+)/i.exec(masked);
+  const columns = ncharM ? Number(ncharM[1]) : 0;
+
+  const declaredTaxa: string[] = [];
+  {
+    const taxM = /taxlabels\s+([^;]*);/i.exec(masked);
+    if (taxM) {
+      for (const tok of splitOutsideQuotes(taxM[1], ' ')) {
+        const t = tok.trim();
+        if (t) declaredTaxa.push(unquote(t));
+      }
+    }
+  }
+
+  const stateLabels = new Map<number, string[]>();
+  {
+    const re = /statelabels\s+([^;]*);/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(masked))) {
+      const parts = splitOutsideQuotes(m[1], ' ').map((t) => t.trim()).filter(Boolean);
+      const charIdx = Number(parts[0]);
+      if (Number.isFinite(charIdx)) stateLabels.set(charIdx, parts.slice(1).map(unquote));
+    }
+  }
+
+  // MATRIX (or CHARACTERS) body. Row starts are decided by the DECLARED taxa
+  // when the block has TAXLABELS (the reliable rule for interleaved files);
+  // otherwise a line whose first token is not a declared label is treated as a
+  // continuation of the previous row.
+  const rows = new Map<string, string[]>();
+  {
+    const m = /(?:matrix|characters)\s+([\s\S]*?)(?:;|$)/i.exec(masked);
+    if (m) {
+      const bodyMaskedLines = m[1].split(/\r?\n/);
+      const startRaw = masked.indexOf(m[1]);
+      const rawBody = raw.slice(startRaw, startRaw + m[1].length);
+      const rawLines = rawBody.split(/\r?\n/);
+      const declared = new Set(declaredTaxa.map((t) => t.toLowerCase()));
+      let current: string | null = null;
+      for (let li = 0; li < bodyMaskedLines.length; li += 1) {
+        const lineMasked = bodyMaskedLines[li].trim();
+        if (!lineMasked || lineMasked.startsWith('[')) continue;
+        const lineRaw = (rawLines[li] ?? '').trim() || lineMasked;
+        const toksM = splitOutsideQuotes(lineMasked, ' ').filter(Boolean);
+        const toksR = splitOutsideQuotes(lineRaw, ' ').filter(Boolean);
+        if (toksM.length === 0) continue;
+        const firstRaw = unquote(toksR[0] ?? toksM[0]);
+        const isTaxonStart =
+          declared.has(firstRaw.toLowerCase()) ||
+          (declaredTaxa.length === 0 && current === null);
+        if (isTaxonStart) {
+          current = firstRaw;
+          rows.set(current, [...toksM.slice(1)]);
+        } else if (current) {
+          rows.set(current, [...(rows.get(current) as string[]), ...toksM]);
+        }
+      }
+    }
+  }
+
+  // ASSUMPTIONS-style cost matrices can also ride inside a DATA block header
+  // (OPTIONS line) — parse the masked text for COSTMATRIX=(...) here; the
+  // separate ASSUMPTIONS block is handled by the caller.
+  const costMatrices: MatrixBlock['costMatrices'] = [];
+  {
+    const re = /costmatrix\s*=\s*\(([^;]*?)\)/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(masked))) {
+      const matrix = m[1]
+        .split('/')
+        .map((r) => splitOutsideQuotes(r.trim(), ' ').map((v) => Number(v.trim())))
+        .filter((row) => row.length > 0 && row.every((v) => Number.isFinite(v)));
+      if (matrix.length > 0) costMatrices.push({ applyTo: [], matrix });
+    }
+    const applyM = /applyto\s*=\s*([0-9(\s,]+)/i.exec(masked);
+    if (applyM && costMatrices.length > 0) {
+      const ids = applyM[1]
+        .split(/[\s,()]+/)
+        .map((v) => Number(v))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      if (ids.length > 0) costMatrices[0].applyTo = ids;
+    }
+  }
+
+  if (rows.size === 0) return null;
+  return { datatype, symbols, declaredTaxa, rows, stateLabels, costMatrices, columns };
+}
+
+/** ASSUMPTIONS blocks: OPTIONS DEFTYPE=… COSTMATRIX=(…) APPLYTO=…. */
+function parseAssumptions(input: string): { applyTo: number[]; matrix: number[][] }[] {
+  const out: { applyTo: number[]; matrix: number[][] }[] = [];
+  for (const b of blocksOf(input, ['assumptions'])) {
+    const re = /costmatrix\s*=\s*\(([^;]*?)\)/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(b.masked))) {
+      const matrix = m[1]
+        .split('/')
+        .map((r) => splitOutsideQuotes(r.trim(), ' ').map((v) => Number(v.trim())))
+        .filter((row) => row.length > 0 && row.every((v) => Number.isFinite(v)));
+      if (matrix.length === 0) continue;
+      const applyM = /applyto\s*=\s*([0-9(\s,]+)/i.exec(b.masked.slice(m.index));
+      const applyTo = applyM
+        ? applyM[1]
+            .split(/[\s,()]+/)
+            .map((v) => Number(v))
+            .filter((v) => Number.isFinite(v) && v > 0)
+        : [];
+      out.push({ applyTo, matrix });
+    }
+  }
+  return out;
+}
+
+/**
+ * Read the DATA / CHARACTERS / ASSUMPTIONS blocks of a NEXUS file into
+ * CladeForge characters. STANDARD (morphology) matrices — the common
+ * Mesquite / PAUP / MrBayes exchange — are fully supported, including
+ * SYMBOLS, STATELABELS, polymorphic `(xy)` cells, `?`/`-` missing codes and
+ * cost matrices; continuous matrices become continuous characters; sequence
+ * datatypes (DNA/AA) are refused with a reason (there is no sequence layer).
+ */
+export function parseNexusMatrix(input: string): NexusMatrixResult {
+  const issues: string[] = [];
+  const unsupported: string[] = [];
+  const characters: Character[] = [];
+  const blocks = blocksOf(input, ['data', 'characters']);
+  const assumptionMatrices = parseAssumptions(input);
+  if (blocks.length === 0) return { characters, issues, tipLabels: [], unsupported };
+
+  const tipLabels: string[] = [];
+  for (const b of blocks) {
+    const block = parseMatrixBlock(b.raw, b.masked);
+    if (!block) continue;
+    if (['DNA', 'NUCLEOTIDE', 'AA', 'AMINOACID', 'PROTEIN', 'RNA'].includes(block.datatype)) {
+      unsupported.push(
+        tr(
+          `数据类型 ${block.datatype}（序列矩阵）不可导入：本软件不做序列演化推断，请使用比对/建树工具处理序列`,
+          `Datatype ${block.datatype} (a sequence matrix) cannot be imported: this software does not model sequence evolution; process the alignment with a dedicated tool`,
+        ),
+      );
+      continue;
+    }
+    const taxa = [...block.rows.keys()];
+    if (tipLabels.length === 0) tipLabels.push(...taxa);
+    const columnCount = Math.max(block.columns, ...taxa.map((t) => (block.rows.get(t) as string[]).length));
+    if (columnCount === 0) continue;
+
+    if (block.datatype === 'CONTINUOUS') {
+      // One continuous character per column; values attach by label below.
+      for (let col = 0; col < columnCount; col += 1) {
+        const ch: Character = {
+          id: newId(),
+          name: tr(`连续性状 ${col + 1}`, `Continuous ${col + 1}`),
+          type: 'continuous',
+          states: [],
+          lowColor: '#60a5fa',
+          highColor: '#f97316',
+        };
+        const values: Record<string, number> = {};
+        for (const taxon of taxa) {
+          const v = Number((block.rows.get(taxon) as string[])[col]);
+          if (Number.isFinite(v)) values[taxon] = v;
+        }
+        if (Object.keys(values).length >= 3) {
+          (ch as Character & { __values?: Record<string, number> }).__values = values;
+          characters.push(ch);
+        }
+      }
+      continue;
+    }
+
+    for (let col = 0; col < columnCount; col += 1) {
+      const usedSymbols = new Set<string>();
+      for (const taxon of taxa) {
+        const tok = (block.rows.get(taxon) as string[])[col] ?? '?';
+        const poly = /^\((.*)\)$/.exec(tok);
+        for (const s of (poly ? poly[1] : tok).split('')) {
+          if (MISSING_STATE_CODES.includes(s)) continue;
+          usedSymbols.add(s);
+        }
+      }
+      const ordered = [...usedSymbols].sort(
+        (a, b) => block.symbols.indexOf(a) - block.symbols.indexOf(b),
+      );
+      if (ordered.length < 2) continue; // a column with one observed state has no signal
+      const labels = block.stateLabels.get(col + 1) ?? [];
+      const ch: Character = {
+        id: newId(),
+        name: tr(`性状 ${col + 1}`, `Character ${col + 1}`),
+        type: 'discrete',
+        states: ordered.map((s, i) => ({
+          ...newCharacterState(labels[i] ?? s, i),
+          color: stateColorFor(i),
+        })),
+      };
+      const assignments: Record<string, string | string[]> = {};
+      for (const taxon of taxa) {
+        const tok = (block.rows.get(taxon) as string[])[col] ?? '?';
+        const poly = /^\((.*)\)$/.exec(tok);
+        const cellSymbols = (poly ? poly[1] : tok).split('');
+        const ids: string[] = [];
+        for (const s of cellSymbols) {
+          if (MISSING_STATE_CODES.includes(s)) continue;
+          const idx = ordered.indexOf(s);
+          const st = ch.states[idx];
+          if (st) ids.push(st.id);
+        }
+        if (ids.length === 0) continue;
+        assignments[taxon] = ids.length === 1 ? ids[0] : ids;
+      }
+      const cm =
+        assumptionMatrices.find((m) => m.applyTo.includes(col + 1)) ??
+        block.costMatrices.find((m) => m.applyTo.length === 0 || m.applyTo.includes(col + 1));
+      if (cm && cm.matrix.length === ch.states.length) {
+        ch.costMatrix = cm.matrix;
+        ch.model = 'custom';
+      }
+      (ch as Character & { __assignments?: Record<string, string | string[]> }).__assignments =
+        assignments;
+      characters.push(ch);
+    }
+  }
+  if (characters.length === 0 && blocks.length > 0) {
+    issues.push(
+      tr(
+        '文件含 DATA/CHARACTERS 块，但没有可导入的列（每列需至少两个可观测状态）',
+        'The file has DATA/CHARACTERS block(s) but no importable column (each needs at least two observed states)',
+      ),
+    );
+  }
+  return { characters, issues, tipLabels, unsupported };
+}
+
+/**
+ * Attach a parsed matrix onto a tree document, matching matrix rows to tips by
+ * label (exact, then normalized case/underscore — the same tolerance the
+ * Newick reader applies). Returns how many tips matched and which labels did
+ * not, so the caller can report a partial join instead of hiding it.
+ */
+export function applyMatrixToProject(
+  project: Project,
+  matrix: NexusMatrixResult,
+): { matched: number; unmatchedLabels: string[] } {
+  const byLabel = new Map<string, NodeId>();
+  const byNorm = new Map<string, NodeId>();
+  for (const n of Object.values(project.nodes)) {
+    if (n.childrenIds.length > 0) continue;
+    byLabel.set(n.label, n.id);
+    byNorm.set(n.label.trim().toLowerCase().replace(/_/g, ' '), n.id);
+  }
+  let matched = 0;
+  const unmatched: string[] = [];
+  const norm = (s: string): string => s.trim().toLowerCase().replace(/_/g, ' ');
+  for (const label of matrix.tipLabels) {
+    const nodeId = byLabel.get(label) ?? byNorm.get(norm(label));
+    if (!nodeId) {
+      unmatched.push(label);
+      continue;
+    }
+    const node = project.nodes[nodeId];
+    matched += 1;
+    for (const ch of matrix.characters) {
+      const bag = ch as Character & {
+        __assignments?: Record<string, string | string[]>;
+        __values?: Record<string, number>;
+      };
+      const assignment = bag.__assignments?.[label];
+      const value = bag.__values?.[label];
+      const assigned = assignment ?? value;
+      if (assigned === undefined) continue;
+      if (!node.charStates) node.charStates = {};
+      node.charStates[ch.id] = assigned;
+    }
+  }
+  // The transient assignment buckets never belong in the document.
+  for (const ch of matrix.characters) {
+    delete (ch as Character & { __assignments?: unknown }).__assignments;
+    delete (ch as Character & { __values?: unknown }).__values;
+  }
+  return { matched, unmatchedLabels: unmatched };
 }

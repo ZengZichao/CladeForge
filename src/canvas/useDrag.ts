@@ -84,7 +84,15 @@ type Gesture =
       freeAxis?: 'x' | 'y';
     }
   | { kind: 'connect'; sourceId: NodeId }
-  | { kind: 'press-bg'; startScreen: Point; moved: boolean };
+  | { kind: 'press-bg'; startScreen: Point; moved: boolean }
+  /**
+   * Rubber-band (marquee) selection: Shift+drag (or Alt+drag) on the background
+   * sweeps a rectangle; every node inside is selected on release. This is the
+   * standard way to annotate a whole clade in one gesture — shift-clicking 30
+   * tips one by one was the only alternative, and the marquee is what every
+   * canvas tool ships.
+   */
+  | { kind: 'marquee'; startScreen: Point; additive: boolean };
 
 export interface CanvasGestures {
   onPointerDown: (e: ReactPointerEvent<SVGSVGElement>) => void;
@@ -96,6 +104,8 @@ export interface CanvasGestures {
   dropTargetId: NodeId | null;
   /** Active alignment guide while a dragged node is snapped to others. */
   snapGuide: { axis: 'x' | 'y'; coord: number } | null;
+  /** Live rubber-band rectangle (screen px) while a marquee drag is active. */
+  marquee: { x: number; y: number; w: number; h: number } | null;
 }
 
 export function useCanvasGestures(
@@ -118,6 +128,7 @@ export function useCanvasGestures(
   const [connect, setConnect] = useState<{ sourceId: NodeId; world: Point } | null>(null);
   const [dropTargetId, setDropTargetId] = useState<NodeId | null>(null);
   const [snapGuide, setSnapGuide] = useState<{ axis: 'x' | 'y'; coord: number } | null>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const gridRef = useRef<{ forLayout: unknown; forView: ViewTransform; grid: HitGrid } | null>(null);
 
   /**
@@ -206,6 +217,7 @@ export function useCanvasGestures(
     setConnect(null);
     setDropTargetId(null);
     setSnapGuide(null);
+    setMarquee(null);
   }, []);
 
   // A gesture can end without ever delivering `pointerup`: the window losing
@@ -247,6 +259,12 @@ export function useCanvasGestures(
       /* ignore */
     }
 
+    if (role === 'collapse-toggle' && nodeId) {
+      // The expand/collapse triangle handles itself (see NodeView); never turn
+      // it into a node press.
+      gestureRef.current = { kind: 'none' };
+      return;
+    }
     if (role === 'port' && nodeId) {
       gestureRef.current = { kind: 'connect', sourceId: nodeId };
       setConnect({ sourceId: nodeId, world });
@@ -270,6 +288,12 @@ export function useCanvasGestures(
     }
     if (spaceHeld.current || e.button === 1) {
       gestureRef.current = { kind: 'pan', startScreen: screen, startView: view };
+    } else if (e.shiftKey || e.altKey) {
+      // Shift/Alt + background drag = rubber-band selection (pan stays on the
+      // plain drag so both gestures coexist).
+      gestureRef.current = { kind: 'marquee', startScreen: screen, additive: e.shiftKey };
+      if (!e.shiftKey) select(null);
+      setMarquee({ x: screen.x, y: screen.y, w: 0, h: 0 });
     } else {
       gestureRef.current = { kind: 'press-bg', startScreen: screen, moved: false };
     }
@@ -291,6 +315,15 @@ export function useCanvasGestures(
           ty: g.startView.ty + (screen.y - g.startScreen.y),
         });
         break;
+      case 'marquee': {
+        setMarquee({
+          x: Math.min(g.startScreen.x, screen.x),
+          y: Math.min(g.startScreen.y, screen.y),
+          w: Math.abs(screen.x - g.startScreen.x),
+          h: Math.abs(screen.y - g.startScreen.y),
+        });
+        break;
+      }
       case 'connect':
         setConnect((c) => (c ? { ...c, world } : c));
         setDropTargetId(findNodeAt(screen, new Set([g.sourceId])));
@@ -415,8 +448,41 @@ export function useCanvasGestures(
       case 'press-bg':
         if (!g.moved) clearSelection();
         break;
+      case 'marquee': {
+        const current = eventScreenPoint(svg, e);
+        const rect = {
+          x1: Math.min(g.startScreen.x, current.x),
+          y1: Math.min(g.startScreen.y, current.y),
+          x2: Math.max(g.startScreen.x, current.x),
+          y2: Math.max(g.startScreen.y, current.y),
+        };
+        // A click-sized sweep is just a click: keep the existing selection
+        // semantics instead of wiping it.
+        if (Math.abs(rect.x2 - rect.x1) < MOVE_THRESHOLD && Math.abs(rect.y2 - rect.y1) < MOVE_THRESHOLD) {
+          setMarquee(null);
+          break;
+        }
+        const v = useStore.getState().view;
+        const w1 = screenToWorld({ x: rect.x1, y: rect.y1 }, v);
+        const w2 = screenToWorld({ x: rect.x2, y: rect.y2 }, v);
+        const { positions, visible } = layoutRef.current;
+        const inside: NodeId[] = [];
+        for (const id of visible) {
+          const p = positions.get(id);
+          if (!p) continue;
+          if (p.x >= w1.x && p.x <= w2.x && p.y >= w1.y && p.y <= w2.y) inside.push(id);
+        }
+        if (g.additive) {
+          const cur = useStore.getState().selection;
+          useStore.getState().selectMany([...new Set([...cur, ...inside])]);
+        } else {
+          useStore.getState().selectMany(inside);
+        }
+        setMarquee(null);
+        break;
+      }
     }
   };
 
-  return { onPointerDown, onPointerMove, onPointerUp, cancelGesture, connect, dropTargetId, snapGuide };
+  return { onPointerDown, onPointerMove, onPointerUp, cancelGesture, connect, dropTargetId, snapGuide, marquee };
 }

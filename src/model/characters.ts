@@ -317,7 +317,13 @@ export const MAX_DISTINGUISHABLE_STATES = 39;
 /** A warning once a character outgrows the palette, or null while it is safe. */
 export function stateColorLimitWarning(stateCount: number): string | null {
   if (stateCount <= MAX_DISTINGUISHABLE_STATES) return null;
-  return `该性状有 ${stateCount} 个状态，超出配色可区分的上限（约 ${MAX_DISTINGUISHABLE_STATES} 个）：第 ${MAX_DISTINGUISHABLE_STATES + 1} 个之后的派生色两两差异已小于肉眼可辨的范围，图例与分支着色可能被误读。建议改用直接标注、图案填充或合并状态。`;
+  // Bilingual through the shared string table — this text reaches the character
+  // panel directly, and a hardcoded Chinese string in an English UI is exactly
+  // the drift the locale parity machinery exists to prevent.
+  return tr(
+    `该性状有 ${stateCount} 个状态，超出配色可区分的上限（约 ${MAX_DISTINGUISHABLE_STATES} 个）：第 ${MAX_DISTINGUISHABLE_STATES + 1} 个之后的派生色两两差异已小于肉眼可辨的范围，图例与分支着色可能被误读。建议改用直接标注、图案填充或合并状态。`,
+    `This character has ${stateCount} states, above the distinguishable-colour limit (~${MAX_DISTINGUISHABLE_STATES}): derived colours after the first ${MAX_DISTINGUISHABLE_STATES} differ by less than the eye can tell, so the legend and branch colours can be misread. Use direct labels, pattern fills, or merge states instead.`,
+  );
 }
 
 /** Palette QA: worst pairwise CIE76 distance among the first `count` colours. */
@@ -385,8 +391,17 @@ export const MISSING_STATE_CODES: readonly string[] = ['?', '-'];
  */
 export function isObservedState(
   character: Character,
-  value: string | number | undefined,
+  value: string | number | string[] | undefined,
 ): value is string {
+  // A polymorphic assignment (a set) is observed when it is non-empty and
+  // every member is a declared state id; the statistics layer treats it as
+  // real evidence, never as missing data.
+  if (Array.isArray(value)) {
+    return (
+      value.length > 0 &&
+      value.every((id) => typeof id === 'string' && character.states.some((s) => s.id === id))
+    );
+  }
   if (typeof value !== 'string') return false;
   if (MISSING_STATE_CODES.includes(value)) return false;
   return character.states.some((s) => s.id === value);
@@ -403,15 +418,31 @@ export function missingCodeCount(project: Project, character: Character): number
 }
 
 /** Human-readable label for a node's value under a character. */
-export function stateLabel(character: Character, value: string | number | undefined): string | undefined {
+export function stateLabel(
+  character: Character,
+  value: string | number | string[] | undefined,
+): string | undefined {
   if (value === undefined) return undefined;
   if (character.type === 'continuous') return String(value);
+  // Polymorphic sets display as '/'-joined labels, matching layerDiff tables.
+  if (Array.isArray(value)) {
+    if (value.length === 0) return undefined;
+    const labels = value.map((id) => character.states.find((s) => s.id === id)?.label ?? String(id));
+    return labels.join('/');
+  }
   return character.states.find((s) => s.id === value)?.label;
 }
 
-function discreteColor(character: Character, value: string | number | undefined): string | undefined {
+function discreteColor(
+  character: Character,
+  value: string | number | string[] | undefined,
+): string | undefined {
   if (value === undefined) return undefined;
-  return character.states.find((s) => s.id === value)?.color;
+  // A polymorphic set paints with its FIRST declared member's swatch (deterministic,
+  // matches the set's display order).
+  const first = Array.isArray(value) ? value[0] : value;
+  if (first === undefined) return undefined;
+  return character.states.find((s) => s.id === first)?.color;
 }
 
 export interface NumRange {
@@ -442,7 +473,7 @@ export function continuousRange(project: Project, character: Character): NumRang
  */
 export function characterValueColor(
   character: Character,
-  value: string | number | undefined,
+  value: string | number | string[] | undefined,
   range?: NumRange,
 ): string | undefined {
   if (value === undefined) return undefined;
@@ -498,7 +529,7 @@ export function detectTransitions(
   visible?: Set<NodeId>,
 ): Transition[] {
   const continuous = character.type === 'continuous';
-  const observed = (v: string | number | undefined): string | number | undefined =>
+  const observed = (v: string | number | string[] | undefined): string | number | undefined =>
     continuous
       ? typeof v === 'number' && Number.isFinite(v)
         ? v

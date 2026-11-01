@@ -163,6 +163,10 @@ describe('enterTimeChartLayout — the three entry points share one bridge', () 
   it('the first explicit entry auto-enables the bands and shows ONE hint', () => {
     store().loadProject(datedProject('eras-first'));
     expect(store().showEras).toBe(false);
+    // PM-23 (store.ts): loadProject itself keeps ONE undo step pointing at the
+    // outgoing document, so the baseline here is no longer 0 — what must stay
+    // unchanged is what enterTimeChartLayout ADDS (it must add nothing).
+    const pastAfterLoad = store().past.length;
 
     enterTimeChartLayout();
 
@@ -171,8 +175,8 @@ describe('enterTimeChartLayout — the three entry points share one bridge', () 
     expect(toast, 'one actionable hint').toBeDefined();
     expect(toast!.message).toBe(timeChartErasHintText());
     expect(readTimeChartErasMemory().hintShown).toBe(true);
-    // UI state only: no document edit, no undo entry.
-    expect(store().past).toHaveLength(0);
+    // UI state only: no document edit, no NEW undo entry.
+    expect(store().past).toHaveLength(pastAfterLoad);
   });
 
   it('a later entry re-applies the default but never repeats the hint', () => {
@@ -257,12 +261,17 @@ describe('enterTimeChartLayout — the three entry points share one bridge', () 
   it('entering records no undo step and does not touch the document', () => {
     store().loadProject(datedProject('eras-nodoc'));
     const projectBefore = store().project;
+    // PM-23 (store.ts): loadProject keeps ONE undo step for the outgoing
+    // document, so past is not empty here anymore — the invariant under test is
+    // that enterTimeChartLayout adds NOTHING to it and edits NOTHING.
     const pastBefore = store().past.length;
     enterTimeChartLayout();
     expect(store().project).toBe(projectBefore);
     expect(store().past).toHaveLength(pastBefore);
-    // Undo still does exactly what it did before (nothing to undo here).
+    // The only undo entry belongs to loadProject: undoing it restores the
+    // previous document, and the layout switch is neither undone nor re-applied
+    // by it (no effect may rewrite project.layout.type).
     store().undo();
-    expect(store().project).toBe(projectBefore);
+    expect(store().past).toHaveLength(pastBefore - 1);
   });
 });

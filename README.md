@@ -27,7 +27,14 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
 - **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and side-by-side reconciliation view.
 - **Time calibration** — Fossil calibration points, geological era bands, and environmental event overlays.
-- **Import/Export** — Newick and Nexus import (with NHX metadata round-tripping); project files in `.cladeforge.json`; image export to SVG/PNG/PDF with auto-generated legends; hypothesis JSON export.
+- **Import/Export** — Newick and NEXUS import (NEXUS reads `TREES` **and** `DATA`/`CHARACTERS`/`ASSUMPTIONS` blocks; Newick keeps bracket comments verbatim and interprets `&support`, `&R/&U`, BEAST `height`/`height_95%_HPD`/`posterior` and NHX tags — other comment text is preserved as text, not interpreted); CSV/TSV character-matrix and annotation tables in, matrix/annotation/template CSVs out; NeXML export; project files in `.cladeforge.json` (schema documented in `docs/FORMAT.md`); image export to SVG/PNG/PDF with an export-settings dialog (DPI control, opt-in support values, scale bar, legend toggle) and auto-generated legends; hypothesis JSON + Markdown narrative + a self-contained R analysis script.
+
+**Scope statement.** CladeForge is a hypothesis-editing and argumentation
+workbench. It does NOT build trees, align sequences, fit Bayesian dating
+models, or search topologies; every inference it shows is conditional on the
+single, user-edited topology in the document. The Mk reconstruction fits a
+one-dimensional rate by maximum likelihood but implements only the
+equal-rates (ER) sub-model.
 - **Undo/redo** with structural sharing via Immer; bilingual UI (English/中文).
 
 ## System Requirements

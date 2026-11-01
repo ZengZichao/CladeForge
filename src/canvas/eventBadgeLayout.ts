@@ -45,6 +45,7 @@ import {
 } from '../model/types';
 import { branchMidpointOn } from './paths';
 import { labelBoxForNode, type Box } from './labelBounds';
+import { tr } from '../ui/strings';
 
 /** UI state the time-axis overlay is drawn from (mirrors TreeCanvas). */
 export interface AxisOverlayOptions {
@@ -290,7 +291,11 @@ export function timeAxisTextBoxes(
   }
 
   for (const t of info.ticks) {
-    const label = t.age === 0 ? 'Present' : `${t.age}`;
+    // Measure with the SAME text the axis renders (PM-33): the axis draws
+    // tr('现今','Present') for age 0, so a hard-coded English 'Present' made
+    // the Chinese collision box the wrong width. Both sides now go through the
+    // same tr() call, so they can never diverge again.
+    const label = t.age === 0 ? tr('现今', 'Present') : `${t.age}`;
     const w = estimateAxisWidth(label);
     if (info.horizontal) {
       boxes.push({

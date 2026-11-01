@@ -101,12 +101,39 @@ export interface DtlOptions {
   originCost?: number;
   /**
    * Charged when the optimum places the gene root somewhere other than the
-   * species root — the ancestral lineage arriving from a part of the species
-   * tree that is not represented (implicit transfer / unsampled relative).
-   * Default 0 charges nothing, leaving the root free to place anywhere, which is
-   * the plain parsimony convention.
+   * species root. Default 0.
    */
   rootTransferCost?: number;
+  /**
+   * Allow the gene root to FLOAT below the species root when that is cheaper.
+   * Default FALSE (changed from the original free-floating behaviour): a free
+   * root systematically lowers the absolute event totals and biases the family
+   * origin toward the deepest nodes, which is one of the documented reasons
+   * the numbers are not comparable with standard DTL tools. Turn it on
+   * explicitly when that convention is what you want.
+   */
+  allowFreeRoot?: boolean;
+  /**
+   * Priority order used when several event classes tie at one cell. Default
+   * `duplication > speciation > transfer` — a documented convention, NOT
+   * evidence, and the wrong prior for transfer-rich (microbial) data, which is
+   * why it is selectable.
+   */
+  tiePriority?: ReconEventType[];
+  /**
+   * Enforce transfer time feasibility from species-node ages: a transfer needs
+   * the donor and receiver lineages to overlap in time. When the tree carries
+   * ages the DP uses them (strict); without ages it can only apply the
+   * topological approximation (never into own subtree/ancestors). Default true
+   * — it only ever tightens when data exists.
+   */
+  timeAware?: boolean;
+  /**
+   * Include, for every internal gene node, the placement cost list (sorted by
+   * cost) so the UI can show ΔE pseudo-posteriors instead of a single
+   * unqualified optimum.
+   */
+  includeCellCosts?: boolean;
 }
 
 export interface DtlSolveResult {
@@ -114,6 +141,18 @@ export interface DtlSolveResult {
   error?: string;
   /** Labels that collide after normalization and were therefore left unmapped. */
   ambiguousLabels?: string[];
+  /**
+   * Per internal gene node: the placement costs of every species node, sorted
+   * ascending, with ΔE relative to the optimum and the exp(−ΔE) pseudo-posterior
+   * (EXPLICITLY a heuristic — it is not a likelihood). Only present when
+   * `options.includeCellCosts` was set.
+   */
+  cellCosts?: Record<NodeId, { speciesNode: NodeId; cost: number; delta: number; pseudoPosterior: number }[]>;
+  /**
+   * Time feasibility source for this solve: 'ages' when species-node ages
+   * constrained transfers, 'topology' when only the structural rule applied.
+   */
+  timeFeasibility?: 'ages' | 'topology';
 }
 
 const INF = Number.POSITIVE_INFINITY;
@@ -145,7 +184,10 @@ const KIND_EVENT: Record<Cell['kind'], ReconEventType | null> = {
 };
 
 /** Priority used when several event classes tie (documented, not evidence). */
-const TIE_PRIORITY: ReconEventType[] = ['duplication', 'speciation', 'transfer'];
+const DEFAULT_TIE_PRIORITY: ReconEventType[] = ['duplication', 'speciation', 'transfer'];
+
+/** Priority of a solver run — the caller's `tiePriority` option, else the default. */
+let TIE_PRIORITY: ReconEventType[] = DEFAULT_TIE_PRIORITY;
 
 /** Union of `alts` and `ev`, kept in `TIE_PRIORITY` order. */
 function withAlt(alts: ReconEventType[], ev: ReconEventType): ReconEventType[] {
@@ -168,6 +210,10 @@ export function solveDtl(
   const rootTransferCost = Number.isFinite(options.rootTransferCost)
     ? Math.max(0, options.rootTransferCost as number)
     : 0;
+  TIE_PRIORITY =
+    options.tiePriority && options.tiePriority.length === 3
+      ? options.tiePriority
+      : DEFAULT_TIE_PRIORITY;
 
   // --- structural guards -----------------------------------------------------
   if (!species.nodes[species.rootId]) {
@@ -180,8 +226,8 @@ export function solveDtl(
   if (polytomies.length > 0) {
     return {
       error: tr(
-        `基因树存在 ${polytomies.length} 处多歧分支；动态规划需要二叉基因树，请先解析多歧枝`,
-        `The gene tree has ${polytomies.length} polytomy/polymoties; resolve them before running the solver`,
+        `基因树存在 ${polytomies.length} 处多歧分支（polytomy）；动态规划需要二叉基因树。请使用「解析多歧枝」将其随机二叉化（可在协同面板选择重复次数），或导入已解析的二叉树`,
+        `The gene tree has ${polytomies.length} polytomies; the dynamic program needs a binary gene tree. Use "Resolve polytomies" to split them into random binary resolutions (repeat count selectable in the reconciliation panel), or import an already-resolved binary tree`,
       ),
     };
   }
@@ -279,7 +325,44 @@ export function solveDtl(
   const isAncestorOf = (z: NodeId, s: NodeId): boolean =>
     (inTime.get(z) ?? INF) <= (inTime.get(s) ?? -INF) && (inTime.get(s) ?? INF) <= (outTime.get(z) ?? -INF);
   /** A transfer may not land inside subtree(s) ∪ ancestors(s) of its own node. */
-  const forbiddenFor = (s: NodeId, z: NodeId): boolean => inSubtree(s, z) || isAncestorOf(z, s);
+  const forbiddenTopological = (s: NodeId, z: NodeId): boolean =>
+    inSubtree(s, z) || isAncestorOf(z, s);
+
+  // Time-aware feasibility: when the species tree carries ages (time before
+  // present), a transfer needs the donor and receiver lineages to OVERLAP in
+  // time. A lineage's interval is [age(node), age(parent(node))] (the node's
+  // incoming branch); the topological rule alone cannot see that a transfer
+  // from the Palaeozoic into the Recent is impossible. Absent ages fall back
+  // to the topological approximation and the result says which rule ran.
+  const timeAware = options.timeAware !== false;
+  const lineageInterval = (s: NodeId): [number, number] | null => {
+    const n = species.nodes[s];
+    if (!n || typeof n.age !== 'number' || !Number.isFinite(n.age)) return null;
+    const p = n.parentId ? species.nodes[n.parentId] : undefined;
+    const pa = p && typeof p.age === 'number' && Number.isFinite(p.age) ? p.age : n.age;
+    // Ages run root→tip as max→0; order the pair defensively.
+    return pa >= n.age ? [n.age, pa] : [pa, n.age];
+  };
+  const intervalsOverlap = (a: [number, number], b: [number, number]): boolean =>
+    a[0] <= b[1] + 1e-12 && b[0] <= a[1] + 1e-12;
+  const timeFeasible = (s: NodeId, z: NodeId): boolean => {
+    if (!timeAware) return true;
+    const is = lineageInterval(s);
+    const iz = lineageInterval(z);
+    if (!is || !iz) return true; // no age on one side — no time information
+    return intervalsOverlap(is, iz);
+  };
+  let usedAges = false;
+  {
+    for (const id of spIds) {
+      if (lineageInterval(id)) {
+        usedAges = true;
+        break;
+      }
+    }
+  }
+  const forbiddenFor = (s: NodeId, z: NodeId): boolean =>
+    forbiddenTopological(s, z) || !timeFeasible(s, z);
 
   const kidsOf = new Map<NodeId, NodeId[]>();
   for (const n of Object.values(gene.nodes)) kidsOf.set(n.id, n.childrenIds);
@@ -324,9 +407,27 @@ export function solveDtl(
    * die with an uncatchable `RangeError` in the middle of a solve, the chain is
    * counted and the solve refused with a readable message.
    */
-  const MAX_CELL_DEPTH = 400;
+  const MAX_CELL_DEPTH = 1500;
   let cellDepth = 0;
   let depthExceeded = false;
+
+  // Cheap pre-pass: refuse a pathologically nested gene tree BEFORE the DP
+  // spends seconds computing cells it can never use (the in-DP counter below
+  // stays as the belt-and-braces for mid-solve recursion, e.g. rerooted or
+  // polytomy-resolved inputs whose shape is only known after preprocessing).
+  const geneNestingDepth = (): number => {
+    let max = 0;
+    const stack: Array<{ id: NodeId; d: number }> = [{ id: gene.rootId, d: 1 }];
+    const visited = new Set<NodeId>();
+    while (stack.length) {
+      const { id, d } = stack.pop() as { id: NodeId; d: number };
+      if (d > max) max = d;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      for (const c of kidsOf.get(id) ?? []) stack.push({ id: c, d: d + 1 });
+    }
+    return max;
+  };
 
   function cellFor(g: NodeId, s: NodeId): Cell {
     const k = key(g, s);
@@ -505,17 +606,35 @@ export function solveDtl(
     return best;
   }
 
+  // Reject before spending the DP: a pre-processed gene tree whose nesting is
+  // already past the cell-recursion ceiling can only end in depthExceeded.
+  if (geneNestingDepth() > MAX_CELL_DEPTH) {
+    return {
+      error: tr(
+        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出。请先分解该基因家族、解析多歧枝，或使用「解析多歧枝」对深层枝做随机二叉化`,
+        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family, resolve polytomies, or random-binary-resolve the deep branches first`,
+      ),
+    };
+  }
+
   const rootCell = cellFor(gene.rootId, species.rootId);
   const rootDown = downOf(gene.rootId, species.rootId);
   if (depthExceeded) {
     return {
       error: tr(
-        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出；请先分解该基因家族或解析多歧枝`,
-        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family or resolve the topology first`,
+        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出。请先分解该基因家族、解析多歧枝，或使用「解析多歧枝」对深层枝做随机二叉化`,
+        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family, resolve polytomies, or random-binary-resolve the deep branches first`,
       ),
     };
   }
-  const freeRoot = rootDown < rootCell.cost;
+  // Free-root is now OPT-IN (default false): letting the gene root float
+  // anywhere for free systematically lowers the absolute totals and pushes the
+  // family origin deep, which is one of the documented reasons the numbers are
+  // not comparable with standard DTL implementations. The anchor-at-root
+  // default keeps counts comparable; turn `allowFreeRoot` on for the old
+  // behaviour, and the panel states which convention ran.
+  const freeRoot =
+    options.allowFreeRoot === true && rootDown < rootCell.cost;
   // A free-floating root pays `rootTransferCost` (default 0) because the model
   // otherwise gets the arrival of the whole family at that depth for nothing,
   // which is what makes the absolute totals incomparable with standard DTL
@@ -683,12 +802,37 @@ export function solveDtl(
   if (depthExceeded) {
     return {
       error: tr(
-        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出；请先分解该基因家族或解析多歧枝`,
-        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family or resolve the topology first`,
+        `基因树嵌套过深（超过 ${MAX_CELL_DEPTH} 层），动态规划已中止以避免栈溢出。请先分解该基因家族、解析多歧枝，或使用「解析多歧枝」对深层枝做随机二叉化`,
+        `The gene tree nests deeper than ${MAX_CELL_DEPTH} levels; the dynamic program was stopped instead of overflowing the stack. Split the family, resolve polytomies, or random-binary-resolve the deep branches first`,
       ),
     };
   }
-  return { scenario, ambiguousLabels: ambiguousLabels.length > 0 ? ambiguousLabels : undefined };
+  // Placement-cost lists (ΔE pseudo-posteriors): for every internal gene node,
+  // the sorted cell costs with the delta to the optimum and exp(−ΔE) — a
+  // HEURISTIC weight, not a likelihood, and the UI must label it as one.
+  let cellCosts: DtlSolveResult['cellCosts'];
+  if (options.includeCellCosts) {
+    cellCosts = {};
+    for (const n of Object.values(gene.nodes)) {
+      if (n.childrenIds.length === 0) continue;
+      const list = (ranked.get(n.id) ?? [])
+        .filter((e) => Number.isFinite(e.cost))
+        .slice(0, 24)
+        .map((e) => {
+          const best = (ranked.get(n.id) ?? [{ cost: e.cost }])[0].cost;
+          const delta = e.cost - best;
+          return { speciesNode: e.z, cost: e.cost, delta, pseudoPosterior: Math.exp(-Math.max(0, delta)) };
+        });
+      if (list.length > 0) cellCosts[n.id] = list;
+    }
+  }
+
+  return {
+    scenario,
+    ambiguousLabels: ambiguousLabels.length > 0 ? ambiguousLabels : undefined,
+    ...(cellCosts ? { cellCosts } : {}),
+    timeFeasibility: usedAges ? 'ages' : 'topology',
+  };
 }
 
 export function dtlTipMap(species: Project, gene: Project): TipMapping {

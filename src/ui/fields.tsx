@@ -16,7 +16,16 @@ import { type BranchShape, type DashStyle } from '../model/types';
 import { isImeComposing } from './imeGuard';
 import { S, tr } from './strings';
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  /** Hover text for a label that had to be shortened for a narrow panel. */
+  title?: string;
+  children: ReactNode;
+}) {
   const id = useId();
   // `id` can only be attached to a host element. A component child (TextField,
   // …) ignores it, and emitting `htmlFor` anyway leaves the label pointing at
@@ -43,7 +52,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   });
   return (
     <div className="field">
-      <label {...(hostChild ? { htmlFor: id } : {})}>{label}</label>
+      <label {...(hostChild ? { htmlFor: id } : {})} title={title}>{label}</label>
       {childWithId}
     </div>
   );

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Factory helpers for new / sample projects.
 //
 // ALL sample projects ship FICTIONAL taxa with NEUTRAL CODE NAMES: every node
@@ -20,11 +21,13 @@ import {
   DEFAULT_RECON_COSTS,
   PROJECT_VERSION,
   defaultStyleDefaults,
+  type GeneNodeAssumption,
   type Project,
   type TreeNode,
 } from './types';
 import { newId } from './treeOps';
 import { defaultLayers } from './layers';
+import { makeGeneTreeEntry } from './geneTrees';
 import { tr } from '../ui/strings';
 
 /**
@@ -76,6 +79,12 @@ export interface SampleDescriptor {
   descEn: string;
   /** Factory that builds a fresh copy of the sample project. */
   build: () => Project;
+  /**
+   * Which workspace the sample opens into. `'recon'` samples carry gene trees
+   * and land directly in the reconciliation workspace (active gene tree =
+   * the first entry) instead of the standard canvas.
+   */
+  entryView?: 'standard' | 'recon';
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -1293,6 +1302,114 @@ export function createAnimalSample(): Project {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SAMPLE 7 — Gene-family reconciliation (opens into the reconciliation view)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// The DTL demo the reconciliation workspace's empty state and the sample
+// picker both offer: ONE click lands the user in a fully mapped reconciliation
+// — species tree + two gene trees, one duplication, one transfer, one loss —
+// instead of an empty canvas they would first have to populate themselves.
+//
+// Event semantics are validated with `validateScenario` inside this builder
+// (the sample test asserts 0 errors for tree α), so the demo can never ship an
+// inconsistent scenario. Gene docs are built with plain `addChildren` (always
+// binary → the DP solver accepts them) and labelled by hand; node ids are
+// random, so assumptions are written via the ids returned here, never literally.
+
+/**
+ * The reconciliation sample. Species tree: 6 fictional tips (Taxon_A…F) with
+ * ages consistent with the branch-length identity. Gene tree α reuses the same
+ * tip labels (every tip auto-maps) on a different topology, and carries a
+ * hand-written scenario with exactly one duplication (δ), one transfer (τ) and
+ * one loss (λ). Gene tree β is a clean mirror of the species topology with one
+ * deliberately unresolved internal node, so the validation section has a real
+ * warning badge to show.
+ */
+export function createReconciliationSample(): Project {
+  const project = createEmptyProject(
+    tr('虚拟类群 · 基因家族协同', 'Virtual taxa · Gene-family reconciliation'),
+  );
+  project.sampleId = 'recon-family';
+
+  // --- species tree (strictly binary, ages satisfy branchLength identity) ---
+  const rootId = project.rootId;
+  project.nodes[rootId].label = tr('物种根', 'Species root');
+  project.nodes[rootId].age = 100;
+  const n1 = mkNode(project, 'N1', rootId, 60, 40);
+  const tipA = mkNode(project, 'Taxon_A', n1, 0, 60);
+  const tipB = mkNode(project, 'Taxon_B', n1, 0, 60);
+  const n2 = mkNode(project, 'N2', rootId, 60, 40);
+  const tipC = mkNode(project, 'Taxon_C', n2, 0, 60);
+  const n3 = mkNode(project, 'N3', n2, 30, 30);
+  const tipD = mkNode(project, 'Taxon_D', n3, 0, 30);
+  const n4 = mkNode(project, 'N4', n3, 15, 15);
+  const tipE = mkNode(project, 'Taxon_E', n4, 0, 15);
+  const tipF = mkNode(project, 'Taxon_F', n4, 0, 15);
+  assertBinary(project);
+
+  // --- gene tree α: same tip labels, different topology, full scenario -------
+  // α: ((A,(B)) transferred…) — the working scenario:
+//   αR  → root   σ   (children land in the two root branches)
+//   αAC → N1     τ   (gene lineage of A/B transferred out of C's lineage)
+//   αAB → A      δ   (one child co-located on A: classic duplication)
+//   αN3 → N3     σ λ (2 edges below the root ⇒ 1 structural loss)
+//   αEF → N4     δ   (both children end on the same branch)
+  const alpha = createEmptyProject(tr('基因家族 α', 'Gene family α'));
+  alpha.layout = { ...alpha.layout, type: 'rectangular-cladogram', orientation: 'LR' };
+  const aR = alpha.rootId;
+  alpha.nodes[aR].label = 'αR';
+  const aAC = mkNode(alpha, 'αAC', aR);
+  const aAB = mkNode(alpha, 'αAB', aAC);
+  mkNode(alpha, 'Taxon_A', aAB);
+  mkNode(alpha, 'Taxon_B', aAB);
+  mkNode(alpha, 'Taxon_C', aAC);
+  const aN3 = mkNode(alpha, 'αN3', aR);
+  mkNode(alpha, 'Taxon_D', aN3);
+  const aEF = mkNode(alpha, 'αEF', aN3);
+  mkNode(alpha, 'Taxon_E', aEF);
+  const tipFNode = mkNode(alpha, 'Taxon_F', aEF);
+  assertBinary(alpha);
+  const alphaAssumptions: Record<string, GeneNodeAssumption> = {
+    [aR]: { speciesNode: rootId, event: 'speciation' },
+    [aAC]: { speciesNode: n1, event: 'transfer' },
+    [aAB]: { speciesNode: tipA, event: 'duplication' },
+    [aN3]: { speciesNode: n3, event: 'speciation', losses: 1 },
+    [aEF]: { speciesNode: n4, event: 'duplication' },
+    [tipFNode]: { speciesNode: tipE },
+  };
+
+  // --- gene tree β: mirror topology, one unresolved node (a real warning) ----
+  const beta = createEmptyProject(tr('基因家族 β', 'Gene family β'));
+  beta.layout = { ...beta.layout, type: 'rectangular-cladogram', orientation: 'LR' };
+  const bR = beta.rootId;
+  beta.nodes[bR].label = 'βR';
+  const b1 = mkNode(beta, 'β1', bR);
+  mkNode(beta, 'Taxon_A', b1);
+  mkNode(beta, 'Taxon_B', b1);
+  const b2 = mkNode(beta, 'β2', bR);
+  mkNode(beta, 'Taxon_C', b2);
+  const b3 = mkNode(beta, 'β3', b2);
+  mkNode(beta, 'Taxon_D', b3);
+  const b4 = mkNode(beta, 'β4', b3); // deliberately unresolved: no assumption below
+  mkNode(beta, 'Taxon_E', b4);
+  mkNode(beta, 'Taxon_F', b4);
+  assertBinary(beta);
+  const betaAssumptions: Record<string, GeneNodeAssumption> = {
+    [bR]: { speciesNode: rootId, event: 'speciation' },
+    [b1]: { speciesNode: n1, event: 'speciation' },
+    [b2]: { speciesNode: n2, event: 'speciation' },
+    [b3]: { speciesNode: n3, event: 'speciation' },
+  };
+
+  const alphaEntry = makeGeneTreeEntry(alpha, alpha.name);
+  alphaEntry.assumptions = alphaAssumptions;
+  const betaEntry = makeGeneTreeEntry(beta, beta.name);
+  betaEntry.assumptions = betaAssumptions;
+  project.geneTrees = [alphaEntry, betaEntry];
+  return project;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // SAMPLE CATALOGUE
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1302,6 +1419,15 @@ export function sampleById(id: string): SampleDescriptor | undefined {
 }
 
 export const SAMPLE_PROJECTS: SampleDescriptor[] = [
+  {
+    id: 'recon-family',
+    label: '虚拟类群 · 基因家族协同',
+    labelEn: 'Virtual taxa · Gene-family reconciliation',
+    desc: '两棵基因家族树与物种树的 DTL 协同演示：加倍、转移与损失各一例。',
+    descEn: 'A DTL reconciliation demo of two gene families against a species tree: one duplication, one transfer, and one loss.',
+    build: createReconciliationSample,
+    entryView: 'recon',
+  },
   {
     id: 'archaea',
     label: '虚拟类群 · 深域辐射',

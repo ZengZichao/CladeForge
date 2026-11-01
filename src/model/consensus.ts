@@ -28,7 +28,7 @@ import type { NodeId, Project, TreeNode } from './types';
 /** Separator used to encode tip-index sets into clade keys.
  * Using \u0001 (a control character that cannot appear in a valid taxon name)
  * prevents labels containing commas from being mis-split. */
-const SPLIT_SEP = '\u0001';
+export const SPLIT_SEP = '\u0001';
 
 /** Rooted-clade key of a sorted list of tip indices into `tips`. */
 function cladeKey(indexes: number[]): string {
@@ -203,7 +203,12 @@ export interface CladeSupport {
   tips: string[];
   /** Number of input trees carrying this clade. */
   count: number;
-  /** `count / treeCount` as a percentage (the value written to node.support). */
+  /**
+   * `count / treeCount` as a percentage — kept at FULL PRECISION (no
+   * `Math.round`): rounding quantises a 100-tree posterior sample to 1% steps,
+   * and a rounded `1` then collides with the legacy "≤1 means fraction"
+   * heuristic. Consumers that need integers format at display time.
+   */
   support: number;
 }
 
@@ -221,7 +226,7 @@ export function cladeSupports(projects: Project[], tips: string[]): CladeSupport
       key,
       tips: key.split(SPLIT_SEP).map((i) => tips[Number(i)]),
       count,
-      support: Math.round((100 * count) / treeCount),
+      support: (100 * count) / treeCount,
     }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
@@ -279,6 +284,10 @@ function buildTreeFromClades(
       parentId: holder,
       childrenIds: children,
       support: clade.support,
+      // Scale and provenance travel WITH the number: a bare 1 (one tree in a
+      // 100-tree sample) must never be re-read as a 0–1 posterior.
+      supportScale: 'percent',
+      supportKind: 'consensus-frequency',
     };
     const inClade = new Set(children);
     nodes[holder].childrenIds = nodes[holder].childrenIds.filter((c) => !inClade.has(c));
@@ -334,5 +343,119 @@ export function buildConsensusTree(
   // of them co-occur in at least one input tree).
   const threshold = method === 'strict' ? projects.length : Math.floor(projects.length / 2) + 1;
   const selected = supports.filter((s) => s.count >= threshold);
-  return buildTreeFromClades(tips, selected, name, onIssues);
+
+  // Consensus branch lengths / node ages (TreeSum-style post-processing): for
+  // each selected clade, the MEAN incoming branch length and the MEDIAN age
+  // (with a 95% interval when enough inputs carry ages) of the corresponding
+  // nodes across the input trees. A consensus tree without these is a topology
+  // the time panel cannot even display.
+  const perTreeCladeNode = projects.map((p) => {
+    const byKey = new Map<string, NodeId>();
+    const indexOf = new Map(tips.map((t, i) => [t, i] as const));
+    // Re-walk each tree and key every internal node by its clade key.
+    const root = p.nodes[p.rootId];
+    if (!root) return byKey;
+    const order: TreeNode[] = [];
+    const seen = new Set<NodeId>([root.id]);
+    const stack: TreeNode[] = [root];
+    while (stack.length) {
+      const n = stack.pop() as TreeNode;
+      order.push(n);
+      for (const cid of n.childrenIds) {
+        const c = p.nodes[cid];
+        if (!c || seen.has(c.id)) continue;
+        seen.add(c.id);
+        stack.push(c);
+      }
+    }
+    const members = new Map<NodeId, number[]>();
+    for (let i = order.length - 1; i >= 0; i -= 1) {
+      const n = order[i];
+      if (n.childrenIds.length === 0) {
+        const idx = n.label ? indexOf.get(n.label) : undefined;
+        members.set(n.id, idx === undefined ? [] : [idx]);
+        continue;
+      }
+      let acc: number[] = [];
+      for (const cid of n.childrenIds) acc = mergeSorted(acc, members.get(cid) ?? []);
+      members.set(n.id, acc);
+      if (n.id !== p.rootId && acc.length > 1 && acc.length < tips.length) {
+        byKey.set(cladeKey(acc), n.id);
+      }
+    }
+    return byKey;
+  });
+  const cladeStats = (key: string): { lengths: number[]; ages: number[] } => {
+    const lengths: number[] = [];
+    const ages: number[] = [];
+    for (const byKey of perTreeCladeNode) {
+      const nid = byKey.get(key);
+      if (nid === undefined) continue;
+      const n = projects[perTreeCladeNode.indexOf(byKey)].nodes[nid];
+      if (!n) continue;
+      if (typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) && n.branchLength >= 0) {
+        lengths.push(n.branchLength);
+      }
+      if (typeof n.age === 'number' && Number.isFinite(n.age)) ages.push(n.age);
+    }
+    return { lengths, ages };
+  };
+  const median = (arr: number[]): number => {
+    if (arr.length === 0) return Number.NaN;
+    const s = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  };
+  const percentile = (arr: number[], q: number): number => {
+    if (arr.length === 0) return Number.NaN;
+    const s = [...arr].sort((a, b) => a - b);
+    const pos = (s.length - 1) * q;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  };
+
+  const project2 = buildTreeFromClades(tips, selected, name, onIssues);
+  // Decorate the built tree with the consensus branch data.
+  for (const node of Object.values(project2.nodes)) {
+    if (node.parentId === null) continue;
+    const memberIdx = node.childrenIds.length
+      ? undefined
+      : tips.indexOf(node.label);
+    const key =
+      memberIdx !== undefined && memberIdx >= 0
+        ? null
+        : (() => {
+            // internal node: recover its clade key from its descendants
+            const acc: number[] = [];
+            const collect = (id: NodeId): void => {
+              const n = project2.nodes[id];
+              if (!n) return;
+              if (n.childrenIds.length === 0) {
+                const i = tips.indexOf(n.label);
+                if (i >= 0) acc.push(i);
+                return;
+              }
+              for (const c of n.childrenIds) collect(c);
+            };
+            for (const c of node.childrenIds) collect(c);
+            acc.sort((a, b) => a - b);
+            return cladeKey(acc);
+          })();
+    if (!key) continue;
+    const { lengths, ages } = cladeStats(key);
+    if (lengths.length > 0) {
+      node.branchLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    }
+    if (ages.length >= 3) {
+      node.age = median(ages);
+      node.ageMin = percentile(ages, 0.025);
+      node.ageMax = percentile(ages, 0.975);
+      node.ageSource = 'clock';
+    } else if (ages.length > 0) {
+      node.age = median(ages);
+      node.ageSource = 'clock';
+    }
+  }
+  return project2;
 }

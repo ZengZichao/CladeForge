@@ -122,7 +122,33 @@ export const TimeAxis = memo(function TimeAxis({
   };
 
   return (
+    // The axis chrome stays hover-transparent, but a dedicated transparent hit
+    // band below re-enables the environmental-event tooltips: the whole group
+    // used to carry pointerEvents:'none', which made the `<title>` notes in the
+    // event marks unreachable — documented behaviour, dead in practice.
     <g className="time-axis" style={{ pointerEvents: 'none' }}>
+      {showEras && envEvents.length > 0 && (
+        <g style={{ pointerEvents: 'all' }}>
+          {envEvents.map((e) => {
+            const a = info.ageToCoord(e.from);
+            const b = info.ageToCoord(e.to);
+            const lo = Math.min(a, b);
+            const hi = Math.max(a, b);
+            const h = Math.max(10, Math.abs(b1 - b0));
+            return info.horizontal ? (
+              <rect key={`hit-${e.id}`} x={lo} y={b0} width={Math.max(6, hi - lo)} height={h} fill="transparent">
+                <title>{e.note ? `${e.label}
+${e.note}` : e.label}</title>
+              </rect>
+            ) : (
+              <rect key={`hit-${e.id}`} x={b0} y={lo} width={h} height={Math.max(6, hi - lo)} fill="transparent">
+                <title>{e.note ? `${e.label}
+${e.note}` : e.label}</title>
+              </rect>
+            );
+          })}
+        </g>
+      )}
       {showEras &&
         plan.bands.map((e) => {
           return info.horizontal ? (

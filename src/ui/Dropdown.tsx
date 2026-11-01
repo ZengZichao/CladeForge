@@ -15,6 +15,9 @@ export interface DropdownItem {
   onClick?: () => void;
   kbd?: string;
   sep?: boolean;
+  /** Disabled entries render inert (no handler, aria-disabled) — a placeholder
+   *  that LOOKS clickable but does nothing reads as breakage. */
+  disabled?: boolean;
 }
 
 interface PanelPos {
@@ -78,7 +81,10 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
                   key={it.label}
                   className="menu-item"
                   role="menuitem"
+                  aria-disabled={it.disabled || undefined}
+                  style={it.disabled ? { opacity: 0.5, cursor: 'default' } : undefined}
                   onClick={() => {
+                    if (it.disabled) return;
                     setOpen(false);
                     it.onClick?.();
                   }}

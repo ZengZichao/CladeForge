@@ -237,7 +237,11 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   const characterColorTarget = useStore((s) => s.characterColorTarget);
   const layoutType = useStore((s) => s.project.layout.type);
   const projectEvents = useStore((s) => s.project.events);
-  const activeCharacter = findCharacter(useStore.getState().project, activeCharacterId ?? '');
+  // Subscribe to the project itself (PM-33): reading `getState()` here handed
+  // the legend a snapshot that could lag one store update behind the nodes'
+  // own subscription, so the legend swatches could be one edit stale.
+  const legendProject = useStore((s) => s.project);
+  const activeCharacter = findCharacter(legendProject, activeCharacterId ?? '');
   // The state-colouring swatch mirrors the first state colour so the legend
   // matches the actual coloured dots on the canvas.
   const stateColor = activeCharacter?.states[0]?.color ?? 'var(--accent)';

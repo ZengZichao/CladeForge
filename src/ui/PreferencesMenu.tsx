@@ -1,6 +1,13 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Preferences dropdown: language (中 / EN) and theme (Light / Dark / System)
-// consolidated into ONE header target.
+// Preferences dropdown: language, theme, UI scale, colour-vision-friendly
+// badges, diagnostics and local-data controls, consolidated into ONE target.
+//
+// A "preferences" entry that only switched appearance was an appearance
+// switcher; the settings that actually shape a session live here now:
+//   * UI scale (interface chrome zoom — the 11px baseline is small on 4K);
+//   * CVD-friendly badges (force shape+code emphasis on event markers);
+//   * copy diagnostics (version / platform / doc stats for bug reports);
+//   * clear local data (autosave / recents / prefs), with confirmation.
 //
 // BUG-10 caps the header at ten clickable targets. The two segmented controls
 // that used to live here cost five of them (中, EN, light, dark, system) while
@@ -24,6 +31,36 @@ import {
 import { changeLanguage, useLanguage } from './i18n';
 import { setTheme, storedTheme, type Theme } from './theme';
 import { S, tr } from './strings';
+import { APP_VERSION } from '../model/types';
+import { requestConfirm } from './confirmDialog';
+import { notify } from './toast';
+import { writeClipboardText } from '../io/clipboardIO';
+
+const UI_SCALE_KEY = 'cladeforge:uiScale';
+const CVD_MODE_KEY = 'cladeforge:cvdMode';
+
+function storedUiScale(): number {
+  try {
+    const v = Number(localStorage.getItem(UI_SCALE_KEY));
+    return Number.isFinite(v) && v >= 0.85 && v <= 1.6 ? v : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function applyUiScale(scale: number): void {
+  // `zoom` scales the chrome including hit targets; tree typography is
+  // unaffected (the canvas computes its own sizes).
+  document.documentElement.style.setProperty('zoom', String(scale));
+}
+
+function storedCvdMode(): boolean {
+  try {
+    return localStorage.getItem(CVD_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** Panel width, also used to keep the right-aligned flyout inside the viewport. */
 const PANEL_WIDTH = 208;
@@ -37,6 +74,8 @@ interface ThemeOption {
 export function PreferencesMenu() {
   const lang = useLanguage();
   const [pref, setPref] = useState<Theme>(storedTheme);
+  const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
+  const [cvd, setCvd] = useState<boolean>(storedCvdMode);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -49,6 +88,15 @@ export function PreferencesMenu() {
     const onChange = () => setPref(storedTheme());
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // Restore the stored UI scale + CVD flag on mount.
+  useEffect(() => {
+    applyUiScale(storedUiScale());
+    if (storedCvdMode()) {
+      (window as unknown as Record<string, unknown>).__cladeforgeCvd = true;
+      document.documentElement.dataset.cvdMode = '1';
+    }
   }, []);
 
   // Close on outside click, any scrollable ancestor scrolling, resize or Escape
@@ -98,6 +146,69 @@ export function PreferencesMenu() {
     changeLanguage(value);
   };
 
+  const chooseUiScale = (value: number) => {
+    setUiScaleState(value);
+    applyUiScale(value);
+    try {
+      localStorage.setItem(UI_SCALE_KEY, String(value));
+    } catch {
+      /* storage unavailable — session-only */
+    }
+  };
+
+  const chooseCvd = (value: boolean) => {
+    setCvd(value);
+    try {
+      localStorage.setItem(CVD_MODE_KEY, value ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+    // The flag is read by the event layers / exporter through the store-agnostic
+    // global so badge rendering can respond without threading a prop everywhere.
+    (window as unknown as Record<string, unknown>).__cladeforgeCvd = value;
+    document.documentElement.dataset.cvdMode = value ? '1' : '';
+    setOpen(false);
+  };
+
+  const copyDiagnostics = () => {
+    const st = (window as unknown as { __cladeforge?: { useStore: { getState: () => { project: { nodes: Record<string, unknown>; characters: unknown[]; events: unknown[]; geneTrees?: unknown[] } } } } }).__cladeforge?.useStore.getState();
+    const docStats = st
+      ? `nodes=${Object.keys(st.project.nodes).length}, characters=${st.project.characters.length}, events=${st.project.events.length}, geneTrees=${st.project.geneTrees?.length ?? 0}`
+      : 'store unavailable';
+    const text = [
+      `CladeForge ${APP_VERSION}`,
+      `ua: ${navigator.userAgent}`,
+      `lang: ${lang}`,
+      `doc: ${docStats}`,
+      `time: ${new Date().toISOString()}`,
+    ].join('\n');
+    void writeClipboardText(text).then((ok) =>
+      notify.success(ok ? S.review.diagnosticsCopied : text),
+    );
+    setOpen(false);
+  };
+
+  const clearLocalData = () => {
+    setOpen(false);
+    requestConfirm({
+      key: 'clear-local-data',
+      title: S.review.clearLocalData,
+      message: S.review.clearLocalDataConfirm,
+      confirmLabel: S.review.clearLocalData,
+      danger: true,
+      onConfirm: () => {
+        try {
+          const keepTheme = localStorage.getItem('cladeforge:theme');
+          localStorage.clear();
+          if (keepTheme) localStorage.setItem('cladeforge:theme', keepTheme);
+        } catch {
+          /* storage already broken */
+        }
+        notify.success(S.review.clearedLocalData);
+      },
+    });
+  };
+
   const themeOptions: ThemeOption[] = [
     { value: 'light', icon: <SunIcon />, label: S.theme.light },
     { value: 'dark', icon: <MoonIcon />, label: S.theme.dark },
@@ -126,7 +237,16 @@ export function PreferencesMenu() {
             className="dropdown-panel prefs-panel"
             role="menu"
             aria-label={tr('偏好设置', 'Preferences')}
-            style={{ position: 'fixed', top: pos.top, left: pos.left, width: PANEL_WIDTH }}
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              minWidth: PANEL_WIDTH,
+              // max-content keeps long English labels (the 54-char workflow-tour
+              // entry) on one line instead of wrapping mid-phrase.
+              width: 'max-content',
+              maxWidth: Math.min(360, window.innerWidth - pos.left - 8),
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="menu-section-label">{S.lang.label}</div>
@@ -169,6 +289,51 @@ export function PreferencesMenu() {
                 </span>
               </button>
             ))}
+            <div className="menu-sep" />
+            <div className="menu-section-label">{S.review.preferencesUiScale}</div>
+            {[1, 1.15, 1.3].map((v) => (
+              <button
+                key={v}
+                className="menu-item prefs-item"
+                role="menuitemradio"
+                aria-checked={Math.abs(uiScale - v) < 0.01}
+                onClick={() => chooseUiScale(v)}
+              >
+                <span className="prefs-item-label">
+                  <span className="prefs-check" aria-hidden="true">
+                    {Math.abs(uiScale - v) < 0.01 ? '✓' : ''}
+                  </span>
+                  <span>
+                    {v === 1 ? tr('标准 100%', 'Standard 100%') : `${Math.round(v * 100)}%`}
+                  </span>
+                </span>
+              </button>
+            ))}
+            <div className="menu-sep" />
+            <button
+              className="menu-item prefs-item"
+              role="menuitemcheckbox"
+              aria-checked={cvd}
+              onClick={() => chooseCvd(!cvd)}
+            >
+              <span className="prefs-item-label">
+                <span className="prefs-check" aria-hidden="true">{cvd ? '✓' : ''}</span>
+                <span>{S.review.cvdMode}</span>
+              </span>
+            </button>
+            <div className="menu-sep" />
+            <button className="menu-item prefs-item" onClick={copyDiagnostics}>
+              <span className="prefs-item-label">
+                <span className="prefs-check" aria-hidden="true" />
+                <span>{S.review.diagnosticsCopy}</span>
+              </span>
+            </button>
+            <button className="menu-item prefs-item" onClick={clearLocalData} style={{ color: 'var(--danger)' }}>
+              <span className="prefs-item-label">
+                <span className="prefs-check" aria-hidden="true" />
+                <span>{S.review.clearLocalData}</span>
+              </span>
+            </button>
           </div>,
           document.body,
         )}

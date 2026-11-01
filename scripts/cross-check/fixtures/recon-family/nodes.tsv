@@ -1,0 +1,12 @@
+node_key	label	parent_key	branch_length	rescaled_length	is_tip	tips_below
+N:Taxon_A+Taxon_B+Taxon_C+Taxon_D+Taxon_E+Taxon_F|11	物种根		0	0	0	6
+N:Taxon_A+Taxon_B|3	N1	N:Taxon_A+Taxon_B+Taxon_C+Taxon_D+Taxon_E+Taxon_F|11	40	1.095890410958904	0	2
+N:Taxon_C+Taxon_D+Taxon_E+Taxon_F|7	N2	N:Taxon_A+Taxon_B+Taxon_C+Taxon_D+Taxon_E+Taxon_F|11	40	1.095890410958904	0	4
+T:Taxon_A	Taxon_A	N:Taxon_A+Taxon_B|3	60	1.643835616438356	1	1
+T:Taxon_B	Taxon_B	N:Taxon_A+Taxon_B|3	60	1.643835616438356	1	1
+T:Taxon_C	Taxon_C	N:Taxon_C+Taxon_D+Taxon_E+Taxon_F|7	60	1.643835616438356	1	1
+N:Taxon_D+Taxon_E+Taxon_F|5	N3	N:Taxon_C+Taxon_D+Taxon_E+Taxon_F|7	30	0.821917808219178	0	3
+T:Taxon_D	Taxon_D	N:Taxon_D+Taxon_E+Taxon_F|5	30	0.821917808219178	1	1
+N:Taxon_E+Taxon_F|3	N4	N:Taxon_D+Taxon_E+Taxon_F|5	15	0.410958904109589	0	2
+T:Taxon_E	Taxon_E	N:Taxon_E+Taxon_F|3	15	0.410958904109589	1	1
+T:Taxon_F	Taxon_F	N:Taxon_E+Taxon_F|3	15	0.410958904109589	1	1

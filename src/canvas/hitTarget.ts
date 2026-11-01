@@ -12,7 +12,7 @@
 import type { EdgeId, NodeId } from '../model/types';
 
 export interface HitTarget {
-  role: 'port' | 'custom-edge' | 'node' | null;
+  role: 'port' | 'custom-edge' | 'node' | 'collapse-toggle' | null;
   nodeId: NodeId | null;
   edgeId: EdgeId | null;
 }
@@ -23,9 +23,12 @@ export function hitTargetFor(target: EventTarget | null): HitTarget {
   const el = target instanceof Element ? target : null;
   if (!el || typeof el.closest !== 'function') return NULL_HIT;
 
-  // Priority: port ⊃ custom-edge ⊃ node. The port dot renders inside the
-  // node group, so it must win over the node branch; a node group also
-  // contains label/hit children that should select the node.
+  // Priority: port ⊃ custom-edge ⊃ collapse-toggle ⊃ node. The port dot
+  // renders inside the node group, so it must win over the node branch; a node
+  // group also contains label/hit children that should select the node. The
+  // collapse triangle is a node-group child too, but a press on it is NOT a
+  // node press — the background gesture handler checks for this role and
+  // stands down so the toggle's own click handler acts alone.
   const port = el.closest('[data-role="port"]');
   if (port) {
     return { role: 'port', nodeId: port.getAttribute('data-node-id'), edgeId: null };
@@ -33,6 +36,10 @@ export function hitTargetFor(target: EventTarget | null): HitTarget {
   const edge = el.closest('[data-role="custom-edge"]');
   if (edge) {
     return { role: 'custom-edge', nodeId: null, edgeId: edge.getAttribute('data-edge-id') };
+  }
+  const toggle = el.closest('[data-role="collapse-toggle"]');
+  if (toggle) {
+    return { role: 'collapse-toggle', nodeId: toggle.getAttribute('data-node-id'), edgeId: null };
   }
   const node = el.closest('[data-role="node"], [data-node-id]');
   if (node) {

@@ -1,4 +1,5 @@
 project	id	name
+recon-family	recon-family	虚拟类群 · 基因家族协同
 archaea	archaea	虚拟类群 · 深域辐射
 bacteria	bacteria	虚拟类群 · 壁型与氧需求
 virus	virus	虚拟类群 · 病毒演化

@@ -194,11 +194,15 @@ describe('the remaining source-level contracts', () => {
   });
 
   it('panel widths are re-clamped at render, not only on commit', () => {
-    const app = sourceOf('../App.tsx');
-    expect(app).toContain('const panelLeft = clampPanel(leftWidth)');
-    expect(app).toContain('const panelRight = clampPanel(rightWidth)');
-    expect(app).toContain('width: isNarrow ? 280 : panelLeft');
-    expect(app).toContain('width: isNarrow ? 300 : panelRight');
-    expect(app).not.toMatch(/width: isNarrow \? \d+ : (leftWidth|rightWidth)/);
+    // The standard panel widths live in StandardWorkspace since the workspace
+    // split; the recon workspace clamps its own widths through the same rule.
+    const ws = sourceOf('../ui/StandardWorkspace.tsx');
+    expect(ws).toContain('const panelLeft = clampPanel(leftWidth)');
+    expect(ws).toContain('const panelRight = clampPanel(rightWidth)');
+    expect(ws).toContain('width: isNarrow ? 280 : panelLeft');
+    expect(ws).toContain('width: isNarrow ? 300 : panelRight');
+    expect(ws).not.toMatch(/width: isNarrow \? \d+ : (leftWidth|rightWidth)/);
+    const recon = sourceOf('../canvas/ReconWorkspace.tsx');
+    expect(recon).toContain('clampReconPanel');
   });
 });

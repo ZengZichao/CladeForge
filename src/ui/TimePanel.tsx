@@ -31,6 +31,13 @@ import {
 import type { Project } from '../model/types';
 import type { EstimateAgesResult } from '../model/treeOps';
 import { estimateAgesText } from './treeEditNotices';
+import { TIME_UNIT_TO_MA } from '../layout/timescale';
+import { deriveBranchLengthsFromAges, estimateAgesWithCalibrations } from '../model/treeOps';
+
+/** Dropdown options = the recognised geological units (see TIME_UNIT_TO_MA). */
+const TIME_UNIT_OPTIONS = Object.keys(TIME_UNIT_TO_MA).filter((u) =>
+  ['ma', 'myr', 'mya', 'ka', 'kyr', 'kya', 'ga', 'gyr', 'gya'].includes(u),
+);
 import type { EraLevel } from '../layout/timescale';
 import {
   CheckboxField,
@@ -320,11 +327,35 @@ export function TimePanel() {
 
       <Section title={S.layoutPanel.timeSection} pinable>
         <Field label={S.layoutPanel.timeUnit}>
-          <TextField
-            value={project.layout.timeUnit ?? 'Ma'}
-            onCommit={(v) => apply((d) => void (d.layout.timeUnit = v))}
-          />
+          {/* Known units become a dropdown (a free-text field where the SPELLING
+              decides whether geological bands draw is a trap); the custom entry
+              stays available for exotic units. */}
+          <select
+            value={TIME_UNIT_OPTIONS.includes((project.layout.timeUnit ?? 'Ma').toLowerCase())
+              ? (project.layout.timeUnit ?? 'Ma').toLowerCase()
+              : 'custom'}
+            onChange={(e) => {
+              const v = e.target.value;
+              apply((d) => void (d.layout.timeUnit = v === 'custom' ? 'Ma' : v));
+            }}
+          >
+            {TIME_UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+            <option value="custom">{tr('自定义…', 'Custom…')}</option>
+          </select>
         </Field>
+        {!TIME_UNIT_OPTIONS.includes((project.layout.timeUnit ?? 'Ma').toLowerCase()) && (
+          <Field label={tr('自定义单位', 'Custom unit')}>
+            <TextField
+              value={project.layout.timeUnit ?? 'Ma'}
+              onCommit={(v) => apply((d) => void (d.layout.timeUnit = v))}
+            />
+          </Field>
+        )}
+        <div className="hint">{S.review.icsNote}</div>
         <CheckboxField
           label={S.layoutPanel.showEras}
           checked={showEras}
@@ -352,6 +383,7 @@ export function TimePanel() {
             }}
           >
             <option value="eon">{S.layoutPanel.eraLevelEon}</option>
+            <option value="era">{S.layoutPanel.eraLevelEra}</option>
             <option value="period">{S.layoutPanel.eraLevelPeriod}</option>
             <option value="both">{S.layoutPanel.eraLevelBoth}</option>
           </select>

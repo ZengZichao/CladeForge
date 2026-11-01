@@ -6,7 +6,7 @@ import { addChildren } from '../model/treeOps';
 import { serializeProject, parseProject } from './projectIO';
 import { parseNewick } from './newick';
 import { computeLayout } from '../layout/autoLayout';
-import { EVENT_BADGE_RADIUS } from '../model/events';
+import { EVENT_BADGE_RADIUS , findEventType } from '../model/events';
 import { curvedBranchPath } from '../canvas/paths';
 import {
   planEventAnchors,
@@ -77,20 +77,21 @@ describe('exportImage', () => {
     expect(svg).toContain(curvedBranchPath(from, to, p.layout.orientation));
   });
 
-  it('draws no badge letters by default and shows text only on request', () => {
-    // Default markers are shape + colour only: a figure full of two-letter
-    // acronyms is exactly what the per-event marker options exist to avoid.
+  it('draws badge letters by default and honours the per-event opt-out', () => {
+    // Default markers carry their two-letter code now (eventMarkerTextVisible:
+    // with 15+ event types and four near-identical greens the code is the
+    // redundant channel that survives greyscale and dichromat printing).
     const p = createSampleProject();
     const plain = exportSVGString(p, { showEvents: true });
-    expect(plain).not.toContain('>KI<'); // key innovation on the branch
-    expect(plain).not.toContain('>AR<'); // adaptive radiation
+    expect(plain).toContain('>KI<'); // key innovation on the branch
+    expect(plain).toContain('>AR<'); // adaptive radiation
 
-    // Opting in draws the same text the canvas draws (type code or custom),
+    // Opting out drops the code while a custom markerText still renders,
     // XML-escaped like every other text run in the export.
-    p.events[0].markerShowText = true;
+    p.events[0].markerShowText = false;
     p.events[1].markerText = '创<&>';
     const withText = exportSVGString(p, { showEvents: true });
-    expect(withText).toContain('>KI<');
+    expect(withText).not.toContain('>KI<');
     expect(withText).toContain('创&lt;&amp;&gt;');
     expect(withText).toContain('font-weight="700"');
   });
@@ -357,7 +358,9 @@ interface ParsedText {
 /** Node labels: `<text ... dominant-baseline>` excludes legend/axis/transition text. */
 function parseLabelTexts(svg: string): ParsedText[] {
   const re =
-    /<text x="(-?[\d.]+)" y="(-?[\d.]+)" text-anchor="(start|middle|end)" dominant-baseline="(?:central|hanging|auto)" font-size="([\d.]+)"[^>]*>([^<]*)<\/text>/g;
+    // Coordinates can be emitted in exponent form (circular layouts produce
+  // values like -1.9e-15), so the number pattern must admit exponents.
+  /<text x="(-?[\d.]+(?:e[-+]?\d+)?)" y="(-?[\d.]+(?:e[-+]?\d+)?)" text-anchor="(start|middle|end)" dominant-baseline="(?:central|hanging|auto)" font-size="([\d.]+)"[^>]*>([^<]*)<\/text>/g;
   const out: ParsedText[] = [];
   for (const m of svg.matchAll(re)) {
     out.push({ text: m[5], x: Number(m[1]), y: Number(m[2]), anchor: m[3], fontSize: Number(m[4]) });
@@ -366,21 +369,42 @@ function parseLabelTexts(svg: string): ParsedText[] {
 }
 
 /**
- * Event badges. Badges draw as `eventMarkerPath` outlines, not `<circle>`
- * elements, so this parses the default circle path (radius == EVENT_BADGE_RADIUS,
- * white fill) and recovers its centre from the two arc endpoints:
- * `M x1 y A r r … x2 y A r r … x1 y Z`.
+ * Event badges. Badges draw as `eventMarkerPath` outlines — and since the
+ * per-event marker styling landed, the shape is per EVENT TYPE (stars for
+ * key innovations, circles elsewhere), so no single path template matches.
+ * Parse every white-filled marker path and take its bounding box straight
+ * from the path's own coordinates: shape-agnostic, still measured off the
+ * emitted SVG rather than the planner's promise.
  */
-function parseBadgeCircles(svg: string): { x: number; y: number }[] {
-  const r = EVENT_BADGE_RADIUS;
-  const re = new RegExp(
-    `<path d="M (-?[\\d.]+(?:e[-+]?\\d+)?) (-?[\\d.]+(?:e[-+]?\\d+)?) A ${r} ${r} 0 1 0 (-?[\\d.]+(?:e[-+]?\\d+)?) -?[\\d.]+(?:e[-+]?\\d+)? A ${r} ${r} 0 1 0 \\1 \\2 Z" fill="#ffffff"`,
-    'g',
-  );
-  return [...svg.matchAll(re)].map((m) => ({
-    x: (Number(m[1]) + Number(m[3])) / 2,
-    y: Number(m[2]),
-  }));
+function parseBadgeBoxes(svg: string, strokes: string[]): { x: number; y: number; half: number }[] {
+  // Node markers, legend swatches and collapse triangles are white-filled
+  // paths too, so the parse is keyed to the PROJECT'S OWN event colours —
+  // the exporter takes badge strokes straight from the event catalogue.
+  const alt = strokes.map((c) => c.replace('#', '')).join('|');
+  const re = new RegExp(`<path d="([^"]*)" fill="#ffffff" stroke="#(?:${alt})"`, 'g');
+  const out: { x: number; y: number; half: number }[] = [];
+  for (const m of svg.matchAll(re)) {
+    const nums = [...m[1].matchAll(/(-?[\d.]+(?:e[-+]?\d+)?),?\s?/g)].map((n) => Number(n[1]));
+    const xs: number[] = [];
+    const ys: number[] = [];
+    // Path data interleaves x/y after each command letter; take every numeric
+    // pair as a coordinate candidate — an over-approximation that only ever
+    // WIDENS the box, which is the conservative direction for a collision test.
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+      xs.push(nums[i]);
+      ys.push(nums[i + 1]);
+    }
+    if (xs.length < 2) continue;
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const half = Math.max(maxX - minX, maxY - minY) / 2;
+    // Legend swatches reuse the same colour at radius 6.6; only the on-tree
+    // badges (radius 8) are wanted here.
+    if (half >= 7) out.push({ x: (minX + maxX) / 2, y: (minY + maxY) / 2, half });
+  }
+  return out;
 }
 
 /** CJK-aware glyph estimate, independent of the exporter's own 1.05 factor. */
@@ -421,14 +445,21 @@ describe('exportImage — event badges reuse the canvas collision planner (BUG-4
 
   for (const type of LAYOUTS) {
     it(`${type}: badge outlines do not intersect label text`, () => {
-      const svg = buildSVG(projectWithLayout(type), { showEvents: true }).svg;
+      const project = projectWithLayout(type);
+      const svg = buildSVG(project, { showEvents: true }).svg;
       const labels = parseLabelTexts(svg);
-      const badges = parseBadgeCircles(svg);
+      const strokes = project.events.map((e) => findEventType(e.typeId)?.color ?? '');
+      const badges = parseBadgeBoxes(svg, strokes);
       expect(labels.length).toBeGreaterThan(5);
       expect(badges.length).toBe(2); // KI + AR on Taxon_D
-      const half = EVENT_BADGE_RADIUS + 1.5;
       for (const b of badges) {
-        const badgeBox = { minX: b.x - half, minY: b.y - half, maxX: b.x + half, maxY: b.y + half };
+        // +1.5 breathing room, same as the planner's own margin.
+        const badgeBox = {
+          minX: b.x - b.half - 1.5,
+          minY: b.y - b.half - 1.5,
+          maxX: b.x + b.half + 1.5,
+          maxY: b.y + b.half + 1.5,
+        };
         for (const t of labels) {
           expect(intersects(badgeBox, textBox(t)), `${t.text} × badge at ${b.x},${b.y}`).toBe(false);
         }
@@ -494,12 +525,20 @@ describe('exportImage — event badges reuse the canvas collision planner (BUG-4
     });
     const svg = buildSVG(project, { showEvents: true }).svg;
     expect(plan.anchors.size).toBe(2);
+    const strokes = project.events.map((e) => findEventType(e.typeId)?.color ?? '');
+    const boxes = parseBadgeBoxes(svg, strokes);
     for (const a of plan.anchors.values()) {
-      // Default badges draw as the radius-8 circle path of eventMarkerPath;
-      // the exported d must start exactly at the planned anchor's centre.
-      expect(svg).toContain(
-        `M ${a.x - EVENT_BADGE_RADIUS} ${a.y} A ${EVENT_BADGE_RADIUS} ${EVENT_BADGE_RADIUS} 0 1 0 ${a.x + EVENT_BADGE_RADIUS} ${a.y}`,
+      // Per-event shapes mean no single path template; assert geometrically:
+      // some exported badge's bounding-box CENTRE must sit exactly on the
+      // planned anchor (marker shapes are centre-symmetric about it).
+      // A star path's bbox centre is NOT its anchor (5 points have no
+      // left-right symmetry), so require the anchor to sit INSIDE the bbox
+      // with real margin rather than at its exact centre.
+      const hit = boxes.find(
+        (b) =>
+          Math.abs(b.x - a.x) <= b.half * 0.25 && Math.abs(b.y - a.y) <= b.half * 0.25,
       );
+      expect(hit, `no badge centred on the planned anchor ${a.x},${a.y}`).toBeTruthy();
     }
     // And the badges really did move off the branch line (not the old anchors).
     const natural = plan.anchors.get(project.events[0].id)!;

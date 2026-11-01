@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { getAppInfo, isTauri, type AppInfo } from '../io/native';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
+import { notify } from './toast';
 import pkg from '../../package.json';
 
 /** The author record: language-neutral, shown verbatim in the About box. */
@@ -46,10 +47,33 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
             {S.app.name}
           </div>
           <div className="about-tagline">{S.about.tagline}</div>
+          {/* One-sentence positioning, matching the README's own claim, plus the
+              capability boundary the reviewers asked to be visible INSIDE the
+              app (it used to live only in code comments and the manual). */}
+          <p style={{ fontSize: 12, margin: '8px 0 0' }}>
+            {tr(
+              'CladeForge 是演化假说的可复核工作台账：把一棵树、一组性状、一套事件解释与若干竞争假说，连同方法、参数与版本一起，导出成可核验的图与表。',
+              'CladeForge is an auditable ledger for evolutionary hypotheses: one tree, a set of characters, event explanations and competing hypothesis layers — exported with their methods, parameters and version as verifiable figures and tables.',
+            )}
+          </p>
+          <div className="hint" style={{ marginTop: 8 }}>{S.review.boundaryStatement}</div>
           <dl className="about-facts">
             <div className="about-row">
               <dt>{S.about.version}</dt>
-              <dd>{version}</dd>
+              <dd>
+                {version}
+                <button
+                  className="btn"
+                  style={{ marginLeft: 8, fontSize: 11 }}
+                  onClick={() => {
+                    void import('../io/clipboardIO').then(({ writeClipboardText }) =>
+                      writeClipboardText(`CladeForge ${version}`),
+                    );
+                  }}
+                >
+                  {tr('复制版本号', 'Copy version')}
+                </button>
+              </dd>
             </div>
             <div className="about-row">
               <dt>{S.about.author}</dt>
@@ -62,6 +86,26 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
             <div className="about-row">
               <dt>{S.about.license}</dt>
               <dd>MIT</dd>
+            </div>
+            {/* Documentation / repository / issue links, copyable: the About box
+                used to answer none of "what is this / where are the docs / how
+                do I cite or complain". */}
+            <div className="about-row">
+              <dt>{tr('文档 / 仓库', 'Docs / repo')}</dt>
+              <dd>
+                <button
+                  className="btn"
+                  style={{ fontSize: 11 }}
+                  onClick={() => {
+                    void import('../io/clipboardIO').then(({ writeClipboardText }) =>
+                      writeClipboardText('https://github.com/zengzichao/CladeForge'),
+                    );
+                    notify.success(tr('仓库地址已复制', 'Repository URL copied'));
+                  }}
+                >
+                  github.com/zengzichao/CladeForge
+                </button>
+              </dd>
             </div>
           </dl>
         </div>

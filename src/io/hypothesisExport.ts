@@ -71,7 +71,7 @@ export function buildNarrative(project: Project): string {
       const rootState = root?.charStates?.[c.id];
       const rootMeta = root?.charMeta?.[c.id];
       if (rootState !== undefined) {
-        let s = tr(`- 根节点（${nl(project.rootId)}）假设状态：**${md(stateLabel(c, rootState) ?? rootState)}**`, `- Root (${nl(project.rootId)}) hypothesised state: **${md(stateLabel(c, rootState) ?? rootState)}**`);
+        let s = tr(`- 根节点（${nl(project.rootId)}）假设状态：**${md(stateLabel(c, rootState) ?? String(rootState))}**`, `- Root (${nl(project.rootId)}) hypothesised state: **${md(stateLabel(c, rootState) ?? String(rootState))}**`);
         if (rootMeta?.confidence) s += tr(`（置信度：${confLabel(rootMeta.confidence)}）`, ` (confidence: ${confLabel(rootMeta.confidence)})`);
         L.push(s);
         if (rootMeta?.support) L.push(tr(`  - 支持证据：${md(rootMeta.support)}`, `  - Supporting evidence: ${md(rootMeta.support)}`));
@@ -231,8 +231,11 @@ export function buildNarrative(project: Project): string {
  * overwrite each other silently. `characters[]` in the payload is the
  * id → name/state dictionary.
  */
-function charStateMap(project: Project, node: TreeNode): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
+function charStateMap(
+  project: Project,
+  node: TreeNode,
+): Record<string, string | number | string[]> {
+  const out: Record<string, string | number | string[]> = {};
   for (const c of project.characters) {
     const v = node.charStates?.[c.id];
     // Discrete values are the STATE id (decode with characters[].states); a

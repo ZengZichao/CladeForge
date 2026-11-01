@@ -15,6 +15,7 @@ import type {
   EvolutionaryEvent,
   HypothesisLayer,
   HypothesisMeta,
+  NodeId,
   Project,
   StoredLayer,
 } from './types';
@@ -122,21 +123,38 @@ export function removeLayer(project: Project, id: string): void {
  * assignments / evidence for characters that have been deleted. An orphan
  * character key in `layerStore` stays invisible until the user switches layers,
  * when it comes back long after the trait itself is gone.
+ *
+ * Nothing is dropped silently any more: the returned summary names how many
+ * records of each kind were removed, and callers must surface it (the loader
+ * folds the counts into the load report; see io/projectIO.ts).
  */
-export function pruneLayerStore(project: Project): boolean {
-  let changed = false;
+export interface LayerPruneSummary {
+  /** State assignments removed. */
+  states: number;
+  /** Confidence/evidence records removed. */
+  meta: number;
+  /** Hypothesis notes removed. */
+  notes: number;
+  /** Stored events removed. */
+  events: number;
+  /** True when anything at all was pruned. */
+  changed: boolean;
+}
+
+export function pruneLayerStore(project: Project): LayerPruneSummary {
+  const summary: LayerPruneSummary = { states: 0, meta: 0, notes: 0, events: 0, changed: false };
   const characterIds = new Set(project.characters.map((c) => c.id));
   for (const stored of Object.values(project.layerStore)) {
     for (const nid of Object.keys(stored.states)) {
       if (!project.nodes[nid]) {
         delete stored.states[nid];
-        changed = true;
+        summary.states += 1;
       }
     }
     for (const nid of Object.keys(stored.meta)) {
       if (!project.nodes[nid]) {
         delete stored.meta[nid];
-        changed = true;
+        summary.meta += 1;
       }
     }
     for (const bucket of [stored.states, stored.meta] as const) {
@@ -145,7 +163,8 @@ export function pruneLayerStore(project: Project): boolean {
         for (const cid of Object.keys(rec)) {
           if (!characterIds.has(cid)) {
             delete rec[cid];
-            changed = true;
+            if (bucket === stored.states) summary.states += 1;
+            else summary.meta += 1;
           }
         }
         if (Object.keys(rec).length === 0) delete bucket[nid];
@@ -155,14 +174,14 @@ export function pruneLayerStore(project: Project): boolean {
       for (const nid of Object.keys(stored.notes)) {
         if (!project.nodes[nid]) {
           delete stored.notes[nid];
-          changed = true;
+          summary.notes += 1;
         }
       }
     }
     const validEvents = stored.events.filter((e) => project.nodes[e.nodeId]);
     if (validEvents.length !== stored.events.length) {
+      summary.events += stored.events.length - validEvents.length;
       stored.events = validEvents;
-      changed = true;
     }
     const ids = new Set(stored.events.map((e) => e.id));
     for (const e of stored.events) {
@@ -171,9 +190,138 @@ export function pruneLayerStore(project: Project): boolean {
       );
       if (!Array.isArray(e.triggers) || clean.length !== e.triggers.length) {
         e.triggers = clean;
-        changed = true;
       }
     }
   }
-  return changed;
+  summary.changed = summary.states + summary.meta + summary.notes + summary.events > 0;
+  return summary;
+}
+
+// --- per-layer statistics and cross-layer comparison --------------------------
+// "Compare competing hypotheses" is the product's core claim, so the numbers a
+// comparison needs (record counts, parsimony cost of a layer) and the node-level
+// diff between two layers live here, computed from data that already exists.
+
+export interface LayerRecordCounts {
+  /** Internal nodes carrying ancestral-state hypotheses. */
+  states: number;
+  /** Internal nodes carrying confidence/evidence. */
+  meta: number;
+  /** Nodes carrying a hypothesis note. */
+  notes: number;
+  /** Events owned by the layer. */
+  events: number;
+}
+
+/**
+ * Record counts for one layer. The ACTIVE layer's data lives on the nodes /
+ * project.events; every other layer reads its snapshot from `layerStore`.
+ */
+export function layerRecordCounts(project: Project, layerId: string): LayerRecordCounts {
+  if (layerId === project.activeLayerId) {
+    let states = 0;
+    let meta = 0;
+    let notes = 0;
+    for (const n of Object.values(project.nodes)) {
+      if (n.childrenIds.length === 0) continue;
+      if (n.charStates && Object.keys(n.charStates).length) states += 1;
+      if (n.charMeta && Object.keys(n.charMeta).length) meta += 1;
+      if (n.hypothesisNote?.trim()) notes += 1;
+    }
+    return { states, meta, notes, events: project.events.length };
+  }
+  const stored = project.layerStore[layerId];
+  if (!stored) return { states: 0, meta: 0, notes: 0, events: 0 };
+  return {
+    states: Object.keys(stored.states).length,
+    meta: Object.keys(stored.meta).length,
+    notes: Object.keys(stored.notes ?? {}).length,
+    events: stored.events.length,
+  };
+}
+
+/** One node where the two layers disagree. */
+export interface LayerDiffEntry {
+  nodeId: NodeId;
+  characterId: string;
+  /** The character's display name, resolved for the report. */
+  characterName: string;
+  /** Layer A's assignment, display-formatted (polymorphic sets joined with '/'). */
+  a?: string;
+  /** Layer B's assignment. */
+  b?: string;
+}
+
+/** Result of comparing two hypothesis layers. */
+export interface LayerDiff {
+  aId: string;
+  bId: string;
+  /** Nodes whose ancestral-state assignment differs, sorted by node id. */
+  stateDiffs: LayerDiffEntry[];
+  /** Events present only in layer A / only in layer B. */
+  eventsOnlyA: EvolutionaryEvent[];
+  eventsOnlyB: EvolutionaryEvent[];
+}
+
+/** Format one assignment for a diff table cell. */
+function formatAssignment(v: string | number | string[] | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  if (Array.isArray(v)) return v.join('/');
+  return String(v);
+}
+
+/**
+ * Compare two layers' ancestral states and event sets without mutating the
+ * document: the active layer is read from the live nodes, the other from its
+ * snapshot. Only nodes present in BOTH layers' topologies are compared — a node
+ * that exists only on one side is a topology edit the layer predates.
+ */
+export function layerDiff(project: Project, aId: string, bId: string): LayerDiff {
+  const readStates = (layerId: string): Record<string, Record<string, string | number | string[]>> => {
+    if (layerId === project.activeLayerId) {
+      const out: Record<string, Record<string, string | number | string[]>> = {};
+      for (const n of Object.values(project.nodes)) {
+        if (n.childrenIds.length === 0) continue;
+        if (n.charStates && Object.keys(n.charStates).length) out[n.id] = { ...n.charStates };
+      }
+      return out;
+    }
+    return project.layerStore[layerId]?.states ?? {};
+  };
+  const readEvents = (layerId: string): EvolutionaryEvent[] =>
+    layerId === project.activeLayerId
+      ? project.events
+      : (project.layerStore[layerId]?.events ?? []);
+
+  const aStates = readStates(aId);
+  const bStates = readStates(bId);
+  const characterName = new Map(project.characters.map((c) => [c.id, c.name]));
+  const stateDiffs: LayerDiffEntry[] = [];
+  const nodeIds = new Set([...Object.keys(aStates), ...Object.keys(bStates)]);
+  for (const nid of nodeIds) {
+    if (!project.nodes[nid]) continue;
+    const recA = aStates[nid] ?? {};
+    const recB = bStates[nid] ?? {};
+    const cids = new Set([...Object.keys(recA), ...Object.keys(recB)]);
+    for (const cid of cids) {
+      const va = recA[cid];
+      const vb = recB[cid];
+      if (JSON.stringify(va) === JSON.stringify(vb)) continue;
+      stateDiffs.push({
+        nodeId: nid,
+        characterId: cid,
+        characterName: characterName.get(cid) ?? cid,
+        a: formatAssignment(va),
+        b: formatAssignment(vb),
+      });
+    }
+  }
+  stateDiffs.sort((x, y) => x.nodeId.localeCompare(y.nodeId) || x.characterId.localeCompare(y.characterId));
+
+  const keyOf = (e: EvolutionaryEvent): string => `${e.typeId}|${e.nodeId}|${e.target}|${e.label ?? ''}`;
+  const aKeys = new Set(readEvents(aId).map(keyOf));
+  const bKeys = new Set(readEvents(bId).map(keyOf));
+  const eventsOnlyA = readEvents(aId).filter((e) => !bKeys.has(keyOf(e)));
+  const eventsOnlyB = readEvents(bId).filter((e) => !aKeys.has(keyOf(e)));
+  return { aId, bId, stateDiffs, eventsOnlyA, eventsOnlyB };
 }

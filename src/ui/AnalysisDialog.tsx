@@ -8,6 +8,15 @@
 // metric is a Jaccard overlap ratio (descriptive), Blomberg's K is a point
 // estimate without a significance test, and CI/RI exist only for equally
 // weighted characters.
+//
+// Every number on this dialog is CONDITIONAL ON THE SINGLE USER-EDITED
+// TOPOLOGY. That statement used to live in code comments and the manual —
+// places users never see — and now it is the first line of the dialog itself.
+//
+// The heavy statistics only run while the dialog is OPEN (the useMemos check
+// `open` first): the dialog used to stay mounted with all of its per-edit
+// recomputation live even when closed, which made every keystroke pay for a
+// statistics pass nobody was reading.
 
 import { useMemo, useState } from 'react';
 import { useStore } from '../model/store';
@@ -17,69 +26,25 @@ import type { AsrWarning } from '../model/asr';
 import {
   blombergK,
   blombergKBlockReason,
+  blombergKNullTest,
   ciRiApplies,
   discreteSignal,
-  holmBonferroni,
   treeSummary,
 } from '../model/stats';
 import {
   characterCorrelations,
+  characterCorrelationTests,
   checkConsistency,
-  correlationPermutationTest,
-  type CorrelationTest,
+  type AdjustedCorrelationTest,
 } from '../model/consistency';
-import type { Character, NodeId, Project } from '../model/types';
+import { requestConfirm } from './confirmDialog';
+import { notify } from './toast';
+import { APP_VERSION, type AnalysisResult } from '../model/types';
+import { fillParsimony, newId } from '../model/treeOps';
+import type { Project } from '../model/types';
 import { useDialogFocus } from './useDialogFocus';
 import { RangeField } from './fields';
 import { S, tr } from './strings';
-
-/**
- * The inference is decoupled from the descriptive screen: pairs already flagged
- * at Jaccard ≥ 0.5 are not the only ones that can carry a p-value, and a pair
- * whose two single deep changes coincide (overlap 1/3) would otherwise be neither
- * shown nor tested. Everything the permutation test CAN be run on is tested,
- * because the family that gets corrected must be the family that was tested — and
- * the most-overlapping pairs go first, so the wall-clock cap drops the least
- * informative pairs instead of the most promising ones.
- */
-const MAX_TESTED_PAIRS = 24;
-
-function testAllCharacterPairs(project: Project): {
-  rows: { test: CorrelationTest; adjusted: number }[];
-  skipped: number;
-} {
-  const discrete = project.characters.filter((c) => c.type === 'discrete' && c.states.length > 0);
-  const changes = new Map<string, Set<NodeId>>();
-  for (const c of discrete) changes.set(c.id, parsimony(project, c).changeBranches);
-  const candidates: { a: Character; b: Character; score: number }[] = [];
-  for (let i = 0; i < discrete.length; i += 1) {
-    for (let j = i + 1; j < discrete.length; j += 1) {
-      const a = discrete[i];
-      const b = discrete[j];
-      const A = changes.get(a.id) as Set<NodeId>;
-      const B = changes.get(b.id) as Set<NodeId>;
-      if (A.size < 2 || B.size < 2) continue; // no statistic to permute
-      let inter = 0;
-      for (const x of A) if (B.has(x)) inter += 1;
-      const union = A.size + B.size - inter;
-      candidates.push({ a, b, score: union > 0 ? inter / union : 0 });
-    }
-  }
-  candidates.sort((x, y) => y.score - x.score);
-  const tests: CorrelationTest[] = [];
-  for (const { a, b } of candidates.slice(0, MAX_TESTED_PAIRS)) {
-    const t = correlationPermutationTest(project, a, b);
-    if (t) tests.push(t);
-  }
-  // One adjustment across the whole tested family. Holm controls the
-  // family-wise error rate, which is what "flag the pairs worth calling
-  // co-evolved" needs; the raw per-pair p is still shown, clearly labelled.
-  const adjusted = holmBonferroni(tests.map((t) => t.pValue));
-  const rows = tests
-    .map((test, i) => ({ test, adjusted: adjusted[i] }))
-    .sort((x, y) => x.adjusted - y.adjusted || y.test.score - x.test.score);
-  return { rows, skipped: Math.max(0, candidates.length - MAX_TESTED_PAIRS) };
-}
 
 /** Locale-aware name of one Mk degradation class. */
 function asrWarningLabel(kind: AsrWarning['kind']): string {
@@ -94,20 +59,34 @@ function asrWarningLabel(kind: AsrWarning['kind']): string {
       return S.analysis.asrWarnInvalid;
     case 'posterior-collapse':
       return S.analysis.asrWarnCollapse;
+    case 'missing-branch-lengths-refused':
+      return tr('缺失枝长过多，重建被拒绝', 'too many missing branch lengths; reconstruction refused');
     default:
       return kind;
   }
+}
+
+/** Stable fingerprint of the inputs a correlation run depended on. */
+function familyFingerprint(project: Project): string {
+  const chars = project.characters
+    .filter((c) => c.type === 'discrete')
+    .map((c) => `${c.id}:${c.states.length}`)
+    .join(',');
+  return `${chars}|nodes=${Object.keys(project.nodes).length}`;
 }
 
 export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const project = useStore((s) => s.project);
   const activeCharacterId = useStore((s) => s.activeCharacterId);
   const select = useStore((s) => s.select);
+  const focusNode = useStore((s) => s.focusNode);
   const runAsr = useStore((s) => s.runAsr);
   const clearAsr = useStore((s) => s.clearAsr);
   const asr = useStore((s) => s.asr);
   const asrOptions = useStore((s) => s.asrOptions);
   const setAsrOptions = useStore((s) => s.setAsrOptions);
+  const apply = useStore((s) => s.apply);
+  const recordAnalysis = useStore((s) => s.recordAnalysis);
 
   const discrete = project.characters.filter((c) => c.type === 'discrete');
   const [charId, setCharId] = useState<string>('');
@@ -118,62 +97,157 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
     '';
   const character = findCharacter(project, effectiveId);
 
+  // `open` gates every heavy computation: a closed dialog recomputes nothing.
   const mp = useMemo(
-    () => (character ? parsimony(project, character) : null),
-    [project, character],
+    () => (open && character ? parsimony(project, character) : null),
+    [open, project, character],
   );
   const issues = useMemo(
-    () => (character ? checkConsistency(project, character) : []),
-    [project, character],
+    () => (open && character ? checkConsistency(project, character) : []),
+    [open, project, character],
   );
   const signal = useMemo(
-    () => (character ? discreteSignal(project, character) : null),
-    [project, character],
+    () => (open && character ? discreteSignal(project, character) : null),
+    [open, project, character],
   );
-  const correlations = useMemo(() => characterCorrelations(project), [project]);
+  const correlations = useMemo(() => (open ? characterCorrelations(project) : []), [open, project]);
   // Significance is not free. The overlap ratio is descriptive; a p-value
   // only exists after the tree-constrained permutation test has been RUN, on
-  // demand, because it costs one parsimony solve per replicate. The results are
-  // keyed to the document they were computed on, so any edit invalidates them
-  // rather than leaving a stale p-value on screen — and every p in the family
-  // carries its Holm–Bonferroni partner, because a per-pair 0.05 across a dozen
-  // pairs is not a 0.05 test.
+  // demand. THE FAMILY IS THE MODEL'S OWN: `characterCorrelationTests` defines
+  // membership by "a statistic exists", never by the observed score, and caps
+  // on the stable pair key — the dialog's own score-ranked copy was the exact
+  // data-driven-family mistake the model's principle forbids.
   const [tested, setTested] = useState<{
-    project: typeof project;
-    rows: { test: CorrelationTest; adjusted: number }[];
-    skipped: number;
+    fingerprint: string;
+    rows: AdjustedCorrelationTest[];
+    familyTotal: number;
   } | null>(null);
   const [testing, setTesting] = useState(false);
-  const tests = tested?.project === project ? tested.rows : null;
+  const currentFingerprint = useMemo(
+    () => (open ? familyFingerprint(project) : ''),
+    [open, project],
+  );
+  const tests = tested && tested.fingerprint === currentFingerprint ? tested.rows : null;
   const runCorrelationTests = () => {
     if (testing) return;
     setTesting(true);
     // Yield one frame so the "running" label paints before the synchronous work.
     setTimeout(() => {
-      const snapshot = project;
       try {
-        setTested({ project: snapshot, ...testAllCharacterPairs(snapshot) });
+        const rows = characterCorrelationTests(project);
+        const familyTotal = rows[0]?.familyTotal ?? rows.length;
+        setTested({ fingerprint: familyFingerprint(project), rows, familyTotal });
       } finally {
         setTesting(false);
       }
     }, 0);
   };
-  const summary = useMemo(() => treeSummary(project), [project]);
-  const nonBinaryInternals =
-    summary.internalCount - Math.round(summary.resolution * summary.internalCount);
+  const summary = useMemo(() => (open ? treeSummary(project) : null), [open, project]);
+  const nonBinaryInternals = summary
+    ? summary.internalCount - Math.round(summary.resolution * summary.internalCount)
+    : 0;
   const continuousChars = project.characters.filter((c) => c.type === 'continuous');
   const continuousResults = useMemo(
     () =>
-      continuousChars.map((c) => ({
-        character: c,
-        result: blombergK(project, c),
-        reason: blombergKBlockReason(project, c),
-      })),
-    [project, continuousChars],
+      open
+        ? continuousChars.map((c) => ({
+            character: c,
+            result: blombergK(project, c),
+            reason: blombergKBlockReason(project, c),
+          }))
+        : [],
+    [open, project, continuousChars],
   );
+  // BM null p-values for K are computed on demand (400 simulated traits each).
+  const [kNulls, setKNulls] = useState<Record<string, ReturnType<typeof blombergKNullTest>>>({});
+  const runKNull = (cid: string) => {
+    const c = project.characters.find((x) => x.id === cid);
+    if (!c) return;
+    const r = blombergKNullTest(project, c);
+    if (r) setKNulls((m) => ({ ...m, [cid]: r }));
+    else notify.info(tr('该性状无法模拟零分布（数据或矩阵不可用）', 'Cannot simulate a BM null for this character (data or matrix unavailable)'));
+  };
+  // The stored analysis runs (first-class, exportable).
+  const runHistory = open ? (project.analysisResults ?? []).slice().reverse() : [];
 
   // Focus trap + Esc close + initial focus.
   const ref = useDialogFocus(open, onClose);
+
+  const applyParsimonyBaseline = () => {
+    if (!character) return;
+    requestConfirm({
+      key: 'apply-parsimony',
+      title: S.review.analysisApplyParsimony,
+      message: S.review.analysisApplyParsimonyConfirm,
+      confirmLabel: S.review.analysisApplyParsimony,
+      onConfirm: () => {
+        apply((d) => {
+          fillParsimony(d, character.id);
+        });
+        notify.success(S.review.analysisApplied(Object.values(project.nodes).filter((n) => n.childrenIds.length > 0).length));
+      },
+    });
+  };
+
+  const copyCitation = async (method: string, params: Record<string, string | number | boolean | null>) => {
+    const bits = [
+      `CladeForge ${APP_VERSION}`,
+      method,
+      ...Object.entries(params).map(([k, v]) => `${k}=${String(v)}`),
+      `topology: single user-edited tree (${Object.keys(project.nodes).length} nodes)`,
+      `generated: ${new Date().toISOString()}`,
+    ];
+    try {
+      await navigator.clipboard?.writeText(bits.join('\n'));
+      notify.success(S.review.analysisCopied);
+    } catch {
+      notify.info(bits.join('\n'));
+    }
+  };
+
+  const exportResultsCsv = () => {
+    if (!tests) return;
+    const lines = [
+      ['character_a', 'character_b', 'jaccard', 'p_raw', 'p_adjusted_holm', 'permutations', 'resolution', 'null_mean', 'family_total', 'family_selection'].join(','),
+      ...tests.map((t) =>
+        [
+          JSON.stringify(t.aName),
+          JSON.stringify(t.bName),
+          t.score.toFixed(4),
+          t.pValue.toFixed(6),
+          t.adjustedP.toFixed(6),
+          t.permutations,
+          t.resolution.toFixed(6),
+          t.nullMean.toFixed(4),
+          t.familyTotal ?? '',
+          t.familySelection ?? '',
+        ].join(','),
+      ),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cladeforge-correlation-tests.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const recordRun = (kind: AnalysisResult['kind'], method: string, params: Record<string, string | number | boolean | null>, payload: unknown, characterIds?: string[]) => {
+    recordAnalysis({
+      id: newId(),
+      kind,
+      title: method,
+      characterIds,
+      fingerprint: familyFingerprint(project),
+      method,
+      params,
+      version: APP_VERSION,
+      createdAt: new Date().toISOString(),
+      payload,
+    });
+    notify.success(S.review.analysisRecorded);
+  };
 
   if (!open) return null;
 
@@ -197,7 +271,15 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
       >
         <h2>{S.analysis.title}</h2>
 
+        {/* Conditional-on-topology statement: the methodological boundary every
+            reader of these numbers has to know, ON SCREEN, not just in a manual
+            chapter nobody opens. */}
+        <div className="hint" style={{ borderColor: 'var(--warning, #f59e0b)' }}>
+          ⚠ {S.review.analysisTopologyWarning}
+        </div>
+
         {/* Tree summary statistics (3.2) */}
+        {summary && (
         <div className="panel-section">
           <h3>{S.analysis.treeSummarySection}</h3>
           <div className="field"><label>{S.analysis.tipCount}</label><span>{summary.tipCount}</span></div>
@@ -221,6 +303,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
             <div className="hint">{S.analysis.collessBinaryOnly(nonBinaryInternals)}</div>
           )}
         </div>
+        )}
 
         {discrete.length === 0 || !character ? (
           <div className="hint">{S.analysis.needCharacter}</div>
@@ -244,6 +327,32 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                 <span>{mp ? mp.cost : 0}</span>
               </div>
               <div className="hint">{S.analysis.fillHint}</div>
+              {/* The apply exit the module comment always promised: one action
+                  writes the MP baseline to every internal node as ONE undo-able
+                  step, and the user then reviews per-node. */}
+              <div className="field row-actions">
+                <button className="btn" onClick={applyParsimonyBaseline}>
+                  {S.review.analysisApplyParsimony}
+                </button>
+                <button
+                  className="btn ghost"
+                  onClick={() =>
+                    recordRun(
+                      'parsimony',
+                      'Sankoff parsimony (generalised, tie-broken)',
+                      {
+                        cost: mp?.cost ?? 0,
+                        optimization: 'sankoff-min',
+                        character: character.name,
+                      },
+                      { cost: mp?.cost ?? 0 },
+                      [character.id],
+                    )
+                  }
+                >
+                  {S.review.analysisRecordRun}
+                </button>
+              </div>
             </div>
 
             <div className="panel-section">
@@ -258,6 +367,14 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <div className="field"><label>RI</label><span>{signal.ri.toFixed(3)} = (g−s)/(g−m)</span></div>
                   {signal.missingCodes > 0 && (
                     <div className="hint">{S.analysis.signalMissingCodes(signal.missingCodes)}</div>
+                  )}
+                  {signal.unresolvedTree && (
+                    <div className="hint">
+                      {tr(
+                        '树含未解析多歧枝：CI/RI 会偏乐观（变化可在多歧枝间“免费”共享）',
+                        'The tree contains unresolved polytomies: CI/RI read optimistic (changes are shared "for free" across unresolved branches)',
+                      )}
+                    </div>
                   )}
                   <div className="hint">{S.analysis.signalHint}</div>
                 </>
@@ -284,8 +401,12 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       className={`issue issue-${it.severity}${it.nodeId ? ' issue-click' : ''}`}
                       onClick={() => {
                         if (it.nodeId) {
+                          // Click-through SELECTS and pans WITHOUT closing the
+                          // dialog: analysis is an "look, then look again"
+                          // activity, and the old onClose() made the user re-run
+                          // the whole dialog per issue.
                           select(it.nodeId);
-                          onClose();
+                          focusNode(it.nodeId);
                         }
                       }}
                     >
@@ -305,7 +426,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               {correlations.length > 0 && (
                 <ul className="issue-list">
                   {correlations.map((c) => {
-                    const row = tests?.find((x) => x.test.aId === c.aId && x.test.bId === c.bId);
+                    const row = tests?.find((x) => x.aId === c.aId && x.bId === c.bId);
                     return (
                       <li key={`${c.aId}-${c.bId}`} className="issue issue-info">
                         <div>
@@ -317,24 +438,19 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                           {S.analysis.correlationShared(c.shared, c.aBranches, c.bBranches)} ·{' '}
                           {S.analysis.correlationExpected(c.expectedShared)}
                         </div>
-                        {/* The faded / "(not significant)" grading of an
-                            invalid p-value is gone. Opacity encodes the
-                            DESCRIPTIVE overlap band, which is what the number
-                            actually is; the verdict, when there is one, is the
-                            Holm-adjusted p of a test that was really run. */}
                         {row ? (
                           <div className="hint">
                             <strong>{S.analysis.correlationPValue}</strong>{' '}
-                            {S.analysis.correlationPSummary(row.test.pValue, row.test.permutations, row.test.resolution)}{' '}
-                            · {S.analysis.correlationNullMean(row.test.nullMean)}
+                            {S.analysis.correlationPSummary(row.pValue, row.permutations, row.resolution)}{' '}
+                            · {S.analysis.correlationNullMean(row.nullMean)}
                             <div>
                               <strong>{S.analysis.correlationPAdjusted}</strong>{' '}
-                              {row.adjusted.toFixed(4)} ·{' '}
-                              {row.adjusted <= 0.05
+                              {row.adjustedP.toFixed(4)} ·{' '}
+                              {row.adjustedP <= 0.05
                                 ? S.analysis.correlationVerdictYes
                                 : S.analysis.correlationVerdictNo}
                             </div>
-                            <div>{S.analysis.correlationTestMethod(row.test.method)}</div>
+                            <div>{S.analysis.correlationTestMethod(row.method)}</div>
                           </div>
                         ) : (
                           <div className="hint">
@@ -348,6 +464,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   })}
                 </ul>
               )}
+              <div className="hint">{S.review.analysisPermutationNote}</div>
               <div className="hint">{S.analysis.correlationDescriptive}</div>
               <div className="hint">{S.analysis.correlationGateNote}</div>
               <div className="field row-actions">
@@ -358,14 +475,50 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       ? S.analysis.correlationRerunTest
                       : S.analysis.correlationRunTest}
                 </button>
+                {tests && tests.length > 0 && (
+                  <>
+                    <button className="btn ghost" onClick={exportResultsCsv}>
+                      {S.review.analysisExportCsv}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      onClick={() =>
+                        recordRun(
+                          'correlation',
+                          'Tree-constrained two-sided tip-state permutation + Holm',
+                          {
+                            pairs: tests.length,
+                            familyTotal: tested?.familyTotal ?? tests.length,
+                            familySelection: tests[0]?.familySelection ?? 'stable-key',
+                          },
+                          tests.map((t) => ({
+                            a: t.aName,
+                            b: t.bName,
+                            jaccard: t.score,
+                            p: t.pValue,
+                            adjustedP: t.adjustedP,
+                            permutations: t.permutations,
+                          })),
+                        )
+                      }
+                    >
+                      {S.review.analysisRecordRun}
+                    </button>
+                  </>
+                )}
               </div>
+              {tests && tested && (
+                <div className="hint">
+                  {S.review.analysisFamily(tests.length, tested.familyTotal)} · m = {tests.length}
+                </div>
+              )}
               {tests && tests.length > 0 && (
                 <>
                   <div className="hint">
                     <strong>{S.analysis.correlationAllTestedTitle}</strong>
                   </div>
                   <ul className="issue-list">
-                    {tests.map(({ test, adjusted }) => (
+                    {tests.map((test) => (
                       <li key={`all-${test.aId}-${test.bId}`} className="issue issue-info">
                         <div>
                           {test.aName} ↔ {test.bName} · {S.analysis.correlationType}:{' '}
@@ -374,8 +527,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                         <div className="hint">
                           {S.analysis.correlationPSummary(test.pValue, test.permutations, test.resolution)}{' '}
                           ·{' '}
-                          <strong>{S.analysis.correlationPAdjusted}</strong> {adjusted.toFixed(4)} ·{' '}
-                          {adjusted <= 0.05
+                          <strong>{S.analysis.correlationPAdjusted}</strong> {test.adjustedP.toFixed(4)} ·{' '}
+                          {test.adjustedP <= 0.05
                             ? S.analysis.correlationVerdictYes
                             : S.analysis.correlationVerdictNo}
                         </div>
@@ -383,9 +536,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     ))}
                   </ul>
                   <div className="hint">
-                    {S.analysis.correlationSignificant(tests.filter((r) => r.adjusted <= 0.05).length)}{' '}
+                    {S.analysis.correlationSignificant(tests.filter((r) => r.adjustedP <= 0.05).length)}{' '}
                     · {S.analysis.correlationMultiTest(tests.length)}
-                    {tested && tested.skipped > 0 ? ` · ${S.analysis.correlationSkippedPairs(tested.skipped)}` : ''}
                   </div>
                 </>
               )}
@@ -397,7 +549,11 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
         {continuousResults.length > 0 && (
           <div className="panel-section">
             <h3>{S.analysis.continuousSection}</h3>
-            {continuousResults.map(({ character: c, result, reason }) => (
+            {continuousResults.map(({ character: c, result, reason }) => {
+              // Bind once: the guard below must narrow ONE value, not two
+              // independent `kNulls[c.id]` lookups that TS cannot correlate.
+              const knull = kNulls[c.id];
+              return (
               <div key={c.id} className="field">
                 <label>{c.name}</label>
                 <span>
@@ -405,9 +561,20 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     <>
                       {/* No verdict words ("保守演化" / "过度分散") appear: they
                           would assert an evolutionary conclusion from a point
-                          estimate nobody tested. */}
+                          estimate nobody tested. The simulated BM null p-value
+                          is one click away and the zero-variation case is named. */}
                       {S.analysis.blombergK}: {result.k.toFixed(3)} (n = {result.n}) ·{' '}
                       {S.analysis.blombergKScale(result.imputedBranches, result.totalBranches)}
+                      {result.zeroBranches > 0 && (
+                        <span>
+                          {' '}
+                          ·{' '}
+                          {tr(
+                            `${result.zeroBranches} 条真实零枝长（同期分化，按 0 计入）`,
+                            `${result.zeroBranches} real zero-length branch(es) (synchronous divergence, used as 0)`,
+                          )}
+                        </span>
+                      )}
                     </>
                   ) : reason ? (
                     S.analysis.continuousBlockedReason(reason)
@@ -415,8 +582,21 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     S.analysis.continuousNone
                   )}
                 </span>
+                {result && (
+                  <span className="field row-actions" style={{ display: 'inline-flex', gap: 6 }}>
+                    <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => runKNull(c.id)}>
+                      {tr('模拟 BM 零分布', 'Simulate BM null')}
+                    </button>
+                    {knull && (
+                      <span style={{ fontSize: 12 }}>
+                        p ≈ {knull.pValue.toFixed(3)} ({knull.replicates}×)
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
-            ))}
+              );
+            })}
             <div className="hint">{S.analysis.blombergKHint}</div>
             <div className="hint">{S.analysis.blombergKNoTest}</div>
           </div>
@@ -428,14 +608,12 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
             <h3>{S.analysis.asrModelSection}</h3>
             <div className="field">
               <label>{S.analysis.asrModel}</label>
-              {/* Only the equal-rates Mk model is implemented; the closed-form
-                  transition matrix in model/asr.ts is ER by construction. */}
-              <select
-                value={asrOptions.model}
-                onChange={(e) => setAsrOptions({ model: e.target.value as 'ER' })}
-              >
-                <option value="ER">{S.analysis.asrModelER}</option>
-              </select>
+              {/* Read-only statement instead of a one-option dropdown: "only ER
+                  exists" is a fact, not a choice, and a dropdown with a single
+                  option pretends otherwise. SYM/ARD are named as NOT implemented. */}
+              <span>
+                {S.analysis.asrModelER} — {tr('唯一实现；SYM/ARD 未实现', 'the only implemented model; SYM/ARD are not implemented')}
+              </span>
             </div>
             <div className="field">
               <label>{S.analysis.asrThreshold}</label>
@@ -456,7 +634,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               <button
                 className="btn primary"
                 disabled={!character || character.type !== 'discrete'}
-                onClick={runAsr}
+                onClick={() => runAsr(false)}
               >
                 {S.analysis.asrRun}
               </button>
@@ -468,9 +646,47 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
             </div>
             {asr && (
               <div className="field">
-                <label>{S.analysis.asrResultSummary}</label>
+                <label>{S.review.analysisMethod}</label>
                 <span>
                   {asr.model} ·{' '}
+                  {asr.rate.method === 'ml'
+                    ? `${S.review.analysisRate}: ${S.review.analysisRateMl}`
+                    : S.review.analysisRateMoment}
+                  {asr.rate.method === 'ml' && asr.rate.rate !== undefined && (
+                    <>
+                      {' '}
+                      · r = {Number(asr.rate.rate.toPrecision(4))}
+                      {asr.rate.logLikelihood !== undefined && (
+                        <>
+                          {' '}
+                          · {S.review.analysisLnL} = {asr.rate.logLikelihood.toFixed(3)}
+                        </>
+                      )}
+                      {asr.rate.logLikelihoodCi && (
+                        <>
+                          {' '}
+                          · 95% CI [{asr.rate.logLikelihoodCi[0].toPrecision(3)}, {asr.rate.logLikelihoodCi[1].toPrecision(3)}]
+                        </>
+                      )}
+                    </>
+                  )}
+                  {asr.rate.sensitivity && (
+                    <div className="hint">
+                      {S.review.analysisRateSensitivity(asr.rate.sensitivity.maxDelta, asr.rate.sensitivity.nodesChangedArgmax)}
+                    </div>
+                  )}
+                </span>
+              </div>
+            )}
+            {asr?.stale && (
+              <div className="hint" style={{ color: 'var(--warning, #f59e0b)' }}>
+                {S.review.analysisStale}
+              </div>
+            )}
+            {asr && (
+              <div className="field">
+                <label>{S.analysis.asrResultSummary}</label>
+                <span>
                   {asr.warnings.length === 0
                     ? S.analysis.asrNoWarnings
                     : S.analysis.asrWarningCount(asr.warnings.length)}
@@ -490,6 +706,67 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                 ))}
               </ul>
             )}
+            {asr && asr.probs.size === 0 && (
+              <div className="field row-actions">
+                <button className="btn" onClick={() => runAsr(true)}>
+                  {S.review.asrForceContinue}
+                </button>
+              </div>
+            )}
+            {asr && asr.probs.size > 0 && (
+              <div className="field row-actions">
+                <button
+                  className="btn ghost"
+                  onClick={() =>
+                    recordRun(
+                      'asr',
+                      asr.rate.method === 'ml' ? 'Mk-ER marginal ASR, ML rate' : 'Mk-ER marginal ASR, moment rate',
+                      {
+                        model: asr.model,
+                        rate: asr.rate.rate,
+                        rateMethod: asr.rate.method,
+                        threshold: asr.threshold,
+                        lnL: asr.rate.logLikelihood ?? null,
+                      },
+                      { nodes: asr.probs.size },
+                      [asr.characterId],
+                    )
+                  }
+                >
+                  {S.review.analysisRecordRun}
+                </button>
+                <button
+                  className="btn ghost"
+                  onClick={() =>
+                    void copyCitation(`Mk-ER marginal ASR (rate ${asr.rate.method})`, {
+                      r: Number(asr.rate.rate.toPrecision(4)),
+                      threshold: asr.threshold,
+                    })
+                  }
+                >
+                  {S.review.analysisCopyCitation}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Retained analysis runs: the numbers a user may cite, kept with the
+            document instead of evaporating with a component's state. */}
+        {runHistory.length > 0 && (
+          <div className="panel-section">
+            <h3>{S.review.analysisRunHistory}</h3>
+            <ul className="issue-list">
+              {runHistory.slice(0, 12).map((r) => (
+                <li key={r.id} className="issue issue-info">
+                  <div>
+                    {r.title ?? r.kind} · {new Date(r.createdAt).toLocaleString()} · v{r.version}
+                    {r.pinned ? ' · 📌' : ''}
+                  </div>
+                  <div className="hint">{r.method}</div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

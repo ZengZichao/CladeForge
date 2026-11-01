@@ -237,7 +237,12 @@ export function checkConsistency(project: Project, character: Character): Consis
 
   // C3 — homoplasy: a state independently arises ≥2 times in the MP reconstruction.
   // Uses the tie-broken MP path (`chosen`), never `states[0]`, so the count
-  // follows the documented tie-break instead of state declaration order.
+  // follows the documented tie-break instead of state declaration order. The
+  // wording follows the character's MODEL: "may violate irreversibility" is only
+  // meaningful for an irreversible (Dollo/ordered) coding — plain unordered
+  // Fitch does not forbid reversals, so the observation is plain parallelism/
+  // convergence there.
+  const modelIsIrreversible = character.model === 'dollo' || character.model === 'wagner';
   const gains = new Map<string, number>();
   for (const childId of mp.changeBranches) {
     const to = mp.chosen.get(childId);
@@ -248,10 +253,15 @@ export function checkConsistency(project: Project, character: Character): Consis
       issues.push({
         kind: 'homoplasy',
         severity: 'info',
-        message: tr(
-          `状态「${label(sid)}」在简约重建下独立出现约 ${count} 次（同塑/回复），可能违反不可逆性，请确认。`,
-          `State “${label(sid)}” independently arises ≈${count} times in the MP reconstruction (homoplasy/reversal) — possibly violating irreversibility; please verify.`,
-        ),
+        message: modelIsIrreversible
+          ? tr(
+              `状态「${label(sid)}」在简约重建下独立出现约 ${count} 次（同塑/回复）。本性状采用不可逆模型，请确认这些回复是否动摇不可逆假设。`,
+              `State “${label(sid)}” independently arises ≈${count} times in the MP reconstruction (homoplasy/reversal). This character uses an irreversible model — please check whether these reversals undermine that assumption.`,
+            )
+          : tr(
+              `状态「${label(sid)}」在简约重建下独立出现 ${count} 次（平行/演化，同塑）。无序模型不禁止回复，这不构成对不可逆性的质疑。`,
+              `State “${label(sid)}” arises independently ${count} times in the MP reconstruction (parallelism/convergence, homoplasy). An unordered model does not forbid reversals, so this is not an irreversibility concern.`,
+            ),
         tag: tr('同塑', 'Homoplasy'),
       });
     }
@@ -531,6 +541,10 @@ export interface CorrelationTest extends CharacterCorrelation {
   nullMean: number;
   /** Name of the procedure, for the UI to print next to the number. */
   method: string;
+  /** How many testable pairs existed in total (the family BEFORE any cap). */
+  familyTotal?: number;
+  /** How the tested subset was chosen when the family had to be capped. */
+  familySelection?: 'all' | 'stable-key';
 }
 
 /** A correlation test carrying its Holm partner and the family size behind it. */
@@ -717,30 +731,37 @@ function pairKey(a: Character, b: Character): string {
  * The whole family, tested and then adjusted.
  *
  * The family is `testableCharacterPairs` — every pair the permutation test can
- * be run on — NOT the subset the ≥ 0.5 overlap flag happened to like. Holm
- * corrects the family that was TESTED, so the model and the UI have to define it
- * the same way and both do it through `holmAdjustFamily`; the flag is a display
- * filter applied to the rows returned here, never an input to the correction.
- * That is what makes m (carried on every row as `familySize`) independent of the
- * data: if the family and the display flag were the same set, the same pair's
- * adjusted p would move with how many OTHER pairs happened to be flagged.
+ * be run on — NOT the subset the ≥ 0.5 overlap flag happened to like, and NOT
+ * the most-overlapping pairs. Holm corrects the family that was TESTED, so
+ * membership may never be chosen by the OBSERVED STATISTIC: selecting the
+ * highest-Jaccard pairs and then correcting them is exactly the
+ * data-driven-family mistake this module's own principle forbids (the adjusted
+ * p shrinks as the selection gets better, i.e. the correction stops correcting).
  *
- * The most-overlapping pairs are tested first, so a capped run drops the least
- * informative ones instead of the most promising (see `MAX_TESTED_PAIRS`); ties
- * break on the canonical pair key, never on declaration order.
+ * When a compute cap must bite, it bites on the STABLE pair key — a
+ * data-independent order — and every row records `familyTotal` and
+ * `familySelection: 'stable-key'` so the UI prints "tested 24 of 58 pairs
+ * (deterministic subset); Holm m = 24". Raising `maxPairs` (or moving the run
+ * into a worker) is the way to widen coverage, not re-ranking by score.
  */
 export function characterCorrelationTests(
   project: Project,
   options: CorrelationTestOptions = {},
 ): AdjustedCorrelationTest[] {
+  const family = testableCharacterPairs(project);
   const cap = Math.max(0, Math.floor(options.maxPairs ?? MAX_TESTED_PAIRS));
-  const ordered = [...testableCharacterPairs(project)].sort(
-    (x, y) => y.score - x.score || pairKey(x.a, x.b).localeCompare(pairKey(y.a, y.b)),
-  );
+  // Cap on the CANONICAL pair key — deterministic, data-independent. Two runs
+  // on the same document test the same subset, whatever the scores say.
+  const ordered = [...family].sort((x, y) => pairKey(x.a, x.b).localeCompare(pairKey(y.a, y.b)));
+  const capped = ordered.length > cap;
   const tests: CorrelationTest[] = [];
-  for (const { a, b } of ordered.slice(0, cap)) {
+  for (const { a, b } of capped ? ordered.slice(0, cap) : ordered) {
     const t = correlationPermutationTest(project, a, b, options);
-    if (t) tests.push(t);
+    if (t) {
+      t.familyTotal = family.length;
+      t.familySelection = capped ? 'stable-key' : 'all';
+      tests.push(t);
+    }
   }
   return holmAdjustFamily(tests).sort(
     (x, y) =>

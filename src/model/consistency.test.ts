@@ -586,7 +586,10 @@ describe('consistency categories — all five exist and can fire', () => {
     // tree gains state 2 exactly twice (clades L2 and R2), in exactly one report.
     expect(hom).toHaveLength(1);
     expect(hom[0].message).toMatch(/状态 2/);
-    expect(hom[0].message).toMatch(/独立出现约 2 次/);
+    // Review rework: the wording follows the character's model. X is plain
+    // unordered, so the count is stated exactly ("约" was reserved for the
+    // irreversible-model message) and no irreversibility caveat is raised.
+    expect(hom[0].message).toMatch(/独立出现 2 次/);
     expect(hom[0].severity).toBe('info'); // a homoplasy hint, not an error
   });
 

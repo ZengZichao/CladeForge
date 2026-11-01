@@ -11,6 +11,7 @@
 import { tr } from '../ui/strings';
 import { notify } from '../ui/toast';
 import {
+  APP_VERSION,
   DEFAULT_CANVAS,
   DEFAULT_LAYOUT,
   DEFAULT_RECON_COSTS,
@@ -59,6 +60,15 @@ const KNOWN_PROJECT_KEYS: readonly string[] = [
   'calibrationPoints',
   'geneTrees',
   'reconCosts',
+  'reconOptions',
+  'customEventTypes',
+  'analysisResults',
+  'provenance',
+  'sourcePath',
+  'savedAt',
+  'savedRevision',
+  'modifiedAt',
+  'appVersion',
   'sampleId',
 ];
 
@@ -66,25 +76,40 @@ export function serializeProject(project: Project): string {
   // The envelope repeats the document's own version instead of stamping this
   // build's: a file that was opened "with best effort" from a newer schema must
   // not come back claiming a version it was never validated against.
+  // `appVersion` is stamped on a COPY (which build wrote this file) — the
+  // minimal provenance a reproducibility checklist asks for.
+  const stamped: Project = { ...project, appVersion: APP_VERSION };
   const payload: ProjectFile = {
     app: 'CladeForge',
     version: project.version || PROJECT_VERSION,
-    project,
+    project: stamped,
   };
   return JSON.stringify(payload, null, 2);
 }
 
 // --- version migration -------------------------------------------------------
 // Each migration upgrades a raw project object from one schema version to the
-// next. `0.1.0` is the initial schema, so the registry is empty today, but the
-// machinery is in place so future schema changes have an explicit, ordered
-// upgrade path instead of silently overwriting the version field.
+// next. The registry is seeded with the 0.1.0 → 0.2.0 step (new optional
+// fields: support kind/scale metadata, node-age intervals, annotations,
+// hypothesis-layer bodies, analysis results, provenance, save-path memory —
+// all of which backfill cleanly), so future schema changes have an explicit,
+// ordered upgrade path instead of silently overwriting the version field.
 type RawProject = Record<string, unknown>;
 interface Migration {
   to: string;
   run: (raw: RawProject) => RawProject;
 }
-const MIGRATIONS: Record<string, Migration> = {};
+const MIGRATIONS: Record<string, Migration> = {
+  '0.1.0': {
+    to: '0.2.0',
+    run: (raw) => {
+      // Everything 0.2.0 adds is optional with a backfill default, so the
+      // migration only stamps the new schema version; the backfill pass below
+      // fills the rest and reports anything it had to invent.
+      return { ...raw };
+    },
+  },
+};
 
 function migrate(raw: RawProject, fromVersion: string): { raw: RawProject; notes: string[] } {
   const notes: string[] = [];
@@ -248,7 +273,15 @@ function finalizeProject(
   }
 
   const { project, issues } = validateProject(backfilled);
-  pruneLayerStore(project);
+  const pruned = pruneLayerStore(project);
+  if (pruned.changed) {
+    issues.push(
+      tr(
+        `载入时清理了失效的假说层数据：${pruned.states} 条状态记录、${pruned.meta} 条证据记录、${pruned.notes} 条注释、${pruned.events} 个事件（对应已不存在的节点）`,
+        `Pruned stale hypothesis-layer data on load: ${pruned.states} state record(s), ${pruned.meta} evidence record(s), ${pruned.notes} note(s), ${pruned.events} event(s) (nodes no longer exist)`,
+      ),
+    );
+  }
 
   // An embedded gene-tree document is a whole Project that the DTL solver, the
   // layout and the exporters all walk recursively. Validating only the outer

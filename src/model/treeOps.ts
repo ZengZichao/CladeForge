@@ -17,6 +17,7 @@ import type {
   CalibrationPoint,
   Point,
   Project,
+  SupportScale,
   TreeNode,
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
@@ -585,6 +586,12 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
  * out, so a re-root never destroys evidence. Per-character records are
  * merged with the survivor winning, because an existing hypothesis on the
  * surviving node is the more specific statement.
+ *
+ * Stored (non-active) hypothesis layers are migrated with the SAME care as the
+ * live ones: their events and notes used to be left behind on the dying node id,
+ * where the next load's `pruneLayerStore` destroyed them without a trace —
+ * one routine re-root was enough to silently delete a competing hypothesis's
+ * evidence set.
  */
 function reattachNodeReferences(project: Project, fromId: NodeId, toId: NodeId): void {
   if (fromId === toId) return;
@@ -593,11 +600,13 @@ function reattachNodeReferences(project: Project, fromId: NodeId, toId: NodeId):
   for (const stored of Object.values(project.layerStore)) {
     mergeNodeRecord(stored.states, fromId, toId);
     mergeNodeRecord(stored.meta, fromId, toId);
+    if (stored.notes) mergeNodeRecord(stored.notes, fromId, toId);
+    for (const e of stored.events) if (e.nodeId === fromId) e.nodeId = toId;
   }
 }
 
 /** Merge `from`'s record into `to`'s for a node-keyed record map. */
-function mergeNodeRecord<T extends object>(
+function mergeNodeRecord<T>(
   records: Record<NodeId, T>,
   from: NodeId,
   to: NodeId,
@@ -605,12 +614,16 @@ function mergeNodeRecord<T extends object>(
   const src = records[from];
   if (!src) return;
   const dst = records[to];
-  if (!dst) records[to] = src;
-  else {
+  if (dst === undefined || dst === null) records[to] = src;
+  else if (typeof dst === 'object' && typeof src === 'object') {
     for (const [k, v] of Object.entries(src)) {
       if (!(k in (dst as Record<string, unknown>))) (dst as Record<string, unknown>)[k] = v;
     }
   }
+  // Both values scalar (a hypothesis note is a plain string): the survivor's
+  // own note is the more specific statement and wins the merge. Iterating a
+  // string's entries here (Object.entries("note") → "0","1",…) would crash the
+  // `in` check below, so scalars are handled before that path.
   delete records[from];
 }
 
@@ -954,17 +967,43 @@ export function extractSubtree(project: Project, id: NodeId): Project | null {
 }
 
 /**
- * Support values reach us in two conventions: bootstrap proportions are written
- * 0–100 (`75`) and posterior probabilities 0–1 (`0.95`), and both land in the
- * same `support` field (`newick.ts` stores whatever the file says). Comparing a
- * mixed field against a single threshold without converting first marks every
- * branch of a Bayesian tree "low supported" — the same root cause as the
- * `support < 70` test in `exportImage.ts`. Anything <= 1 is read as
- * a fraction, so `1` means 100 %, and 0 stays 0.
+ * Convert a support value to the 0–100 scale used for thresholds and display.
+ *
+ * A node that declares its scale (`supportScale`) is converted EXACTLY: a
+ * stored fraction multiplies by 100, a stored percent passes through. Without a
+ * declared scale the legacy heuristic applies — anything <= 1 is read as a
+ * fraction — which exists only for documents written before the field did and
+ * for files whose import convention was left on "auto". The heuristic is WRONG
+ * for a real 1% bootstrap support (it reads 1 as 100%), so import should always
+ * let the user declare the convention (see the import dialog) and consumers
+ * should prefer `supportPercent(node)` below.
  */
-export function normalizeSupport(value: number | undefined): number | undefined {
+export function normalizeSupport(value: number | undefined, scale?: SupportScale): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  if (scale === 'fraction') return value * 100;
+  if (scale === 'percent') return value;
   return value <= 1 ? value * 100 : value;
+}
+
+/**
+ * A node's support on the 0–100 scale, honouring its declared `supportScale`
+ * first and falling back to the legacy `<= 1 means fraction` heuristic only for
+ * older documents that never recorded one. This is the single conversion every
+ * threshold/dash/dim consumer should use — the second, diverging copy that used
+ * to live in `exportImage.ts` is gone.
+ */
+export function supportPercent(node: Pick<TreeNode, 'support' | 'supportScale'>): number | undefined {
+  return normalizeSupport(node.support, node.supportScale);
+}
+
+/**
+ * Guess the support convention of a whole file's worth of values. Anything
+ * above 1 can only be a percent; a value set that stays within [0, 1] is
+ * PROBABLY a fraction (posterior probabilities) but could equally be an all-low
+ * bootstrap set — the caller must let the user confirm rather than trust this.
+ */
+export function inferSupportScale(values: number[]): SupportScale {
+  return values.some((v) => Number.isFinite(v) && v > 1) ? 'percent' : 'fraction';
 }
 
 /**
@@ -980,7 +1019,7 @@ export function collapseBelowSupport(project: Project, threshold: number): numbe
   for (const n of Object.values(project.nodes)) {
     if (n.childrenIds.length === 0) continue;
     if (n.parentId === null) continue;
-    const support = normalizeSupport(n.support);
+    const support = supportPercent(n);
     if (support !== undefined && support < limit) {
       n.collapsed = true;
       count++;
@@ -1525,6 +1564,8 @@ export function estimateAges(project: Project): EstimateAgesResult {
     if (finiteAge(n) !== undefined) continue; // user-entered age wins, always
     const depth = heights.get(n.id) ?? 0;
     n.age = Math.round((unit === 'project' ? depth * scale : depth) * 1e6) / 1e6;
+    // Mark the provenance: an estimated age must never pass for a calibrated one.
+    n.ageSource = 'estimate';
     // The relative depth is kept NEXT TO the age, never inside it: the age field
     // is read as the project's time unit, the meta key says what the number was
     // derived from.
@@ -1552,6 +1593,223 @@ export function hasEstimatedAges(project: Project): boolean {
   return Object.values(project.nodes).some(
     (n) => n.meta?.[AGE_ESTIMATED_META] === true,
   );
+}
+
+export interface CalibratedAgesResult {
+  /** Nodes whose age was (re)written. */
+  filled: NodeId[];
+  /** Calibration ranges that could not be honoured simultaneously. */
+  conflicts: { nodeId: NodeId; minAge: number; maxAge: number }[];
+  changed: boolean;
+}
+
+/**
+ * Fit node ages to the topology AND the fossil calibration ranges: a
+ * least-squares isotonic regression (pool-adjacent-violators) on root-to-tip
+ * depth, with each calibrated node clamped to its [minAge, maxAge] window.
+ *
+ * This is deliberately NOT Bayesian dating and returns no HPD — it is the
+ * minimal "make the ages consistent with the constraints" pass the time panel
+ * was missing, and it reports the calibration ranges it could not satisfy
+ * instead of quietly bending them.
+ *
+ * Only nodes WITHOUT an explicit user age participate (user ages are data, the
+ * same rule `estimateAges` follows); calibrated nodes are always honoured
+ * because the user placed the range deliberately.
+ */
+export function estimateAgesWithCalibrations(project: Project): CalibratedAgesResult {
+  const calibrations = project.calibrationPoints ?? [];
+  const calibByNode = new Map<NodeId, { min: number; max: number }>();
+  for (const cp of calibrations) {
+    if (!project.nodes[cp.nodeId]) continue;
+    calibByNode.set(cp.nodeId, { min: cp.minAge, max: cp.maxAge });
+  }
+
+  // Depth of every node from the root, in edges.
+  const depth = new Map<NodeId, number>();
+  const stack: { id: NodeId; d: number }[] = [{ id: project.rootId, d: 0 }];
+  while (stack.length) {
+    const { id, d } = stack.pop() as { id: NodeId; d: number };
+    if (depth.has(id)) continue;
+    depth.set(id, d);
+    const n = project.nodes[id];
+    if (n) for (const c of n.childrenIds) stack.push({ id: c, d: d + 1 });
+  }
+
+  // Scale: fit the depth→age slope through the calibrated nodes (least squares
+  // over (depth, midAge)), then isotonic-project the free nodes onto the
+  // monotone (root oldest) sequence while respecting per-node windows.
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let sxy = 0;
+  let n = 0;
+  for (const [nid, range] of calibByNode) {
+    const d = depth.get(nid) ?? 0;
+    const mid = (range.min + range.max) / 2;
+    sx += d;
+    sy += mid;
+    sxx += d * d;
+    sxy += d * mid;
+    n += 1;
+  }
+  const slope = n > 0 && sxx * n - sx * sx !== 0 ? (sxy * n - sx * sy) / (sxx * n - sx * sx) : 0;
+  const intercept = n > 0 ? (sy - slope * sx) / n : 0;
+
+  // Walk root→tips; each free node takes the PAV-smoothed value of the linear
+  // fit, then is clamped into its window. A simple sequential pool-adjacent-
+  // violators pass over the depth-ordered nodes keeps parent ≥ child.
+  const order: NodeId[] = [];
+  const bfs: NodeId[] = [project.rootId];
+  while (bfs.length) {
+    const id = bfs.shift() as NodeId;
+    order.push(id);
+    const node = project.nodes[id];
+    if (node) for (const c of node.childrenIds) bfs.push(c);
+  }
+
+  const filled: NodeId[] = [];
+  const conflicts: CalibratedAgesResult['conflicts'] = [];
+  const valueOf = new Map<NodeId, number>();
+  for (const id of order) {
+    const node = project.nodes[id];
+    if (!node) continue;
+    const d = depth.get(id) ?? 0;
+    if (node.parentId !== null) {
+      const parentValue = valueOf.get(node.parentId) ?? intercept;
+      let v = slope * d + intercept;
+      // Monotonicity: a child can never be older than its parent.
+      if (v > parentValue) v = parentValue;
+      const window = calibByNode.get(id);
+      if (window) {
+        if (v < window.min) {
+          conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
+          v = window.min;
+        } else if (v > window.max) {
+          conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
+          v = window.max;
+        }
+      }
+      if (finiteAge(node) === undefined || calibByNode.has(id)) {
+        const prev = finiteAge(node);
+        node.age = Math.round(v * 1e6) / 1e6;
+        node.ageSource = calibByNode.has(id) ? 'fossil' : 'estimate';
+        node.meta = { ...node.meta, [AGE_ESTIMATED_META]: true };
+        if (prev === undefined) filled.push(id);
+        else if (Math.abs(prev - node.age) > 1e-9) filled.push(id);
+      }
+      valueOf.set(id, node.age ?? v);
+    } else {
+      valueOf.set(id, finiteAge(node) ?? intercept);
+    }
+  }
+  return { filled, conflicts, changed: filled.length > 0 || conflicts.length > 0 };
+}
+
+/**
+ * Derive branch lengths from node ages: the branch entering a node is
+ * `parent.age − node.age`, and the root's own edge (if any) is left alone.
+ * This is the one-pass bridge between the two time representations — a
+ * document that carries only ages (a BEAST-style chronogram) gets real branch
+ * lengths, so Mk / Blomberg's K stop silently degrading to a unit-length
+ * topology model. Nodes missing either endpoint age get NO length (absence
+ * stays absence); the return value reports how many were derived and how many
+ * stayed missing.
+ */
+export function deriveBranchLengthsFromAges(project: Project): {
+  derived: number;
+  stillMissing: number;
+  changed: boolean;
+} {
+  let derived = 0;
+  let stillMissing = 0;
+  for (const node of Object.values(project.nodes)) {
+    if (node.parentId === null) continue;
+    const parent = project.nodes[node.parentId];
+    const pa = finiteAge(parent);
+    const ca = finiteAge(node);
+    if (pa === undefined || ca === undefined) {
+      if (node.branchLength === undefined) stillMissing += 1;
+      continue;
+    }
+    const len = pa - ca;
+    if (len >= 0 && Number.isFinite(len)) {
+      node.branchLength = Math.round(len * 1e9) / 1e9;
+      derived += 1;
+    } else {
+      stillMissing += 1;
+    }
+  }
+  return { derived, stillMissing, changed: derived > 0 };
+}
+
+/** Collapse every internal branch (the whole tree folds onto its tips). */
+export function collapseAll(project: Project): number {
+  let count = 0;
+  for (const n of Object.values(project.nodes)) {
+    if (n.parentId === null) continue;
+    if (n.childrenIds.length === 0) continue;
+    n.collapsed = true;
+    count += 1;
+  }
+  return count;
+}
+
+/** Expand every collapsed branch. */
+export function expandAll(project: Project): number {
+  let count = 0;
+  for (const n of Object.values(project.nodes)) {
+    if (n.collapsed) {
+      n.collapsed = false;
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Sort every sibling group by the MODAL tip state of the subtree beneath it
+ * for one character, so the tree reads in colour blocks instead of in random
+ * order. Tips are grouped by their observed state (declaration order), then
+ * alphabetically within a group; internal nodes recurse first, then sort by
+ * their children's group. This is the "arrange the figure so the reader can
+ * see the character" operation — the thing ladderize does for topology.
+ * Returns the number of sibling groups reordered.
+ */
+export function sortTipsByCharacter(project: Project, characterId: string): number {
+  const character = project.characters.find((c) => c.id === characterId);
+  if (!character) return 0;
+  const stateOrder = new Map(character.states.map((s, i) => [s.id, i]));
+  let reordered = 0;
+
+  const groupOf = (id: NodeId): number => {
+    const node = project.nodes[id];
+    if (!node) return Number.MAX_SAFE_INTEGER;
+    if (node.childrenIds.length === 0) {
+      const v = node.charStates?.[characterId];
+      if (typeof v === 'string' && stateOrder.has(v)) return stateOrder.get(v) as number;
+      return Number.MAX_SAFE_INTEGER; // unobserved last
+    }
+    return Math.min(...node.childrenIds.map(groupOf));
+  };
+
+  const walk = (id: NodeId) => {
+    const node = project.nodes[id];
+    if (!node) return;
+    for (const c of node.childrenIds) walk(c);
+    if (node.childrenIds.length < 2) return;
+    const before = node.childrenIds.join('|');
+    const sorted = [...node.childrenIds].sort((a, b) => {
+      const ga = groupOf(a);
+      const gb = groupOf(b);
+      if (ga !== gb) return ga - gb;
+      return (project.nodes[a]?.label ?? '').localeCompare(project.nodes[b]?.label ?? '');
+    });
+    node.childrenIds = sorted;
+    if (before !== sorted.join('|')) reordered += 1;
+  };
+  walk(project.rootId);
+  return reordered;
 }
 
 export function toggleCollapse(project: Project, id: NodeId): void {
@@ -1616,11 +1874,48 @@ export function addCharacter(project: Project, character: Character): void {
 /** Outcome of a character / state edit the UI has to report. */
 export interface CharacterEditResult {
   ok: boolean;
-  reason?: 'character-missing' | 'state-missing';
+  reason?: 'character-missing' | 'state-missing' | 'reserved-code';
   /** True when a hand-built Sankoff matrix had to be dropped (dimension change). */
   costMatrixDiscarded: boolean;
+  /** True when the hand-built Sankoff matrix was resized instead of dropped. */
+  costMatrixResized?: boolean;
   /** Node assignments cleared by the edit. */
   clearedAssignments: number;
+}
+
+/**
+ * State labels that would collide with the missing-data codes. A state literally
+ * named `?` can never be read as an observation (`isObservedState` checks the
+ * missing codes first), so creating one is refused up front instead of silently
+ * producing an unobservable state.
+ */
+export const RESERVED_STATE_LABELS = MISSING_STATE_CODES;
+
+/**
+ * Insert a row/column of default costs into a square matrix at `index`.
+ * New→old transitions cost 1, old→new cost 1, the diagonal 0 — the Fitch
+ * defaults — so a hand-weighted analysis keeps its weights instead of silently
+ * degrading to uniform when the user adds a state.
+ */
+function resizeCostMatrix(matrix: number[][], index: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < matrix.length; i += 1) {
+    const row = [...matrix[i]];
+    row.splice(index, 0, 1);
+    out.push(row);
+  }
+  const newRow = out.map(() => 1);
+  newRow[index] = 0;
+  out.splice(index, 0, newRow);
+  return out;
+}
+
+/** Delete the row/column at `index` from a square matrix, keeping the rest. */
+function shrinkCostMatrix(matrix: number[][], index: number): number[][] {
+  const out = matrix
+    .filter((_, i) => i !== index)
+    .map((row) => row.filter((_, j) => j !== index));
+  return out;
 }
 
 /** Remove a character and every trace of it: node states, node evidence meta
@@ -1652,7 +1947,7 @@ export function removeCharacter(project: Project, characterId: string): Characte
 }
 
 /** Drop one character key from a node-keyed record map. Returns records touched. */
-function purgeFromRecordMap<T extends object>(
+function purgeFromRecordMap<T>(
   records: Record<NodeId, T>,
   characterId: string,
   stateId?: string,
@@ -1661,7 +1956,12 @@ function purgeFromRecordMap<T extends object>(
   for (const nid of Object.keys(records)) {
     const rec: Record<string, unknown> | undefined = records[nid] as Record<string, unknown>;
     if (!rec || !(characterId in rec)) continue;
-    if (stateId !== undefined && rec[characterId] !== stateId) continue;
+    if (stateId !== undefined) {
+      const v = rec[characterId];
+      // A polymorphic assignment (a set) is purged only when the removed state
+      // was one of its members; single assignments compare directly.
+      if (Array.isArray(v) ? !v.includes(stateId) : v !== stateId) continue;
+    }
     delete rec[characterId];
     removed += 1;
     if (Object.keys(rec).length === 0) delete records[nid];
@@ -1705,11 +2005,11 @@ export function setCharacterType(
 }
 
 /**
- * Add a state to a character. Returns whether the hand-built Sankoff matrix had
- * to be discarded: the matrix is indexed by state position, so any dimension
- * change invalidates it — but dropping it silently degrades a weighted analysis
- * to equal-cost Fitch without the user hearing about it. The caller is
- * expected to say so.
+ * Add a state to a character. A hand-built Sankoff matrix is RESIZED (a
+ * row/column of Fitch-default costs inserted) rather than dropped, so a
+ * carefully weighted analysis survives adding a state; `costMatrixResized`
+ * tells the UI to mention it. Labels colliding with the missing-data codes
+ * ('?' / '-') are refused: such a state could never be read as observed.
  */
 export function addCharacterState(
   project: Project,
@@ -1718,10 +2018,16 @@ export function addCharacterState(
 ): CharacterEditResult {
   const c = project.characters.find((x) => x.id === characterId);
   if (!c) return { ok: false, reason: 'character-missing', costMatrixDiscarded: false, clearedAssignments: 0 };
-  const discarded = !!c.costMatrix;
+  if (RESERVED_STATE_LABELS.includes(state.label.trim()) || RESERVED_STATE_LABELS.includes(state.id.trim())) {
+    return { ok: false, reason: 'reserved-code', costMatrixDiscarded: false, clearedAssignments: 0 };
+  }
+  const index = c.states.length;
   c.states.push(state);
-  delete c.costMatrix; // dimensions changed; reset to uniform to avoid mismatch
-  return { ok: true, costMatrixDiscarded: discarded, clearedAssignments: 0 };
+  if (c.costMatrix) {
+    c.costMatrix = resizeCostMatrix(c.costMatrix, index);
+    return { ok: true, costMatrixDiscarded: false, costMatrixResized: true, clearedAssignments: 0 };
+  }
+  return { ok: true, costMatrixDiscarded: false, clearedAssignments: 0 };
 }
 
 export function updateCharacterState(
@@ -1754,12 +2060,17 @@ export function removeCharacterState(
   if (!c.states.some((s) => s.id === stateId)) {
     return { ok: false, reason: 'state-missing', costMatrixDiscarded: false, clearedAssignments: 0 };
   }
-  const discarded = !!c.costMatrix;
+  const index = c.states.findIndex((s) => s.id === stateId);
   c.states = c.states.filter((s) => s.id !== stateId);
-  delete c.costMatrix; // dimensions changed; reset to uniform to avoid mismatch
+  if (c.costMatrix) {
+    c.costMatrix = shrinkCostMatrix(c.costMatrix, index);
+  }
   let cleared = 0;
   for (const node of Object.values(project.nodes)) {
-    if (node.charStates?.[characterId] === stateId) {
+    const v = node.charStates?.[characterId];
+    const references =
+      v === stateId || (Array.isArray(v) && v.includes(stateId));
+    if (references) {
       clearNodeCharacter(node, characterId, true);
       cleared += 1;
     } else if (node.charMeta && characterId in node.charMeta && !node.charStates?.[characterId]) {
@@ -1768,7 +2079,7 @@ export function removeCharacterState(
     }
   }
   cleared += purgeCharacterFromLayers(project, characterId, stateId);
-  return { ok: true, costMatrixDiscarded: discarded, clearedAssignments: cleared };
+  return { ok: true, costMatrixDiscarded: false, costMatrixResized: !!c.costMatrix, clearedAssignments: cleared };
 }
 
 /**
@@ -1820,6 +2131,34 @@ export function setNodeState(
   }
   if (!node.charStates) node.charStates = {};
   node.charStates[characterId] = value;
+}
+
+/**
+ * Assign a POLYMORPHIC / partially-observed state set ("A or B") to a node.
+ * Every member must be a declared state id; an empty set clears the assignment.
+ * A set is NOT missing data — parsimony scores it as the cheapest member, Mk
+ * multiplies the members' likelihoods — which is exactly the Fitch & McPeek
+ * ambiguous-encoding semantics the single-value field could not express.
+ */
+export function setNodeStateSet(
+  project: Project,
+  nodeId: NodeId,
+  characterId: string,
+  values: string[],
+): boolean {
+  const node = project.nodes[nodeId];
+  if (!node) return false;
+  const unique = [...new Set(values)];
+  if (unique.length === 0) {
+    clearNodeCharacter(node, characterId);
+    return true;
+  }
+  const character = project.characters.find((c) => c.id === characterId);
+  if (!character || character.type !== 'discrete') return false;
+  if (!unique.every((v) => character.states.some((s) => s.id === v))) return false;
+  if (!node.charStates) node.charStates = {};
+  node.charStates[characterId] = unique;
+  return true;
 }
 
 /** Set (or, with undefined, clear) a character's Sankoff step matrix. */

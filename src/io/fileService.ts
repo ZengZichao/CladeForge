@@ -92,15 +92,29 @@ export async function saveText(
   content: string,
   filters: DialogFilter[],
 ): Promise<boolean> {
+  const r = await saveTextWithResult(defaultName, content, filters);
+  return r.ok;
+}
+
+/**
+ * Like `saveText`, but reports WHICH path was written so the caller can adopt
+ * it as the document's sourcePath (the Document ↔ File binding ⌘S needs).
+ * `ok === false` means the user cancelled.
+ */
+export async function saveTextWithResult(
+  defaultName: string,
+  content: string,
+  filters: DialogFilter[],
+): Promise<{ ok: boolean; path?: string }> {
   if (isTauri()) {
     const { save } = await import('@tauri-apps/plugin-dialog');
     const path = await save({ defaultPath: defaultName, filters });
-    if (!path) return false;
+    if (!path) return { ok: false };
     await writeTextFileNative(path, content);
-    return true;
+    return { ok: true, path };
   }
   downloadBlob(new Blob([content], { type: 'text/plain;charset=utf-8' }), defaultName);
-  return true;
+  return { ok: true };
 }
 
 export async function saveBinary(
