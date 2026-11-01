@@ -178,6 +178,10 @@ jobs:
           const ids = new Set(manifest.map((l) => l.split('\t').slice(0, 2).join(':')));
           const bad = agreement.filter((l) => {
             const [project, character] = l.split('\t');
+            // A '-' character marks a WHOLE-DOCUMENT leg (the Sankoff
+            // reproducibility check re-runs the entire project, not one
+            // character), so there is no manifest row to match by design.
+            if (character === '-') return false;
             return !ids.has(project + ':' + character);
           });
           if (bad.length) {
