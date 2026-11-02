@@ -94,6 +94,8 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
   // and are ignored by the Tauri webview.)
   return (
     <div className="toolbar" data-tauri-drag-region>
+      <UndoRedo />
+      <ViewModeSegment />
       {/* No "add children" in the reconciliation workspace: adding nodes to the
           species tree here would invalidate existing mappings silently, and the
           action reads as if it could edit the read-only gene tree. */}
@@ -102,8 +104,6 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
           <PlusIcon /> {S.toolbar.addChildren}
         </button>
       )}
-      <UndoRedo />
-      <ViewModeSegment />
       <div className="spacer" data-tauri-drag-region />
       <div className="hint project-name" data-tauri-drag-region>{projectName}</div>
       <button

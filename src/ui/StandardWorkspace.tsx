@@ -158,7 +158,6 @@ function BottomTabBar({ active, onSelect }: { active: NavModule; onSelect: (m: N
     { id: 'style', label: S.nav.style },
     { id: 'traits', label: S.nav.traits },
     { id: 'layers', label: S.nav.layers },
-    { id: 'recon', label: S.nav.recon },
     { id: 'time', label: S.nav.time },
     { id: 'analysis', label: S.nav.analysis },
     { id: 'export', label: S.nav.export },
@@ -312,9 +311,8 @@ function LeftPanelContent({
   onCopySpeciesTree: () => void;
   onEditGeneTree: (id: string) => void;
 }) {
-  // One-shot guard for the PM-13 recon handoff: entering the workspace swaps
-  // the whole tree, so the flag resets with this component.
-  const reconEnterRequested = useRef(false);
+  // One-shot guard for the removed standard-rail reconciliation entry is gone:
+  // the workspace switch in the toolbar is the only way in now.
   switch (module) {
     case 'traits':
       return (
@@ -336,16 +334,6 @@ function LeftPanelContent({
           <LayerPanel />
         </>
       );
-    case 'recon':
-      // PM-13: the standard rail's 协同重建 entry now ENTERS the reconciliation
-      // workspace — one mode, one layout. The legacy stacked ReconPanel was a
-      // second, diverging face of the same feature and is retired from this
-      // surface (the workspace's own rail renders the four-section panel).
-      if (!reconEnterRequested.current) {
-        reconEnterRequested.current = true;
-        useStore.getState().enterReconWorkspace();
-      }
-      return null;
     case 'time':
       // TimePanel renders its own header.
       return <TimePanel />;
