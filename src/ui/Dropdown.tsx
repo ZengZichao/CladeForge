@@ -26,6 +26,8 @@ interface PanelPos {
   top: number;
   left: number;
   minWidth: number;
+  maxWidth: number;
+  maxHeight: number;
 }
 
 export function Dropdown({ label, items }: { label: string; items: DropdownItem[] }) {
@@ -55,7 +57,20 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left, minWidth: Math.max(r.width, 170) });
+      const edge = 8;
+      const minWidth = Math.min(Math.max(r.width, 170), window.innerWidth - edge * 2);
+      const maxWidth = window.innerWidth - edge * 2;
+      // Keep the menu inside the viewport and let it scroll internally: the
+      // long File menu used to run past the bottom edge of the window.
+      const left = Math.max(edge, Math.min(r.left, window.innerWidth - minWidth - edge));
+      const top = Math.max(edge, Math.min(r.bottom + 4, window.innerHeight - edge));
+      setPos({
+        top,
+        left,
+        minWidth,
+        maxWidth,
+        maxHeight: Math.max(80, window.innerHeight - top - edge),
+      });
     }
     setOpen((o) => !o);
   };
@@ -72,7 +87,16 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
           <div
             className="dropdown-panel"
             role="menu"
-            style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth }}
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              minWidth: pos.minWidth,
+              maxWidth: pos.maxWidth,
+              maxHeight: pos.maxHeight,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             {items.map((it, i) =>

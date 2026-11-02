@@ -5,7 +5,7 @@
 // spaghetti must be testable without rendering anything.
 
 import { describe, it, expect } from 'vitest';
-import { collectMappingLines, eventToken, scopePasses, eventFilterPasses, bridgeCurve, bundleTotals, type PaneView } from './reconMapping';
+import { collectMappingLines, eventToken, scopePasses, eventFilterPasses, bridgeLine, bundleTotals, type PaneView } from './reconMapping';
 import { computeLayout } from '../layout/autoLayout';
 import { createEmptyProject } from '../model/sampleTree';
 import { addChildren } from '../model/treeOps';
@@ -198,11 +198,17 @@ describe('collectMappingLines', () => {
     // y = pane.top + layoutY * scale + ty
     expect(lines[0].from.y).toBeGreaterThan(0);
     expect(lines[0].to.y).toBeGreaterThan(0);
-    expect(bridgeCurve(lines[0].from, lines[0].to)).toMatch(/^M /);
+    expect(bridgeLine(lines[0].from, lines[0].to)).toMatch(/^M [^ ]+ [^ ]+ L [^ ]+ [^ ]+$/);
   });
 });
 
 describe('event tokens and small predicates', () => {
+  it('bridge paths are straight segments, never curves', () => {
+    const d = bridgeLine({ x: 10, y: 20 }, { x: 310, y: 120 });
+    expect(d).toBe('M 10 20 L 310 120');
+    expect(d).not.toContain('C');
+  });
+
   it('event tokens map to the four colour classes', () => {
     expect(eventToken('speciation')).toBe('sigma');
     expect(eventToken('duplication')).toBe('dup');

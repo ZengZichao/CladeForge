@@ -63,4 +63,30 @@ describe('requested layout fixes', () => {
     expect(defaultTabbar).not.toContain('80px');
     expect(css).toMatch(/\.app\.macos-titlebar \.tabbar\s*\{[^}]*padding-left:\s*80px/s);
   });
+
+  it('faces the reconciliation trees towards each other with straight mapping lines', () => {
+    const view = source('../canvas/ReconciliationView.tsx');
+    expect(view).toContain("horizontalCladogram(project, 'LR')");
+    expect(view).toContain("horizontalCladogram(entry.doc, 'RL')");
+    const mapping = source('../canvas/reconMapping.ts');
+    expect(mapping).toContain('export function bridgeLine');
+    expect(mapping).not.toContain('bridgeCurve');
+    expect(source('../canvas/ReconMappingLayer.tsx')).toContain('bridgeLine(l.from, l.to)');
+  });
+
+  it('uses one-column equal-width reconciliation action stacks', () => {
+    const panel = source('ReconPanel.tsx');
+    expect(panel.match(/className="recon-action-stack"/g)?.length).toBe(2);
+    expect(panel).toContain('className="recon-cost-numbers"');
+    expect(css).toMatch(/\.recon-action-stack\s*\{[^}]*flex-direction:\s*column/s);
+    expect(css).toMatch(/\.recon-action-stack \.btn\s*\{[^}]*width:\s*100%/s);
+    expect(css).toMatch(/\.recon-cost-numbers \.field\s*\{[^}]*grid-template-columns/s);
+  });
+
+  it('keeps dropdown menus inside the viewport with internal scrolling', () => {
+    const dropdown = source('Dropdown.tsx');
+    expect(dropdown).toContain('maxHeight');
+    expect(dropdown).toContain("overflowY: 'auto'");
+    expect(source('MenuBar.tsx')).toContain('maxHeight');
+  });
 });

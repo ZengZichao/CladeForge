@@ -56,6 +56,7 @@ session's row below. The list above remains valid for the 2026-10-08 session.
 
 | Release / snapshot | Date | Files created or materially refactored with AI assistance | Tool + version | Scope of assistance | Reviewer |
 |---|---|---|---|---|---|
+| Unreleased working tree — reconciliation face-to-face + UI cleanup session, 2026-11-02 (changes left uncommitted) | 2026-11-02 | `src/canvas/ReconPane.tsx`; `src/canvas/ReconciliationView.tsx`; `src/canvas/reconMapping.ts`; `src/canvas/reconMapping.test.ts`; `src/canvas/ReconMappingLayer.tsx`; `src/canvas/reconPaneGeometry.test.ts` (new); `src/ui/ReconPanel.tsx`; `src/ui/Dropdown.tsx`; `src/ui/MenuBar.tsx`; `src/styles/app.css`; `src/ui/layoutFixes.test.ts`; `docs/AI_PROVENANCE.md` | Qoder (Qoder Desktop), agent model not exposed by the runtime; version UNKNOWN — author to supply | Six user-reported defects plus repository hygiene: (1) the reconciliation gene pane is laid out RL so the species and gene trees face each other; (2) mapping bridge lines are straight segments and use the measured SVG-box origin, so their endpoints coincide with the per-node guide stubs instead of running curves ~6 px off the branches; (3) the scenario "current gene tree" action buttons, (4) the DTL cost number rows, and (5) the gene-tree tab action buttons now use one-column equal-width stacks / a fixed number-control column; (6) the File and Help dropdowns are clamped to the viewport with internal scrolling instead of running past the window edge. Removed ignored build/cache artifacts (`.DS_Store`, `.mimosa`, `dist`, `CladeForge.app`, `src-tauri/gen`, `src-tauri/target`, Vite's dependency cache). `tsc --noEmit` clean; full test suite passes; production build succeeds; live-browser geometry checks confirm zero curved bridge paths and exact stub/path endpoint matches. | **Pending review** — Zichao Zeng (corresponding author) |
 | Unreleased working tree — review-repair session (four review reports), 2026-11-01 (changes left uncommitted) | 2026-11-01 | `src/model/*` (types, treeOps, layers, parsimony, asr, stats, consistency, dtl, geneTrees, consensus, treeDistance*new*); `src/io/*` (newick, nexus, limits, projectIO, fileActions, fileService, exportImage, scriptExport, tableIO*new*, nexml*new*, clipboardIO*new*); `src/layout/*` (autoLayout, timescale); `src/canvas/*` (NodeView, useDrag, TreeCanvas, EdgeView, AsrPieLayer, TimeAxis); `src/ui/*` (strings, App, ErrorBoundary*new*, ExportSettingsDialog*new*, AnalysisDialog, LayerPanel, LayoutPanel, TimePanel, ReconPanel, ContextMenu, Dropdown, fileMenu, MenuBar, PreferencesMenu, ShortcutsDialog, AboutDialog, EventEditor, CommandPalette, StandardWorkspace); `src/main.tsx`; `vite.config.ts`; `src-tauri/*` (tauri.conf.json, Cargo.toml, lib.rs); `docs/*` (FORMAT*new*, GLOSSARY*new*, MANUAL_EN/ZH, AI_PROVENANCE); `CHANGELOG.md`*new*; `.github/workflows/ci.yml`; `SECURITY.md`; tests (layers.test, asr.test, independentReference.test, dtl.test, nexus.test, scientificInvariants.test*new*, exportStructure.test*new*, shortcutReference.test*new*); `scripts/cross-check/fixtures/ape-agreement.tsv` (regenerated) | ZCode (ZCode Desktop), agent model reported by the runtime as `GLM-5.3-Flash` | Implements the review-repair task list derived from the four review documents: data-model semantics (support kind/scale, age intervals, polymorphic states, annotations, provenance, hypothesis-layer bodies, analysis results), the B1 layer-migration fix, the B2 support-scale fix, ML rate for Mk, the B13 family fix, DTL polytomy resolution + reroot + presets, RF distances, NEXUS matrix read-back, CSV/TSV + clipboard channels, NeXML export, export settings (DPI/scale bar/dashed unmeasured/collapsed badges), ErrorBoundary + dirty flags + save-in-place, keyboard/marquee/hit-floor canvas work, terminology unification, docs (FORMAT/GLOSSARY/CHANGELOG) and CI gates. Verified: R cross-check re-run locally (ape + phangorn available; 8/8 step-count and 14/14 R-script Sankoff legs agreed; agreement fixture regenerated against current sample ids). NOT verified: `vitest`/`tsc`/`cargo` were unavailable in the repair environment, so the suite was not executed there — the CI job is the gate. | **Pending review** — Zichao Zeng (corresponding author) |
 | `v0.1.0` (tag → `b5482d5`; tree committed in `6c4d313`) | 2026-09-29 | The whole released tree: all 153 `src/**/*.ts(x)` files (44,005 lines), `src-tauri/src/lib.rs` + `src-tauri/src/main.rs` (1,082 lines), `src-tauri/tauri.conf.json`, `docs/MANUAL_EN.md`, `docs/MANUAL_ZH.md`, `README.md`, `README_ZH.md`, `CONTRIBUTING.md`, `CONTRIBUTING_ZH.md`, `scripts/` | **UNKNOWN — author to supply** (see [tool versions](#tool-names-and-versions-what-could-and-could-not-be-established)) | **Not attributed per file.** `CONTRIBUTING.md` §"Use of generative AI" records repo-wide that AI assistants were used for (1) code writing, modification and refactoring and (2) language polishing of documentation. No per-file marker existed, and the entire tree entered history as one commit, so file-level attribution cannot be recovered from the repository. | Zichao Zeng (corresponding author) — repo-wide review, recorded in `CONTRIBUTING.md` |
 | `main` after the tag, up to `577ce38` (not tagged; not pushed at the time of this record) | 2026-09-29 → 2026-09-30 | Per commit: `4873442` → `README.md`, `README_ZH.md`, `docs/MANUAL_EN.md`, `docs/MANUAL_ZH.md`, `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/*`, `package.json`, `scripts/bench_tips.mjs`; `b5482d5` → `src-tauri/src/lib.rs`, `src/io/native.test.ts`; `577ce38` → `CITATION.cff` (new), `README.md`, `README_ZH.md` | **UNKNOWN — author to supply** | **Not attributed per file.** Same repo-wide statement as above; these commits were hand-checked and are covered by the test suite and CI. The commit-message style (conventional commit plus a rationale body) is consistent with AI-drafted prose, but that is inference, not a record, so it is not claimed here. | Zichao Zeng (corresponding author) |
@@ -233,6 +234,38 @@ ai_provenance:
       gene tree opens the empty state instead of toasting; deleting the last gene
       tree stays in the workspace; standard view structure and behaviour preserved
       (extraction only).
+    reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+  - release: "unreleased working tree (reconciliation face-to-face + UI cleanup session)"
+    date: "2026-11-02"
+    tool: "Qoder (Qoder Desktop)"
+    tool_version: "UNKNOWN - author to supply (model not exposed by the runtime)"
+    marker_in_files: true
+    files:
+      - "src/canvas/ReconPane.tsx"
+      - "src/canvas/ReconciliationView.tsx"
+      - "src/canvas/reconMapping.ts"
+      - "src/canvas/reconMapping.test.ts"
+      - "src/canvas/ReconMappingLayer.tsx"
+      - "src/canvas/reconPaneGeometry.test.ts"
+      - "src/ui/ReconPanel.tsx"
+      - "src/ui/Dropdown.tsx"
+      - "src/ui/MenuBar.tsx"
+      - "src/styles/app.css"
+      - "src/ui/layoutFixes.test.ts"
+      - "docs/AI_PROVENANCE.md"
+    scope: >
+      six user-reported defects plus repository hygiene: gene pane laid out RL so
+      the two trees face each other; mapping bridge painted as straight segments
+      against the measured SVG origin (endpoints coincide with the guide stubs);
+      equal-width one-column action stacks in the scenario/gene-tree panel
+      sections; fixed number-control column for the DTL costs; dropdown menus
+      clamped to the viewport with internal scrolling. Removed ignored
+      build/cache artifacts from the working tree. Adds geometry tests for the
+      mirrored pane and source guards for the bridge/action-stack/menu rules.
+    behaviour_changed: >
+      reconciliation view only: gene tree mirrored, mapping lines straight and
+      precisely aligned; left-panel controls aligned; menus scroll instead of
+      overflowing the window. Standard workspace and inference logic untouched.
     reviewer: "pending - Zichao Zeng (corresponding author) before committing"
 ```
 
