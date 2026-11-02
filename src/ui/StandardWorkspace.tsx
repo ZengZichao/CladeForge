@@ -34,6 +34,7 @@ import { ContextMenu, type ContextTarget } from './ContextMenu';
 import { WINDOW_BREAKPOINTS } from '../canvas/ReconWorkspace';
 import { S, tr } from './strings';
 import { NavigationRail, type NavModule } from './NavigationRail';
+import { LS_NAV_MODULE, readNavModule } from './navModule';
 
 // --- side-panel resizing -----------------------------------------------------
 const LS_LEFT_WIDTH = 'cladeforge:leftWidth';
@@ -48,7 +49,6 @@ const MAX_PANEL_WIDTH = 620;
 // into the narrow form (review PM-14). The recon workspace reads the same
 // ladder, so the two modes can no longer disagree at any window width.
 const NARROW_THRESHOLD = WINDOW_BREAKPOINTS.narrow;
-const LS_NAV_MODULE = 'cladeforge:navModule';
 
 /**
  * Clamp a side-panel width. The ceiling is also bounded by the WINDOW: two panels
@@ -69,20 +69,6 @@ function readPanelWidth(key: string, fallback: number): number {
   } catch {
     return fallback;
   }
-}
-
-function readNavModule(): NavModule {
-  try {
-    const v = localStorage.getItem(LS_NAV_MODULE);
-    if (
-      v === 'traits' || v === 'layers' || v === 'recon' || v === 'time' ||
-      v === 'style' || v === 'analysis' || v === 'export'
-    ) return v;
-    // `hypothesis` is an accepted alias for the layers module, so a stored key
-    // carrying it opens layers rather than falling back to the default.
-    if (v === 'hypothesis') return 'layers';
-  } catch { /* ignore */ }
-  return 'traits';
 }
 
 /**
