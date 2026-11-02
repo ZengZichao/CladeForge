@@ -53,7 +53,7 @@ interface ReconPaneProps {
   transform: PaneTransform;
   /** Commit a new transform; `userAction` marks manual pan/zoom (drops fit). */
   onTransform: (t: PaneTransform, userAction: boolean) => void;
-  onSizeChange: (w: number, h: number) => void;
+  onSizeChange: (w: number, h: number, svgTop: number) => void;
   /** Fit this pane's tree into the given svg box. */
   onFit: () => void;
   onResetZoom: () => void;
@@ -76,8 +76,8 @@ interface ReconPaneProps {
   side: 'species' | 'gene';
 }
 
-/** World-space pane edge x that the stubs run to (right edge for both panes'
- *  stub computation happens caller-side; here it is simply the svg width). */
+/** World-space pane edge x that the stubs run to: the species pane's right
+ *  edge or the gene pane's left edge (the two panes face each other). */
 function stubEdgeX(transform: PaneTransform, boxW: number, fromLeft: boolean): number {
   return fromLeft ? (0 - transform.tx) / transform.scale : (boxW - transform.tx) / transform.scale;
 }
@@ -86,10 +86,17 @@ function stubEdgeX(transform: PaneTransform, boxW: number, fromLeft: boolean): n
  * World bounding box of the pane content INCLUDING the chrome this view draws:
  * labels (mirroring the two text rules below), event glyphs, loss markers and
  * a margin for selection rings — so Fit never tucks a λ badge or a glyph under
- * the header or the pane edge.
+ * the header or the pane edge. The gene pane is mirrored (trees face each
+ * other), so its labels sit on the opposite side of each node.
  */
-export function reconPaneBounds(doc: Project, layout: LayoutResult, options: ReconViewOptions): Box {
+export function reconPaneBounds(
+  doc: Project,
+  layout: LayoutResult,
+  options: ReconViewOptions,
+  side: 'species' | 'gene' = 'species',
+): Box {
   const box: Box = { ...layout.bounds };
+  const mirrored = side === 'gene';
   let touched = false;
   for (const id of layout.visible) {
     const node = doc.nodes[id];
@@ -100,8 +107,12 @@ export function reconPaneBounds(doc: Project, layout: LayoutResult, options: Rec
       const tip = node.childrenIds.length === 0;
       const fontSize = tip ? 11.5 : 10.5;
       const w = estimateLabelWidth(node.label, fontSize) * 1.05;
-      const x0 = tip ? p.x + 9 : p.x - 10.5 - w;
-      const x1 = tip ? p.x + 9 + w : p.x - 10.5;
+      const x0 = tip
+        ? (mirrored ? p.x - 9 - w : p.x + 9)
+        : (mirrored ? p.x + 10.5 : p.x - 10.5 - w);
+      const x1 = tip
+        ? (mirrored ? p.x - 9 : p.x + 9 + w)
+        : (mirrored ? p.x + 10.5 + w : p.x - 10.5);
       const y0 = p.y + 4 - fontSize;
       const y1 = p.y + 4 + fontSize * 0.35;
       box.minX = Math.min(box.minX, x0);
@@ -197,19 +208,25 @@ export function ReconPane({
   // callback identity may change across renders, but a report only fires when
   // the measured size ACTUALLY changed — otherwise the parent's setState would
   // re-render this pane, re-run this effect, and loop forever.
-  const lastSize = useRef<{ w: number; h: number } | null>(null);
+  const lastSize = useRef<{ w: number; h: number; top: number } | null>(null);
   const reportSize = useRef(onSizeChange);
   reportSize.current = onSizeChange;
   useEffect(() => {
     const el = svgBoxRef.current;
     if (!el) return;
     const report = () => {
+      const host = hostRef.current;
       const w = el.clientWidth;
       const h = el.clientHeight;
+      // The svg box starts under the pane header; report its offset so the
+      // bridge lines use the same origin as the nodes (the header may wrap).
+      const top = host
+        ? Math.round((el.getBoundingClientRect().top - host.getBoundingClientRect().top) * 10) / 10
+        : 0;
       const last = lastSize.current;
-      if (last && last.w === w && last.h === h) return;
-      lastSize.current = { w, h };
-      reportSize.current(w, h);
+      if (last && last.w === w && last.h === h && last.top === top) return;
+      lastSize.current = { w, h, top };
+      reportSize.current(w, h, top);
     };
     report();
     const ro = new ResizeObserver(report);
@@ -264,6 +281,10 @@ export function ReconPane({
   const hideInternalLabels = options.showLabels && transform.scale * 10.5 < 8;
   const hideTipLabels = options.showLabels && transform.scale * 11.5 < 7;
   const boxW = hostRef.current?.clientWidth ?? 0;
+  // The two panes face each other: the species tree grows rightwards and the
+  // gene tree is mirrored, so labels and mapping stubs swap sides too.
+  const mirrored = side === 'gene';
+  const branchOrientation = mirrored ? ('RL' as const) : ('LR' as const);
 
   return (
     <div className={`recon-pane recon-pane--${side ?? 'gene'}`} ref={hostRef} role="group" aria-label={ariaLabel}>
@@ -318,7 +339,7 @@ export function ReconPane({
                 return (
                   <path
                     key={`e${id}`}
-                    d={elbowPath(from, to, 'LR')}
+                    d={elbowPath(from, to, branchOrientation)}
                     fill="none"
                     stroke="var(--recon-branch)"
                     strokeWidth={1.4}
@@ -332,7 +353,7 @@ export function ReconPane({
               stubs?.map((stub) => {
                 const p = layout.positions.get(stub.nodeId);
                 if (!p) return null;
-                const edgeX = stubEdgeX(transform, boxW, false);
+                const edgeX = stubEdgeX(transform, boxW, mirrored);
                 return (
                   <line
                     key={`s${stub.nodeId}`}
@@ -435,8 +456,9 @@ export function ReconPane({
                   )}
                   {showTipLabel && (
                     <text
-                      x={p.x + 9}
+                      x={mirrored ? p.x - 9 : p.x + 9}
                       y={p.y + 4}
+                      textAnchor={mirrored ? 'end' : 'start'}
                       fontSize={11.5}
                       fill="currentColor"
                       style={{ pointerEvents: 'none' }}
@@ -446,9 +468,9 @@ export function ReconPane({
                   )}
                   {showInternalLabel && (
                     <text
-                      x={p.x - r - 4}
+                      x={mirrored ? p.x + r + 4 : p.x - r - 4}
                       y={p.y + 4}
-                      textAnchor="end"
+                      textAnchor={mirrored ? 'start' : 'end'}
                       fontSize={10.5}
                       opacity={0.65}
                       fill="currentColor"

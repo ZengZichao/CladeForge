@@ -26,6 +26,7 @@ import { notify } from '../ui/toast';
 import { isImeComposing } from '../ui/imeGuard';
 import {
   ReconPane,
+  RECON_HEADER_H,
   fitTransformFor,
   clampTransform,
   reconPaneBounds,
@@ -46,9 +47,10 @@ export const DTL_STYLE = {
 
 const IDENTITY: PaneTransform = { tx: 40, ty: 40, scale: 1 };
 
-/** Force predictable horizontal cladogram geometry inside this view. */
-function horizontalCladogram(doc: Project): Project {
-  return { ...doc, layout: { ...doc.layout, type: 'rectangular-cladogram', orientation: 'LR' } };
+/** Force predictable horizontal cladogram geometry inside this view. The two
+ *  panes face each other: species grows rightwards (LR), gene leftwards (RL). */
+function horizontalCladogram(doc: Project, orientation: 'LR' | 'RL'): Project {
+  return { ...doc, layout: { ...doc.layout, type: 'rectangular-cladogram', orientation } };
 }
 
 export function ReconciliationView({
@@ -78,27 +80,27 @@ export function ReconciliationView({
 
   // Layouts are computed ONCE here and shared by both panes + the mapping
   // layer (the old code computed each layout twice: pane + overlay).
-  const speciesLayout = useMemo(() => computeLayout(horizontalCladogram(project)), [project]);
+  const speciesLayout = useMemo(() => computeLayout(horizontalCladogram(project, 'LR')), [project]);
   const geneLayout = useMemo(
-    () => (entry ? computeLayout(horizontalCladogram(entry.doc)) : null),
+    () => (entry ? computeLayout(horizontalCladogram(entry.doc, 'RL')) : null),
     [entry],
   );
 
   // --- panes-row measurement (one ResizeObserver drives bridge + fit) --------
   const panesRef = useRef<HTMLDivElement | null>(null);
   const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
-  const [speciesBox, setSpeciesBox] = useState({ w: 0, h: 0 });
-  const [geneBox, setGeneBox] = useState({ w: 0, h: 0 });
+  const [speciesBox, setSpeciesBox] = useState({ w: 0, h: 0, top: RECON_HEADER_H });
+  const [geneBox, setGeneBox] = useState({ w: 0, h: 0, top: RECON_HEADER_H });
   const [bannerClosed, setBannerClosed] = useState(false);
 
   // STABLE size handlers: a fresh arrow here would re-render the panes forever
   // (their size-report effect keys off the callback), and the identity-
   // preserving setState keeps an unchanged measurement from dirtying anything.
-  const onSpeciesSize = useCallback((w: number, h: number) => {
-    setSpeciesBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+  const onSpeciesSize = useCallback((w: number, h: number, top: number) => {
+    setSpeciesBox((prev) => (prev.w === w && prev.h === h && prev.top === top ? prev : { w, h, top }));
   }, []);
-  const onGeneSize = useCallback((w: number, h: number) => {
-    setGeneBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+  const onGeneSize = useCallback((w: number, h: number, top: number) => {
+    setGeneBox((prev) => (prev.w === w && prev.h === h && prev.top === top ? prev : { w, h, top }));
   }, []);
 
   // Keyed on the entry id, NOT []: `.recon-panes` does not exist while the
@@ -129,12 +131,12 @@ export function ReconciliationView({
   const fitMode = useRef(true);
 
   const speciesPane: PaneView = useMemo(
-    () => ({ left: 0, top: 0, width: paneW, height: hostSize.h, transform: speciesT }),
-    [paneW, hostSize.h, speciesT],
+    () => ({ left: 0, top: speciesBox.top, width: paneW, height: Math.max(0, hostSize.h - speciesBox.top), transform: speciesT }),
+    [paneW, hostSize.h, speciesBox.top, speciesT],
   );
   const genePane: PaneView = useMemo(
-    () => ({ left: paneW + bridge, top: 0, width: paneW, height: hostSize.h, transform: geneT }),
-    [paneW, bridge, hostSize.h, geneT],
+    () => ({ left: paneW + bridge, top: geneBox.top, width: paneW, height: Math.max(0, hostSize.h - geneBox.top), transform: geneT }),
+    [paneW, bridge, hostSize.h, geneBox.top, geneT],
   );
 
   const setSpeciesT = useCallback((t: PaneTransform, userAction = false) => {
@@ -149,13 +151,13 @@ export function ReconciliationView({
   const fitBoth = useCallback(() => {
     fitMode.current = true;
     if (!speciesLayout) return;
-    const sb = reconPaneBounds(project, speciesLayout, options);
+    const sb = reconPaneBounds(project, speciesLayout, options, 'species');
     const s1 = fitTransformFor(sb, Math.max(1, speciesBox.w), Math.max(1, speciesBox.h));
     let sScale = s1.scale;
     let sT = s1;
     let gT: PaneTransform | null = null;
     if (geneLayout && entry) {
-      const gb = reconPaneBounds(entry.doc, geneLayout, options);
+      const gb = reconPaneBounds(entry.doc, geneLayout, options, 'gene');
       const f2 = fitTransformFor(gb, Math.max(1, geneBox.w), Math.max(1, geneBox.h));
       if (options.syncZoom) {
         // Shared scale = the SMALLER of the two fits, so neither side overflows.
@@ -178,8 +180,8 @@ export function ReconciliationView({
       const cy = (bounds.minY + bounds.maxY) / 2;
       return { scale: 1, tx: box.w / 2 - cx, ty: box.h / 2 - cy };
     };
-    setSpeciesTState(reset(reconPaneBounds(project, speciesLayout, options), speciesBox));
-    if (entry && geneLayout) setGeneTState(reset(reconPaneBounds(entry.doc, geneLayout, options), geneBox));
+    setSpeciesTState(reset(reconPaneBounds(project, speciesLayout, options, 'species'), speciesBox));
+    if (entry && geneLayout) setGeneTState(reset(reconPaneBounds(entry.doc, geneLayout, options, 'gene'), geneBox));
   }, [project, entry, speciesLayout, geneLayout, options, speciesBox, geneBox]);
 
   // Sync zoom: a manual zoom on one pane mirrors its SCALE to the other (pan
@@ -237,9 +239,9 @@ export function ReconciliationView({
       const t = requestAnimationFrame(() => fitBoth());
       return () => cancelAnimationFrame(t);
     }
-    setSpeciesTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(project, speciesLayout, options), speciesBox.w, speciesBox.h));
+    setSpeciesTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(project, speciesLayout, options, 'species'), speciesBox.w, speciesBox.h));
     if (entry && geneLayout) {
-      setGeneTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(entry.doc, geneLayout, options), geneBox.w, geneBox.h));
+      setGeneTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(entry.doc, geneLayout, options, 'gene'), geneBox.w, geneBox.h));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostSize.w, hostSize.h, speciesBox.w, speciesBox.h, geneBox.w, geneBox.h]);

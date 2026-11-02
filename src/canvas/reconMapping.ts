@@ -98,10 +98,10 @@ export function eventFilterPasses(
   return event === filter;
 }
 
-/** Cubic bridge curve between two host points (horizontal in, horizontal out). */
-export function bridgeCurve(from: { x: number; y: number }, to: { x: number; y: number }): string {
-  const mid = (from.x + to.x) / 2;
-  return `M ${from.x} ${from.y} C ${mid} ${from.y}, ${mid} ${to.x}, ${to.x} ${to.y}`;
+/** Straight bridge segment between two host points: a mapping must read as a
+ *  direct correspondence, not a decorative curve. */
+export function bridgeLine(from: { x: number; y: number }, to: { x: number; y: number }): string {
+  return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
 }
 
 /**

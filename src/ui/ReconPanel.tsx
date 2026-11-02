@@ -343,15 +343,13 @@ export function ReconPanel({
             ))}
           </div>
 
-          <div className="field row-actions">
+          <div className="recon-action-stack">
             <button className="btn primary" onClick={onBuildGeneTree}>
               <PlusIcon /> {S.recon.buildGeneTree}
             </button>
             <button className="btn" onClick={onCopySpeciesTree}>
               {S.recon.copySpeciesTree}
             </button>
-          </div>
-          <div className="field row-actions">
             <button className="btn" onClick={() => void file.actionImportGeneTree()}>
               {S.recon.importFile}
             </button>
@@ -362,22 +360,26 @@ export function ReconPanel({
             >
               {S.recon.loadReconSample}
             </button>
+            {tabOptions.length > 0 && (
+              <>
+                <select
+                  className="recon-action-select"
+                  value={tabChoice}
+                  onChange={(e) => setTabChoice(e.target.value)}
+                >
+                  <option value="">{S.recon.importTab}</option>
+                  {tabOptions.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn" disabled={!tabChoice} onClick={importFromTab}>
+                  {S.recon.importTab}
+                </button>
+              </>
+            )}
           </div>
-          {tabOptions.length > 0 && (
-            <div className="field row-actions">
-              <select value={tabChoice} onChange={(e) => setTabChoice(e.target.value)}>
-                <option value="">{S.recon.importTab}</option>
-                {tabOptions.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <button className="btn" disabled={!tabChoice} onClick={importFromTab}>
-                {S.recon.importTab}
-              </button>
-            </div>
-          )}
         </Section>
       )}
 
@@ -401,71 +403,69 @@ export function ReconPanel({
               </span>
             </div>
 
-            <div className="field row-actions-spread" style={{ marginTop: 8 }}>
-              <div className="actions-group">
-                <button className="btn" onClick={() => onEditGeneTree(activeEntry.id)}>
-                  {S.recon.editTopology}
-                </button>
-                <button className="btn primary" onClick={runLcaSuggestion}>
-                  {S.recon.suggestLca}
-                </button>
-                <button
-                  className="btn"
-                  title={tr('把每处多歧枝随机二叉化为多次求解（报告计数散布）', 'Randomly binary-resolve each polytomy across replicates (reports the count spread)')}
-                  onClick={() => {
-                    // Polytomies are resolved by RANDOM binary splits across
-                    // replicates; the spread of the event counts IS the
-                    // uncertainty, so the panel reports it instead of refusing
-                    // the input. The resolved copy is solver-side only — the
-                    // document keeps the honest multifurcating tree.
-                    const { doc, resolved } = resolvePolytomiesRandom(activeEntry.doc);
-                    const r = solveDtlWithPolytomies(project, activeEntry.doc, costs, undefined, {}, 8);
-                    if (r.error || !r.scenario) {
-                      notify.info(r.error ?? tr('求解失败', 'Solver failed'));
-                      setDp(null);
-                      return;
-                    }
-                    setDp({ geneId: activeEntry.id, scenario: r.scenario });
-                    if (resolved > 0 && r.polytomySummary) {
-                      const c = r.polytomySummary.counts;
-                      notify.info(
-                        tr(
-                          `${resolved} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
-                          `${resolved} polytom${resolved === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
-                        ),
-                      );
-                    }
-                    void doc;
-                  }}
-                >
-                  {S.recon.dpRun}
-                </button>
-                <button
-                  className="btn"
-                  title={tr('以选中的基因节点为新根（DTL 结果对根位高度敏感）', 'Re-root on the selected gene node (DTL counts are highly root-sensitive)')}
-                  onClick={() => {
-                    const nodeId = useStore.getState().geneSelection[0];
-                    if (!nodeId) {
-                      notify.info(tr('请先在基因树面板选中一个节点', 'Select a node in the gene pane first'));
-                      return;
-                    }
-                    let ok = false;
-                    apply((d) => {
-                      ok = rerootGeneTree(d, activeEntry.id, nodeId, 0.5);
-                    });
+            <div className="recon-action-stack" style={{ marginTop: 8 }}>
+              <button className="btn" onClick={() => onEditGeneTree(activeEntry.id)}>
+                {S.recon.editTopology}
+              </button>
+              <button className="btn primary" onClick={runLcaSuggestion}>
+                {S.recon.suggestLca}
+              </button>
+              <button
+                className="btn"
+                title={tr('把每处多歧枝随机二叉化为多次求解（报告计数散布）', 'Randomly binary-resolve each polytomy across replicates (reports the count spread)')}
+                onClick={() => {
+                  // Polytomies are resolved by RANDOM binary splits across
+                  // replicates; the spread of the event counts IS the
+                  // uncertainty, so the panel reports it instead of refusing
+                  // the input. The resolved copy is solver-side only — the
+                  // document keeps the honest multifurcating tree.
+                  const { doc, resolved } = resolvePolytomiesRandom(activeEntry.doc);
+                  const r = solveDtlWithPolytomies(project, activeEntry.doc, costs, undefined, {}, 8);
+                  if (r.error || !r.scenario) {
+                    notify.info(r.error ?? tr('求解失败', 'Solver failed'));
+                    setDp(null);
+                    return;
+                  }
+                  setDp({ geneId: activeEntry.id, scenario: r.scenario });
+                  if (resolved > 0 && r.polytomySummary) {
+                    const c = r.polytomySummary.counts;
                     notify.info(
-                      ok
-                        ? tr('基因树已重新定根：映射按节点 id 保留，请重新校验场景', 'Gene tree re-rooted: mappings were kept by node id — re-validate the scenario')
-                        : tr('无法重新定根（目标无效）', 'Cannot re-root (invalid target)'),
+                      tr(
+                        `${resolved} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
+                        `${resolved} polytom${resolved === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
+                      ),
                     );
-                  }}
-                >
-                  {tr('重新定根（选中节点）', 'Re-root (selected node)')}
-                </button>
-                <button className="btn" onClick={clearAll}>
-                  <TrashIcon /> {S.recon.clearAssumptions}
-                </button>
-              </div>
+                  }
+                  void doc;
+                }}
+              >
+                {S.recon.dpRun}
+              </button>
+              <button
+                className="btn"
+                title={tr('以选中的基因节点为新根（DTL 结果对根位高度敏感）', 'Re-root on the selected gene node (DTL counts are highly root-sensitive)')}
+                onClick={() => {
+                  const nodeId = useStore.getState().geneSelection[0];
+                  if (!nodeId) {
+                    notify.info(tr('请先在基因树面板选中一个节点', 'Select a node in the gene pane first'));
+                    return;
+                  }
+                  let ok = false;
+                  apply((d) => {
+                    ok = rerootGeneTree(d, activeEntry.id, nodeId, 0.5);
+                  });
+                  notify.info(
+                    ok
+                      ? tr('基因树已重新定根：映射按节点 id 保留，请重新校验场景', 'Gene tree re-rooted: mappings were kept by node id — re-validate the scenario')
+                      : tr('无法重新定根（目标无效）', 'Cannot re-root (invalid target)'),
+                  );
+                }}
+              >
+                {tr('重新定根（选中节点）', 'Re-root (selected node)')}
+              </button>
+              <button className="btn" onClick={clearAll}>
+                <TrashIcon /> {S.recon.clearAssumptions}
+              </button>
             </div>
 
             {dp && dp.geneId === activeEntry.id && (
@@ -681,30 +681,32 @@ export function ReconPanel({
       {/* ---- 代价设置（场景节底部，默认折叠） ---- */}
       {(showScenario || !activeEntry) && (
         <Section title={S.recon.costs} defaultOpen={false} pinable>
-          <Field label={S.recon.costDup}>
-            <NumberField
-              value={costs.dup}
-              min={0}
-              step={1}
-              onCommit={(v) => v !== undefined && commitCosts({ dup: v })}
-            />
-          </Field>
-          <Field label={S.recon.costTransfer}>
-            <NumberField
-              value={costs.transfer}
-              min={0}
-              step={1}
-              onCommit={(v) => v !== undefined && commitCosts({ transfer: v })}
-            />
-          </Field>
-          <Field label={S.recon.costLoss}>
-            <NumberField
-              value={costs.loss}
-              min={0}
-              step={1}
-              onCommit={(v) => v !== undefined && commitCosts({ loss: v })}
-            />
-          </Field>
+          <div className="recon-cost-numbers">
+            <Field label={S.recon.costDup}>
+              <NumberField
+                value={costs.dup}
+                min={0}
+                step={1}
+                onCommit={(v) => v !== undefined && commitCosts({ dup: v })}
+              />
+            </Field>
+            <Field label={S.recon.costTransfer}>
+              <NumberField
+                value={costs.transfer}
+                min={0}
+                step={1}
+                onCommit={(v) => v !== undefined && commitCosts({ transfer: v })}
+              />
+            </Field>
+            <Field label={S.recon.costLoss}>
+              <NumberField
+                value={costs.loss}
+                min={0}
+                step={1}
+                onCommit={(v) => v !== undefined && commitCosts({ loss: v })}
+              />
+            </Field>
+          </div>
           <Field label={tr('代价预设', 'Cost presets')}>
             <select
               value=""

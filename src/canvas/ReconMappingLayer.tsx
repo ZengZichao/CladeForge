@@ -11,7 +11,7 @@
 // a mid-line label so the correspondence is readable.
 
 import { useMemo } from 'react';
-import { bridgeCurve, type ReconMappingLine } from './reconMapping';
+import { bridgeLine, type ReconMappingLine } from './reconMapping';
 import { S, tr } from '../ui/strings';
 
 export function tokenLabel(token: ReconMappingLine['token']): string {
@@ -60,7 +60,7 @@ export function ReconMappingLayer({ lines, width, height, showSelectedLabels }: 
         {lines.map((l) => (
           <path
             key={l.id}
-            d={bridgeCurve(l.from, l.to)}
+            d={bridgeLine(l.from, l.to)}
             fill="none"
             stroke={`var(--recon-map-${l.token})`}
             strokeWidth={l.state === 'selected' ? 2.4 : l.state === 'hovered' ? 2 : 1.3}

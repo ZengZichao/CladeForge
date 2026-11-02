@@ -25,6 +25,7 @@ interface PanelPos {
   top: number;
   left: number;
   width: number;
+  maxHeight: number;
 }
 
 /**
@@ -65,13 +66,17 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
+      const edge = 8;
       // Clamp to the viewport: below 640px the menubar itself is narrow and the
-      // panel must not push the document wider than the screen.
-      const width = Math.min(280, window.innerWidth - 16);
+      // panel must not push the document wider than the screen. The height cap
+      // keeps a tall help menu inside the window instead of running off-screen.
+      const width = Math.min(280, window.innerWidth - edge * 2);
+      const top = Math.max(edge, r.bottom + 4);
       setPos({
-        top: r.bottom + 4,
-        left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+        top,
+        left: Math.max(edge, Math.min(r.left, window.innerWidth - width - edge)),
         width,
+        maxHeight: Math.max(80, window.innerHeight - top - edge),
       });
     }
     setOpen((o) => !o);
@@ -99,7 +104,15 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
             className="dropdown-panel help-panel"
             role="menu"
             aria-label={S.menu.helpGroup}
-            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             {items.map((it, i) =>
