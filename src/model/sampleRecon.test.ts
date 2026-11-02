@@ -13,6 +13,8 @@ import {
   createSampleProject,
 } from './sampleTree';
 import { validateScenario, scenarioSummary, mapTipsByLabel } from './reconciliation';
+import { DEFAULT_RECON_VIEW_OPTIONS } from './types';
+import { collectMappingLines } from '../canvas/reconMapping';
 import { computeLayout } from '../layout/autoLayout';
 
 const reconDescriptor = () => SAMPLE_PROJECTS.find((d) => d.id === 'recon-family');
@@ -80,6 +82,54 @@ describe('the reconciliation sample document', () => {
     for (const [gid, a] of Object.entries(alpha.assumptions)) {
       expect(alpha.doc.nodes[gid], gid).toBeTruthy();
       expect(project.nodes[a.speciesNode], a.speciesNode).toBeTruthy();
+    }
+  });
+
+  it('every α gene tip lands on the species tip with the same label', () => {
+    const alpha = (project.geneTrees ?? []).find((g) => g.name.includes('α'))!;
+    const { mappings } = mapTipsByLabel(project, alpha.doc);
+    for (const tip of Object.values(alpha.doc.nodes)) {
+      if (tip.childrenIds.length > 0 || !tip.label) continue;
+      // An explicit assumption overrides label matching in the mapping view;
+      // a demo assumption must never redirect Taxon_F onto Taxon_E.
+      const placed = alpha.assumptions[tip.id]?.speciesNode ?? mappings[tip.id];
+      expect(placed, tip.label).toBeTruthy();
+      expect(project.nodes[placed!]?.label, tip.label).toBe(tip.label);
+    }
+  });
+
+  it('renders one bridge line per α tip, each pairing the same labels', () => {
+    const alpha = (project.geneTrees ?? []).find((g) => g.name.includes('α'))!;
+    const { mappings } = mapTipsByLabel(project, alpha.doc);
+    const assumptions = { ...alpha.assumptions };
+    for (const [gid, target] of Object.entries(mappings)) {
+      if (target && !assumptions[gid]) assumptions[gid] = { speciesNode: target };
+    }
+    const speciesLayout = computeLayout({
+      ...project,
+      layout: { ...project.layout, type: 'rectangular-cladogram', orientation: 'LR' },
+    });
+    const geneLayout = computeLayout({
+      ...alpha.doc,
+      layout: { ...alpha.doc.layout, type: 'rectangular-cladogram', orientation: 'RL' },
+    });
+    const pane = { left: 0, top: 0, width: 400, height: 300, transform: { tx: 0, ty: 0, scale: 1 } };
+    const lines = collectMappingLines({
+      speciesDoc: project,
+      geneDoc: alpha.doc,
+      assumptions,
+      speciesLayout,
+      geneLayout,
+      speciesPane: pane,
+      genePane: { ...pane, left: 496 },
+      options: DEFAULT_RECON_VIEW_OPTIONS,
+      selectedGeneIds: [],
+      hoveredGeneId: null,
+    });
+    const tipLines = lines.filter((l) => alpha.doc.nodes[l.geneNodeId].childrenIds.length === 0);
+    expect(tipLines).toHaveLength(6);
+    for (const line of tipLines) {
+      expect(project.nodes[line.speciesNodeId].label).toBe(alpha.doc.nodes[line.geneNodeId].label);
     }
   });
 
