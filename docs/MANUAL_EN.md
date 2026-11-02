@@ -117,7 +117,7 @@ Organised into three groups:
 
 | Group | Modules | Purpose |
 |-------|---------|---------|
-| **Content** | Traits · Hypotheses · Reconcile · Time | Define characters, manage hypothesis layers, run DTL reconciliation, and configure time calibration |
+| **Content** | Traits · Hypotheses · Time | Define characters, manage hypothesis layers, and configure time calibration |
 | **View** | Style | Global layout and styling |
 | **Output** | Analysis · Export | Inference assistants and file export |
 
@@ -713,7 +713,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | ⌘? / ⌘/ | Shortcut reference |
 | ⌘= / ⌘- | Zoom in / out |
 | ⌘. | Collapse / expand side panels |
-| ⌘1 … ⌘7 | Jump to module 1–7 |
+| ⌘1 … ⌘6 | Jump to module 1–6 |
 
 ### Canvas
 

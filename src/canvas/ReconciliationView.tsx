@@ -467,7 +467,7 @@ export function ReconciliationView({
         <div className="recon-empty-card">
           <div className="recon-empty-title">{S.recon.emptyReconTitle}</div>
           <div className="hint">{S.recon.emptyReconHint}</div>
-          <div className="field row-actions">
+          <div className="recon-empty-actions">
             <button className="btn primary" onClick={onBuildGeneTree}>
               {S.recon.emptyBuild}
             </button>
@@ -477,17 +477,12 @@ export function ReconciliationView({
             <button className="btn" onClick={() => void file.actionImportGeneTree()}>
               {S.recon.emptyImport}
             </button>
-          </div>
-          <div className="field row-actions">
             <button
               className="btn"
               title={S.recon.loadReconSampleTitle}
               onClick={() => openSample(SAMPLE_PROJECTS.find((d) => d.id === 'recon-family')!)}
             >
               {S.recon.loadReconSample}
-            </button>
-            <button className="btn" onClick={() => setReconMode(false)}>
-              {S.recon.exitView}
             </button>
           </div>
         </div>

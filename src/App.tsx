@@ -16,7 +16,7 @@ import type { Project } from './model/types';
 import { requestConfirm } from './ui/confirmDialog';
 import * as file from './io/fileActions';
 import { registerMultiTreeHandler, registerExportSettingsHandler } from './io/fileActions';
-import { getAppInfo } from './io/native';
+import { getAppInfo, isTauri } from './io/native';
 import { readAutoSave, readWorkspace, writeWorkspace } from './io/projectIO';
 import { isImeComposing } from './ui/imeGuard';
 import { MenuBar } from './ui/MenuBar';
@@ -157,6 +157,9 @@ export function App() {
   // The workspace switch reads `reconMode` (and nothing else): the toolbar's
   // active segment and the rendered workspace can never disagree.
   const reconMode = useStore((s) => s.reconMode);
+  // Only macOS Tauri overlays the traffic lights on the webview; every other
+  // platform must not reserve the 80 px title-bar gutter.
+  const macosTitlebar = isTauri() && /Mac/i.test(navigator.userAgent);
   const [addOpen, setAddOpen] = useState(false);
   const [addTarget, setAddTarget] = useState<string | null>(null);
   const [matrixOpen, setMatrixOpen] = useState(false);
@@ -291,12 +294,12 @@ export function App() {
           .filter((n) => n.childrenIds.length === 0)
           .map((n) => n.id);
         s.selectMany(tips);
-      } else if (k >= '1' && k <= '7' && !e.altKey && !e.shiftKey) {
-        // ⌘1–7 jump the left rail to the corresponding module — the rail is
+      } else if (k >= '1' && k <= '6' && !e.altKey && !e.shiftKey) {
+        // ⌘1–6 jump the left rail to the corresponding module — the rail is
         // fully keyboard-reachable through these, which the reference table
         // used to promise for nothing.
         e.preventDefault();
-        const modules = ['traits', 'layers', 'recon', 'time', 'style', 'analysis', 'export'];
+        const modules = ['traits', 'layers', 'time', 'style', 'analysis', 'export'];
         const target = modules[Number(k) - 1];
         if (target) {
           window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: target }));
@@ -431,7 +434,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="app" key={lang}>
+    <div className={`app${macosTitlebar ? ' macos-titlebar' : ''}`} key={lang}>
       <TabBar />
       <div className="header-bar" data-tauri-drag-region>
         <MenuBar

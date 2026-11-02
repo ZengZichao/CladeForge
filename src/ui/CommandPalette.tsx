@@ -193,15 +193,14 @@ export function CommandPalette({
       { id: 'exHyp', label: S.cmd.exportHypothesis, category: tr('文件','File'), icon: <DownloadIcon />, aliases: ['hypothesis', 'json', 'export'], run: () => void file.actionExportHypothesisJSON() },
       { id: 'exRScript', label: S.exportItems.rScript, category: tr('文件','File'), icon: <DownloadIcon />, aliases: ['r', 'script', 'reproducible', 'reproducib', 'export'], run: () => void file.actionExportRScript() },
       // --- 编辑 ---
-      // Module jumps — the rail is reachable by keyboard only through ⌘1–7 and
+      // Module jumps — the rail is reachable by keyboard only through ⌘1–6 and
       // through these; the palette used to have no NavModule reference at all.
       { id: 'navTraits', label: S.review.cmdFocusModule(S.nav.traits), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘1', aliases: ['traits', 'module', 'xingzhuang'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'traits' })) },
       { id: 'navLayers', label: S.review.cmdFocusModule(S.nav.layers), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘2', aliases: ['layers', 'hypotheses', 'jiashuo'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'layers' })) },
-      { id: 'navRecon', label: S.review.cmdFocusModule(S.nav.recon), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘3', aliases: ['recon', 'xietong'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'recon' })) },
-      { id: 'navTime', label: S.review.cmdFocusModule(S.nav.time), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘4', aliases: ['time', 'shijian'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'time' })) },
-      { id: 'navStyle', label: S.review.cmdFocusModule(S.nav.style), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘5', aliases: ['style', 'yangshi'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'style' })) },
-      { id: 'navAnalysis', label: S.review.cmdFocusModule(S.nav.analysis), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘6', aliases: ['analysis', 'fenxi'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'analysis' })) },
-      { id: 'navExport', label: S.review.cmdFocusModule(S.nav.export), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘7', aliases: ['export', 'daochu'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'export' })) },
+      { id: 'navTime', label: S.review.cmdFocusModule(S.nav.time), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘3', aliases: ['time', 'shijian'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'time' })) },
+      { id: 'navStyle', label: S.review.cmdFocusModule(S.nav.style), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘4', aliases: ['style', 'yangshi'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'style' })) },
+      { id: 'navAnalysis', label: S.review.cmdFocusModule(S.nav.analysis), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘5', aliases: ['analysis', 'fenxi'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'analysis' })) },
+      { id: 'navExport', label: S.review.cmdFocusModule(S.nav.export), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘6', aliases: ['export', 'daochu'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'export' })) },
       { id: 'undo', label: S.cmd.undo, category: tr('编辑','Edit'), icon: <ResetIcon />, kbd: '⌘Z', aliases: ['undo', 'chexiao'], run: () => st().undo() },
       { id: 'redo', label: S.cmd.redo, category: tr('编辑','Edit'), icon: <ReloadIcon />, kbd: '⌘⇧Z', aliases: ['redo', 'chongzuo'], run: () => st().redo() },
       // --- 视图 ---

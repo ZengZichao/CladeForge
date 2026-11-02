@@ -214,15 +214,14 @@ body {
 }
 
 /* === Tab Bar === */
-/* On macOS with titleBarStyle: Overlay, the traffic-light buttons (close /
-   minimise / maximise) are overlaid on the webview content. The tab bar needs
-   left padding to avoid overlapping them (~80px), and acts as a window drag
-   region via data-tauri-drag-region so the user can still move the window. */
+/* macOS Tauri overlays the traffic-light buttons (close / minimise / maximise)
+   on the webview; only that combination reserves the 80 px gutter. Windows,
+   Linux and the browser build start the tabs at the normal 8 px padding. */
 .tabbar {
   display: flex;
   align-items: stretch;
   gap: 6px;
-  padding: 5px 8px 5px 80px; /* 80px left for traffic lights */
+  padding: 5px 8px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   overflow: hidden; /* tabs shrink to fit instead of scrolling (no bar) */
@@ -230,6 +229,9 @@ body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-app-region: drag; /* tab bar empty space can drag the window */
+}
+.app.macos-titlebar .tabbar {
+  padding-left: 80px;
 }
 .tab {
   display: flex;
@@ -4096,9 +4098,15 @@ input.has-error {
   font-weight: 700;
   margin-bottom: 6px;
 }
-.recon-empty-card .field.row-actions {
-  justify-content: center;
+.recon-empty-card .recon-empty-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin: 14px 0 0;
+}
+.recon-empty-card .recon-empty-actions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* Sample card badge: marks the reconciliation demo before the click */
@@ -4306,7 +4314,7 @@ input.has-error {
   color: var(--on-accent);
 }
 
-/* Narrow-screen bottom module bar: 7 modules scroll horizontally ---------- */
+/* Narrow-screen bottom module bar: 6 modules scroll horizontally ---------- */
 .bottom-tab-bar {
   overflow-x: auto;
   scrollbar-width: thin;

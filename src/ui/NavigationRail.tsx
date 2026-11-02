@@ -6,7 +6,7 @@
 // The single-member 展示 group is gone: a group with one button is not a
 // group, so 样式 closes the rail as part of 内容's trailing edge:
 //
-//   内容  性状 traits · 假说 layers · 协同重建 recon · 时间 time · 样式 style
+//   内容  性状 traits · 假说 layers · 时间 time · 样式 style
 //   推理  分析 analysis
 //   输出  导出 export
 
@@ -17,11 +17,10 @@ import {
   LayersIcon,
   Component1Icon,
   ClockIcon,
-  ShuffleIcon,
 } from '@radix-ui/react-icons';
 import { S, tr } from './strings';
 
-export type NavModule = 'traits' | 'layers' | 'recon' | 'time' | 'style' | 'analysis' | 'export';
+export type NavModule = 'traits' | 'layers' | 'time' | 'style' | 'analysis' | 'export';
 
 interface RailItem {
   id: NavModule;
@@ -34,7 +33,6 @@ function getGroupContent(): RailItem[] {
   return [
     { id: 'traits', icon: <Component1Icon />, label: S.nav.traits, hint: S.nav.traitsHint },
     { id: 'layers', icon: <LayersIcon />, label: S.nav.layers, hint: S.nav.layersHint },
-    { id: 'recon', icon: <ShuffleIcon />, label: S.nav.recon, hint: S.nav.reconHint },
     { id: 'time', icon: <ClockIcon />, label: S.nav.time, hint: S.nav.timeHint },
     { id: 'style', icon: <MixerHorizontalIcon />, label: S.nav.style, hint: S.nav.styleHint },
   ];

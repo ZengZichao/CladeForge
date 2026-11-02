@@ -49,7 +49,7 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
       { keys: '⌘? / ⌘/', label: tr('快捷键速查', 'Shortcut reference') },
       { keys: '⌘= / ⌘-', label: tr('放大 / 缩小', 'Zoom in / out') },
       { keys: '⌘.', label: tr('收起 / 展开左右面板', 'Collapse / expand side panels') },
-      { keys: '⌘1 … ⌘7', label: S.review.shortcutCmdNum('1–7') },
+      { keys: '⌘1 … ⌘6', label: S.review.shortcutCmdNum('1–6') },
     ],
   },
   {
