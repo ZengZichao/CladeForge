@@ -75,8 +75,8 @@ export function checkConsensusInputs(projects: Project[]): ConsensusInputCheck {
     if (unlabelled > 0) {
       issues.push(
         tr(
-          `第 ${i + 1} 棵树有 ${unlabelled} 个未命名尖端；共识树按标签比对分类单元，必须先全部命名`,
-          `tree ${i + 1} has ${unlabelled} unnamed tip(s); consensus matches taxa by label, so every tip must be named`,
+          `第 ${i + 1} 棵树有 ${unlabelled} 个未命名末端；共识树按标签比对分类单元，必须先全部命名`,
+          `tree ${i + 1} has ${unlabelled} unnamed tip${unlabelled === 1 ? '' : 's'}; consensus matches taxa by label, so every tip must be named`,
         ),
       );
     }
@@ -84,8 +84,8 @@ export function checkConsensusInputs(projects: Project[]): ConsensusInputCheck {
     if (dupes.length > 0) {
       issues.push(
         tr(
-          `第 ${i + 1} 棵树存在重复尖端标签（${dupes.slice(0, 3).join('、')}）`,
-          `tree ${i + 1} has repeated tip label(s) (${dupes.slice(0, 3).join(', ')})`,
+          `第 ${i + 1} 棵树存在重复末端标签（${dupes.slice(0, 3).join('、')}）`,
+          `tree ${i + 1} has repeated tip label${dupes.length === 1 ? '' : 's'} (${dupes.slice(0, 3).join(', ')})`,
         ),
       );
     }
@@ -102,7 +102,7 @@ export function checkConsensusInputs(projects: Project[]): ConsensusInputCheck {
     if (missing.length > 0 || extra.length > 0) {
       issues.push(
         tr(
-          `第 ${i + 1} 棵树的尖端集与第 1 棵不同（缺少 ${missing.slice(0, 3).join('、') || '—'}；多出 ${extra.slice(0, 3).join('、') || '—'}）`,
+          `第 ${i + 1} 棵树的末端集与第 1 棵不同（缺少 ${missing.slice(0, 3).join('、') || '—'}；多出 ${extra.slice(0, 3).join('、') || '—'}）`,
           `tree ${i + 1} has a different tip set from tree 1 (missing ${missing.slice(0, 3).join(', ') || '—'}; extra ${extra.slice(0, 3).join(', ') || '—'})`,
         ),
       );

@@ -169,20 +169,21 @@ export function LayoutPanel() {
       {/* Support threshold — FUNCTIONAL: the canvas dims/dashes branches whose
           (scale-aware) support falls below the threshold, and the exporter
           applies the same rule, so the control is honest on both sides. */}
-      <Section title={tr('支持值阈值', 'Support threshold')} defaultOpen={false} pinable>
+      <Section title={tr('支持度阈值', 'Support threshold')} defaultOpen={false} pinable>
         <Field label={tr('阈值（0–100）', 'Threshold (0–100)')}>
           <SliderNumberField
             value={layout.supportThreshold ?? 70}
             min={0}
             max={100}
             step={1}
+            ariaLabel={tr('支持度阈值', 'Support threshold')}
             recipe={(v) => (d) => void (d.layout.supportThreshold = v)}
           />
         </Field>
         <div className="hint">
           {tr(
-            '低于阈值的枝以虚线、半透明显示；支持值的刻度（0–1 或 0–100）在导入时声明并随节点保存。',
-            'Branches below the threshold draw dashed and dimmed; the support scale (0–1 vs 0–100) is declared at import and stored per node.',
+            '低于阈值的枝以虚线、半透明显示。阈值按 0–100 比较：声明为后验概率（0–1）的值会先换算，bootstrap、SH-aLRT 与共识频率按 0–100 读取。',
+            'Branches below the threshold draw dashed and dimmed. The threshold is compared on a 0–100 scale: posterior probabilities (0–1) are converted first, while bootstrap, SH-aLRT and consensus-frequency values are read on 0–100.',
           )}
         </div>
       </Section>
@@ -213,20 +214,20 @@ export function LayoutPanel() {
             >
               <option value="linear">{tr('线性', 'Linear')}</option>
               <option value="sqrt">{tr('平方根', 'Square root')}</option>
-              <option value="log">{tr('对数 log10(1+t/t₀)', 'Log log10(1+t/t₀)')}</option>
+              <option value="log">{tr('对数：log10(1 + t/t₀)', 'Logarithmic: log10(1 + t/t₀)')}</option>
             </select>
           </Field>
           <div className="hint">
             {tr(
-              '深时数据用 sqrt/log：线性 4 Ga 轴把整个新生代压进不到 1% 的画幅。',
-              'Use sqrt/log for deep time: a linear 4 Ga axis squeezes the entire Cenozoic into under 1% of the figure.',
+              '深时数据用 sqrt/log：线性 4 Ga 轴把整个新生代压进约 1.5% 的画幅。',
+              'Use sqrt/log for deep time: a linear 4 Ga axis squeezes the entire Cenozoic into about 1.5% of the figure.',
             )}
           </div>
         </Section>
       )}
 
       {/* Bulk structure commands: collapse-all / expand-all / sort by state. */}
-      <Section title={tr('批量结构操作', 'Bulk structure')} defaultOpen={false} pinable>
+      <Section title={tr('批量结构操作', 'Bulk structure operations')} defaultOpen={false} pinable>
         <div className="field row-actions">
           <button className="btn" onClick={() => set((d) => void collapseAll(d))}>
             {S.review.cmdCollapseAll}
@@ -245,7 +246,7 @@ export function LayoutPanel() {
                 const n = sortTipsByCharacter(project, cid);
                 if (n > 0) {
                   set((d) => void sortTipsByCharacter(d, cid));
-                  notify.info(tr(`已按状态重排 ${n} 组姊妹枝`, `Reordered ${n} sibling group(s) by state`));
+                  notify.info(tr(`已按状态重排 ${n} 组姊妹枝`, `Reordered ${n} sibling group${n === 1 ? '' : 's'} by state`));
                 }
               }}
             >

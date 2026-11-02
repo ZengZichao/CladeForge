@@ -84,7 +84,7 @@ function reportParseIssues(issues: string[]): void {
     notify.info(
       tr(
         `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示（详见导出/工程文件）`,
-        `${issues.length - MAX_TOASTS} further import note(s) were not shown`,
+        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown`,
       ),
     );
   }
@@ -493,10 +493,10 @@ function notifyTipRenames(project: Project): void {
   const shown = renamed.slice(0, 3).join(', ');
   notify.info(
     renamed.length <= 3
-      ? tr(`导出文件中 ${renamed.length} 个尖端名称被改写：${shown}`,
-           `Export renames ${renamed.length} tip label(s): ${shown}`)
-      : tr(`导出文件中 ${renamed.length} 个尖端名称被改写（如 ${shown} 等）`,
-           `Export renames ${renamed.length} tip label(s), e.g. ${shown}`),
+      ? tr(`导出文件中 ${renamed.length} 个末端名称被改写：${shown}`,
+           `Export renames ${renamed.length} tip label${renamed.length === 1 ? '' : 's'}: ${shown}`)
+      : tr(`导出文件中 ${renamed.length} 个末端名称被改写（如 ${shown} 等）`,
+           `Export renames ${renamed.length} tip label${renamed.length === 1 ? '' : 's'}, e.g. ${shown}`),
   );
 }
 
@@ -705,14 +705,14 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
       notify.success(
         tr(
           `已导入 ${appliedCharacters} 个性状，${report.matched} 个分类单元匹配成功（精确 ${report.exact}，归一化 ${report.normalized}）`,
-          `Imported ${appliedCharacters} character(s); ${report.matched} taxon label(s) matched (${report.exact} exact, ${report.normalized} normalized)`,
+          `Imported ${appliedCharacters} character${appliedCharacters === 1 ? '' : 's'}; ${report.matched} taxon label${report.matched === 1 ? '' : 's'} matched (${report.exact} exact, ${report.normalized} normalised)`,
         ),
       );
       if (report.unmatched.length > 0) {
         notify.error(
           tr(
             `${report.unmatched.length} 个表格行未匹配到树上末端（如 ${report.unmatched.slice(0, 3).join('、')}）：这些行被跳过。请核对名称拼写或下划线/空格差异`,
-            `${report.unmatched.length} table row(s) matched no tip (e.g. ${report.unmatched.slice(0, 3).join(', ')}); they were skipped. Check spelling or underscore/space differences`,
+            `${report.unmatched.length} table row${report.unmatched.length === 1 ? '' : 's'} matched no tip (e.g. ${report.unmatched.slice(0, 3).join(', ')}); they were skipped. Check spelling or underscore/space differences`,
           ),
         );
       }
@@ -737,15 +737,15 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
       });
       notify.success(
         tr(
-          `已为 ${applied} 个尖端写入注释（未匹配 ${report.unmatched.length} 行）`,
-          `Annotated ${applied} tip(s) (${report.unmatched.length} unmatched row(s))`,
+          `已为 ${applied} 个末端写入注释（未匹配 ${report.unmatched.length} 行）`,
+          `Annotated ${applied} tip${applied === 1 ? '' : 's'} (${report.unmatched.length} unmatched row${report.unmatched.length === 1 ? '' : 's'})`,
         ),
       );
       if (report.unmatched.length > 0) {
         notify.error(
           tr(
             `${report.unmatched.length} 行未匹配：${report.unmatched.slice(0, 5).join('、')}`,
-            `${report.unmatched.length} row(s) unmatched: ${report.unmatched.slice(0, 5).join(', ')}`,
+            `${report.unmatched.length} row${report.unmatched.length === 1 ? '' : 's'} unmatched: ${report.unmatched.slice(0, 5).join(', ')}`,
           ),
         );
       }
@@ -760,13 +760,13 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
       report = r.report;
       issues.push(...r.issues);
     });
-    notify.success(tr(`已导入 ${applied} 个校准点`, `Imported ${applied} calibration point(s)`));
+    notify.success(tr(`已导入 ${applied} 个校准点`, `Imported ${applied} calibration point${applied === 1 ? '' : 's'}`));
     for (const msg of issues) notify.info(msg);
     if (report.unmatched.length > 0) {
       notify.error(
         tr(
           `${report.unmatched.length} 行未匹配到节点：${report.unmatched.slice(0, 5).join('、')}`,
-          `${report.unmatched.length} row(s) matched no node: ${report.unmatched.slice(0, 5).join(', ')}`,
+          `${report.unmatched.length} row${report.unmatched.length === 1 ? '' : 's'} matched no node: ${report.unmatched.slice(0, 5).join(', ')}`,
         ),
       );
     }

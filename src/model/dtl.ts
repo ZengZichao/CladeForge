@@ -244,11 +244,11 @@ export function solveDtl(
         : '';
     return {
       error: tr(
-        `${unmappedTips.length} 个基因尖端无法映射到物种树（如 ${unmappedTips
+        `${unmappedTips.length} 个基因末端无法映射到物种树（如 ${unmappedTips
           .slice(0, 3)
           .map((n) => n.label || n.id.slice(0, 5))
           .join(', ')}）${ambiguousNote}，无法求解`,
-        `${unmappedTips.length} gene tip(s) cannot be mapped (e.g. ${unmappedTips
+        `${unmappedTips.length} gene tip${unmappedTips.length === 1 ? '' : 's'} cannot be mapped (e.g. ${unmappedTips
           .slice(0, 3)
           .map((n) => n.label || n.id.slice(0, 5))
           .join(', ')})${ambiguousNote}`,
@@ -262,8 +262,8 @@ export function solveDtl(
   if (danglingTargets.length > 0) {
     return {
       error: tr(
-        `${danglingTargets.length} 个基因尖端映射到物种树中已不存在的节点，请重新映射`,
-        `${danglingTargets.length} gene tip(s) map to species nodes that no longer exist; re-map them`,
+        `${danglingTargets.length} 个基因末端映射到物种树中已不存在的节点，请重新映射`,
+        `${danglingTargets.length} gene tip${danglingTargets.length === 1 ? '' : 's'} map to species nodes that no longer exist; re-map them`,
       ),
     };
   }
@@ -293,7 +293,7 @@ export function solveDtl(
       return {
         error: tr(
           `物种树有 ${unreachable} 个无法从根到达的节点，请先修复树结构`,
-          `The species tree has ${unreachable} node(s) unreachable from the root; repair its structure first`,
+          `The species tree has ${unreachable} node${unreachable === 1 ? '' : 's'} unreachable from the root; repair its structure first`,
         ),
       };
     }
@@ -642,7 +642,7 @@ export function solveDtl(
   const optimal =
     (freeRoot ? rootDown + rootTransferCost : rootCell.cost) + originCost;
   if (!Number.isFinite(optimal)) {
-    return { error: tr('无可行协同重建方案', 'No feasible reconciliation exists') };
+    return { error: tr('无可行协调方案', 'No feasible reconciliation exists') };
   }
 
   // Deepest-free starting placement when the root itself need not sit at the

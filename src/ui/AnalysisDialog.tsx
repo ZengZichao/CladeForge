@@ -431,7 +431,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       <li key={`${c.aId}-${c.bId}`} className="issue issue-info">
                         <div>
                           {c.aName} ↔ {c.bName} · {S.analysis.correlationType}:{' '}
-                          {Math.round(c.score * 100)}% ·{' '}
+                          {c.score.toFixed(3)} ·{' '}
                           {S.analysis.correlationSample(c.sampleSize)}
                         </div>
                         <div className="hint">
@@ -485,7 +485,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       onClick={() =>
                         recordRun(
                           'correlation',
-                          'Tree-constrained two-sided tip-state permutation + Holm',
+                          'Tree-constrained one-sided upper-tail tip-state permutation + Holm',
                           {
                             pairs: tests.length,
                             familyTotal: tested?.familyTotal ?? tests.length,
@@ -509,7 +509,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               </div>
               {tests && tested && (
                 <div className="hint">
-                  {S.review.analysisFamily(tests.length, tested.familyTotal)} · m = {tests.length}
+                  {S.review.analysisFamily(tests.length, tested.familyTotal)}
                 </div>
               )}
               {tests && tests.length > 0 && (
@@ -522,7 +522,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       <li key={`all-${test.aId}-${test.bId}`} className="issue issue-info">
                         <div>
                           {test.aName} ↔ {test.bName} · {S.analysis.correlationType}:{' '}
-                          {Math.round(test.score * 100)}%
+                          {test.score.toFixed(3)}
                         </div>
                         <div className="hint">
                           {S.analysis.correlationPSummary(test.pValue, test.permutations, test.resolution)}{' '}
@@ -571,7 +571,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                           ·{' '}
                           {tr(
                             `${result.zeroBranches} 条真实零枝长（同期分化，按 0 计入）`,
-                            `${result.zeroBranches} real zero-length branch(es) (synchronous divergence, used as 0)`,
+                            `${result.zeroBranches} real zero-length branch${result.zeroBranches === 1 ? '' : 'es'} (synchronous divergence, used as 0)`,
                           )}
                         </span>
                       )}
@@ -589,7 +589,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     </button>
                     {knull && (
                       <span style={{ fontSize: 12 }}>
-                        p ≈ {knull.pValue.toFixed(3)} ({knull.replicates}×)
+                        p ≈ {knull.pValue.toFixed(3)} ({knull.replicates}{' '}
+                        {tr('次模拟', 'simulations')})
                       </span>
                     )}
                   </span>

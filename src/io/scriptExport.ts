@@ -300,7 +300,7 @@ if (is.null(bl) || !any(is.finite(bl) & bl > 0)) {
 # than the application reports. Deriving it from the fallback-protected bl
 # above is what keeps the rate finite for a cladogram-only project.
 rate <- 1 / mean(bl)
-${tree.substituted > 0 && tree.usable ? `cat("NOTE: ${tree.substituted} branch length(s) were unset, negative or non-finite and are analysed as 1, matching the application.\n\n")` : ''}
+${tree.substituted > 0 && tree.usable ? `cat("NOTE: ${tree.substituted} branch length${tree.substituted === 1 ? '' : 's'} were unset, negative or non-finite and are analysed as 1, matching the application.\n\n")` : ''}
 
 characters <- list(
 ${charBlocks.join(',\n')}

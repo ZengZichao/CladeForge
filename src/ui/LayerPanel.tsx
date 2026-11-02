@@ -142,12 +142,12 @@ function LayerCompareDialog({
                     ),
                   )
                   .slice(0, 20)
-                  .join('；')}
+                  .join(tr('；', '; '))}
               </div>
             )}
           </>
         ) : (
-          <div className="hint">{tr('请选择两个不同的层', 'Pick two different layers')}</div>
+          <div className="hint">{tr('请选择两个不同的假说层', 'Pick two different hypothesis layers')}</div>
         )}
         <div className="actions">
           <button className="btn primary" onClick={onClose}>

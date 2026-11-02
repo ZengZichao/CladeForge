@@ -86,7 +86,7 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
             <div className="field">
               <label>{S.analysis.consistencySection}</label>
               <span className="field-value">
-                {issues.length === 0 ? S.analysis.consistencyNone : tr(`${issues.length} 处提示`, `${issues.length} note(s)`)}
+                {issues.length === 0 ? S.analysis.consistencyNone : tr(`${issues.length} 处提示`, `${issues.length} note${issues.length === 1 ? '' : 's'}`)}
               </span>
             </div>
             <div className="field">
@@ -98,7 +98,7 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
                   ? S.analysis.correlationNone
                   : tr(
                       `${correlations.length} 对达到 Jaccard 重叠比 ≥ 0.5（描述性，未检验）`,
-                      `${correlations.length} pair(s) at Jaccard overlap ≥ 0.5 (descriptive, untested)`,
+                      `${correlations.length} pair${correlations.length === 1 ? '' : 's'} at Jaccard overlap ≥ 0.5 (descriptive, untested)`,
                     )}
               </span>
             </div>

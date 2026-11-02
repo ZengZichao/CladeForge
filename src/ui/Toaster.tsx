@@ -30,6 +30,27 @@ export function Toaster() {
               {t.action.label}
             </button>
           )}
+          <button
+            type="button"
+            className="toast-close"
+            aria-label={tr('关闭', 'Dismiss')}
+            title={tr('关闭', 'Dismiss')}
+            onClick={(e) => {
+              e.stopPropagation();
+              dismiss(t.id);
+            }}
+            style={{
+              marginLeft: 8,
+              border: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              cursor: 'pointer',
+              fontSize: 14,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
         </div>
       ))}
     </div>

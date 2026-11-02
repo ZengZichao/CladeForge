@@ -94,10 +94,12 @@ export function ConfirmDialog() {
       >
         <h2>{req.title}</h2>
         <p className="confirm-message">{req.message}</p>
-        <label className="confirm-skip">
-          <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} />
-          {S.confirm.dontAskAgain}
-        </label>
+        {!req.danger && (
+          <label className="confirm-skip">
+            <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} />
+            {S.confirm.dontAskAgain}
+          </label>
+        )}
         <div className="actions">
           <button className="btn" onClick={() => setReq(null)}>
             {S.confirm.cancel}

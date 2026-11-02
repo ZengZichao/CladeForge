@@ -6,6 +6,7 @@
 
 import { memo } from 'react';
 import { tr } from '../ui/strings';
+import { timeUnitSymbol } from '../ui/units';
 import type { EnvironmentalEvent } from '../model/types';
 import {
   ERA_LANE_HEIGHT,
@@ -31,6 +32,7 @@ export const TimeAxis = memo(function TimeAxis({
   const b0 = info.breadthMin - PAD;
   const b1 = info.breadthMax + PAD;
   const span = b1 - b0;
+  const unit = timeUnitSymbol(info.unit);
 
   const plan = planEraOverlay(info, { showEras, eraLevel }, envEvents, FONT);
 
@@ -177,7 +179,7 @@ ${e.note}` : e.label}</title>
       {showEras && plan.labels.map((l) => eraLabel(l))}
 
       {info.ticks.map((t, i) => {
-        const label = t.age === 0 ? tr('现今','Present') : `${t.age}`;
+        const label = t.age === 0 ? `${tr('现今', 'Present')} (0 ${unit})` : `${t.age} ${unit}`;
         return info.horizontal ? (
           <g key={`tick-${i}`}>
             <line

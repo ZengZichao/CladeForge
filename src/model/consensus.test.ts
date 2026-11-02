@@ -72,7 +72,7 @@ describe('consensus — input validation', () => {
     const b = tree('t2', [['A', 'B'], 'D']);
     const issues: string[][] = [];
     expect(buildConsensusTree([a, b], 'strict', 'x', (i) => issues.push(i))).toBeNull();
-    expect(issues[0].join(' ')).toMatch(/尖端集|tip set/);
+    expect(issues[0].join(' ')).toMatch(/末端集|tip set/);
   });
 
   it('rejects duplicate and unnamed tips instead of silently collapsing to a star', () => {

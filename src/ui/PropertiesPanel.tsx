@@ -69,6 +69,7 @@ import { parsimony, type ParsimonyResult } from '../model/parsimony';
 import { EventEditor } from './EventEditor';
 import { requestDeletion } from './deleteGuard';
 import { S, tr, selectedCount } from './strings';
+import { timeUnitLabel, timeUnitSymbol } from './units';
 import { notify } from './toast';
 
 
@@ -93,7 +94,7 @@ type NodeSectionKey =
   | 'branchSection';
 
 const NODE_SECTION_KEYWORDS: Record<NodeSectionKey, string[]> = {
-  section: ['名称', '枝长', '支持率', '年代', '时间', '假说', '标注', 'name', 'branch length', 'support', 'age', 'hypothesis', 'note', 'annotation'],
+  section: ['名称', '枝长', '支持度', '年龄', '时间', '假说', '标注', 'name', 'branch length', 'support', 'age', 'hypothesis', 'note', 'annotation'],
   timeConstraintSection: ['时间约束', '校准', '区间', '最小年代', '最大年代', 'calibration', 'constraint', 'min age', 'max age'],
   styleSection: ['填充色', '描边色', '大小', '形状', '描边', '颜色', '字号', 'fill', 'stroke', 'size', 'shape', 'colour', 'color'],
   labelSection: ['标签', '字号', '字体', '颜色', '旋转', '斜体', '加粗', '字重', '位置', '方位', '偏移', 'label', 'font', 'size', 'colour', 'color', 'rotate', 'italic', 'bold', 'position', 'offset'],
@@ -514,7 +515,7 @@ function NodePanel({
             allowEmpty
             min={0}
             step={0.1}
-            unit="s/s"
+            unit="subst./site"
             unitTitle={tr(
               '每位点替换数（substitutions per site，subst./site）',
               'substitutions per site (subst./site)',
@@ -531,10 +532,10 @@ function NodePanel({
             // a 0.95 value; show it only once the value is clearly a percentage.
             unit={node.support !== undefined && node.support > 1 ? '%' : undefined}
             unitTitle={tr(
-              '支持值：可填 0–1 或 0–100，刻度（scale）随值一起保存；消费方按 scale 判读，绝不猜',
-              'Support: enter 0–1 or 0–100; the scale is stored with the value and consumers read it — never guess',
+              '支持度：可填 0–1 或 0–100；数值 >1 按百分制、≤1 按比例保存；选择支持度类型会相应设定刻度',
+              'Support: enter 0–1 or 0–100; values >1 are stored as percent and ≤1 as a fraction; choosing a support kind sets the scale accordingly',
             )}
-            hint={tr('0–1 或 0–100', '0–1 or 0–100')}
+            hint={tr('0–1 或 0–100（>1 视为百分制）', '0–1 or 0–100 (>1 is read as percent)')}
             onCommit={(v) =>
               apply((d) => {
                 const n = d.nodes[id];
@@ -553,7 +554,7 @@ function NodePanel({
         </Field>
         {/* The metadata that makes the number interpretable: what it measures
             and on which scale. Defaulted heuristically at import, editable here. */}
-        <Field label={tr('支持值类型', 'Support kind')}>
+        <Field label={tr('支持度类型', 'Support kind')}>
           <select
             value={node.supportKind ?? 'other'}
             onChange={(e) =>
@@ -567,11 +568,11 @@ function NodePanel({
               })
             }
           >
-            <option value="bootstrap">{tr('bootstrap（0–100）', 'bootstrap (0–100)')}</option>
-            <option value="posterior">{tr('后验概率（0–1）', 'posterior probability (0–1)')}</option>
+            <option value="bootstrap">{tr('Bootstrap（0–100）', 'Bootstrap (0–100)')}</option>
+            <option value="posterior">{tr('后验概率（0–1）', 'Posterior probability (0–1)')}</option>
             <option value="sh-alrt">SH-aLRT（0–100）</option>
-            <option value="consensus-frequency">{tr('共识频率（0–100）', 'consensus frequency (0–100)')}</option>
-            <option value="other">{tr('其他 / 未声明', 'other / undeclared')}</option>
+            <option value="consensus-frequency">{tr('共识频率（0–100）', 'Consensus frequency (0–100)')}</option>
+            <option value="other">{tr('其他 / 未声明', 'Other / not declared')}</option>
           </select>
         </Field>
         <Field label={S.node.age}>
@@ -581,10 +582,10 @@ function NodePanel({
             step={0.1}
             min={calibration?.minAge}
             max={calibration?.maxAge}
-            unit={timeUnit}
+            unit={timeUnitSymbol(timeUnit)}
             unitTitle={tr(
-              `百万年前（${timeUnit} = Mya）`,
-              `million years ago (${timeUnit} = Mya)`,
+              `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
+              `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
             )}
             onCommit={(v) => apply((d) => setNodeAge(d, id, v))}
           />
@@ -619,10 +620,10 @@ function NodePanel({
                 value={calibration.minAge}
                 step={0.1}
                 min={0}
-                unit={timeUnit}
+                unit={timeUnitSymbol(timeUnit)}
                 unitTitle={tr(
-                  `百万年前（${timeUnit} = Mya）`,
-                  `million years ago (${timeUnit} = Mya)`,
+                  `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
+                  `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
                 )}
                 onCommit={(v) =>
                   v !== undefined &&
@@ -638,10 +639,10 @@ function NodePanel({
                 value={calibration.maxAge}
                 step={0.1}
                 min={0}
-                unit={timeUnit}
+                unit={timeUnitSymbol(timeUnit)}
                 unitTitle={tr(
-                  `百万年前（${timeUnit} = Mya）`,
-                  `million years ago (${timeUnit} = Mya)`,
+                  `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
+                  `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
                 )}
                 onCommit={(v) =>
                   v !== undefined &&

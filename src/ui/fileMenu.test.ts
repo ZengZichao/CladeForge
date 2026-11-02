@@ -105,11 +105,10 @@ describe('buildFileMenuItems', () => {
 
   it('keeps the full item list (labels, order, separators)', () => {
     const labels = buildFileMenuItems(recent, () => undefined).map((it) =>
-      it.sep ? '|' : it.label,
+      it.sep ? '|' : (it.heading ?? it.label),
     );
-    // 3d03bdc grew the menu: the lifecycle trio after 打开, 导入表格/剪贴板导树
-    // after 导入树, NeXML after Nexus, and the three CSV exports before the
-    // narrative group — order here mirrors fileMenu.ts.
+    // 3d03bdc grew the menu; the review round added group headings so the
+    // fifteen export entries are scannable. Order here mirrors fileMenu.ts.
     expect(labels).toEqual([
       S.menu.new,
       S.menu.open,
@@ -117,24 +116,29 @@ describe('buildFileMenuItems', () => {
       S.review.saveAsMenu,
       S.review.revertMenu,
       '|',
-      S.menu.recent,
+      S.review.recentProjects,
       '|',
+      S.review.importGroup,
       S.menu.importTree,
       S.review.importTable,
       S.review.pasteTree,
       '|',
+      S.review.exportFigures,
       S.exportItems.svg,
       S.exportItems.png,
       S.exportItems.pdf,
       '|',
+      S.review.exportData,
       S.exportItems.newick,
       S.exportItems.nexus,
       S.review.exportNexml,
       '|',
+      S.review.exportTables,
       S.review.exportMatrixCsv,
       S.review.exportAnnotationsCsv,
       S.review.exportMatrixTemplate,
       '|',
+      S.review.exportReports,
       S.exportItems.narrative,
       S.exportItems.hypothesisJSON,
       S.exportItems.rScript,

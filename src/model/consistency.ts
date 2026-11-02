@@ -217,8 +217,8 @@ export function checkConsistency(project: Project, character: Character): Consis
         kind: 'excess-changes',
         severity: 'info',
         message: tr(
-          `当前假设需要 ${userChanges} 次状态变化（代价 ${userCost}），仅看尖端数据的简约下限为 ${mp.cost}。这 ${demanded} 的差额由你断言的 ${assertedInternals} 个内部状态本身要求：${minGivenAssertions} 已是与这些断言相容的最低代价，保留证据就没有可省的空间；只有当这些内部赋值缺乏独立证据时才需要重拟，因此这里只是提示，不是判定。`,
-          `The hypothesis requires ${userChanges} state changes (cost ${userCost}); the parsimony minimum over the TIPS ONLY is ${mp.cost}. The whole gap of ${demanded} is demanded by the ${assertedInternals} internal state(s) you asserted: ${minGivenAssertions} is already the cheapest hypothesis compatible with them, so there is nothing to shave off while the evidence stands. Re-draft only if those internal assignments lack independent support — this is a prompt, not a verdict.`,
+          `当前假设需要 ${userChanges} 次状态变化（代价 ${userCost}），仅看末端数据的简约下限为 ${mp.cost}。这 ${demanded} 的差额由你断言的 ${assertedInternals} 个内部状态本身要求：${minGivenAssertions} 已是与这些断言相容的最低代价，保留证据就没有可省的空间；只有当这些内部赋值缺乏独立证据时才需要重拟，因此这里只是提示，不是判定。`,
+          `The hypothesis requires ${userChanges} state changes (cost ${userCost}); the parsimony minimum over the tips only is ${mp.cost}. The whole gap of ${demanded} is demanded by the ${assertedInternals} internal state${assertedInternals === 1 ? '' : 's'} asserted: ${minGivenAssertions} is already the cheapest hypothesis compatible with them, so there is nothing to shave off while the evidence stands. Re-draft only if those internal assignments lack independent support — this is a prompt, not a verdict.`,
         ),
         tag: tr('过多变化', 'Excess changes'),
       });
@@ -227,8 +227,8 @@ export function checkConsistency(project: Project, character: Character): Consis
         kind: 'excess-changes',
         severity: 'info',
         message: tr(
-          `本性状尚未完整赋值，无法为整个假设定价；但仅你已断言的 ${assertedInternals} 个内部状态就已把同一矩阵下的最低代价从尖端数据的 ${mp.cost} 抬高到 ${minGivenAssertions}，值得复核这些断言的依据。`,
-          `The hypothesis is not fully assigned, so it cannot be priced as a whole; still, the ${assertedInternals} internal state(s) already asserted raise the minimum cost under this character's own matrix from ${mp.cost} (tips only) to ${minGivenAssertions} — worth re-checking the evidence behind them.`,
+          `本性状尚未完整赋值，无法为整个假设定价；但仅你已断言的 ${assertedInternals} 个内部状态就已把同一矩阵下的最低代价从末端数据的 ${mp.cost} 抬高到 ${minGivenAssertions}，值得复核这些断言的依据。`,
+          `The hypothesis is not fully assigned, so it cannot be priced as a whole; still, the ${assertedInternals} internal state${assertedInternals === 1 ? '' : 's'} already asserted raise the minimum cost under this character's own matrix from ${mp.cost} (tips only) to ${minGivenAssertions} — worth re-checking the evidence behind them.`,
         ),
         tag: tr('过多变化', 'Excess changes'),
       });
@@ -306,7 +306,7 @@ export function checkConsistency(project: Project, character: Character): Consis
         kind: 'missing-data',
         severity: 'warning',
         message: tr(
-          `${staleValues} 个尖端记录的值不是本性状的状态（'?'/'-' 缺失符号，或已被删除的状态），简约法、Mk 重建与 CI/RI 均已将其按缺失数据处理。`,
+          `${staleValues} 个末端记录的值不是本性状的状态（'?'/'-' 缺失符号，或已被删除的状态），简约法、Mk 重建与 CI/RI 均已将其按缺失数据处理。`,
           `${staleValues} tip value(s) are not states of this character ('?'/'-' missing-data codes, or deleted states); parsimony, Mk reconstruction and CI/RI all treat them as missing.`,
         ),
         tag: tr('缺失数据', 'Missing data'),
@@ -317,8 +317,8 @@ export function checkConsistency(project: Project, character: Character): Consis
         kind: 'missing-data',
         severity: unassignedTips === tipTotal ? 'warning' : 'info',
         message: tr(
-          `${unassignedTips}/${tipTotal} 个尖端尚未赋值：所有推断与统计只使用已赋值的尖端。`,
-          `${unassignedTips} of ${tipTotal} tip(s) have no state recorded: every inference and statistic uses only the scored tips.`,
+          `${unassignedTips}/${tipTotal} 个末端尚未赋值：所有推断与统计只使用已赋值的末端。`,
+          `${unassignedTips} of ${tipTotal} tip${tipTotal === 1 ? '' : 's'} have no state recorded: every inference and statistic uses only the scored tips.`,
         ),
         tag: tr('缺失数据', 'Missing data'),
       });
@@ -715,8 +715,8 @@ export function correlationPermutationTest(
     exceeded,
     nullMean: permutations > 0 ? nullSum / permutations : 0,
     method: tr(
-      '树约束双端尖端态置换（两性状的简约变化枝重叠，Jaccard 统计量）',
-      'Tree-constrained two-sided tip-state permutation (MP change-branch overlap of both characters, Jaccard statistic)',
+      '树约束单侧上尾末端状态置换（两性状的简约变化枝重叠，Jaccard 统计量）',
+      'Tree-constrained one-sided upper-tail tip-state permutation (MP change-branch overlap of both characters, Jaccard statistic)',
     ),
   };
 }

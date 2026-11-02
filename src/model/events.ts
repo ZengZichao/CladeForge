@@ -85,14 +85,17 @@ const GROUP_DEFAULT_SHAPE: Record<string, EventMarkerShape> = {
   Speciation: 'hexagon',
   灭绝: 'triangle',
   Extinction: 'triangle',
-  关键演化: 'star',
-  'Key evolution': 'star',
+  关键创新: 'star',
+  'Evolutionary innovations': 'star',
+  演化创新: 'star',
   基因流: 'diamond',
   'Gene flow': 'diamond',
   生物地理: 'square',
   Biogeography: 'square',
   微生物: 'square',
   Microbial: 'square',
+  基因家族演化: 'hexagon',
+  'Gene family evolution': 'hexagon',
   深时: 'diamond',
   'Deep time': 'diamond',
   通用: 'circle',
@@ -204,12 +207,12 @@ export const EVENT_TYPES: EventTypeDef[] = [
   { id: 'speciation-parapatric', label: '邻域成种', labelEn: 'Parapatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'PA', color: '#14b8a6', target: 'node' },
   { id: 'speciation-polyploidy', label: '多倍化成种', labelEn: 'Polyploid speciation', group: '物种形成', groupEn: 'Speciation', code: 'PO', color: '#22c55e', target: 'node' },
   // 灭绝
-  { id: 'extinction-local', label: '本地灭绝', labelEn: 'Local extinction', group: '灭绝', groupEn: 'Extinction', code: 'LX', color: '#ef4444', target: 'both' },
-  { id: 'extinction-mass', label: '大规模灭绝', labelEn: 'Mass extinction', group: '灭绝', groupEn: 'Extinction', code: 'MX', color: '#b91c1c', target: 'node' },
-  // 关键演化
-  { id: 'key-innovation', label: '关键创新', labelEn: 'Key innovation', group: '关键演化', groupEn: 'Key evolution', code: 'KI', color: '#8b5cf6', target: 'branch' },
-  { id: 'adaptive-radiation', label: '适应辐射', labelEn: 'Adaptive radiation', group: '关键演化', groupEn: 'Key evolution', code: 'AR', color: '#f59e0b', target: 'node' },
-  { id: 'bottleneck', label: '瓶颈效应', labelEn: 'Bottleneck', group: '关键演化', groupEn: 'Key evolution', code: 'BN', color: '#6366f1', target: 'branch' },
+  { id: 'extinction-local', label: '局部灭绝', labelEn: 'Local extinction', group: '灭绝', groupEn: 'Extinction', code: 'LX', color: '#ef4444', target: 'both' },
+  { id: 'extinction-mass', label: '大灭绝', labelEn: 'Mass extinction', group: '灭绝', groupEn: 'Extinction', code: 'MX', color: '#b91c1c', target: 'node' },
+  // 演化创新
+  { id: 'key-innovation', label: '关键创新', labelEn: 'Key innovation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'KI', color: '#8b5cf6', target: 'branch' },
+  { id: 'adaptive-radiation', label: '适应辐射', labelEn: 'Adaptive radiation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'AR', color: '#f59e0b', target: 'node' },
+  { id: 'bottleneck', label: '瓶颈效应', labelEn: 'Bottleneck', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'BN', color: '#6366f1', target: 'branch' },
   // 基因流
   { id: 'hgt', label: '水平基因转移', labelEn: 'Horizontal gene transfer', group: '基因流', groupEn: 'Gene flow', code: 'HG', color: '#ec4899', target: 'both' },
   { id: 'hybridization', label: '杂交', labelEn: 'Hybridization', group: '基因流', groupEn: 'Gene flow', code: 'HY', color: '#d946ef', target: 'node' },
@@ -219,19 +222,20 @@ export const EVENT_TYPES: EventTypeDef[] = [
   { id: 'biogeo-extirpation', label: '区域灭绝', labelEn: 'Regional extirpation', group: '生物地理', groupEn: 'Biogeography', code: 'RE', color: '#dc2626', target: 'branch' },
   // 微生物 / 基因组演化 — the macroevolution list said nothing about the
   // processes microbial datasets actually annotate (§领域专家 2.7 / §学生博后 4.7).
-  { id: 'symbiogenesis', label: '内共生获得', labelEn: 'Endosymbiosis acquisition', group: '微生物', groupEn: 'Microbial', code: 'SB', color: '#0ea5a3', target: 'node', shape: 'hexagon' },
+  { id: 'symbiogenesis', label: '内共生起源', labelEn: 'Endosymbiotic origin', group: '微生物', groupEn: 'Microbial', code: 'SB', color: '#0ea5a3', target: 'node', shape: 'hexagon' },
   { id: 'genome-reduction', label: '基因组缩减', labelEn: 'Genome reduction', group: '微生物', groupEn: 'Microbial', code: 'GR', color: '#8b5cf6', target: 'branch', shape: 'square' },
   { id: 'plasmid-gain', label: '质粒获得', labelEn: 'Plasmid gain', group: '微生物', groupEn: 'Microbial', code: 'PG', color: '#0284c7', target: 'node', shape: 'diamond' },
-  { id: 'phage-reassortment', label: '噬菌体/分段重组', labelEn: 'Phage reassortment', group: '微生物', groupEn: 'Microbial', code: 'PH', color: '#ec4899', target: 'branch', shape: 'diamond' },
+  { id: 'phage-reassortment', label: '病毒分段重组', labelEn: 'Viral reassortment', group: '微生物', groupEn: 'Microbial', code: 'PH', color: '#ec4899', target: 'branch', shape: 'diamond' },
   { id: 'metabolic-gain', label: '代谢通路获得', labelEn: 'Metabolic pathway gain', group: '微生物', groupEn: 'Microbial', code: 'MG', color: '#0e9f6e', target: 'branch', shape: 'hexagon' },
   { id: 'metabolic-loss', label: '代谢通路丢失', labelEn: 'Metabolic pathway loss', group: '微生物', groupEn: 'Microbial', code: 'ML', color: '#b91c1c', target: 'branch', shape: 'triangle' },
-  { id: 'crispr-acquisition', label: 'CRISPR 间隔获得', labelEn: 'CRISPR spacer acquisition', group: '微生物', groupEn: 'Microbial', code: 'CR', color: '#6366f1', target: 'node', shape: 'star' },
-  { id: 'transposon-integration', label: '转座子/ICE 整合', labelEn: 'Transposon/ICE integration', group: '微生物', groupEn: 'Microbial', code: 'TI', color: '#f59e0b', target: 'branch', shape: 'square' },
+  { id: 'crispr-acquisition', label: 'CRISPR 间隔序列获得', labelEn: 'CRISPR spacer acquisition', group: '微生物', groupEn: 'Microbial', code: 'CR', color: '#6366f1', target: 'node', shape: 'star' },
+  { id: 'transposon-integration', label: '转座子/整合性接合元件（ICE）整合', labelEn: 'Transposon / integrative conjugative element (ICE) integration', group: '微生物', groupEn: 'Microbial', code: 'TI', color: '#f59e0b', target: 'branch', shape: 'square' },
   { id: 'hgt-unsampled', label: '来自未采样供体的 HGT', labelEn: 'HGT from unsampled donor', group: '微生物', groupEn: 'Microbial', code: 'HU', color: '#d97706', target: 'both', shape: 'diamond' },
+  // 基因家族演化
+  { id: 'gene-family-expansion', label: '基因家族扩张', labelEn: 'Gene family expansion', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FE', color: '#14b8a6', target: 'node', shape: 'hexagon' },
+  { id: 'gene-family-contraction', label: '基因家族收缩', labelEn: 'Gene family contraction', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FC', color: '#d946ef', target: 'node', shape: 'triangle' },
   // 深时 / 环境驱动
-  { id: 'gene-family-expansion', label: '基因家族扩张', labelEn: 'Gene family expansion', group: '深时', groupEn: 'Deep time', code: 'FE', color: '#14b8a6', target: 'node', shape: 'hexagon' },
-  { id: 'gene-family-contraction', label: '基因家族收缩', labelEn: 'Gene family contraction', group: '深时', groupEn: 'Deep time', code: 'FC', color: '#d946ef', target: 'node', shape: 'triangle' },
-  { id: 'ocean-chemistry-shift', label: '海洋化学转变', labelEn: 'Ocean-chemistry shift', group: '深时', groupEn: 'Deep time', code: 'OC', color: '#0d9488', target: 'branch', shape: 'square' },
+  { id: 'ocean-chemistry-shift', label: '海洋化学变化', labelEn: 'Ocean chemistry shift', group: '深时', groupEn: 'Deep time', code: 'OC', color: '#0d9488', target: 'branch', shape: 'square' },
   // 通用
   { id: 'custom', label: '自定义事件', labelEn: 'Custom event', group: '通用', groupEn: 'General', code: 'CU', color: '#787774', target: 'both' },
 ];

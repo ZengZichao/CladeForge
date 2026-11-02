@@ -387,8 +387,8 @@ export function validateScenario(
       severity: 'error',
       kind: 'unmatched-tip',
       message: tr(
-        `${unmatchedLabels.length} 个基因尖端未匹配到物种（${shown}${more}），无法参与重建`,
-        `${unmatchedLabels.length} gene tip(s) unmatched (${shown}${more}); excluded from reconstruction`,
+        `${unmatchedLabels.length} 个基因末端未匹配到物种（${shown}${more}），无法参与重建`,
+        `${unmatchedLabels.length} gene tip${unmatchedLabels.length === 1 ? '' : 's'} unmatched (${shown}${more}); excluded from reconstruction`,
       ),
     });
   }
@@ -452,7 +452,7 @@ export function validateScenario(
         kind: 'loss-shortfall',
         nodeId: n.id,
         message: tr(
-          `${n.label || n.id.slice(0, 6)} 的损失数低于结构最小值（建议 ≥ ${minLoss}）`,
+          `${n.label || n.id.slice(0, 6)} 的丢失数低于结构最小值（建议 ≥ ${minLoss}）`,
           `Loss count on ${n.label || n.id.slice(0, 6)} is below the structural minimum (≥ ${minLoss})`,
         ),
       });
@@ -481,9 +481,9 @@ export function validateScenario(
       kind: 'tip-on-internal',
       nodeId: n.id,
       message: tr(
-        `尖端 ${n.label || n.id.slice(0, 6)} 被指到物种内部节点 ${
+        `末端 ${n.label || n.id.slice(0, 6)} 被指到物种内部节点 ${
           target.label || place.slice(0, 6)
-        } 上，而其入枝没有任何损失：这等于宣称一个已采集的分类单元就是另一个的祖先。若该谱系在此终止，请至少记 1 次损失`,
+        } 上，而其入枝没有任何丢失：这等于宣称一个已采集的分类单元就是另一个的祖先。若该谱系在此终止，请至少记 1 次丢失`,
         `Tip ${n.label || n.id.slice(0, 6)} is asserted on the internal species node ${
           target.label || place.slice(0, 6)
         } with no loss on its incoming branch: that claims a sampled taxon is the ancestor of another. Record ≥ 1 loss if the lineage ends here`,
@@ -502,7 +502,7 @@ export function validateScenario(
           kind: 'leaf-event',
           nodeId: n.id,
           message: tr(
-            `尖端 ${n.label || n.id.slice(0, 6)} 不应设置事件类型`,
+            `末端 ${n.label || n.id.slice(0, 6)} 不应设置事件类型`,
             `Tip ${n.label || n.id.slice(0, 6)} should not carry an event type`,
           ),
         });
@@ -521,7 +521,7 @@ export function validateScenario(
         kind: 'unresolved',
         nodeId: n.id,
         message: tr(
-          `内部节点 ${n.label || n.id.slice(0, 6)} 尚未解析（缺少映射或事件）`,
+          `内部节点 ${n.label || n.id.slice(0, 6)} 尚未映射（缺少映射或事件）`,
           `Internal node ${n.label || n.id.slice(0, 6)} is unresolved (missing mapping or event)`,
         ),
       });
@@ -561,7 +561,7 @@ export function validateScenario(
           kind: 'event-conflict',
           nodeId: n.id,
           message: tr(
-            `${n.label || n.id.slice(0, 6)} 标记为物种化，但有子代落在节点 ${species.nodes[s]?.label || s.slice(0, 6)} 子树之外`,
+            `${n.label || n.id.slice(0, 6)} 标记为物种形成，但有子代落在节点 ${species.nodes[s]?.label || s.slice(0, 6)} 子树之外`,
             `${n.label || n.id.slice(0, 6)} marked speciation, but a child maps outside the subtree of ${
               species.nodes[s]?.label || s.slice(0, 6)
             }`,
@@ -573,7 +573,7 @@ export function validateScenario(
           kind: 'event-conflict',
           nodeId: n.id,
           message: tr(
-            `${n.label || n.id.slice(0, 6)} 标记为物种化，但有子代仍映射到同一节点，应为加倍`,
+            `${n.label || n.id.slice(0, 6)} 标记为物种形成，但有子代仍映射到同一节点，应为基因重复`,
             `${n.label || n.id.slice(0, 6)} marked speciation with a child on the same node; should be duplication`,
           ),
         });
@@ -590,7 +590,7 @@ export function validateScenario(
             kind: 'event-conflict',
             nodeId: n.id,
             message: tr(
-              `${n.label || n.id.slice(0, 6)} 标记为物种化，但两个子代进入物种节点 ${species.nodes[shared]?.label || shared.slice(0, 6)} 的同一分支`,
+              `${n.label || n.id.slice(0, 6)} 标记为物种形成，但两个子代进入物种节点 ${species.nodes[shared]?.label || shared.slice(0, 6)} 的同一分支`,
               `${n.label || n.id.slice(0, 6)} marked speciation, but two children enter the same branch of ${
                 species.nodes[shared]?.label || shared.slice(0, 6)
               }`,
@@ -615,7 +615,7 @@ export function validateScenario(
           kind: 'mislabelled',
           nodeId: n.id,
           message: tr(
-            `${n.label || n.id.slice(0, 6)} 标记为加倍，但各子代分散在不同分支——更像物种化`,
+            `${n.label || n.id.slice(0, 6)} 标记为基因重复，但各子代分散在不同分支——更像物种形成`,
             `${n.label || n.id.slice(0, 6)} marked duplication while children spread across distinct branches — looks like speciation`,
           ),
         });
@@ -629,7 +629,7 @@ export function validateScenario(
           kind: 'event-conflict',
           nodeId: n.id,
           message: tr(
-            `${n.label || n.id.slice(0, 6)} 标记为转移，需要同时存在子树内与子树外的接收/供体子代`,
+            `${n.label || n.id.slice(0, 6)} 标记为水平转移，需要同时存在子树内与子树外的接收/供体子代`,
             `${n.label || n.id.slice(0, 6)} marked transfer; needs both an in-subtree child and an out-of-subtree donor child`,
           ),
         });
@@ -645,7 +645,7 @@ export function validateScenario(
             kind: 'timing',
             nodeId: n.id,
             message: tr(
-              `${n.label || n.id.slice(0, 6)} 的转移方向与时间轴矛盾：供体晚于接收方`,
+              `${n.label || n.id.slice(0, 6)} 的水平转移方向与时间轴矛盾：供体晚于接收方`,
               `Transfer on ${n.label || n.id.slice(0, 6)} contradicts the time axis: donor younger than recipient`,
             ),
           });

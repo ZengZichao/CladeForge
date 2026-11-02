@@ -31,13 +31,31 @@ import {
 import type { Project } from '../model/types';
 import type { EstimateAgesResult } from '../model/treeOps';
 import { estimateAgesText } from './treeEditNotices';
-import { TIME_UNIT_TO_MA } from '../layout/timescale';
 import { deriveBranchLengthsFromAges, estimateAgesWithCalibrations } from '../model/treeOps';
 
-/** Dropdown options = the recognised geological units (see TIME_UNIT_TO_MA). */
-const TIME_UNIT_OPTIONS = Object.keys(TIME_UNIT_TO_MA).filter((u) =>
-  ['ma', 'myr', 'mya', 'ka', 'kyr', 'kya', 'ga', 'gyr', 'gya'].includes(u),
-);
+/** Dropdown options = recognised geological units, in formal case. */
+const TIME_UNIT_OPTIONS = ['ma', 'myr', 'ka', 'kyr', 'ga', 'gyr', 'yr'];
+
+function timeUnitOptionLabel(unit: string): string {
+  switch (unit) {
+    case 'ma':
+      return S.layoutPanel.timeUnitMa;
+    case 'myr':
+      return S.layoutPanel.timeUnitMyr;
+    case 'ka':
+      return S.layoutPanel.timeUnitKa;
+    case 'kyr':
+      return S.layoutPanel.timeUnitKyr;
+    case 'ga':
+      return S.layoutPanel.timeUnitGa;
+    case 'gyr':
+      return S.layoutPanel.timeUnitGyr;
+    case 'yr':
+      return S.layoutPanel.timeUnitYr;
+    default:
+      return unit;
+  }
+}
 import type { EraLevel } from '../layout/timescale';
 import {
   CheckboxField,
@@ -49,6 +67,7 @@ import {
 } from './fields';
 import { Section } from './Section';
 import { S, tr } from './strings';
+import { timeUnitSymbol } from './units';
 import { notify } from './toast';
 // Shared, never-empty layout display name (BUG-5 defense: an unknown or blank
 // `layout.type` must never render as 「current layout is “”」).
@@ -95,7 +114,7 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
             />
             <button
               className="btn icon danger"
-              title={S.character.deleteCharacter}
+              title={S.layoutPanel.envDelete}
               disabled={disabled}
               onClick={() => apply((d) => removeEnvironmentalEvent(d, e.id))}
             >
@@ -111,9 +130,9 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
             <NumberField
               value={e.from}
               step={0.1}
-              unit={project.layout.timeUnit ?? 'Ma'}
+              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
               unitTitle={tr(
-                '与节点年代相同的时间单位（可在本模块「时间单位」中修改）',
+                '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
                 'The same time unit as the node ages (change it under “Time unit” in this module)',
               )}
               onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { from: v }))}
@@ -122,9 +141,9 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
             <NumberField
               value={e.to}
               step={0.1}
-              unit={project.layout.timeUnit ?? 'Ma'}
+              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
               unitTitle={tr(
-                '与节点年代相同的时间单位（可在本模块「时间单位」中修改）',
+                '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
                 'The same time unit as the node ages (change it under “Time unit” in this module)',
               )}
               onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { to: v }))}
@@ -176,7 +195,7 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
             </select>
             <button
               className="btn icon danger"
-              title={S.character.deleteCharacter}
+              title={S.layoutPanel.calibrationDelete}
               disabled={disabled}
               onClick={() => apply((d) => removeCalibrationPoint(d, c.id))}
             >
@@ -188,12 +207,14 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
             <NumberField
               value={c.minAge}
               step={0.1}
+              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
               onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { minAge: v }))}
             />
             <label>{S.layoutPanel.calibrationMax}</label>
             <NumberField
               value={c.maxAge}
               step={0.1}
+              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
               onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { maxAge: v }))}
             />
           </div>
@@ -289,7 +310,7 @@ export function TimePanel() {
                 // 「已自动切换」: the layout changes because it was clicked, never on
                 // its own.
                 notify.success(
-                  tr('已切换到「地质时间图」布局', 'Switched to the geological time chart layout'),
+                  tr('已切换到时间校准树布局', 'Switched to the time-calibrated tree layout'),
                 );
               }}
             >
@@ -341,7 +362,7 @@ export function TimePanel() {
           >
             {TIME_UNIT_OPTIONS.map((u) => (
               <option key={u} value={u}>
-                {u}
+                {timeUnitOptionLabel(u)}
               </option>
             ))}
             <option value="custom">{tr('自定义…', 'Custom…')}</option>

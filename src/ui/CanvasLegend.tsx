@@ -20,7 +20,7 @@ import {
 } from '../model/events';
 import { eventMarkerPath } from '../canvas/markerGeometry';
 import type { EventMarkerShape } from '../model/types';
-import { S } from './strings';
+import { S, tr } from './strings';
 
 type SwatchKind =
   | 'select'
@@ -340,7 +340,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
           className="legend-close"
           onClick={() => setOpen(false)}
           title={S.legend.toggleTitle}
-          aria-label={S.legend.title}
+          aria-label={tr('关闭图例', 'Close legend')}
         >
           ×
         </button>

@@ -15,6 +15,8 @@ export interface DropdownItem {
   onClick?: () => void;
   kbd?: string;
   sep?: boolean;
+  /** Non-interactive group heading rendered above the following items. */
+  heading?: string;
   /** Disabled entries render inert (no handler, aria-disabled) — a placeholder
    *  that LOOKS clickable but does nothing reads as breakage. */
   disabled?: boolean;
@@ -74,7 +76,11 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
             onMouseDown={(e) => e.stopPropagation()}
           >
             {items.map((it, i) =>
-              it.sep ? (
+              it.heading ? (
+                <div key={`heading-${i}`} className="menu-section-label">
+                  {it.heading}
+                </div>
+              ) : it.sep ? (
                 <div key={`sep-${i}`} className="menu-sep" />
               ) : (
                 <button

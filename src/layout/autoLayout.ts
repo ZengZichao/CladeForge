@@ -453,7 +453,7 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
       count: badPins,
       message: tr(
         `${badPins} 个节点的手工坐标不是有限数值（NaN/Infinity），已忽略并回落到自动布局；该节点原先在画布上不可见、不可选中。`,
-        `${badPins} node(s) carry a non-finite manual position (NaN/Infinity); ignored, falling back to the automatic layout. They were previously invisible and unselectable.`,
+        `${badPins} node${badPins === 1 ? '' : 's'} carry a non-finite manual position (NaN/Infinity); ignored, falling back to the automatic layout. They were previously invisible and unselectable.`,
       ),
     });
   }

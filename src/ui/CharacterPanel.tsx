@@ -196,7 +196,7 @@ function CharacterEditor({
               />
               <button
                 className="btn icon danger"
-                title={S.node.delete}
+                title={S.character.deleteState}
                 onClick={() => apply((d) => removeCharacterState(d, id, st.id))}
               >
                 <Cross1Icon />

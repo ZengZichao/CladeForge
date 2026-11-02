@@ -201,7 +201,7 @@ export function App() {
     notify.success(
       tr(
         `已从物种树创建基因树：${mapped}/${total} 个末端已自动映射`,
-        `Gene tree created from the species tree: ${mapped}/${total} tip(s) auto-mapped`,
+        `Gene tree created from the species tree: ${mapped}/${total} tips auto-mapped`,
       ),
     );
   };
@@ -444,7 +444,7 @@ export function App() {
       </div>
 
       {reconMode ? (
-        <ErrorBoundary scope={tr('协同重建工作区', 'Reconciliation workspace')}>
+        <ErrorBoundary scope={tr('协调工作区', 'Reconciliation workspace')}>
           <ReconWorkspace
             panelsHidden={panelsHidden}
             onBuildGeneTree={() => openGeneBuilder(null)}
@@ -536,12 +536,12 @@ export function App() {
             );
             if (consensus) {
               useStore.getState().openInNewTab(consensus);
-              if (issues.length > 0) notify.info(S.notify.consensusPartial(issues.join('；')));
+              if (issues.length > 0) notify.info(S.notify.consensusPartial(issues.join(tr('；', '; '))));
               else notify.success(S.notify.consensusBuilt);
             } else {
               notify.error(
                 issues.length > 0
-                  ? S.notify.consensusIssues(issues.join('；'))
+                  ? S.notify.consensusIssues(issues.join(tr('；', '; ')))
                   : S.notify.consensusFail,
               );
             }

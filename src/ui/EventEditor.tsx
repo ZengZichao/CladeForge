@@ -68,14 +68,21 @@ function TypeOptions({ project }: { project: Project }) {
 
 /** Prompt for a new custom event type and append it to the project ontology. */
 function addCustomEventType(apply: Apply, project: Project): void {
-  const label = window.prompt(
-    tr(
-      '新事件类型名称（中文；同时生成英文标签与双字母代号）',
-      'New event type name (an English label and two-letter code are derived)',
-    ),
-  );
+  const label = window.prompt(tr('新事件类型名称', 'New event type name'));
   if (!label?.trim()) return;
   const clean = label.trim().slice(0, 24);
+  const meta = window.prompt(
+    tr(
+      '英文标签与两位代号（用逗号分隔，如“Gene loss, GL”；可留空自动生成）',
+      'English label and two-letter code, comma-separated (e.g. “Gene loss, GL”; leave blank to auto-generate)',
+    ),
+  );
+  const [rawLabelEn, rawCode] = (meta ?? '').split(',').map((part) => part.trim());
+  const labelEn = rawLabelEn || clean;
+  const code =
+    (rawCode ?? '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() ||
+    clean.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() ||
+    'CU';
   const id = `user-${clean.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   apply((d) => {
     d.customEventTypes = [
@@ -83,10 +90,10 @@ function addCustomEventType(apply: Apply, project: Project): void {
       {
         id,
         label: clean,
-        labelEn: clean,
+        labelEn,
         group: tr('自定义', 'Custom'),
         groupEn: 'Custom',
-        code: clean.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'CU',
+        code,
         color: '#64748b',
         target: 'both',
       },

@@ -311,7 +311,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
           kind: 'needsData',
           label: tr(
             `待补数据：端点未赋值（${unknown} 枝，不计入变化）`,
-            `needs data: endpoint unassigned (${unknown} branch(es), not counted as changes)`,
+            `needs data: endpoint unassigned (${unknown} branch${unknown === 1 ? '' : 'es'}, not counted as changes)`,
           ),
         });
       }

@@ -240,7 +240,7 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
           <b>{node.age !== undefined ? String(node.age) : '—'}</b>
           <span>{tr('枝长', 'Branch length')}</span>
           <b>{node.branchLength !== undefined ? String(node.branchLength) : '—'}</b>
-          <span>{tr('支持率', 'Support')}</span>
+          <span>{tr('支持度', 'Support')}</span>
           <b>{node.support !== undefined ? String(node.support) : '—'}</b>
           <span>{tr('父节点', 'Parent')}</span>
           <b>{parent?.label || '—'}</b>

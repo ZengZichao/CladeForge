@@ -195,7 +195,7 @@ export function GeneAssumptionInspector({
             <ArrowLeftIcon />
           </button>
           <span className="hint">
-            {tr('未解析', 'Unresolved')} {unresolvedIdx >= 0 ? unresolvedIdx + 1 : '–'}/{unresolvedIds.length}
+            {tr('未映射', 'Unmapped')} {unresolvedIdx >= 0 ? unresolvedIdx + 1 : '–'}/{unresolvedIds.length}
           </span>
           <button
             className="btn icon"

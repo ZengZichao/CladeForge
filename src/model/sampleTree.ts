@@ -88,7 +88,7 @@ export interface SampleDescriptor {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-// These documents are hard-coded demo data, so the helpers verify them instead
+// These documents are hard-coded sample data, so the helpers verify them instead
 // of quietly accepting whatever was typed: every edge has to satisfy the
 // branch-length / node-age identity, every label has to be unique, and every
 // declared state has to be carried by at least one tip.
@@ -211,7 +211,7 @@ export function createSampleProject(): Project {
 }
 
 export function createAquaticSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 水生适应', 'Virtual taxa · Aquatic transition'));
+  const project = createEmptyProject(tr('水生适应', 'Aquatic adaptation'));
   project.sampleId = 'cetacean';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -244,8 +244,8 @@ export function createAquaticSample(): Project {
       { id: aqId, label: tr('水生', 'Aquatic'), color: '#1e3a5f' },
     ],
     description: tr(
-      '演示谱系中陆生 → 半水生 → 水生的栖息地转变（虚构类群）。',
-      'A terrestrial-to-semi-aquatic-to-aquatic habitat transition in the demo clade.',
+      '示例谱系中陆生 → 半水生 → 水生的栖息地转变（虚构类群）。',
+      'A terrestrial-to-semi-aquatic-to-aquatic habitat transition in the sample clade.',
     ),
     // Sankoff step matrix, rows/columns in `states` order (陆生/半水生/水生):
     // an ORDERED (additive, direction-symmetric) matrix over a linearly ordered
@@ -276,7 +276,7 @@ export function createAquaticSample(): Project {
       { id: tailId, label: tr('摆尾游动', 'Tail-powered-swimming'), color: '#1e3a8a' },
     ],
     description: tr(
-      '跖行 → 四肢划水 → 尾鳍推进的运动方式转变（演示：推进一旦交给脊柱即不可逆）。',
+      '跖行 → 四肢划水 → 尾鳍推进的运动方式转变（推进一旦交给脊柱即不可逆）。',
       'Walking to limb-paddling to tail-powered swimming (demo: propulsion handed to the spine does not go back).',
     ),
     // Sankoff step matrix, rows/columns in `states` order. Unlike *Habitat* this
@@ -313,9 +313,9 @@ export function createAquaticSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, habitat.id, terId, 'high', tr('演示形态学证据', 'Demo morphological evidence'));
-  hypothesise(cladeB, habitat.id, terId, 'medium', tr('演示骨盆形态', 'Demo pelvis morphology'));
-  hypothesise(cladeD, habitat.id, semiId, 'medium', tr('演示运动形态', 'Demo locomotor morphology'));
+  hypothesise(rootId, habitat.id, terId, 'high', tr('示例形态学证据', 'Illustrative morphological evidence'));
+  hypothesise(cladeB, habitat.id, terId, 'medium', tr('示例骨盆形态', 'Illustrative pelvis morphology'));
+  hypothesise(cladeD, habitat.id, semiId, 'medium', tr('示例运动形态', 'Illustrative locomotor morphology'));
 
   const innovationId = newId();
   const radiationId = newId();
@@ -327,11 +327,11 @@ export function createAquaticSample(): Project {
       nodeId: cladeD,
       label: tr('摆尾游动', 'Tail-powered swimming'),
       note: tr(
-        '演示谱系中的关键创新：椎骨衍生的尾叶摆动推进，通往全水生生活。',
-        'Key innovation of the demo clade: vertebral-undulation swimming enabling a fully aquatic life.',
+        '示例谱系中的关键创新：椎骨衍生的尾叶摆动推进，通往全水生生活。',
+        'Key innovation of the sample clade: vertebral-undulation swimming enabling a fully aquatic life.',
       ),
       confidence: 'high' as const,
-      support: tr('演示形态学证据', 'Demo morphological evidence'),
+      support: tr('示例形态学证据', 'Illustrative morphological evidence'),
       triggers: [radiationId],
     },
     {
@@ -365,7 +365,7 @@ export function createAquaticSample(): Project {
     states: altStates,
     meta: {
       [rootId]: {
-        [habitat.id]: { confidence: 'low', support: tr('演示：早期记录不确定', 'Demo: uncertain early record') },
+        [habitat.id]: { confidence: 'low', support: tr('早期记录不确定', 'uncertain early record') },
       },
     },
     events: buildEvents(),
@@ -381,47 +381,47 @@ export function createAquaticSample(): Project {
       nodeId: rootId,
       minAge: 52,
       maxAge: 55,
-      label: tr('演示：冠群下限', 'Demo: crown-group bound'),
+      label: tr('冠群下限', 'crown-group bound'),
     },
     {
       id: newId(),
       nodeId: tipG,
       minAge: 47,
       maxAge: 50,
-      label: tr('演示：化石下限', 'Demo: fossil bound'),
+      label: tr('化石下限', 'fossil bound'),
     },
     {
       id: newId(),
       nodeId: tipC,
-      // The two early demo "horizons" (47–50 and 45–49) overlap, as the
+      // The two early sample "horizons" (47–50 and 45–49) overlap, as the
       // stratigraphy of this fictional world requires, and the asserted node age
       // (45.0, fixed by the time-tree identity) sits inside its own window.
       // `validateTimeData` checks both.
       minAge: 45,
       maxAge: 49,
-      label: tr('演示：化石下限', 'Demo: fossil bound'),
+      label: tr('化石下限', 'fossil bound'),
     },
     {
       id: newId(),
       nodeId: cladeD,
       minAge: 34,
       maxAge: 41,
-      label: tr('演示：分支下限', 'Demo: clade minimum'),
+      label: tr('分支下限', 'clade minimum'),
     },
   ];
 
   project.environmentalEvents = [
     {
       id: newId(),
-      label: tr('始新世-渐新世交界', 'Eocene–Oligocene boundary'),
+      label: tr('始新世—渐新世界线', 'Eocene–Oligocene boundary'),
       from: 33.9,
       to: 33.9,
       color: '#ef4444',
-      note: tr('全球气候转冷', 'Global cooling checkpoint'),
+      note: tr('全球气候变冷', 'Global cooling checkpoint'),
     },
     {
       id: newId(),
-      label: tr('中中新世气候转冷', 'Mid-Miocene cooling'),
+      label: tr('中中新世气候变冷', 'Mid-Miocene cooling'),
       from: 14,
       to: 14,
       color: '#ef4444',
@@ -443,7 +443,7 @@ export function createAquaticSample(): Project {
 // SAMPLE 2 — Fictional deep-domain radiation
 // ════════════════════════════════════════════════════════════════════════════
 export function createDeepDomainSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 深域辐射', 'Virtual taxa · Deep-domain radiation'));
+  const project = createEmptyProject(tr('深域辐射', 'Deep-domain radiation'));
   project.sampleId = 'archaea';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -494,7 +494,7 @@ export function createDeepDomainSample(): Project {
       { id: sulfurId, label: tr('硫氧化', 'Sulfur oxidation'), color: '#f59e0b' },
     ],
     description: tr(
-      '演示谱系的核心代谢途径分化（虚构类群）。',
+      '示例谱系的核心代谢途径分化（虚构类群）。',
       'Core metabolic pathway divergence across the fictional clades.',
     ),
   };
@@ -540,9 +540,9 @@ export function createDeepDomainSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, temperature.id, hyperId, 'medium', tr('演示：深部分支证据', 'Demo: deep-branch evidence'));
-  hypothesise(branchB, energy.id, methanoId, 'high', tr('演示：核心基因保守', 'Demo: conserved core genes'));
-  hypothesise(cladeE, energy.id, sulfurId, 'high', tr('演示：硫代谢基因保守', 'Demo: conserved sulfur-metabolism genes'));
+  hypothesise(rootId, temperature.id, hyperId, 'medium', tr('深部分支证据', 'deep-branch evidence'));
+  hypothesise(branchB, energy.id, methanoId, 'high', tr('核心基因保守', 'conserved core genes'));
+  hypothesise(cladeE, energy.id, sulfurId, 'high', tr('硫代谢基因保守', 'conserved sulfur-metabolism genes'));
 
   // The 4000–4100 Ma range the root carries as a calibration bound, so the
   // document carries what it asserts and `validateTimeData` can check the root
@@ -553,7 +553,7 @@ export function createDeepDomainSample(): Project {
       nodeId: rootId,
       minAge: 4000,
       maxAge: 4100,
-      label: tr('演示：根年龄下限', 'Demo: root minimum bound'),
+      label: tr('根年龄下限', 'root minimum bound'),
     },
   ];
 
@@ -565,9 +565,9 @@ export function createDeepDomainSample(): Project {
       target: 'branch',
       nodeId: cladeJ,
       label: tr('产甲烷途径', 'Methanogenesis pathway'),
-      note: tr('演示谱系中的代谢创新：从CO₂+H₂产生甲烷。', 'Metabolic innovation of the demo clade: producing methane from CO₂+H₂.'),
+      note: tr('示例谱系中的代谢创新：从 CO₂ + H₂ 生成甲烷。', 'Metabolic innovation of the sample clade: producing methane from CO₂ + H₂.'),
       confidence: 'high',
-      support: tr('演示基因组注释', 'Demo genome annotation'),
+      support: tr('示例基因组注释', 'Illustrative genome annotation'),
       triggers: [],
     },
     {
@@ -607,7 +607,7 @@ export function createDeepDomainSample(): Project {
 // SAMPLE 3 — Fictional wall-type & oxygen demo
 // ════════════════════════════════════════════════════════════════════════════
 export function createWallTypeSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 壁型与氧需求', 'Virtual taxa · Wall type & oxygen'));
+  const project = createEmptyProject(tr('壁型与氧需求', 'Wall type & oxygen'));
   project.sampleId = 'bacteria';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -650,10 +650,10 @@ export function createWallTypeSample(): Project {
     name: tr('细胞壁类型', 'Cell wall type'),
     type: 'discrete',
     states: [
-      { id: thickId, label: tr('厚壁', 'Thick wall'), color: '#7c3aed' },
-      { id: thinId, label: tr('薄壁', 'Thin wall'), color: '#0ea5e9' },
+      { id: thickId, label: tr('革兰阳性', 'Gram-positive'), color: '#7c3aed' },
+      { id: thinId, label: tr('革兰阴性', 'Gram-negative'), color: '#0ea5e9' },
     ],
-    description: tr('演示谱系的细胞壁结构二态（虚构类群）。', 'A two-state demo cell-wall character across the fictional clades.'),
+    description: tr('示例谱系的细胞壁结构二态（虚构类群）。', 'A two-state sample cell-wall character across the fictional clades.'),
   };
   const aerId = newId();
   const anaId = newId();
@@ -665,7 +665,7 @@ export function createWallTypeSample(): Project {
     states: [
       { id: aerId, label: tr('好氧', 'Aerobic'), color: '#22c55e' },
       { id: anaId, label: tr('厌氧', 'Anaerobic'), color: '#71717a' },
-      { id: facId, label: tr('兼性', 'Facultative'), color: '#f59e0b' },
+      { id: facId, label: tr('兼性厌氧', 'Facultative anaerobe'), color: '#f59e0b' },
     ],
   };
   project.characters = [wall, oxygen];
@@ -698,7 +698,7 @@ export function createWallTypeSample(): Project {
   assign(tipsE1, oxygen.id, anaId);
   assign(tipsE2, oxygen.id, facId);
 
-  project.layers[0].name = tr('薄壁祖先', 'Thin-wall-ancestor');
+  project.layers[0].name = tr('革兰阴性祖先', 'Gram-negative ancestor');
   const hypothesise = (
     nodeId: string,
     charId: string,
@@ -706,10 +706,10 @@ export function createWallTypeSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, wall.id, thickId, 'low', tr('演示：壁结构保守性', 'Demo: wall-structure conservation'));
-  hypothesise(cladeD, wall.id, thinId, 'high', tr('演示：双层结构证据', 'Demo: double-layer evidence'));
-  hypothesise(cladeE, wall.id, thickId, 'high', tr('演示：厚壁层证据', 'Demo: thick-wall layer evidence'));
-  hypothesise(cladeF, oxygen.id, facId, 'medium', tr('演示：代谢灵活性', 'Demo: metabolic flexibility'));
+  hypothesise(rootId, wall.id, thickId, 'low', tr('壁结构保守性', 'wall-structure conservation'));
+  hypothesise(cladeD, wall.id, thinId, 'high', tr('双层结构证据', 'double-layer evidence'));
+  hypothesise(cladeE, wall.id, thickId, 'high', tr('革兰阳性细胞壁证据', 'Gram-positive cell-wall evidence'));
+  hypothesise(cladeF, oxygen.id, facId, 'medium', tr('代谢灵活性', 'metabolic flexibility'));
 
   project.events = [
     {
@@ -718,9 +718,9 @@ export function createWallTypeSample(): Project {
       target: 'branch',
       nodeId: cladeM,
       label: tr('产氧代谢', 'Oxygenic metabolism'),
-      note: tr('演示谱系中的关键创新：以水为电子供体的产氧代谢。', 'Key innovation of the demo clade: oxygenic metabolism with water as electron donor.'),
+      note: tr('示例谱系中的关键创新：以水为电子供体的产氧代谢。', 'Key innovation of the sample clade: oxygenic metabolism with water as electron donor.'),
       confidence: 'high',
-      support: tr('演示基因组注释', 'Demo genome annotation'),
+      support: tr('示例基因组注释', 'Illustrative genome annotation'),
       triggers: [],
     },
     {
@@ -741,7 +741,7 @@ export function createWallTypeSample(): Project {
       from: 2400,
       to: 2400,
       color: '#ef4444',
-      note: tr('演示：产氧代谢导致大气氧积累', 'Demo: oxygenic metabolism led to atmospheric oxygen accumulation'),
+      note: tr('产氧代谢导致大气氧积累', 'oxygenic metabolism led to atmospheric oxygen accumulation'),
     },
   ];
 
@@ -753,7 +753,7 @@ export function createWallTypeSample(): Project {
 // SAMPLE 4 — Fictional viral evolution
 // ════════════════════════════════════════════════════════════════════════════
 export function createVirusSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 病毒演化', 'Virtual taxa · Viral evolution'));
+  const project = createEmptyProject(tr('病毒演化', 'Viral evolution'));
   project.sampleId = 'virus';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -817,7 +817,7 @@ export function createVirusSample(): Project {
       { id: rnaId, label: 'RNA', color: '#3b82f6' },
       { id: dnaId, label: 'DNA', color: '#dc2626' },
     ],
-    description: tr('演示谱系遗传物质的核酸类型（虚构类群）。', 'Nucleic acid type of the fictional demo genomes.'),
+    description: tr('示例谱系遗传物质的核酸类型（虚构类群）。', 'Nucleic acid type of the fictional sample genomes.'),
   };
   const animalId = newId();
   const plantId = newId();
@@ -856,8 +856,8 @@ export function createVirusSample(): Project {
   }
   assign(tipsCaud1, host.id, bactId);
   assign(tipsCaud2, host.id, bactId);
-  // The plant tip is the demo plant-infecting lineage; the giant-virus tip is
-  // the demo nucleocytoplasmic virus of amoebae, NOT a bacteriophage.
+  // The plant tip is the sample plant-infecting lineage; the giant-virus tip is
+  // the sample nucleocytoplasmic virus of amoebae, NOT a bacteriophage.
   assign(tipPlant, host.id, plantId);
   assign(tipGiant, host.id, protistId);
 
@@ -869,9 +869,9 @@ export function createVirusSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, genome.id, rnaId, 'low', tr('演示：早期复制子假说', 'Demo: early replicator hypothesis'));
-  hypothesise(rnaClade, genome.id, rnaId, 'high', tr('演示：RNA依赖的复制酶', 'Demo: RNA-dependent replicase'));
-  hypothesise(dnaClade, genome.id, dnaId, 'high', tr('演示：DNA聚合酶同源', 'Demo: DNA polymerase homology'));
+  hypothesise(rootId, genome.id, rnaId, 'low', tr('早期复制子假说', 'early replicator hypothesis'));
+  hypothesise(rnaClade, genome.id, rnaId, 'high', tr('RNA依赖的复制酶', 'RNA-dependent replicase'));
+  hypothesise(dnaClade, genome.id, dnaId, 'high', tr('DNA聚合酶同源', 'DNA polymerase homology'));
 
   project.events = [
     {
@@ -880,9 +880,9 @@ export function createVirusSample(): Project {
       target: 'branch',
       nodeId: retroClade,
       label: tr('逆转录整合', 'Reverse transcription & integration'),
-      note: tr('演示谱系中的关键创新：逆转录酶使RNA基因组可整合入宿主DNA。', 'Key innovation of the demo clade: reverse transcriptase enabling RNA genome integration.'),
+      note: tr('示例谱系中的关键创新：逆转录酶使RNA基因组可整合入宿主DNA。', 'Key innovation of the sample clade: reverse transcriptase enabling RNA genome integration.'),
       confidence: 'high',
-      support: tr('演示基因组注释', 'Demo genome annotation'),
+      support: tr('示例基因组注释', 'Illustrative genome annotation'),
       triggers: [],
     },
     {
@@ -904,7 +904,7 @@ export function createVirusSample(): Project {
 // SAMPLE 5 — Fictional plant terrestrialization
 // ════════════════════════════════════════════════════════════════════════════
 export function createPlantSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 陆地植物化', 'Virtual taxa · Plant terrestrialization'));
+  const project = createEmptyProject(tr('陆地植物化', 'Plant terrestrialization'));
   project.sampleId = 'plant';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -954,7 +954,7 @@ export function createPlantSample(): Project {
       { id: semiId, label: tr('湿生', 'Semi-aquatic'), color: '#3b82f6' },
       { id: terrId, label: tr('陆生', 'Terrestrial'), color: '#22c55e' },
     ],
-    description: tr('演示谱系从水生到陆生的栖息地转变（虚构类群）。', 'The demo clade\u2019s habitat transition from aquatic to terrestrial.'),
+    description: tr('示例谱系从水生到陆生的栖息地转变（虚构类群）。', 'The sample clade\u2019s habitat transition from aquatic to terrestrial.'),
   };
   const noVascId = newId();
   const vascId = newId();
@@ -1019,12 +1019,12 @@ export function createPlantSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, habitat.id, aqId, 'high', tr('演示：近缘水生类群', 'Demo: closely related aquatic taxa'));
-  hypothesise(landPlants, habitat.id, semiId, 'medium', tr('演示：早期陆生记录', 'Demo: early land record'));
-  hypothesise(landPlants, vasc.id, noVascId, 'high', tr('演示：早期类群无维管', 'Demo: early taxa lack vasculature'));
-  hypothesise(trachea, vasc.id, vascId, 'high', tr('演示：输运组织证据', 'Demo: transport-tissue evidence'));
-  hypothesise(sperma, seed.id, seedId, 'high', tr('演示：种子结构证据', 'Demo: seed-structure evidence'));
-  hypothesise(euphyllo, vasc.id, vascId, 'high', tr('演示：大型叶证据', 'Demo: megaphyll evidence'));
+  hypothesise(rootId, habitat.id, aqId, 'high', tr('近缘水生类群', 'closely related aquatic taxa'));
+  hypothesise(landPlants, habitat.id, semiId, 'medium', tr('早期陆生记录', 'early land record'));
+  hypothesise(landPlants, vasc.id, noVascId, 'high', tr('早期类群无维管', 'early taxa lack vasculature'));
+  hypothesise(trachea, vasc.id, vascId, 'high', tr('输运组织证据', 'transport-tissue evidence'));
+  hypothesise(sperma, seed.id, seedId, 'high', tr('种子结构证据', 'seed-structure evidence'));
+  hypothesise(euphyllo, vasc.id, vascId, 'high', tr('大型叶证据', 'megaphyll evidence'));
 
   project.events = [
     {
@@ -1033,9 +1033,9 @@ export function createPlantSample(): Project {
       target: 'branch',
       nodeId: landPlants,
       label: tr('角质层与气孔', 'Cuticle & stomata'),
-      note: tr('演示谱系的关键创新：防水角质层和可调节气孔。', 'Key innovations of the demo clade: waterproof cuticle and regulatable stomata.'),
+      note: tr('示例谱系的关键创新：防水角质层和可调节气孔。', 'Key innovations of the sample clade: waterproof cuticle and regulatable stomata.'),
       confidence: 'high',
-      support: tr('演示：角质层记录', 'Demo: cuticle record'),
+      support: tr('角质层记录', 'cuticle record'),
       triggers: [],
     },
     {
@@ -1044,9 +1044,9 @@ export function createPlantSample(): Project {
       target: 'branch',
       nodeId: trachea,
       label: tr('维管系统', 'Vascular system'),
-      note: tr('演示谱系的关键创新：输运系统使植物体大型化成为可能。', 'Key innovation of the demo clade: a transport system enabling large body size.'),
+      note: tr('示例谱系的关键创新：输运系统使植物体大型化成为可能。', 'Key innovation of the sample clade: a transport system enabling large body size.'),
       confidence: 'high',
-      support: tr('演示：管胞记录', 'Demo: tracheid record'),
+      support: tr('管胞记录', 'tracheid record'),
       triggers: [],
     },
     {
@@ -1054,7 +1054,7 @@ export function createPlantSample(): Project {
       typeId: 'adaptive-radiation',
       target: 'node',
       nodeId: angia,
-      label: tr('有花分支辐射', 'Flowering-clade radiation'),
+      label: tr('被子植物辐射', 'Angiosperm radiation'),
       confidence: 'medium',
       triggers: [],
     },
@@ -1081,7 +1081,7 @@ export function createPlantSample(): Project {
       from: 66,
       to: 66,
       color: '#ef4444',
-      note: tr('演示：有花分支在K-Pg后快速辐射', 'Demo: the flowering clade radiated rapidly after the K–Pg boundary'),
+      note: tr('被子植物分支在 K–Pg 后快速辐射', 'the angiosperm clade radiated rapidly after the K–Pg boundary'),
     },
   ];
 
@@ -1093,7 +1093,7 @@ export function createPlantSample(): Project {
 // SAMPLE 6 — Fictional land-invasion (tetrapod-style) demo
 // ════════════════════════════════════════════════════════════════════════════
 export function createAnimalSample(): Project {
-  const project = createEmptyProject(tr('虚拟类群 · 四足登陆', 'Virtual taxa · Tetrapod land invasion'));
+  const project = createEmptyProject(tr('四足登陆', 'Tetrapod land invasion'));
   project.sampleId = 'animal';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -1159,7 +1159,7 @@ export function createAnimalSample(): Project {
       { id: terrId, label: tr('陆生', 'Terrestrial'), color: '#22c55e' },
       { id: flyId, label: tr('飞行', 'Aerial'), color: '#8b5cf6' },
     ],
-    description: tr('演示谱系从水生到陆生的栖息地演化（虚构类群）。', 'Habitat evolution from aquatic to terrestrial across the demo clade.'),
+    description: tr('示例谱系从水生到陆生的栖息地演化（虚构类群）。', 'Habitat evolution from aquatic to terrestrial across the sample clade.'),
   };
   const finId = newId();
   const digId = newId();
@@ -1197,7 +1197,7 @@ export function createAnimalSample(): Project {
   assign(tipPrimas, habitat.id, terrId);
   assign(tipMuris, habitat.id, terrId);
   assign(tipLupus, habitat.id, terrId);
-  // Extant demo sister lineage: fully aquatic, fin-bearing.
+  // Extant sample sister lineage: fully aquatic, fin-bearing.
   assign(tipMeria, habitat.id, aqId);
 
   assign(tipFin1, limb.id, finId);
@@ -1229,11 +1229,11 @@ export function createAnimalSample(): Project {
     confidence: 'high' | 'medium' | 'low',
     support: string,
   ) => hypothesiseStateAt(project, nodeId, charId, stateId, confidence, support);
-  hypothesise(rootId, habitat.id, aqId, 'high', tr('演示：肉鳍状记录', 'Demo: lobe-fin-like record'));
-  hypothesise(tetra, habitat.id, semiId, 'high', tr('演示：过渡型记录', 'Demo: transitional record'));
-  hypothesise(tetra, limb.id, digId, 'high', tr('演示：多趾型记录', 'Demo: polydactylous record'));
-  hypothesise(amnia, habitat.id, terrId, 'high', tr('演示：羊膜卵记录', 'Demo: amniotic-egg record'));
-  hypothesise(thera, limb.id, digId, 'high', tr('演示：后肢记录', 'Demo: hindlimb record'));
+  hypothesise(rootId, habitat.id, aqId, 'high', tr('肉鳍状记录', 'lobe-fin-like record'));
+  hypothesise(tetra, habitat.id, semiId, 'high', tr('过渡型记录', 'transitional record'));
+  hypothesise(tetra, limb.id, digId, 'high', tr('多趾型记录', 'polydactylous record'));
+  hypothesise(amnia, habitat.id, terrId, 'high', tr('羊膜卵记录', 'amniotic-egg record'));
+  hypothesise(thera, limb.id, digId, 'high', tr('后肢记录', 'hindlimb record'));
 
   project.events = [
     {
@@ -1242,9 +1242,9 @@ export function createAnimalSample(): Project {
       target: 'branch',
       nodeId: tetra,
       label: tr('四肢与趾型', 'Limbs with digits'),
-      note: tr('演示谱系的关键转变：从鳍到四肢，得以登陆。', 'The demo clade\u2019s key transition: from fins to limbs, enabling land invasion.'),
+      note: tr('示例谱系的关键转变：从鳍到四肢，得以登陆。', 'The sample clade\u2019s key transition: from fins to limbs, enabling land invasion.'),
       confidence: 'high',
-      support: tr('演示：过渡型化石记录', 'Demo: transitional-fossil record'),
+      support: tr('过渡型化石记录', 'transitional-fossil record'),
       triggers: [],
     },
     {
@@ -1253,9 +1253,9 @@ export function createAnimalSample(): Project {
       target: 'branch',
       nodeId: amnia,
       label: tr('羊膜卵', 'Amniotic egg'),
-      note: tr('演示谱系的关键创新：羊膜卵使繁殖脱离水体。', 'Key innovation of the demo clade: the amniotic egg freeing reproduction from water.'),
+      note: tr('示例谱系的关键创新：羊膜卵使繁殖脱离水体。', 'Key innovation of the sample clade: the amniotic egg freeing reproduction from water.'),
       confidence: 'high',
-      support: tr('演示：蛋壳记录', 'Demo: eggshell record'),
+      support: tr('蛋壳记录', 'eggshell record'),
       triggers: [],
     },
     {
@@ -1264,9 +1264,9 @@ export function createAnimalSample(): Project {
       target: 'branch',
       nodeId: avia,
       label: tr('飞行', 'Powered flight'),
-      note: tr('演示谱系的关键创新：动力飞行的起源，与羽毛演化密切相关。', 'Key innovation of the demo clade: powered flight, tied to feather evolution.'),
+      note: tr('示例谱系的关键创新：动力飞行的起源，与羽毛演化密切相关。', 'Key innovation of the sample clade: powered flight, tied to feather evolution.'),
       confidence: 'medium',
-      support: tr('演示：羽毛印痕记录', 'Demo: feather-impression record'),
+      support: tr('羽毛印痕记录', 'feather-impression record'),
       triggers: [],
     },
   ];
@@ -1293,7 +1293,7 @@ export function createAnimalSample(): Project {
       from: 66,
       to: 66,
       color: '#ef4444',
-      note: tr('演示：大型陆生类群更替', 'Demo: turnover of large land taxa'),
+      note: tr('大型陆生类群更替', 'turnover of large land taxa'),
     },
   ];
 
@@ -1305,13 +1305,13 @@ export function createAnimalSample(): Project {
 // SAMPLE 7 — Gene-family reconciliation (opens into the reconciliation view)
 // ════════════════════════════════════════════════════════════════════════════
 //
-// The DTL demo the reconciliation workspace's empty state and the sample
+// The DTL sample the reconciliation workspace's empty state and the sample
 // picker both offer: ONE click lands the user in a fully mapped reconciliation
 // — species tree + two gene trees, one duplication, one transfer, one loss —
 // instead of an empty canvas they would first have to populate themselves.
 //
 // Event semantics are validated with `validateScenario` inside this builder
-// (the sample test asserts 0 errors for tree α), so the demo can never ship an
+// (the sample test asserts 0 errors for tree α), so the sample can never ship an
 // inconsistent scenario. Gene docs are built with plain `addChildren` (always
 // binary → the DP solver accepts them) and labelled by hand; node ids are
 // random, so assumptions are written via the ids returned here, never literally.
@@ -1327,7 +1327,7 @@ export function createAnimalSample(): Project {
  */
 export function createReconciliationSample(): Project {
   const project = createEmptyProject(
-    tr('虚拟类群 · 基因家族协同', 'Virtual taxa · Gene-family reconciliation'),
+    tr('基因家族协调', 'Gene-family reconciliation'),
   );
   project.sampleId = 'recon-family';
 
@@ -1421,59 +1421,59 @@ export function sampleById(id: string): SampleDescriptor | undefined {
 export const SAMPLE_PROJECTS: SampleDescriptor[] = [
   {
     id: 'recon-family',
-    label: '虚拟类群 · 基因家族协同',
-    labelEn: 'Virtual taxa · Gene-family reconciliation',
-    desc: '两棵基因家族树与物种树的 DTL 协同演示：加倍、转移与损失各一例。',
-    descEn: 'A DTL reconciliation demo of two gene families against a species tree: one duplication, one transfer, and one loss.',
+    label: '基因家族协调',
+    labelEn: 'Gene-family reconciliation',
+    desc: '两棵基因树与物种树的 DTL 协调示例：各含一例基因重复、水平转移与基因丢失（虚构示例）。',
+    descEn: 'A DTL reconciliation sample of two gene trees against a species tree: one gene duplication, one horizontal transfer and one gene loss (fictional dataset).',
     build: createReconciliationSample,
     entryView: 'recon',
   },
   {
     id: 'archaea',
-    label: '虚拟类群 · 深域辐射',
-    labelEn: 'Virtual taxa · Deep-domain radiation',
-    desc: '虚拟类群两大分支的能量代谢与温度适应性演化',
-    descEn: 'Energy metabolism and temperature adaptation across fictional phyla',
+    label: '深域辐射',
+    labelEn: 'Deep-domain radiation',
+    desc: '两大分支的能量代谢与温度适应性演化（虚构示例）',
+    descEn: 'Energy metabolism and temperature adaptation across fictional phyla (fictional dataset)',
     build: createDeepDomainSample,
   },
   {
     id: 'bacteria',
-    label: '虚拟类群 · 壁型与氧需求',
-    labelEn: 'Virtual taxa · Wall type & oxygen',
-    desc: '虚拟类群的细胞壁类型、氧需求与产氧代谢创新',
-    descEn: 'Cell-wall type, oxygen requirement, and oxygenic-metabolism innovation in fictional lineages',
+    label: '壁型与氧需求',
+    labelEn: 'Wall type & oxygen',
+    desc: '细胞壁类型、氧需求与产氧代谢创新（虚构示例）',
+    descEn: 'Cell-wall type, oxygen requirement, and oxygenic-metabolism innovation (fictional dataset)',
     build: createWallTypeSample,
   },
   {
     id: 'virus',
-    label: '虚拟类群 · 病毒演化',
-    labelEn: 'Virtual taxa · Viral evolution',
-    desc: '虚拟病毒基因组类型、宿主范围与逆转录创新',
-    descEn: 'Genome types, host range, and reverse-transcription innovation of fictional viruses',
+    label: '病毒演化',
+    labelEn: 'Viral evolution',
+    desc: '病毒基因组类型、宿主范围与逆转录创新（虚构示例）',
+    descEn: 'Genome types, host range, and reverse-transcription innovation (fictional dataset)',
     build: createVirusSample,
   },
   {
     id: 'cetacean',
-    label: '虚拟类群 · 水生适应',
-    labelEn: 'Virtual taxa · Aquatic transition',
-    desc: '虚拟类群从陆地到水生的栖息地与运动方式转变',
-    descEn: 'Terrestrial-to-aquatic habitat and locomotion transition of a fictional clade',
+    label: '水生适应',
+    labelEn: 'Aquatic adaptation',
+    desc: '从陆地到水生的栖息地与运动方式变化（虚构示例）',
+    descEn: 'Terrestrial-to-aquatic habitat and locomotion shift of a fictional clade (fictional dataset)',
     build: createAquaticSample,
   },
   {
     id: 'plant',
-    label: '虚拟类群 · 陆地植物化',
-    labelEn: 'Virtual taxa · Plant terrestrialization',
-    desc: '维管组织与种子的演化，从水生藻类到有花类群（虚构）',
-    descEn: 'Vascular tissue and seed evolution from aquatic algae to flowering taxa (fictional)',
+    label: '陆地植物化',
+    labelEn: 'Plant terrestrialization',
+    desc: '维管组织与种子的演化，从水生藻类到被子植物（虚构示例）',
+    descEn: 'Vascular tissue and seed evolution from aquatic algae to angiosperms (fictional dataset)',
     build: createPlantSample,
   },
   {
     id: 'animal',
-    label: '虚拟类群 · 四足登陆',
-    labelEn: 'Virtual taxa · Tetrapod land invasion',
-    desc: '从鳍到四肢、羊膜卵与飞行的演化（虚构类群）',
-    descEn: 'From fins to limbs, amniotic egg, and flight (fictional taxa)',
+    label: '四足登陆',
+    labelEn: 'Tetrapod land invasion',
+    desc: '从鳍到四肢、羊膜卵与飞行的演化（虚构示例）',
+    descEn: 'From fins to limbs, amniotic egg, and flight (fictional dataset)',
     build: createAnimalSample,
   },
 ];

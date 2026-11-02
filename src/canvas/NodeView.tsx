@@ -161,8 +161,8 @@ export const NodeView = memo(function NodeView({
   const ariaLabel = [
     node.label || tr('未命名节点', 'Unnamed node'),
     isLeaf ? tr('末端', 'Tip') : tr('内部节点', 'Internal node'),
-    node.support !== undefined ? `${tr('支持率', 'Support')} ${node.support}` : '',
-    node.age !== undefined ? `${tr('年代', 'Age')} ${node.age}` : '',
+    node.support !== undefined ? `${tr('支持度', 'Support')} ${node.support}` : '',
+    node.age !== undefined ? `${tr('年龄', 'Age')} ${node.age}` : '',
   ]
     .filter(Boolean)
     .join('，');

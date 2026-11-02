@@ -51,6 +51,7 @@ function NodeSearch() {
       <input
         id="node-search-input"
         className="cc-search-input"
+        aria-label={S.toolbar.searchPlaceholder}
         value={q}
         placeholder={S.toolbar.searchPlaceholder}
         onChange={(e) => {
