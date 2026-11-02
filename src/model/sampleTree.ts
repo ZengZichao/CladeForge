@@ -1353,7 +1353,7 @@ export function createReconciliationSample(): Project {
 //   αAC → N1     τ   (gene lineage of A/B transferred out of C's lineage)
 //   αAB → A      δ   (one child co-located on A: classic duplication)
 //   αN3 → N3     σ λ (2 edges below the root ⇒ 1 structural loss)
-//   αEF → N4     δ   (both children end on the same branch)
+//   αEF → N4     σ   (children land on the two N4 branches, E and F)
   const alpha = createEmptyProject(tr('基因家族 α', 'Gene family α'));
   alpha.layout = { ...alpha.layout, type: 'rectangular-cladogram', orientation: 'LR' };
   const aR = alpha.rootId;
@@ -1367,15 +1367,16 @@ export function createReconciliationSample(): Project {
   mkNode(alpha, 'Taxon_D', aN3);
   const aEF = mkNode(alpha, 'αEF', aN3);
   mkNode(alpha, 'Taxon_E', aEF);
-  const tipFNode = mkNode(alpha, 'Taxon_F', aEF);
+  mkNode(alpha, 'Taxon_F', aEF);
   assertBinary(alpha);
   const alphaAssumptions: Record<string, GeneNodeAssumption> = {
     [aR]: { speciesNode: rootId, event: 'speciation' },
     [aAC]: { speciesNode: n1, event: 'transfer' },
     [aAB]: { speciesNode: tipA, event: 'duplication' },
     [aN3]: { speciesNode: n3, event: 'speciation', losses: 1 },
-    [aEF]: { speciesNode: n4, event: 'duplication' },
-    [tipFNode]: { speciesNode: tipE },
+    // Tips E and F map by label to their same-named species tips; αEF is a
+    // speciation whose children enter the two branches of N4.
+    [aEF]: { speciesNode: n4, event: 'speciation' },
   };
 
   // --- gene tree β: mirror topology, one unresolved node (a real warning) ----
