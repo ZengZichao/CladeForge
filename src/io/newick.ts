@@ -587,7 +587,7 @@ function resolveRootedness(project: Project, issues: string[]): void {
     if (declared[1].toUpperCase() === 'U') {
       issues.push(
         tr(
-          '文件声明该树为无根树（[&U]）：CladeForge 内部按有根邻接表存储，重根/极性请显式指定外群；导出时将保留无根标记',
+          '文件声明该树为无根树（[&U]）：CladeForge 内部按有根邻接表存储，重新定根/极性请显式指定外群；导出时将保留无根标记',
           'The file declares this tree unrooted ([&U]): CladeForge stores an adjacency rooted at its root node, so set an outgroup explicitly before trusting polarity; the unrooted marker is kept on export',
         ),
       );
@@ -598,7 +598,7 @@ function resolveRootedness(project: Project, issues: string[]): void {
     root.meta = { ...root.meta, rooted: false };
     issues.push(
       tr(
-        `根节点分出 ${root.childrenIds.length} 个子枝（三歧根 = 无根树的常见写法），已按无根树（[&U]）处理；如需有根分析请显式指定外群重根`,
+        `根节点分出 ${root.childrenIds.length} 个子枝（三歧根 = 无根树的常见写法），已按无根树（[&U]）处理；如需有根分析请显式指定外群重新定根`,
         `The root splits into ${root.childrenIds.length} branches (a trifurcate root is how unrooted trees are usually written), so the tree was treated as unrooted ([&U]); re-root on an explicit outgroup if a rooted analysis is intended`,
       ),
     );
@@ -685,7 +685,7 @@ export function parseNewickTrees(
   if (netChar) {
     issues.push(
       tr(
-        `该文件包含网状进化 Newick 语法（字符「${netChar}」，如 PhyloNet 扩展 Newick 的 #H1 或 >H1/<H1 标记）。本软件按普通树解析：网状关系已被丢弃，这不是无损导入。请用网络专用工具转换后再导入，或在画布上用「关联线」手工补画网状关系`,
+        `该文件包含网状进化 Newick 语法（字符「${netChar}」，如 PhyloNet 扩展 Newick 的 #H1 或 >H1/<H1 标记）。本软件按普通树解析：网状关系已被丢弃，这不是无损导入。请用网络专用工具转换后再导入，或在画布上用「自定义连线」手工补画网状关系`,
         `This file contains network-evolution Newick syntax (character "${netChar}", e.g. PhyloNet extended-Newick #H1 or >H1/<H1 markers). It was parsed as an ORDINARY tree: the reticulation was dropped, which is NOT a lossless import. Convert the file with a network-aware tool first, or redraw the reticulation with custom edges on the canvas`,
       ),
     );
@@ -725,7 +725,7 @@ export function parseNewickTrees(
     if (numericSupports.length > 0 && convention === 'fraction') {
       issues.push(
         tr(
-          `支持值全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 UFBoot=1 表示 1%），请在导入对话框中显式选择「百分比」`,
+          `支持度全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 UFBoot=1 表示 1%），请在导入对话框中显式选择「百分比」`,
           `All support values are ≤ 1 and were interpreted as 0–1 posteriors (fraction). If they are actually 0–100 percentages (e.g. UFBoot=1 meaning 1%), pick "percent" explicitly in the import dialog`,
         ),
       );

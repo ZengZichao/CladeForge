@@ -83,7 +83,7 @@ describe('hypothesisExport', () => {
     const p = projectWithMissingSymbols();
     const section = buildNarrative(p).split('### 覆盖度')[1] ?? '';
     expect(section).toBeTruthy();
-    const counted = /状态转变（(\d+) 处）/.exec(section);
+    const counted = /状态变化（(\d+) 处）/.exec(section);
     expect(counted).toBeTruthy();
     const lines = section.split('\n');
     const branchLines = lines.filter((l) => l.trimStart().startsWith('- 分支「'));
@@ -105,7 +105,7 @@ describe('hypothesisExport', () => {
     // The narrative agrees with the model's own missing-code tally.
     const cov = p.characters.find((c) => c.name === '覆盖度')!;
     expect(missingCodeCount(p, cov)).toBe(2);
-    expect(section).toMatch(/不计入转变总数/);
+    expect(section).toMatch(/不计入状态变化总数/);
   });
 
   it('lists every consistency category it found, not just homoplasy', () => {

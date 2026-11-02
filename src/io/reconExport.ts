@@ -142,11 +142,11 @@ export function geneTreeNhk(project: Project, gene: Project, assumptions: Record
 export function buildReconciliationReport(project: Project): string {
   const c = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
   const L: string[] = [];
-  L.push(`# ${tr('协同重建报告', 'Reconciliation report')} — ${esc(project.name || 'CladeForge')}`);
+  L.push(`# ${tr('协调报告', 'Reconciliation report')} — ${esc(project.name || 'CladeForge')}`);
   L.push('');
   L.push(
     tr(
-      `代价向量：加倍 δ=${c.dup} · 转移 τ=${c.transfer} · 损失 λ=${c.loss} （物种化 σ 计为 0）`,
+      `代价向量：基因重复 δ=${c.dup} · 水平转移 τ=${c.transfer} · 基因丢失 λ=${c.loss}（物种形成 σ 计为 0）`,
       `Costs: duplication δ=${c.dup}, transfer τ=${c.transfer}, loss λ=${c.loss} (speciation σ = 0).`,
     ),
   );
@@ -181,7 +181,7 @@ export function buildReconciliationReport(project: Project): string {
       counts.loss += Math.max(0, a?.losses ?? 0);
       rows.push([
         esc(n.label || n.id.slice(0, 6)),
-        internal ? tr('内部', 'internal') : tr('尖端', 'tip'),
+        internal ? tr('内部', 'internal') : tr('末端', 'tip'),
         mapTo ? esc(speciesLabel(project, mapTo)) : '—',
         [
           a?.event === 'speciation' ? 'σ' : '',
@@ -197,8 +197,8 @@ export function buildReconciliationReport(project: Project): string {
 
     L.push(
       tr(
-        `- 尖端 ${tipCountOf(g.doc)} 个；已映射内部节点 ${mappedInternal}/${totalInternal}`,
-        `- ${tipCountOf(g.doc)} tips; resolved internal nodes ${mappedInternal}/${totalInternal}.`,
+        `- 末端 ${tipCountOf(g.doc)} 个；已映射内部节点 ${mappedInternal}/${totalInternal}`,
+        `- ${tipCountOf(g.doc)} tips; mapped internal nodes ${mappedInternal}/${totalInternal}.`,
       ),
     );
     L.push(
@@ -228,7 +228,7 @@ export function buildReconciliationReport(project: Project): string {
     L.push(`### ${tr('映射与事件', 'Placements & events')}`);
     L.push('');
     L.push(
-      `| ${tr('基因节点', 'gene node')} | ${tr('类型', 'type')} | ${tr('物种靶点', 'species target')} | ${tr('事件/损失', 'events/losses')} |`,
+      `| ${tr('基因节点', 'gene node')} | ${tr('类型', 'type')} | ${tr('物种靶点', 'species target')} | ${tr('事件/丢失', 'events/losses')} |`,
     );
     L.push('| --- | --- | --- | --- |');
     for (const r of rows) L.push(`| ${r[0]} | ${r[1]} | ${r[2]} | ${r[3]} |`);

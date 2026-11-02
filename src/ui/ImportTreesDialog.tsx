@@ -70,7 +70,7 @@ export function ImportTreesDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>{S.importMulti.title}</h2>
-        <div className="hint">{S.importMulti.hint.replace('{n}', String(projects.length))}</div>
+        <div className="hint">{S.importMulti.hint(projects.length)}</div>
         <div className="import-tree-list">
           {summaries.map((s, i) => (
             <label className={`import-tree-row${selected.has(i) ? ' selected' : ''}`} key={i}>

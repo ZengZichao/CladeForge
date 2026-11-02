@@ -183,7 +183,7 @@ export function GeneTreeBuilderDialog({
     notify.success(
       tr(
         `基因树「${finalName}」已就绪：${sc?.mappedTips ?? 0}/${sc?.totalTips ?? tips} 个末端已自动映射`,
-        `Gene tree "${finalName}" is ready: ${sc?.mappedTips ?? 0}/${sc?.totalTips ?? tips} tip(s) auto-mapped`,
+        `Gene tree "${finalName}" is ready: ${sc?.mappedTips ?? 0}/${sc?.totalTips ?? tips} tip${(sc?.mappedTips ?? 0) === 1 ? '' : 's'} auto-mapped`,
       ),
     );
     onClose();

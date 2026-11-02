@@ -3,6 +3,7 @@
 // can gauge distances — a standard expectation for published phylograms.
 
 import type { TimeAxisInfo } from '../layout/timescale';
+import { timeUnitSymbol } from '../ui/units';
 
 const TARGET_PX = 90;
 
@@ -23,7 +24,7 @@ export function ScaleBar({ depthScale, viewScale }: { depthScale: number; viewSc
   return (
     <div className="scale-bar" style={{ width }}>
       <div className="scale-bar-line" />
-      <div className="scale-bar-label">{+value.toFixed(3)}</div>
+      <div className="scale-bar-label">{+value.toFixed(3)} subst./site</div>
     </div>
   );
 }
@@ -51,7 +52,7 @@ export function TimeScaleBar({ timeAxis, viewScale }: { timeAxis: TimeAxisInfo; 
   return (
     <div className="scale-bar" style={{ width }}>
       <div className="scale-bar-line" />
-      <div className="scale-bar-label">{+value.toFixed(3)} {timeAxis.unit}</div>
+      <div className="scale-bar-label">{+value.toFixed(3)} {timeUnitSymbol(timeAxis.unit)}</div>
     </div>
   );
 }

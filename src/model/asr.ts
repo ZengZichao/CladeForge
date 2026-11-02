@@ -668,30 +668,30 @@ export function reconstructMk(
     'unset-branch-length',
     unsetBranch,
     (n) => `${n} 个节点未设置枝长，已按 1 替代（可能影响重建精度）`,
-    (n) => `${n} node(s) have no branch length recorded and were treated as 1 (may affect accuracy)`,
+    (n) => `${n} node${n === 1 ? '' : 's'} have no branch length recorded and were treated as 1 (may affect accuracy)`,
   );
   pushNodeWarning(
     'zero-branch-length',
     zeroBranch,
     (n) => `${n} 个节点枝长为 0（同期分化），已按 0 参与计算`,
-    (n) => `${n} node(s) have a branch length of 0 (synchronous divergence) and were used as 0`,
+    (n) => `${n} node${n === 1 ? '' : 's'} have a branch length of 0 (synchronous divergence) and were used as 0`,
   );
   pushNodeWarning(
     'negative-branch-length',
     negativeBranch,
     (n) => `${n} 个节点枝长为负值，非合法长度，已按 1 替代`,
-    (n) => `${n} node(s) have a negative branch length, which is not a length; replaced by 1`,
+    (n) => `${n} node${n === 1 ? '' : 's'} have a negative branch length, which is not a length; replaced by 1`,
   );
   pushNodeWarning(
     'invalid-branch-length',
     invalidBranch,
     (n) => `${n} 个节点枝长无效（NaN/Infinity），已替代为 1`,
-    (n) => `${n} node(s) with invalid branch lengths (NaN/Infinity) replaced by 1`,
+    (n) => `${n} node${n === 1 ? '' : 's'} with invalid branch lengths (NaN/Infinity) replaced by 1`,
   );
   if (collapsedNodes.length > 0) {
     warnings.push({
       kind: 'posterior-collapse',
-      message: tr(`${collapsedNodes.length} 个节点的后验概率因数值下溢塌缩为均匀分布`, `${collapsedNodes.length} node posterior(s) collapsed to uniform due to numerical underflow`),
+      message: tr(`${collapsedNodes.length} 个节点的后验概率因数值下溢塌缩为均匀分布`, `${collapsedNodes.length} node posterior${collapsedNodes.length === 1 ? '' : 's'} collapsed to uniform due to numerical underflow`),
       count: collapsedNodes.length,
       nodeIds: collapsedNodes,
     });

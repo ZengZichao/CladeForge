@@ -240,7 +240,7 @@ export function validateProject(project: Project): ValidationResult {
       issues.push(
         tr(
           `${project.calibrationPoints.length - validCalibrations.length} 个化石校准点指向已不存在的节点，已移除`,
-          `${project.calibrationPoints.length - validCalibrations.length} calibration point(s) referenced missing nodes; removed`,
+          `${project.calibrationPoints.length - validCalibrations.length} calibration point${project.calibrationPoints.length - validCalibrations.length === 1 ? '' : 's'} referenced missing nodes; removed`,
         ),
       );
       project.calibrationPoints = validCalibrations;

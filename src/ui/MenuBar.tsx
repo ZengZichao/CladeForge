@@ -158,7 +158,7 @@ export function MenuBar({
     {
       label: tr(
         '工作流引导：性状 → 假说 → 分析 → 导出',
-        'Workflow tour: Traits → Hypotheses → Analysis → Export',
+        'Workflow tour: Characters → Hypotheses → Analysis → Export',
       ),
       onClick: onOpenWorkflowTour,
     },
@@ -176,7 +176,7 @@ export function MenuBar({
         notify.info(
           tr(
             `问题反馈地址已复制：${url}`,
-            `Issue URL copied: ${url}`,
+            `Issue-report URL copied: ${url}`,
           ),
         );
       },

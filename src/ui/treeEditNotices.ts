@@ -63,7 +63,7 @@ export function midpointText(result: MidpointResult): string {
   if (!result.ok) {
     return result.failure === 'too-small'
       ? tr(
-          '树的节点太少（少于 3 个），无法测量尖-尖距离，中点定根未执行。',
+          '树的节点太少（少于 3 个），无法测量末端到末端距离，中点定根未执行。',
           'Fewer than three nodes: no tip-to-tip path can be measured, so midpoint rooting was skipped.',
         )
       : tr(
@@ -76,15 +76,15 @@ export function midpointText(result: MidpointResult): string {
     return tr('中点定根已完成。', 'Midpoint rooting completed.');
   }
   const head = tr(
-    `已在最长尖-尖路径的中点定根：树径 = ${formatDiameter(p.diameter)} 个枝长单位（新根落在枝内，不是某个节点上）。`,
+    `已在最长末端到末端路径的中点重新定根：树径 = ${formatDiameter(p.diameter)} 个枝长单位（新根落在枝内，不是某个节点上）。`,
     `Rooted at the midpoint of the longest tip-to-tip path: diameter = ${formatDiameter(p.diameter)} branch-length units (the new root sits INSIDE a branch, not on a node).`,
   );
   if (p.complete) return head;
   return (
     head +
     tr(
-      `注意：${p.unknownEdges} 条分支没有可用枝长，已被排除在直径测量之外（没有按 1 计入），所以这个直径只覆盖树的一部分。`,
-      ` Note that ${p.unknownEdges} branch(es) had no usable length and were EXCLUDED from the measurement (not priced as 1), so this diameter covers only part of the tree.`,
+      `注意：${p.unknownEdges} 条枝没有可用枝长，已被排除在直径测量之外（没有按 1 计入），所以这个直径只覆盖树的一部分。`,
+      ` Note that ${p.unknownEdges} branch${p.unknownEdges === 1 ? '' : 'es'} had no usable length and were excluded from the measurement (not priced as 1), so this diameter covers only part of the tree.`,
     )
   );
 }
@@ -99,25 +99,25 @@ export function estimateAgesText(result: EstimateAgesResult): string {
     );
   }
   const head = tr(
-    `已按拓扑估算 ${filled.length} 个节点年代，保留你已输入的 ${preserved} 个。`,
-    `Estimated ages for ${filled.length} node(s); kept the ${preserved} you had entered.`,
+    `已按拓扑深度填充 ${filled.length} 个节点年龄，保留已输入的 ${preserved} 个。`,
+    `Filled relative ages for ${filled.length} node${filled.length === 1 ? '' : 's'} from topological depth; kept the ${preserved} entered.`,
   );
   const tips =
     tipsAssumedPresent > 0
       ? tr(
-          `${tipsAssumedPresent} 个尖端本无年代，已按现生（年代 0）处理。`,
-          ` ${tipsAssumedPresent} tip(s) had no age and were read as extant (age 0).`,
+          `${tipsAssumedPresent} 个末端本无年龄，已按现生（年龄 0）处理。`,
+          ` ${tipsAssumedPresent} tip${tipsAssumedPresent === 1 ? '' : 's'} had no age and were read as extant (age 0).`,
         )
       : '';
   const scale =
     unit === 'relative'
       ? tr(
-          `单位是分支数（相对时间），不是${timeUnit}：时间轴现在每格代表一条分支，请勿当作绝对年代读数。`,
-          ` The values are EDGE COUNTS (relative time), not ${timeUnit}: the axis now spends one unit per branch, so do not read it as absolute age.`,
+          `单位是枝数（相对时间），不是${timeUnit}：时间轴现在每条枝占一个单位，不应作为绝对年龄读数。`,
+          ` The values are edge counts (relative time), not ${timeUnit}: the axis now spends one unit per branch, so they are not absolute ages.`,
         )
       : tr(
-          `数值已按你填写的最深年代 ${formatDiameter(calibrationAge)} ${timeUnit} 定标，与时间轴同单位。`,
-          ` Scaled onto your deepest entered age, ${formatDiameter(calibrationAge)} ${timeUnit}, so the numbers share the time axis's unit.`,
+          `数值已按填写的最深年龄 ${formatDiameter(calibrationAge)} ${timeUnit} 定标，与时间轴同单位。`,
+          ` Scaled onto the deepest entered age, ${formatDiameter(calibrationAge)} ${timeUnit}, so the numbers share the time axis's unit.`,
         );
   return head + tips + scale;
 }

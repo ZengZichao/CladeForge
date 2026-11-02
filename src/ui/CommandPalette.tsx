@@ -123,7 +123,7 @@ export function CommandPalette({
         const r = estimateAgesWithCalibrations(d);
         msg = tr(
           `已按校准点拟合年代（${r.filled.length} 个节点更新，${r.conflicts.length} 处冲突）`,
-          `Fitted ages to calibration points (${r.filled.length} node(s) updated, ${r.conflicts.length} conflict(s))`,
+          `Fitted ages to calibration points (${r.filled.length} node${r.filled.length === 1 ? '' : 's'} updated, ${r.conflicts.length} conflict${r.conflicts.length === 1 ? '' : 's'})`,
         );
       });
       return msg;
@@ -434,7 +434,7 @@ export function CommandPalette({
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label={S.cmd.placeholder}
+        aria-label={S.shortcuts.palette}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
@@ -445,6 +445,7 @@ export function CommandPalette({
           aria-controls="command-list"
           aria-autocomplete="list"
           aria-activedescendant={activeId}
+          aria-label={S.shortcuts.palette}
           placeholder={S.cmd.placeholder}
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -472,7 +473,7 @@ export function CommandPalette({
             }
           }}
         />
-        <div className="command-list" role="listbox" id="command-list" aria-label={S.cmd.placeholder} ref={listRef}>
+        <div className="command-list" role="listbox" id="command-list" aria-label={S.shortcuts.palette} ref={listRef}>
           {filtered.length === 0 && <div className="command-empty">{S.cmd.none}</div>}
           {grouped.map(([cat, items]) => renderGroup(cat, items))}
         </div>

@@ -35,20 +35,23 @@ export function buildFileMenuItems(
       // The recent entry OPENS THE LIST — the old behaviour jumped straight to
       // the most recent file with no submenu and no feedback, and with no
       // recents it silently did nothing at all.
-      label: S.menu.recent,
+      label: S.review.recentProjects,
       onClick: () => {
         if (firstRecent) onOpenRecent(firstRecent);
       },
     },
     { sep: true },
+    { heading: S.review.importGroup },
     { label: S.menu.importTree, onClick: () => void file.actionImportTree() },
     { label: S.review.importTable, onClick: () => void file.actionImportTable('matrix') },
     { label: S.review.pasteTree, onClick: () => void file.actionPasteTreeFromClipboard() },
     { sep: true },
+    { heading: S.review.exportFigures },
     { label: S.exportItems.svg, onClick: () => void file.actionExportSVG() },
     { label: S.exportItems.png, onClick: () => void file.actionExportPNG() },
     { label: S.exportItems.pdf, onClick: () => void file.actionExportPDF() },
     { sep: true },
+    { heading: S.review.exportData },
     { label: S.exportItems.newick, onClick: () => void file.actionExportNewick() },
     {
       // Called with NO arguments — never `onClick: file.actionExportNexus`,
@@ -58,10 +61,12 @@ export function buildFileMenuItems(
     },
     { label: S.review.exportNexml, onClick: () => void file.actionExportNexml() },
     { sep: true },
+    { heading: S.review.exportTables },
     { label: S.review.exportMatrixCsv, onClick: () => void file.actionExportMatrixCsv() },
     { label: S.review.exportAnnotationsCsv, onClick: () => void file.actionExportAnnotationsCsv() },
     { label: S.review.exportMatrixTemplate, onClick: () => void file.actionExportMatrixTemplate() },
     { sep: true },
+    { heading: S.review.exportReports },
     { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },
     { label: S.exportItems.hypothesisJSON, onClick: () => void file.actionExportHypothesisJSON() },
     { label: S.exportItems.rScript, onClick: () => void file.actionExportRScript() },

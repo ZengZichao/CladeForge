@@ -245,7 +245,7 @@ function finalizeProject(
     notes.push(
       tr(
         `已原样保留 ${preserved.length} 个本版本不识别的工程字段（${preserved.slice(0, 8).join(', ')}${preserved.length > 8 ? ' …' : ''}），保存时会写回`,
-        `Preserved ${preserved.length} field(s) this build does not understand (${preserved.slice(0, 8).join(', ')}${preserved.length > 8 ? ' …' : ''}); they are written back on save`,
+        `Preserved ${preserved.length} field${preserved.length === 1 ? '' : 's'} this build does not understand (${preserved.slice(0, 8).join(', ')}${preserved.length > 8 ? ' …' : ''}); they are written back on save`,
       ),
     );
   }
@@ -259,7 +259,7 @@ function finalizeProject(
     notes.push(
       tr(
         `${strippedDocs} 个嵌入基因树文档自带非空的 geneTrees，已丢弃（本格式只嵌套一层）`,
-        `Dropped the non-empty nested geneTrees of ${strippedDocs} embedded gene-tree document(s); this format nests only one level`,
+        `Dropped the non-empty nested geneTrees of ${strippedDocs} embedded gene-tree document${strippedDocs === 1 ? '' : 's'}; this format nests only one level`,
       ),
     );
   }
@@ -277,8 +277,8 @@ function finalizeProject(
   if (pruned.changed) {
     issues.push(
       tr(
-        `载入时清理了失效的假说层数据：${pruned.states} 条状态记录、${pruned.meta} 条证据记录、${pruned.notes} 条注释、${pruned.events} 个事件（对应已不存在的节点）`,
-        `Pruned stale hypothesis-layer data on load: ${pruned.states} state record(s), ${pruned.meta} evidence record(s), ${pruned.notes} note(s), ${pruned.events} event(s) (nodes no longer exist)`,
+        `打开时清理了失效的假说层数据：${pruned.states} 条状态记录、${pruned.meta} 条证据记录、${pruned.notes} 条注释、${pruned.events} 个事件（对应已不存在的节点）`,
+        `Pruned stale hypothesis-layer data on load: ${pruned.states} state record${pruned.states === 1 ? '' : 's'}, ${pruned.meta} evidence record${pruned.meta === 1 ? '' : 's'}, ${pruned.notes} note${pruned.notes === 1 ? '' : 's'}, ${pruned.events} event${pruned.events === 1 ? '' : 's'} (nodes no longer exist)`,
       ),
     );
   }

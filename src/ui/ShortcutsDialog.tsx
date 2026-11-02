@@ -32,7 +32,7 @@ export interface ShortcutRow {
 export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
   return [
   {
-    title: 'global',
+    title: S.shortcuts.global,
     rows: [
       { keys: '⌘Z / Ctrl+Z', label: tr('撤销', 'Undo') },
       { keys: '⌘⇧Z / Ctrl+Y', label: tr('重做', 'Redo') },
@@ -42,7 +42,7 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
       { keys: '⌘T / ⌘N', label: tr('新建标签页', 'New tab') },
       { keys: '⌘W', label: S.review.shortcutCmdW },
       { keys: '⌘A', label: S.review.shortcutCmdA },
-      { keys: '⌘F / Ctrl+F', label: tr('搜索节点', 'Search nodes'), mode: tr('协同重建视图下仅提示：请用「场景 › 假设清单」定位', 'in the reconciliation view this only points at 场景 › 假设清单') },
+      { keys: '⌘F / Ctrl+F', label: tr('搜索节点', 'Search nodes'), mode: tr('协调视图下仅提示：请用「场景 › 映射与事件」定位', 'in the reconciliation view this only points to Scene › Mappings & events') },
       { keys: '⌘⇧F', label: tr('适应窗口', 'Fit to window') },
       { keys: '⌘0', label: S.review.shortcutCmd0 },
       { keys: '⌘K', label: tr('命令面板', 'Command palette') },
@@ -53,12 +53,12 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
     ],
   },
   {
-    title: 'canvas',
+    title: S.shortcuts.canvas,
     rows: [
       { keys: 'Delete / Backspace', label: tr('删除所选节点', 'Delete selected nodes') },
       { keys: 'F2', label: S.review.shortcutF2 },
       { keys: 'Esc', label: tr('取消选择 / 中断手势', 'Clear selection / abort gesture') },
-      { keys: 'Esc', label: S.review.shortcutEscExitRecon, mode: tr('仅协同重建视图', 'reconciliation view only') },
+      { keys: 'Esc', label: S.review.shortcutEscExitRecon, mode: tr('仅协调视图', 'reconciliation view only') },
       { keys: 'Arrow keys', label: tr('微调选中节点（Shift = 10px 步进）', 'Nudge selected nodes (Shift = 10px steps)') },
       { keys: 'Alt + ← / ↑ · Alt + → / ↓', label: tr('在树节点间移动焦点（父/子/兄弟）', 'Move focus between nodes (parent/child/sibling)') },
       { keys: 'Wheel', label: tr('缩放（Ctrl/⌘ + 滚轮 = 捏合缩放；双指平移 = 平移画布）', 'Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan)') },
@@ -74,7 +74,7 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
     ],
   },
   {
-    title: 'palette',
+    title: S.shortcuts.palette,
     rows: [
       { keys: '↑ / ↓', label: tr('在命令间移动', 'Move between commands') },
       { keys: 'Enter', label: tr('执行选中命令', 'Run selected command') },

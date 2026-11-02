@@ -109,12 +109,12 @@ export function buildNarrative(project: Project): string {
           return tr(`残留值 ${raw}`, `stale value ${raw}`);
         };
         if (real.length) {
-          L.push(tr(`- 状态转变（${real.length} 处）：`, `- State transitions (${real.length}):`));
+          L.push(tr(`- 状态变化（${real.length} 处）：`, `- State changes (${real.length}):`));
           for (const t of real) {
             L.push(tr(`  - 分支「${nl(t.nodeId)}」：${md(t.fromLabel)} → ${md(t.toLabel)}`, `  - Branch “${nl(t.nodeId)}”: ${md(t.fromLabel)} → ${md(t.toLabel)}`));
           }
         } else {
-          L.push(tr('- 未标注明确的状态转变。', '- No explicit state transitions annotated.'));
+          L.push(tr('- 未标注明确的状态变化。', '- No explicit state changes annotated.'));
         }
         // Branches the transition finder could not report at all — BOTH endpoints
         // carry no observation, so there is no change to draw — but where one of
@@ -137,8 +137,8 @@ export function buildNarrative(project: Project): string {
         if (uncounted.length) {
           L.push(
             tr(
-              `- 另有 ${uncounted.length} 处分支的一端未赋值或使用缺失符号（? / -），不计入转变总数：`,
-              `- ${uncounted.length} further branch(es) have an unassigned or missing-symbol ('?' / '-') endpoint and are NOT counted as transitions:`,
+              `- 另有 ${uncounted.length} 处枝的一端未赋值或使用缺失符号（? / -），不计入状态变化总数：`,
+              `- ${uncounted.length} further branch${uncounted.length === 1 ? '' : 'es'} have an unassigned or missing-symbol ('?' / '-') endpoint and are NOT counted as state changes:`,
             ),
           );
           for (const t of uncounted.slice(0, 20)) {

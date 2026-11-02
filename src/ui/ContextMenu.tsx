@@ -103,13 +103,13 @@ export function ContextMenu({
         // the same Undo affordance node deletion has.
         onClick: run(() => {
           const edge = project.customEdges.find((e) => e.id === edgeId);
-          const label = edge?.label || edge?.kind || tr('未命名关联线', 'unnamed edge');
+          const label = edge?.label || edge?.kind || tr('未命名自定义连线', 'unnamed link');
           // One undo-able step with an explicit confirmation toast (PM-20).
           requestConfirm({
             key: 'delete-edge',
             title: S.context.deleteEdge,
             message: tr(
-              `将删除关联线「${label}」及其注记。该操作可撤销。`,
+              `将删除自定义连线「${label}」及其注记。该操作可撤销。`,
               `This deletes the custom edge "${label}" and its note. The action is undoable.`,
             ),
             confirmLabel: S.context.deleteEdge,

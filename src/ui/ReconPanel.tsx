@@ -45,7 +45,7 @@ function issueTagText(issue: ReconIssue): string {
     case 'unmatched-tip':
       return tr('未匹配', 'Unmatched');
     case 'unresolved':
-      return tr('未解析', 'Unresolved');
+      return tr('未映射', 'Unmapped');
     case 'dangling':
       return tr('悬空', 'Dangling');
     case 'event-conflict':
@@ -64,7 +64,7 @@ function issueTagText(issue: ReconIssue): string {
       // species node — express it as the claim it is, tooltip keeps the term.
       return tr('末端被映射到祖先节点', 'Tip mapped onto an ancestral node');
     case 'leaf-event':
-      return tr('尖端事件', 'Leaf event');
+      return tr('末端事件', 'Tip event');
     default:
       return '?';
   }
@@ -170,7 +170,7 @@ export function ReconPanel({
     requestConfirm({
       key: 'recon-remove-gene',
       title: S.recon.remove,
-      message: tr(`将移除基因树「${name}」。`, `Remove gene tree "${name}".`),
+      message: tr(`将删除基因树「${name}」。`, `Delete gene tree "${name}".`),
       confirmLabel: S.recon.remove,
       danger: true,
       onConfirm: () => {
@@ -311,7 +311,7 @@ export function ReconPanel({
                 </span>
                 <span
                   className={`issue-badge${row.errors > 0 ? ' bad' : row.warnings > 0 ? ' warn' : ''}`}
-                  title={tr(`${row.errors} 错误 / ${row.warnings} 提示`, `${row.errors} error(s) / ${row.warnings} note(s)`)}
+                  title={tr(`${row.errors} 错误 / ${row.warnings} 提示`, `${row.errors} error${row.errors === 1 ? '' : 's'} / ${row.warnings} note${row.warnings === 1 ? '' : 's'}`)}
                 >
                   {row.errors > 0 ? row.errors : row.warnings > 0 ? row.warnings : '✓'}
                 </span>
@@ -385,7 +385,7 @@ export function ReconPanel({
       {showScenario && activeEntry && activeStat && (
         <>
           <Section title={S.recon.activeGene} pinable>
-            <Field label={S.recon.rename}>
+            <Field label={S.recon.geneTreeName}>
               <TextField
                 value={activeEntry.name}
                 onCommit={(v) => apply((d) => renameGeneTree(d, activeEntry.id, v))}
@@ -431,7 +431,7 @@ export function ReconPanel({
                       notify.info(
                         tr(
                           `${resolved} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
-                          `${resolved} polytomy(ies) randomly resolved ×${r.polytomySummary.replicates} replicate(s): σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
+                          `${resolved} polytom${resolved === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
                         ),
                       );
                     }
@@ -455,12 +455,12 @@ export function ReconPanel({
                     });
                     notify.info(
                       ok
-                        ? tr('基因树已重根：假设按节点 id 保留，请重新校验场景', 'Gene tree re-rooted: assumptions were kept by node id — re-validate the scenario')
-                        : tr('无法重根（目标无效）', 'Cannot re-root (invalid target)'),
+                        ? tr('基因树已重新定根：映射按节点 id 保留，请重新校验场景', 'Gene tree re-rooted: mappings were kept by node id — re-validate the scenario')
+                        : tr('无法重新定根（目标无效）', 'Cannot re-root (invalid target)'),
                     );
                   }}
                 >
-                  {tr('重根（选中节点）', 'Re-root (selected node)')}
+                  {tr('重新定根（选中节点）', 'Re-root (selected node)')}
                 </button>
                 <button className="btn" onClick={clearAll}>
                   <TrashIcon /> {S.recon.clearAssumptions}
@@ -573,7 +573,7 @@ export function ReconPanel({
               <div className="hint">
                 {tr(
                   `${activeStat.errors} 错误 / ${activeStat.warnings} 提示 · ${S.recon.issuesTitle}`,
-                  `${activeStat.errors} error(s) / ${activeStat.warnings} note(s) · ${S.recon.issuesTitle}`,
+                  `${activeStat.errors} error${activeStat.errors === 1 ? '' : 's'} / ${activeStat.warnings} note${activeStat.warnings === 1 ? '' : 's'} · ${S.recon.issuesTitle}`,
                 )}
               </div>
               <ul className="issue-list">
@@ -714,7 +714,7 @@ export function ReconPanel({
                 commitCosts(preset.costs);
                 notify.info(
                   tr(
-                    `已应用预设「${preset.label}」(δ=${preset.costs.dup}, τ=${preset.costs.transfer}, λ=${preset.costs.loss})。转移廉价时 HGT 更容易被采纳；默认等价代价 (1,1,1) 取代了旧的 transfer=2 偏置`,
+                    `已应用预设「${preset.label}」（δ=${preset.costs.dup}, τ=${preset.costs.transfer}, λ=${preset.costs.loss}）。水平转移代价低时 HGT 更容易被采纳；默认等价代价（1, 1, 1）取代了旧的 transfer=2 偏置`,
                     `Applied preset "${preset.labelEn}" (δ=${preset.costs.dup}, τ=${preset.costs.transfer}, λ=${preset.costs.loss}). Cheap transfers make HGT easier to adopt; the default is now the unbiased unit vector (1,1,1)`,
                   ),
                 );

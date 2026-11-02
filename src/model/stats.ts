@@ -439,14 +439,14 @@ function kAnalysis(project: Project, character: Character): {
   if (n < 3) {
     return {
       result: null,
-      reason: tr(`仅 ${n} 个尖端有数值，K 至少需要 3 个`, `only ${n} numeric tip value(s); K needs at least 3`),
+      reason: tr(`仅 ${n} 个末端有数值，K 至少需要 3 个`, `only ${n} numeric tip value${n === 1 ? '' : 's'}; K needs at least 3`),
     };
   }
   if (n > BLOMBERG_MAX_TIPS) {
     return {
       result: null,
       reason: tr(
-        `${n} 个尖端超过 K 的上限 ${BLOMBERG_MAX_TIPS}（协方差矩阵求解为 O(n³)）`,
+        `${n} 个末端超过 K 的上限 ${BLOMBERG_MAX_TIPS}（协方差矩阵求解为 O(n³)）`,
         `${n} tips exceed the K cap of ${BLOMBERG_MAX_TIPS} (the covariance solve is O(n³))`,
       ),
     };
@@ -526,7 +526,7 @@ function kAnalysis(project: Project, character: Character): {
     return {
       result: null,
       reason: tr(
-        '协方差矩阵奇异（枝长全为 0 或存在重合尖端），K 无法估计',
+        '协方差矩阵奇异（枝长全为 0 或存在重合末端），K 无法估计',
         'The phylogenetic covariance matrix is singular (zero-length or coincident tips); K is not estimable',
       ),
     };

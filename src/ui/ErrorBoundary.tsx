@@ -23,6 +23,7 @@ export interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   error: Error | null;
   info: ErrorInfo | null;
+  copied: boolean;
 }
 
 /** The copyable diagnostic block: what support/debugging actually needs. */
@@ -41,7 +42,7 @@ export function errorDiagnostics(scope: string, error: Error, info: ErrorInfo | 
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null, info: null };
+  state: ErrorBoundaryState = { error: null, info: null, copied: false };
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error };
@@ -54,7 +55,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   private reset = (): void => {
-    this.setState({ error: null, info: null });
+    this.setState({ error: null, info: null, copied: false });
   };
 
   private hardReset = (): void => {
@@ -88,11 +89,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         }}
       >
         <strong>
-          {tr(
-            `「${this.props.scope}」区域出现渲染错误`,
-            `The "${this.props.scope}" area hit a rendering error`,
-          )}
+          {tr('CladeForge 无法渲染此区域。', 'CladeForge could not render this area.')}
         </strong>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>
+          {tr('区域：', 'Scope: ')}
+          {this.props.scope}
+        </span>
         <pre
           style={{
             margin: 0,
@@ -126,7 +128,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           )}
           {!this.props.compact && (
             <button type="button" className="btn btn-danger" onClick={this.hardReset}>
-              {tr('放弃本次会话并重置', 'Discard this session and reset')}
+              {tr('放弃本次会话并重置本地自动保存', 'Discard this session and reset local autosave')}
             </button>
           )}
           <button
@@ -134,9 +136,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             className="btn"
             onClick={() => {
               void navigator.clipboard?.writeText(diag);
+              this.setState({ copied: true });
             }}
           >
-            {tr('复制诊断信息', 'Copy diagnostics')}
+            {this.state.copied
+              ? tr('已复制诊断信息', 'Diagnostics copied')
+              : tr('复制诊断信息', 'Copy diagnostics')}
           </button>
         </div>
         {!this.props.compact && (

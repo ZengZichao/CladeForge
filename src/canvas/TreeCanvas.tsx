@@ -354,12 +354,12 @@ export function TreeCanvas() {
         e.preventDefault();
         const edgeId = st.selectedEdgeId;
         const edge = project.customEdges.find((x) => x.id === edgeId);
-        const label = edge?.label || edge?.kind || tr('未命名关联线', 'unnamed edge');
+        const label = edge?.label || edge?.kind || tr('未命名自定义连线', 'unnamed link');
         requestConfirm({
           key: 'delete-edge-kbd',
           title: S.edge.delete,
           message: tr(
-            `将删除关联线「${label}」及其注记。该操作可撤销。`,
+            `将删除自定义连线「${label}」及其注记。该操作可撤销。`,
             `This deletes the custom edge "${label}" and its note. The action is undoable.`,
           ),
           confirmLabel: S.edge.delete,
@@ -643,7 +643,7 @@ export function TreeCanvas() {
         notify.error(
           tr(
             `暂不支持拖入的文件（${rejected || '未知'}）：请拖入 .nwk/.newick/.tree/.tre/.nex/.nexus 树文件或 .cladeforge.json 项目；CSV/TSV 性状表请用 文件 › 导入表格`,
-            `Unsupported dropped file(s) (${rejected || 'unknown'}): drop a .nwk/.newick/.tree/.tre/.nex/.nexus tree or a .cladeforge.json project; CSV/TSV tables go through File › Import table`,
+            `Unsupported dropped file${files.length === 1 ? '' : 's'} (${rejected || 'unknown'}): drop a .nwk/.newick/.tree/.tre/.nex/.nexus tree or a .cladeforge.json project; CSV/TSV tables go through File › Import table`,
           ),
         );
       }}

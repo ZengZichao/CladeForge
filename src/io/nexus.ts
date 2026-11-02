@@ -246,7 +246,7 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
       if (!stmt.rooted) {
         issues.push(
           tr(
-            '文件声明该树为无根树（[&U]）：CladeForge 内部按有根邻接表存储，重根/极性请显式指定外群；导出 NEXUS 时将原样保留 [&U] 标记',
+            '文件声明该树为无根树（[&U]）：CladeForge 内部按有根邻接表存储，重新定根/极性请显式指定外群；导出 NEXUS 时将原样保留 [&U] 标记',
             'The file declares this tree unrooted ([&U]): CladeForge stores an adjacency rooted at its root node, so set an outgroup explicitly before trusting polarity; the [&U] marker is kept on export',
           ),
         );
@@ -279,8 +279,8 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
         target.characters = [...target.characters, ...matrix.characters];
         issues.push(
           tr(
-            `已从 DATA/CHARACTERS 块导入 ${matrix.characters.length} 个性状，${join.matched} 个尖端匹配成功${join.unmatchedLabels.length > 0 ? `；${join.unmatchedLabels.length} 个矩阵行未匹配到树上的末端（${join.unmatchedLabels.slice(0, 3).join('、')}）` : ''}`,
-            `Imported ${matrix.characters.length} character(s) from the DATA/CHARACTERS block; ${join.matched} tip(s) matched${join.unmatchedLabels.length > 0 ? `; ${join.unmatchedLabels.length} matrix row(s) matched no tip (${join.unmatchedLabels.slice(0, 3).join(', ')})` : ''}`,
+            `已从 DATA/CHARACTERS 块导入 ${matrix.characters.length} 个性状，${join.matched} 个末端匹配成功${join.unmatchedLabels.length > 0 ? `；${join.unmatchedLabels.length} 个矩阵行未匹配到树上的末端（${join.unmatchedLabels.slice(0, 3).join('、')}）` : ''}`,
+            `Imported ${matrix.characters.length} character${matrix.characters.length === 1 ? '' : 's'} from the DATA/CHARACTERS block; ${join.matched} tip${join.matched === 1 ? '' : 's'} matched${join.unmatchedLabels.length > 0 ? `; ${join.unmatchedLabels.length} matrix row${join.unmatchedLabels.length === 1 ? '' : 's'} matched no tip (${join.unmatchedLabels.slice(0, 3).join(', ')})` : ''}`,
           ),
         );
       }
@@ -934,7 +934,7 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
     issues.push(
       tr(
         '文件含 DATA/CHARACTERS 块，但没有可导入的列（每列需至少两个可观测状态）',
-        'The file has DATA/CHARACTERS block(s) but no importable column (each needs at least two observed states)',
+        'The file has a DATA/CHARACTERS block but no importable column (each needs at least two observed states)',
       ),
     );
   }

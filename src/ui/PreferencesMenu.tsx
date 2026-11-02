@@ -209,6 +209,23 @@ export function PreferencesMenu() {
     });
   };
 
+  // P0-15 / U-41: “Don't ask again” is stored permanently, so Preferences must
+  // offer a way back. Clearing the skip keys re-enables every confirmation.
+  const restoreConfirmPrompts = () => {
+    setOpen(false);
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('cladeforge:confirm:skip:')) keys.push(key);
+      }
+      for (const key of keys) localStorage.removeItem(key);
+    } catch {
+      /* storage already broken */
+    }
+    notify.success(S.review.restoredConfirmPrompts);
+  };
+
   const themeOptions: ThemeOption[] = [
     { value: 'light', icon: <SunIcon />, label: S.theme.light },
     { value: 'dark', icon: <MoonIcon />, label: S.theme.dark },
@@ -223,8 +240,8 @@ export function PreferencesMenu() {
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={tr('偏好设置：语言与主题', 'Preferences: language and theme')}
-        title={tr('偏好设置：语言与主题', 'Preferences: language and theme')}
+        aria-label={tr('偏好设置', 'Preferences')}
+        title={tr('偏好设置', 'Preferences')}
       >
         <GearIcon />
         <span className="prefs-trigger-label">{tr('偏好', 'Preferences')}</span>
@@ -326,6 +343,12 @@ export function PreferencesMenu() {
               <span className="prefs-item-label">
                 <span className="prefs-check" aria-hidden="true" />
                 <span>{S.review.diagnosticsCopy}</span>
+              </span>
+            </button>
+            <button className="menu-item prefs-item" onClick={restoreConfirmPrompts}>
+              <span className="prefs-item-label">
+                <span className="prefs-check" aria-hidden="true" />
+                <span>{S.review.restoreConfirmPrompts}</span>
               </span>
             </button>
             <button className="menu-item prefs-item" onClick={clearLocalData} style={{ color: 'var(--danger)' }}>

@@ -114,7 +114,7 @@ describe('estimateAgesText', () => {
     // Without this sentence, an axis built out of topological depths reads as a
     // real "0–12 Ma Phanerozoic" scale.
     const text = estimateAgesText({ ...base, unit: 'relative', calibrationAge: 0 });
-    expect(text).toContain('分支数');
+    expect(text).toContain('枝数');
     expect(text).toContain('不是Ma');
     expect(text).not.toContain('定标');
   });
@@ -133,12 +133,11 @@ describe('estimateAgesText', () => {
       preserved: 9,
     });
     expect(text).toContain('9');
-    expect(text).not.toContain('已按拓扑估算');
-  });
+    expect(text).not.toContain('已按拓扑估算');  });
 
   it('reads correctly in English too', () => {
     setLanguage('en');
-    expect(estimateAgesText({ ...base, unit: 'relative' })).toMatch(/EDGE COUNTS/);
+    expect(estimateAgesText({ ...base, unit: 'relative' })).toMatch(/edge counts/);
     expect(midpointText({ ok: false, failure: 'too-small' })).toMatch(/Fewer than three/);
     expect(outgroupFailureText('unrootable')).toMatch(/cannot host this re-root/);
   });
