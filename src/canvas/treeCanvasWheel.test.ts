@@ -178,6 +178,41 @@ describe('wheel zoom/pan is coalesced into one frame and one commit', () => {
     unsubscribe();
   }, 20000);
 
+  it('latches one mode per burst so a scroll cannot pan and zoom together', async () => {
+    const svg = mount();
+
+    // A high-resolution wheel/trackpad ramps deltaY across the 12 px boundary
+    // inside one burst. Both events arrive before the frame: the first is a
+    // pan-sized tick, the second a full wheel notch.
+    identity();
+    wheel(svg, { deltaY: 5, deltaX: 0, deltaMode: 0, clientX: 200, clientY: 150 });
+    wheel(svg, { deltaY: -100, deltaX: 0, deltaMode: 0, clientX: 200, clientY: 150 });
+    await flushFrame();
+    // Latched to pan: both ticks pan (ty = -5 - (-100)), and no zoom happened.
+    expect(live()).toEqual({ tx: 0, ty: 95, scale: 1 });
+    await endBurst();
+
+    // The reverse ramp: starts as a full wheel notch, then small ticks.
+    identity();
+    wheel(svg, { deltaY: -100, deltaMode: 0, clientX: 200, clientY: 150 });
+    wheel(svg, { deltaY: -5, deltaMode: 0, clientX: 200, clientY: 150 });
+    await flushFrame();
+    // Latched to zoom: two anchored 1.1× steps, no vertical pan.
+    const zoomed = live();
+    expect(zoomed.scale).toBeCloseTo(1.21, 9);
+    expect(zoomed.tx).toBeCloseTo(-42, 6);
+    expect(zoomed.ty).toBeCloseTo(-31.5, 6);
+    await endBurst();
+
+    // A vertical trackpad swipe with small horizontal noise still pans only on
+    // the latched axis, exactly like the old per-event behaviour.
+    identity();
+    wheel(svg, { deltaY: 6, deltaX: 2, deltaMode: 0, clientX: 200, clientY: 150 });
+    await flushFrame();
+    expect(live()).toEqual({ tx: 0, ty: -6, scale: 1 });
+    await endBurst();
+  }, 20000);
+
   it('keeps the documented wheel semantics and scale clamps', async () => {
     const svg = mount();
 
