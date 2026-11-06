@@ -4,10 +4,12 @@
 // viewport fitting, keyboard shortcuts and the layered SVG rendering:
 //   background -> tree branches -> custom edges -> nodes -> connection overlay.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
 import { fitView, zoomAt, type Bounds } from './coords';
+import { getLiveView, resetLiveView, setLiveView, viewTransformAttr } from './liveView';
+import { SelectedCustomEdgeDelete, SnapGuide } from './ViewOverlays';
 import { boundsWithLabels } from './labelBounds';
 import {
   collectSubtree,
@@ -19,7 +21,17 @@ import {
   topologicalNeighbour,
   unpinAll,
 } from '../model/treeOps';
-import { resolveBranchStyle, resolveNodeStyle, branchColorFor, DEFAULT_CANVAS, DEFAULT_BRANCH_STYLE, type NodeId, type Point } from '../model/types';
+import {
+  resolveBranchStyle,
+  resolveNodeStyle,
+  branchColorFor,
+  DEFAULT_CANVAS,
+  DEFAULT_BRANCH_STYLE,
+  type BranchStyle,
+  type NodeId,
+  type Point,
+  type ViewTransform,
+} from '../model/types';
 import {
   characterValueColor,
   continuousRange,
@@ -41,7 +53,7 @@ import { ScaleBar, TimeScaleBar } from './ScaleBar';
 import { ConnectionLayer } from './ConnectionLayer';
 import { eventScreenPoint, useSpaceHeld, useWheel } from './usePanZoom';
 import { useCanvasGestures } from './useDrag';
-import { branchMidpointOn, curveMidpoint } from './paths';
+import { branchMidpointOn } from './paths';
 import { removeCustomEdge } from '../model/treeOps';
 import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO } from './colors';
 import { importTreeText } from '../io/fileActions';
@@ -81,7 +93,10 @@ export function TreeCanvas() {
   const spaceHeld = useSpaceHeld();
 
   const project = useStore((s) => s.project);
-  const view = useStore((s) => s.view);
+  // Deliberately NO `useStore((s) => s.view)` subscription: the view transform
+  // is painted imperatively (see the layout effect and handleWheel below), so a
+  // wheel burst never re-renders the tree.
+  const viewGroupRef = useRef<SVGGElement | null>(null);
   const setView = useStore((s) => s.setView);
   const apply = useStore((s) => s.apply);
   const clearSelection = useStore((s) => s.clearSelection);
@@ -104,6 +119,98 @@ export function TreeCanvas() {
   const focusNode = useStore((s) => s.focusNode);
   const openInNewTab = useStore((s) => s.openInNewTab);
   const requestFit = useStore((s) => s.requestFit);
+
+  // --- imperative view transform (wheel fast path) ---------------------------
+  // The store holds the last COMMITTED transform (history / fit / undo); a wheel
+  // burst accumulates into a ref and paints the world group at most once per
+  // animation frame. Nothing in the tree's React subtree re-renders during the
+  // burst. Committing at a time-based interval — and once when the burst ends —
+  // keeps the Minimap, scale bars and zoom read-outs following at low frequency
+  // without turning every wheel tick into a React commit. A delta threshold
+  // would not be enough: a pinch can deliver ~2 events per frame (2 × 1.1),
+  // which would trip any percentage threshold on every frame.
+  const liveViewRef = useRef(useStore.getState().view);
+  const committedViewRef = useRef(useStore.getState().view);
+  const lastCommitAtRef = useRef(0);
+  const [cullView, setCullView] = useState(useStore.getState().view);
+  const frameRef = useRef<number | null>(null);
+  const wheelIdleRef = useRef<number | null>(null);
+  const wheelActiveRef = useRef(false);
+  // Last view object written to the group. A threshold commit republishes the
+  // very object the frame just painted; deduping it keeps the DOM write at most
+  // once per frame.
+  const appliedViewRef = useRef<ViewTransform | null>(null);
+
+  const applyViewToCanvas = useCallback((v: ViewTransform) => {
+    setLiveView(v);
+    if (appliedViewRef.current === v) return;
+    appliedViewRef.current = v;
+    // Passed by ref instead of through React so an unrelated re-render cannot
+    // put a stale transform back onto the group while a burst is in flight.
+    viewGroupRef.current?.setAttribute('transform', viewTransformAttr(v));
+  }, []);
+
+  useLayoutEffect(() => {
+    lastCommitAtRef.current = performance.now();
+    applyViewToCanvas(getLiveView(useStore.getState().view));
+    const unsubscribe = useStore.subscribe((s, prev) => {
+      if (s.view === prev.view) return;
+      // The burst's own threshold commits carry the very object the wheel
+      // accumulator holds; anything else (fit, minimap click, undo, tab
+      // switch) supersedes the pending transform, and its idle flush must not
+      // overwrite the newer view.
+      if (wheelActiveRef.current && s.view !== liveViewRef.current) {
+        wheelActiveRef.current = false;
+        if (wheelIdleRef.current !== null) {
+          window.clearTimeout(wheelIdleRef.current);
+          wheelIdleRef.current = null;
+        }
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
+      }
+      if (!wheelActiveRef.current) liveViewRef.current = s.view;
+      committedViewRef.current = s.view;
+      applyViewToCanvas(s.view);
+      // Viewport culling is frozen while a wheel burst is in flight (the end of
+      // the burst recomputes it once): a per-tick cull set would rebuild the
+      // branch list and every downstream memo.
+      if (!wheelActiveRef.current) setCullView(s.view);
+    });
+    return () => {
+      unsubscribe();
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
+      resetLiveView();
+    };
+  }, [applyViewToCanvas]);
+
+  const commitWheelView = useCallback((force: boolean) => {
+    // Long continuous gestures still get periodic overlay updates; short bursts
+    // are committed once, when they end.
+    const now = performance.now();
+    if (!force && now - lastCommitAtRef.current < 120) return;
+    lastCommitAtRef.current = now;
+    const next = liveViewRef.current;
+    if (next === committedViewRef.current) return;
+    committedViewRef.current = next;
+    useStore.getState().setView(next);
+  }, []);
+
+  const finishWheelBurst = useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    wheelIdleRef.current = null;
+    // Flush the last accumulated frame before committing its final value.
+    applyViewToCanvas(liveViewRef.current);
+    wheelActiveRef.current = false;
+    commitWheelView(true);
+    // One culling refresh per burst, after the transform settles.
+    setCullView(liveViewRef.current);
+  }, [applyViewToCanvas, commitWheelView]);
 
   // STATE MACHINE — the time-data mismatch is a PROPOSAL, never an imposition.
   //
@@ -270,7 +377,7 @@ export function TreeCanvas() {
     const el = wrapRef.current;
     const p = layoutRef.current.positions.get(focusTarget.id);
     if (!el || !p) return;
-    const scale = useStore.getState().view.scale;
+    const scale = getLiveView(useStore.getState().view).scale;
     setView({ scale, tx: el.clientWidth / 2 - p.x * scale, ty: el.clientHeight / 2 - p.y * scale });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTarget]);
@@ -285,27 +392,52 @@ export function TreeCanvas() {
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
-      const st = useStore.getState();
+      // Build on the LIVE transform, not the last committed one: several wheel
+      // events can arrive before the next frame, and each must compound on the
+      // previous one (or fast trackpads would lose most of their delta).
+      const current = liveViewRef.current;
       const pinch = e.ctrlKey || e.metaKey;
+      let next: ViewTransform;
       if (!pinch && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         // Horizontal two-finger pan, in screen px.
-        setView({ ...st.view, tx: st.view.tx - e.deltaX, ty: st.view.ty });
-        return;
-      }
-      if (!pinch && !e.shiftKey && e.deltaMode === 0 && Math.abs(e.deltaY) > 0 && e.deltaX === 0) {
+        next = { ...current, tx: current.tx - e.deltaX, ty: current.ty };
+      } else if (
+        !pinch &&
+        !e.shiftKey &&
+        e.deltaMode === 0 &&
+        Math.abs(e.deltaY) > 0 &&
+        e.deltaX === 0 &&
+        Math.abs(e.deltaY) < 12
+      ) {
         // Plain vertical wheel: keep the classic zoom (mouse users expect it),
         // but give trackpad-class small deltas a proportional pan instead of
         // 10% zoom steps per pixel-row.
-        if (Math.abs(e.deltaY) < 12) {
-          setView({ ...st.view, tx: st.view.tx, ty: st.view.ty - e.deltaY });
-          return;
-        }
+        next = { ...current, tx: current.tx, ty: current.ty - e.deltaY };
+      } else {
+        // Ctrl/Cmd wheel and pinch share this path; zoomAt keeps the pointer
+        // anchor fixed and clamps to MIN_SCALE / MAX_SCALE exactly as before.
+        const screen = eventScreenPoint(svg, e);
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        next = zoomAt(current, screen, factor);
       }
-      const screen = eventScreenPoint(svg, e);
-      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      setView(zoomAt(st.view, screen, factor));
+      // At a scale limit the transform is unchanged; do not open a burst for a
+      // no-op (preventDefault above still stops the page from scrolling).
+      if (next.scale === current.scale && next.tx === current.tx && next.ty === current.ty) return;
+      liveViewRef.current = next;
+      wheelActiveRef.current = true;
+      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
+      wheelIdleRef.current = window.setTimeout(finishWheelBurst, 140);
+      // Coalesce every wheel event in this frame into ONE paint. The event
+      // handler itself performs no React update.
+      if (frameRef.current === null) {
+        frameRef.current = requestAnimationFrame(() => {
+          frameRef.current = null;
+          applyViewToCanvas(liveViewRef.current);
+          commitWheelView(false);
+        });
+      }
     },
-    [setView],
+    [applyViewToCanvas, commitWheelView, finishWheelBurst],
   );
   useWheel(svgRef, handleWheel);
 
@@ -491,26 +623,45 @@ export function TreeCanvas() {
   // next to the branches it describes, because the degradation is invisible
   // otherwise.
   const layoutNotices = layout.issues ?? [];
+  // Culling follows the COMMITTED view, not the per-frame wheel transform.
+  // Rebuilding this set per wheel tick used to invalidate the branch list, the
+  // transition list and every downstream memo; a burst now recomputes it once,
+  // when it ends. The one-viewport buffer above keeps the frozen set valid for
+  // the whole gesture. Identity is reused when the members did not change, so a
+  // pan that moves the window but reveals no new node costs nothing.
+  const prevCulledRef = useRef<Set<NodeId>>(new Set());
   const culledIds = useMemo(() => {
     const set = new Set<NodeId>();
     // Before the viewport is measured there is nothing to cull against.
     if (viewportSize.w <= 0 || viewportSize.h <= 0) {
       for (const n of visibleNodes) set.add(n.id);
-      return set;
+    } else {
+      const { scale, tx, ty } = cullView;
+      const bufX = Math.max(200, viewportSize.w) / scale;
+      const bufY = Math.max(200, viewportSize.h) / scale;
+      const x0 = -tx / scale - bufX;
+      const x1 = (viewportSize.w - tx) / scale + bufX;
+      const y0 = -ty / scale - bufY;
+      const y1 = (viewportSize.h - ty) / scale + bufY;
+      for (const n of visibleNodes) {
+        const p = layout.positions.get(n.id);
+        if (p && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) set.add(n.id);
+      }
     }
-    const { scale, tx, ty } = view;
-    const bufX = Math.max(200, viewportSize.w) / scale;
-    const bufY = Math.max(200, viewportSize.h) / scale;
-    const x0 = -tx / scale - bufX;
-    const x1 = (viewportSize.w - tx) / scale + bufX;
-    const y0 = -ty / scale - bufY;
-    const y1 = (viewportSize.h - ty) / scale + bufY;
-    for (const n of visibleNodes) {
-      const p = layout.positions.get(n.id);
-      if (p && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) set.add(n.id);
+    const prev = prevCulledRef.current;
+    if (prev.size === set.size) {
+      let same = true;
+      for (const id of set) {
+        if (!prev.has(id)) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return prev;
     }
+    prevCulledRef.current = set;
     return set;
-  }, [visibleNodes, layout, view, viewportSize]);
+  }, [visibleNodes, layout, cullView, viewportSize]);
   // The branches the layout could NOT measure. `computeLayout` parks them on the
   // topological grid instead of inventing a length, but that is invisible unless
   // they are drawn differently — otherwise an unmeasured tree looks
@@ -519,27 +670,39 @@ export function TreeCanvas() {
     () => unmeasuredNodeIds(layout.unknownDepth, layout.unknownAge),
     [layout],
   );
-  const branches = useMemo(
+  // Built from the layout only (not from culling), so the branch items — and
+  // therefore the points handed to every EdgeView — keep their identity across
+  // view-only changes; rendering merely filters this list.
+  const allBranches = useMemo(
     () =>
       visibleNodes
-        .filter((n) => n.parentId && culledIds.has(n.id) && culledIds.has(n.parentId))
+        .filter((n) => n.parentId)
         .map((n) => ({
           node: n,
           from: layout.positions.get(n.parentId as NodeId) as Point,
           to: layout.positions.get(n.id) as Point,
         })),
-    [visibleNodes, culledIds, layout],
+    [visibleNodes, layout],
+  );
+  const branches = useMemo(
+    () => allBranches.filter((b) => culledIds.has(b.node.id) && culledIds.has(b.node.parentId as NodeId)),
+    [allBranches, culledIds],
+  );
+  const allCustomEdgeItems = useMemo(
+    () =>
+      project.customEdges.map((edge) => ({
+        edge,
+        from: layout.positions.get(edge.sourceId) as Point,
+        to: layout.positions.get(edge.targetId) as Point,
+      })),
+    [project.customEdges, layout],
   );
   const customEdgeItems = useMemo(
     () =>
-      project.customEdges
-        .filter((edge) => culledIds.has(edge.sourceId) && culledIds.has(edge.targetId))
-        .map((edge) => ({
-          edge,
-          from: layout.positions.get(edge.sourceId) as Point,
-          to: layout.positions.get(edge.targetId) as Point,
-        })),
-    [project.customEdges, culledIds, layout],
+      allCustomEdgeItems.filter(
+        (ce) => culledIds.has(ce.edge.sourceId) && culledIds.has(ce.edge.targetId),
+      ),
+    [allCustomEdgeItems, culledIds],
   );
   const renderNodes = useMemo(
     () => visibleNodes.filter((n) => culledIds.has(n.id)),
@@ -576,16 +739,101 @@ export function TreeCanvas() {
 
   // Cache resolved styles so that memo (NodeView/EdgeView) works correctly.
   // Without this cache, resolveNodeStyle/resolveBranchStyle return new objects
-  // on every render, defeating shallow comparison.
+  // on every render, defeating shallow comparison. Keyed on the document's own
+  // identities (nodes/defaults) and covering ALL nodes — not just the culled
+  // ones — so a viewport change never swaps style objects under every node.
   const styleCache = useMemo(() => {
     const nodeStyles = new Map<NodeId, ReturnType<typeof resolveNodeStyle>>();
     const branchStyles = new Map<NodeId, ReturnType<typeof resolveBranchStyle>>();
-    for (const n of renderNodes) {
-      nodeStyles.set(n.id, resolveNodeStyle(n, project));
-      if (n.parentId) branchStyles.set(n.id, resolveBranchStyle(n, project));
+    for (const id of Object.keys(project.nodes)) {
+      const n = project.nodes[id];
+      nodeStyles.set(id, resolveNodeStyle(n, project));
+      if (n.parentId) branchStyles.set(id, resolveBranchStyle(n, project));
     }
     return { nodeStyles, branchStyles };
-  }, [renderNodes, project.defaults, project.nodes]);
+  }, [project.defaults, project.nodes]);
+
+  // Resolve each branch's FINAL visual style once per document/colour change.
+  // The old code spread `{ ...bs, color }` inside branches.map, producing a new
+  // style object on every TreeCanvas render and invalidating EdgeView's memo
+  // for the whole tree. Character colouring, the theme substitution for the
+  // default colour, and support-threshold dimming are all folded in here.
+  const edgeStyles = useMemo(() => {
+    const out = new Map<NodeId, { style: BranchStyle; dimmed: boolean }>();
+    const threshold =
+      typeof project.layout.supportThreshold === 'number'
+        ? project.layout.supportThreshold
+        : undefined;
+    for (const id of Object.keys(project.nodes)) {
+      const node = project.nodes[id];
+      if (!node.parentId) continue;
+      const bs = styleCache.branchStyles.get(id) ?? resolveBranchStyle(node, project);
+      // Character colouring can paint the child's state on its incoming branch.
+      // Unassigned branches keep the normal style colour rather than turning
+      // the whole tree grey.
+      const charColor =
+        activeCharacter && characterColorTarget === 'branch'
+          ? nodeCharacterColor(activeCharacter, node, charRange)
+          : undefined;
+      const color =
+        charColor ??
+        branchColorFor(node, project, layout.depths.get(id) ?? 0, layout.maxDepth);
+      // Default branch colour (#333333) is invisible on the dark canvas; when
+      // the user has not customised it, render the theme variable (exports keep
+      // the stored default, so files stay self-contained).
+      const renderedColor = charColor
+        ? charColor
+        : color === DEFAULT_BRANCH_STYLE.color
+          ? 'var(--c-default-branch)'
+          : color;
+      // Support-threshold dimming: branches whose (scale-aware) support falls
+      // below the document's threshold draw dashed and lighter — the SAME rule
+      // the exporter applies, so "I dimmed it on screen" matches the figure.
+      const belowSupport =
+        threshold !== undefined &&
+        typeof node.support === 'number' &&
+        node.childrenIds.length > 0 &&
+        (supportPercent(node) ?? 100) < threshold;
+      const style: BranchStyle = belowSupport
+        ? { ...bs, color: renderedColor, dash: bs.dash === 'solid' ? 'dashed' : bs.dash }
+        : renderedColor === bs.color
+          ? bs
+          : { ...bs, color: renderedColor };
+      out.set(id, { style, dimmed: belowSupport });
+    }
+    return out;
+  }, [
+    project.nodes,
+    project.defaults,
+    project.layout,
+    layout.depths,
+    layout.maxDepth,
+    styleCache,
+    activeCharacter,
+    charRange,
+    characterColorTarget,
+  ]);
+
+  // MRCA highlight style per branch: same geometry as the branch itself, wider
+  // and in the selection colour. Memoised so the selection overlay does not
+  // recreate style objects on unrelated renders.
+  const mrcaStyles = useMemo(() => {
+    const out = new Map<NodeId, BranchStyle>();
+    if (!mrcaPath) return out;
+    for (const b of allBranches) {
+      if (!mrcaPath.branches.has(b.node.id)) continue;
+      const bs = styleCache.branchStyles.get(b.node.id) ?? resolveBranchStyle(b.node, project);
+      out.set(b.node.id, {
+        color: C_MRCA,
+        width: bs.width + 8,
+        dash: 'solid',
+        // Follow the branch's own geometry: a highlight drawn as an elbow over
+        // a curved branch would visibly diverge from it.
+        shape: bs.shape,
+      });
+    }
+    return out;
+  }, [mrcaPath, allBranches, styleCache, project]);
   // An empty document drives the empty-state guidance and sample picker below.
   const isEmpty = (project.nodes[project.rootId]?.childrenIds.length ?? 0) === 0;
 
@@ -703,22 +951,12 @@ export function TreeCanvas() {
           height={size.h}
           fill={canvasBg}
         />
-        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+        {/* No `transform` prop: it is painted through viewGroupRef, once per
+            animation frame, so React never rewrites it during a wheel burst. */}
+        <g ref={viewGroupRef} data-role="world">
           {/* Alignment guide while a dragged node is magnetically snapped to
               another node's coordinate — makes the snap pause visible. */}
-          {snapGuide && (
-            <line
-              x1={snapGuide.axis === 'x' ? snapGuide.coord : layout.bounds.minX - 400}
-              y1={snapGuide.axis === 'x' ? layout.bounds.minY - 400 : snapGuide.coord}
-              x2={snapGuide.axis === 'x' ? snapGuide.coord : layout.bounds.maxX + 400}
-              y2={snapGuide.axis === 'x' ? layout.bounds.maxY + 400 : snapGuide.coord}
-              stroke="var(--c-select)"
-              strokeWidth={1 / view.scale}
-              strokeDasharray={`${6 / view.scale} ${4 / view.scale}`}
-              opacity={0.55}
-              pointerEvents="none"
-            />
-          )}
+          <SnapGuide guide={snapGuide} bounds={layout.bounds} />
           {layout.timeAxis && (
             <TimeAxis
               info={layout.timeAxis}
@@ -729,59 +967,28 @@ export function TreeCanvas() {
           )}          {mrcaPath &&
             branches
               .filter((b) => mrcaPath.branches.has(b.node.id))
-              .map((b) => (
-                <EdgeView
-                  key={`mrca-${b.node.id}`}
-                  from={b.from}
-                  to={b.to}
-                  orientation={project.layout.orientation}
-                  layoutType={project.layout.type}
-                  style={{
-                    color: C_MRCA,
-                    width: resolveBranchStyle(b.node, project).width + 8,
-                    dash: 'solid',
-                    // Follow the branch's own geometry: a highlight drawn as an
-                    // elbow over a curved branch would visibly diverge from it.
-                    shape: resolveBranchStyle(b.node, project).shape,
-                  }}
-                />
-              ))}
+              .map((b) => {
+                const style = mrcaStyles.get(b.node.id);
+                if (!style) return null;
+                return (
+                  <EdgeView
+                    key={`mrca-${b.node.id}`}
+                    from={b.from}
+                    to={b.to}
+                    orientation={project.layout.orientation}
+                    layoutType={project.layout.type}
+                    style={style}
+                  />
+                );
+              })}
           {branches.map((b) => {
-            const bs = styleCache.branchStyles.get(b.node.id) ?? resolveBranchStyle(b.node, project);
-            // Character colouring can paint the child's state on its incoming
-            // branch. Unassigned branches keep the normal style colour rather
-            // than turning the whole tree grey.
-            const charColor =
-              activeCharacter && characterColorTarget === 'branch'
-                ? nodeCharacterColor(activeCharacter, b.node, charRange)
-                : undefined;
-            const color = charColor ?? branchColorFor(
-              b.node,
-              project,
-              layout.depths.get(b.node.id) ?? 0,
-              layout.maxDepth,
-            );
-            // Default branch colour (#333333) is invisible on the dark canvas;
-            // when the user has not customised it, render the theme variable
-            // (exports keep the stored default, so files stay self-contained).
-            const renderedColor = charColor
-              ? charColor
-              : color === DEFAULT_BRANCH_STYLE.color
-                ? 'var(--c-default-branch)'
-                : color;
-            // Support-threshold dimming: branches whose (scale-aware) support
-            // falls below the document's threshold draw dashed and lighter —
-            // the SAME rule the exporter applies, so "I dimmed it on screen"
-            // finally matches "I dimmed it in the figure". The hidden
-            // "non-functional" control in the style panel becomes real.
-            const threshold = typeof project.layout.supportThreshold === 'number'
-              ? project.layout.supportThreshold
-              : undefined;
-            const belowSupport =
-              threshold !== undefined &&
-              typeof b.node.support === 'number' &&
-              b.node.childrenIds.length > 0 &&
-              (supportPercent(b.node) ?? 100) < threshold;
+            // Precomputed once per document/colour change: no inline spread, so
+            // EdgeView's shallow comparison holds across unrelated renders.
+            const resolved = edgeStyles.get(b.node.id);
+            const style =
+              resolved?.style ??
+              styleCache.branchStyles.get(b.node.id) ??
+              resolveBranchStyle(b.node, project);
             return (
               <EdgeView
                 key={`b-${b.node.id}`}
@@ -789,15 +996,9 @@ export function TreeCanvas() {
                 to={b.to}
                 orientation={project.layout.orientation}
                 layoutType={project.layout.type}
-                style={
-                  belowSupport
-                    ? { ...bs, color: renderedColor, dash: bs.dash === 'solid' ? 'dashed' : bs.dash }
-                    : renderedColor === bs.color
-                      ? bs
-                      : { ...bs, color: renderedColor }
-                }
+                style={style}
                 unmeasured={unmeasured.has(b.node.id)}
-                dimmed={belowSupport}
+                dimmed={resolved?.dimmed}
               />
             );
           })}
@@ -816,27 +1017,13 @@ export function TreeCanvas() {
           {(() => {
             const sel = customEdgeItems.find((ce) => ce.edge.id === selectedEdgeId);
             if (!sel) return null;
-            const m = curveMidpoint(sel.from, sel.to, sel.edge.style.curvature);
-            const s = 1 / view.scale; // keep a constant on-screen size
             return (
-              <g
-                transform={`translate(${m.x} ${m.y}) scale(${s})`}
-                style={{ cursor: 'pointer' }}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  apply((d) => removeCustomEdge(d, sel.edge.id));
-                }}
-              >
-                <title>{S.edge.delete}</title>
-                <circle r={11} fill="var(--surface)" stroke="var(--danger)" strokeWidth={1.5} />
-                <path
-                  d="M -4 -4 L 4 4 M 4 -4 L -4 4"
-                  stroke="var(--danger)"
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  pointerEvents="none"
-                />
-              </g>
+              <SelectedCustomEdgeDelete
+                edgeId={sel.edge.id}
+                from={sel.from}
+                to={sel.to}
+                curvature={sel.edge.style.curvature}
+              />
             );
           })()}
           {transitions.map((t) => {
@@ -992,7 +1179,7 @@ export function TreeCanvas() {
       )}
 </g>
       </svg>
-      <Minimap layout={layout} nodes={project.nodes} view={view} size={size} setView={setView} />
+      <Minimap layout={layout} nodes={project.nodes} size={size} setView={setView} />
       {/* On-canvas colour legend */}
       <CanvasLegend unmeasuredBranches={unmeasured.size > 0} />
       {/* On a dated tree the circular layout is the time wheel (root at the
@@ -1005,10 +1192,10 @@ export function TreeCanvas() {
         </div>
       ))}
       {project.layout.type === 'rectangular-phylogram' && hasScaleBar(layout.depthScale) ? (
-        <ScaleBar depthScale={layout.depthScale as number} viewScale={view.scale} />
+        <ScaleBar depthScale={layout.depthScale as number} />
       ) : null}
       {project.layout.type === 'time-calibrated' && layout.timeAxis ? (
-        <TimeScaleBar timeAxis={layout.timeAxis} viewScale={view.scale} />
+        <TimeScaleBar timeAxis={layout.timeAxis} />
       ) : null}
       {isEmpty && (
         <div className="empty-state">

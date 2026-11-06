@@ -101,12 +101,12 @@ export const NodeView = memo(function NodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.label);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Screen-space hit floor: the DOM hit circle is in WORLD units, so at 0.2×
-  // zoom a 14px marker gave a 5.6px target — under every minimum-click standard.
-  // The radius never drops below a 10-SCREEN-px floor; the drag layer's own
-  // grid already works in screen space, and this makes the DOM agree with it.
-  const scale = useStore((s) => s.view.scale);
-  const hitRadius = Math.max(style.size + 8, 10 / Math.max(scale, 0.01));
+  // Fixed WORLD-space hit circle, deliberately independent of the view scale:
+  // subscribing to `s.view.scale` here made every node re-render on every zoom
+  // tick. The old screen-space floor is now covered by the drag layer's
+  // nearest-node search on pointerdown (same 22-screen-px radius it already
+  // uses for drop targets), so a zoomed-out node remains clickable.
+  const hitRadius = style.size + 8;
   const toggleCollapse = () => apply((d) => {
     const n = d.nodes[node.id];
     if (n && n.childrenIds.length > 0) n.collapsed = !n.collapsed;
