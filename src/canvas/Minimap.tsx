@@ -1,9 +1,12 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Corner minimap: a scaled overview of the whole tree with a rectangle marking
 // the current viewport. Click or drag anywhere on it to recentre the main view.
 // Rendered as an overlay inside the canvas wrapper (it needs the live layout,
 // view transform and viewport size).
 
 import { memo, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from 'react';
+import { useStore } from '../model/store';
+import { getLiveView } from './liveView';
 import type { LayoutResult } from '../layout/autoLayout';
 import type { Point, TreeNode, ViewTransform } from '../model/types';
 
@@ -18,16 +21,20 @@ const MAX_MINIMAP_SEGMENTS = 480;
 export const Minimap = memo(function Minimap({
   layout,
   nodes,
-  view,
   size,
   setView,
 }: {
   layout: LayoutResult;
   nodes: Record<string, TreeNode>;
-  view: ViewTransform;
   size: { w: number; h: number };
   setView: (v: ViewTransform) => void;
 }) {
+  // The minimap viewport rectangle follows the COMMITTED view, which the
+  // canvas updates at low frequency during a wheel burst (and once when it
+  // ends). It therefore re-renders a handful of times per gesture instead of
+  // on every wheel tick — subscribing in this leaf keeps the cost out of the
+  // tree canvas.
+  const view = useStore((s) => s.view);
   const b = layout.bounds;
   const treeW = Math.max(1, b.maxX - b.minX);
   const treeH = Math.max(1, b.maxY - b.minY);
@@ -85,12 +92,16 @@ export const Minimap = memo(function Minimap({
 
   const navTo = (clientX: number, clientY: number, rect: DOMRect) => {
     if (!hasView) return;
+    // Use the live scale: a click that lands within the wheel burst's idle
+    // window must keep the zoom the user can already see, not snap back to the
+    // last committed value.
+    const scale = getLiveView(useStore.getState().view).scale;
     const worldX = b.minX + (clientX - rect.left - offX) / k;
     const worldY = b.minY + (clientY - rect.top - offY) / k;
     setView({
-      scale: view.scale,
-      tx: size.w / 2 - worldX * view.scale,
-      ty: size.h / 2 - worldY * view.scale,
+      scale,
+      tx: size.w / 2 - worldX * scale,
+      ty: size.h / 2 - worldY * scale,
     });
   };
 

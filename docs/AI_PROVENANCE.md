@@ -268,6 +268,46 @@ ai_provenance:
       precisely aligned; left-panel controls aligned; menus scroll instead of
       overflowing the window. Standard workspace and inference logic untouched.
     reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+  - release: "unreleased working tree (canvas wheel-performance session)"
+    date: "2026-11-06"
+    tool: "Qoder (Qoder Desktop)"
+    tool_version: "UNKNOWN - author to supply (model not exposed by the runtime)"
+    marker_in_files: true
+    files:
+      - "docs/AI_PROVENANCE.md"
+      - "src/canvas/liveView.ts"
+      - "src/canvas/ViewOverlays.tsx"
+      - "src/canvas/TreeCanvas.tsx"
+      - "src/canvas/useDrag.ts"
+      - "src/canvas/NodeView.tsx"
+      - "src/canvas/Minimap.tsx"
+      - "src/canvas/ScaleBar.tsx"
+      - "src/canvas/treeCanvasWheel.test.ts"
+    scope: >
+      removes the per-wheel-event React render from the SVG canvas: wheel deltas
+      accumulate in a ref and the world group's transform is painted imperatively
+      via setAttribute at most once per animation frame; the store is committed at
+      a 120 ms cadence and once per burst end; TreeCanvas/useDrag stop subscribing
+      to s.view (pointer gestures read the live transform); NodeView drops its
+      s.view.scale subscription in favour of a fixed world hit radius plus a
+      screen-space nearest-node fallback on pointerdown; style caches are keyed on
+      project.nodes/project.defaults and cover all nodes, per-branch rendered
+      colour/dash/support styles are precomputed (no inline spreads in
+      branches.map), branch/custom-edge item lists are separated from culling, and
+      the culled Set identity is reused when its members are unchanged; Minimap,
+      ScaleBar/TimeScaleBar, the snap guide and the selected-edge delete button
+      follow the committed scale as isolated leaf subscribers. Adds a mounted-
+      canvas test proving a burst performs no synchronous update and one commit
+      per burst, plus wheel-semantics tests (pointer-anchored Ctrl-zoom, horizontal
+      pan, small-delta trackpad pan, MIN/MAX clamps).
+    behaviour_changed: >
+      canvas navigation only: wheel zoom/pan no longer re-renders the tree per
+      tick (same zoom anchor, modifier handling, trackpad pan thresholds and scale
+      clamps); viewport culling is frozen during a wheel burst and refreshed once
+      when it ends; low-zoom node clicks are resolved by the drag layer's
+      nearest-node search because the DOM hit circle no longer grows with zoom.
+      Rendering remains SVG; no document, layout or inference behaviour changed.
+    reviewer: "pending - Zichao Zeng (corresponding author) before committing"
 ```
 
 ## Tool names and versions: what could and could not be established

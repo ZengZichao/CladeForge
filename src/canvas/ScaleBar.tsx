@@ -1,7 +1,9 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Branch-length scale bar for the phylogram. A horizontal bar labelled with a
 // "nice" branch-length value (1/2/5 × 10ⁿ) sized to ~90 px on screen, so readers
 // can gauge distances — a standard expectation for published phylograms.
 
+import { useStore } from '../model/store';
 import type { TimeAxisInfo } from '../layout/timescale';
 import { timeUnitSymbol } from '../ui/units';
 
@@ -15,7 +17,11 @@ function niceNumber(x: number): number {
   return nf * 10 ** exp;
 }
 
-export function ScaleBar({ depthScale, viewScale }: { depthScale: number; viewScale: number }) {
+export function ScaleBar({ depthScale }: { depthScale: number }) {
+  // Subscribed here (a leaf) rather than passed from the canvas: the canvas
+  // commits the view at low frequency during a wheel burst, so the bar follows
+  // without being re-rendered per wheel tick.
+  const viewScale = useStore((s) => s.view.scale);
   const pxPerUnit = depthScale * viewScale;
   if (!Number.isFinite(pxPerUnit) || pxPerUnit <= 0) return null;
   const value = niceNumber(TARGET_PX / pxPerUnit);
@@ -35,7 +41,9 @@ export function ScaleBar({ depthScale, viewScale }: { depthScale: number; viewSc
  * so readers can gauge geological time distances — the standard expectation
  * for published chronograms.
  */
-export function TimeScaleBar({ timeAxis, viewScale }: { timeAxis: TimeAxisInfo; viewScale: number }) {
+export function TimeScaleBar({ timeAxis }: { timeAxis: TimeAxisInfo }) {
+  // Same low-frequency leaf subscription as ScaleBar above.
+  const viewScale = useStore((s) => s.view.scale);
   // The ageToCoord function maps an age to a world coordinate. We compute
   // px-per-time-unit from the tick spacing.
   if (!timeAxis || timeAxis.ticks.length < 2) return null;

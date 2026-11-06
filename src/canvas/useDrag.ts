@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Canvas pointer-gesture hook. Encapsulates the drag/interaction state machine
 // used by TreeCanvas: select / drag-move / Alt-drag-reparent / port-drag-connect
 // / pan, via event delegation + pointer capture. Kept separate from rendering so
@@ -13,6 +14,7 @@ import {
 } from 'react';
 import { useStore } from '../model/store';
 import { screenToWorld, worldToScreen } from './coords';
+import { getLiveView } from './liveView';
 import { eventScreenPoint } from './usePanZoom';
 import { hitTargetFor } from './hitTarget';
 import {
@@ -113,7 +115,9 @@ export function useCanvasGestures(
   layoutRef: MutableRefObject<LayoutResult>,
   spaceHeld: MutableRefObject<boolean>,
 ): CanvasGestures {
-  const view = useStore((s) => s.view);
+  // NO `s.view` subscription: a wheel burst must not re-render the canvas.
+  // Gesture handlers read the live transform (including wheel frames not yet
+  // committed to the store) at the moment of the event instead.
   const project = useStore((s) => s.project);
   const setView = useStore((s) => s.setView);
   const apply = useStore((s) => s.apply);
@@ -144,7 +148,7 @@ export function useCanvasGestures(
   const findSnap = useCallback(
     (axis: 'x' | 'y', value: number, exclude: Set<NodeId>): number | null => {
       const { positions, visible } = layoutRef.current;
-      const world = SNAP_RADIUS / useStore.getState().view.scale;
+      const world = SNAP_RADIUS / getLiveView(useStore.getState().view).scale;
       let best: number | null = null;
       let bestD = world;
       for (const id of visible) {
@@ -165,7 +169,7 @@ export function useCanvasGestures(
   const findNodeAt = useCallback(
     (screen: Point, exclude?: Set<NodeId>): NodeId | null => {
       const { positions, visible } = layoutRef.current;
-      const v = useStore.getState().view;
+      const v = getLiveView(useStore.getState().view);
       // Rebuild when the layout object was replaced (positions changed) or the
       // view transform changed (the grid stores screen-space coordinates).
       if (
@@ -246,13 +250,24 @@ export function useCanvasGestures(
     if (e.button === 2) return;
     const svg = svgRef.current;
     if (!svg) return;
+    const view = getLiveView(useStore.getState().view);
     const screen = eventScreenPoint(svg, e);
     const world = screenToWorld(screen, view);
     // Resolve through closest(): the physical hit is often a CHILD of the
     // attributed group (custom edges draw a fat transparent hit path), so
     // reading e.target's own attributes misses and broke edge re-selection.
     const hit = hitTargetFor(e.target);
-    const { role, nodeId, edgeId } = hit;
+    let { role, nodeId, edgeId } = hit;
+    // Node hit circles are world-space (and no longer grow at low zoom). Fall
+    // back to the same screen-space nearest-node search the drop targets use,
+    // so a press near a node still selects it when the tree is zoomed out.
+    if (!role && !nodeId && !edgeId) {
+      const nearest = findNodeAt(screen);
+      if (nearest) {
+        role = 'node';
+        nodeId = nearest;
+      }
+    }
     try {
       svg.setPointerCapture(e.pointerId);
     } catch {
@@ -304,6 +319,7 @@ export function useCanvasGestures(
     if (g.kind === 'none') return;
     const svg = svgRef.current;
     if (!svg) return;
+    const view = getLiveView(useStore.getState().view);
     const screen = eventScreenPoint(svg, e);
     const world = screenToWorld(screen, view);
 
@@ -462,7 +478,7 @@ export function useCanvasGestures(
           setMarquee(null);
           break;
         }
-        const v = useStore.getState().view;
+        const v = getLiveView(useStore.getState().view);
         const w1 = screenToWorld({ x: rect.x1, y: rect.y1 }, v);
         const w2 = screenToWorld({ x: rect.x2, y: rect.y2 }, v);
         const { positions, visible } = layoutRef.current;
