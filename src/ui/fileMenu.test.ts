@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md. 
 // Menu side of the export entry points: the file dropdown must never hand the
 // click event to an action that takes an options bag. `fileMenu.ts` exists so
 // this is testable without rendering the menu bar.
@@ -39,6 +40,8 @@ vi.mock('../io/fileActions', () => ({
   actionExportNarrative: recorder.noop('actionExportNarrative'),
   actionExportHypothesisJSON: recorder.noop('actionExportHypothesisJSON'),
   actionExportRScript: recorder.noop('actionExportRScript'),
+  // The export-settings dialog entry (导出选项…) is synchronous, not a promise.
+  actionOpenExportSettings: recorder.noop('actionOpenExportSettings'),
 }));
 
 import { buildFileMenuItems, buildRecentItems, itemByLabel } from './fileMenu';
@@ -124,6 +127,7 @@ describe('buildFileMenuItems', () => {
       S.review.pasteTree,
       '|',
       S.review.exportFigures,
+      S.exportItems.options,
       S.exportItems.svg,
       S.exportItems.png,
       S.exportItems.pdf,

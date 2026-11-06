@@ -995,9 +995,10 @@ export function TreeCanvas() {
       <Minimap layout={layout} nodes={project.nodes} view={view} size={size} setView={setView} />
       {/* On-canvas colour legend */}
       <CanvasLegend unmeasuredBranches={unmeasured.size > 0} />
-      {/* The circular layout draws radii from topological depth only,
-          so a dated tree switched to it loses the time axis, the era bands and
-          the event strip. Named out loud instead of leaving the reader to notice. */}
+      {/* On a dated tree the circular layout is the time wheel (root at the
+          centre, radii by age); without ages it degrades to topological depth.
+          Either way the mapping / degradation is named out loud instead of
+          leaving the reader to notice. */}
       {layoutNotices.map((issue) => (
         <div key={issue.kind} className="canvas-notice" role="note" title={issue.message}>
           {issue.message}

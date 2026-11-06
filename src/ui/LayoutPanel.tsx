@@ -19,6 +19,7 @@ import {
 import {
   unpinAll,
   hasBranchLengths,
+  hasAges,
   isTimeCalibrated,
   nodesMissingAges,
   collapseAll,
@@ -111,6 +112,11 @@ export function LayoutPanel() {
                 d.layout.type = newType;
                 unpinAll(d);
               });
+              // Each layout has its own extents (circular on a dated tree is
+              // far wider than the cladogram it replaces); keeping the previous
+              // zoom/pan left most of the new layout outside the viewport.
+              // UI-only, like the Re-layout button below.
+              requestFit();
               // BUG-7: this selector is one of the explicit time-chart entry
               // points. On the first entry the era overlay is switched on once
               // and a one-time hint says where the controls are; a remembered
@@ -125,26 +131,30 @@ export function LayoutPanel() {
             <option value="circular">{S.layoutType.circular}</option>
           </select>
         </Field>
-        {/* The circular layout never reads node ages, so
-            choosing it on a dated tree drops the time axis, the era bands and the
-            environmental-event ribbon. The data is intact — but a reader of the
-            figure cannot know that from the picture, so say it where the choice is
-            made (the canvas repeats it from `computeLayout`'s own issue list). */}
-        {layout.type === 'circular' && isTimeCalibrated(project) && (
+        {/* On a dated tree the circular layout is the time wheel: radii map
+            node age (root at the centre, extant taxa on the rim). Without
+            ages the radii fall back to topological depth and the time data is
+            simply not drawn. Say which case applies where the choice is made
+            (the canvas repeats it from `computeLayout`'s own issue list);
+            `hasAges` mirrors the positive-age gate `computeLayout` uses. */}
+        {layout.type === 'circular' && (
           <div className="hint" style={{ marginBottom: 8 }}>
-            {S.layoutPanel.circularIgnoresAges}
+            {hasAges(project) ? S.layoutPanel.circularTimeWheel : S.layoutPanel.circularIgnoresAges}
           </div>
         )}
         <Field label={S.layoutPanel.orientation}>
           <select
             value={layout.orientation}
             disabled={layout.type === 'circular'}
-            onChange={(e) =>
+            onChange={(e) => {
               set((d) => {
                 d.layout.orientation = e.target.value as Orientation;
                 unpinAll(d);
-              })
-            }
+              });
+              // A quarter-turn swaps the extents, so the previous zoom can
+              // push part of the tree out of view — refit, as Re-layout does.
+              requestFit();
+            }}
           >
             <option value="LR">{S.orientation.LR}</option>
             <option value="RL">{S.orientation.RL}</option>

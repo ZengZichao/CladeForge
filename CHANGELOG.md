@@ -1,9 +1,48 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # Changelog
 
 All notable changes to CladeForge are documented here. Format: Keep a
 Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
+
+### UI design review round — 2026-11-06. Fresh headless-browser review of the
+shipped UI (4 layouts × 2 themes × 2 languages × 5 viewports, all dialogs,
+both workspaces) plus a code-level pass over the chrome; every confirmed
+finding repaired.
+
+#### Fixed
+- Toasts no longer cover or click-block open menus: the toast stack sat above
+  the dropdown/context-menu layers, so the layout-proposal toast hid the
+  Preferences panel's language items for its whole TTL. Menus now layer above
+  toasts (`.dropdown-panel`, `.context-menu`).
+- Time panel · environmental events: the colour-hex readout overlapped the
+  name input in the ~200 px rows (hex hidden there; the swatch already edits
+  the colour), and the two per-field "Ma" chips squeezed both number inputs
+  below two-digit width — "34"/"33.9" rendered clipped. One shared unit chip
+  now follows the pair and the spin-button space is reclaimed.
+- Time panel: the "Fill relative ages from topological depth (heuristic)"
+  button overflowed the panel into the canvas; long panel buttons may now
+  wrap (`.btn-multiline`).
+- Switching layout type or orientation no longer keeps the previous zoom/pan:
+  switching to Circular on the dated sample left most of the tree outside the
+  viewport. Both switches fit the view, like the Re-layout button.
+- Circular layout on a dated tree is the time wheel, and now matches its own
+  description: the root sits at the CENTRE and present-day tips fall on the
+  rim. The previous mapping put the root on the rim and collapsed every
+  age-0 tip onto one shared centre point (overlapping markers/labels); the
+  on-canvas notice and the Layout panel hint (now conditional on `hasAges`)
+  describe the actual geometry. Stale comments corrected.
+- Export options… (导出选项…) is reachable again: the export-settings dialog
+  (preset mode, DPI, support values, legend, scale bar, grayscale,
+  background) was registered but no UI called it, so every figure button
+  exported directly. Added to the top of the Export panel and the File
+  menu's FIGURES group.
+
+#### Added
+- Regression test: the circular time wheel keeps the root at the centre and
+  same-age tips on separate rim positions (`autoLayout.test.ts`).
 
 ### Review round 2 — fixes for the four review reports (PM / domain expert /
 journal editor / postdoc), grouped by theme. Every entry closes one or more

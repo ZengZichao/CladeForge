@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md. 
 // Auto-layout engine built on d3-hierarchy.
 //
 // Produces world-space positions for every *visible* node (collapsed subtrees
@@ -215,12 +216,14 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
   const unknownAge = new Set<NodeId>();
 
   if (layout.type === 'circular') {
-    // Circular time tree: when the tree carries ages, radii map AGE (root =
-    // outermost… no — root at centre is the convention) so the polar figure is
-    // a real chronogram; the polar time wheel is the standard presentation for
-    // large dated trees (outbreaks, deep-time clones). Angles stay equally
-    // spaced over tips. Without ages the radius falls back to topological
-    // depth and the honest degradation notice is kept.
+    // Circular time tree: when the tree carries ages, radii map AGE so the
+    // polar figure is a real chronogram; the polar time wheel is the standard
+    // presentation for large dated trees (outbreaks, deep-time clones). The
+    // root sits at the CENTRE (radius 0) and the present-day rim carries the
+    // tips — the same orientation the depth fallback already uses (root depth
+    // 0 → centre), and the only arrangement that keeps extant tips from
+    // collapsing onto one shared point. Angles stay equally spaced over tips.
+    // Without ages the radius falls back to topological depth.
     const dated = Object.values(project.nodes).filter((n) => (finiteAge(n) ?? 0) > 0).length;
     let ageRadius: ((age: number) => number) | null = null;
     let circMaxAge = 0;
@@ -237,13 +240,13 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
         return age;
       };
       const unitMax = unitOf(circMaxAge);
-      ageRadius = (age) => (unitOf(Math.max(0, age)) / unitMax) * maxRadius;
+      ageRadius = (age) => (1 - unitOf(Math.max(0, age)) / unitMax) * maxRadius;
       issues.push({
         kind: 'circular-time-radii',
         count: dated,
         message: tr(
-          `圆形布局已按年龄映射半径（时间轮）：圆心为根，半径∝(最大年龄 − 节点年龄)。角度仍按拓扑等分。`,
-          `The circular layout now maps radii by AGE (time wheel): centre = root, radius ∝ (max age − node age). Angles remain evenly spaced.`,
+          `圆形布局按年龄映射半径（时间轮）：根位于圆心，半径随节点年龄向外递减，现生类群位于外缘。角度仍按拓扑等分。`,
+          `The circular layout maps radii by node age (time wheel): the root sits at the centre and radius decreases with node age, so extant taxa fall on the rim. Angles remain evenly spaced.`,
         ),
       });
     } else if (dated > 0) {
