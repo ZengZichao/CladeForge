@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md. 
 // The menu bar's two dropdown lists, built outside the components so they are
 // testable.
 //
@@ -47,6 +48,13 @@ export function buildFileMenuItems(
     { label: S.review.pasteTree, onClick: () => void file.actionPasteTreeFromClipboard() },
     { sep: true },
     { heading: S.review.exportFigures },
+    {
+      // Opens the export-settings dialog (preset mode, DPI, support values,
+      // legend, scale bar). The ellipsis marks the extra dialog, per the
+      // style guide; the three direct exports below skip it.
+      label: S.exportItems.options,
+      onClick: () => file.actionOpenExportSettings(),
+    },
     { label: S.exportItems.svg, onClick: () => void file.actionExportSVG() },
     { label: S.exportItems.png, onClick: () => void file.actionExportPNG() },
     { label: S.exportItems.pdf, onClick: () => void file.actionExportPDF() },

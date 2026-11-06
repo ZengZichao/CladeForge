@@ -1,3 +1,4 @@
+/* AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md. *
 /* Tailwind v4 entry — utilities are available alongside the hand-written
    classes below. The @theme inline block maps the semantic CSS custom
    properties to Tailwind's color system so utilities like `bg-surface` or
@@ -125,6 +126,10 @@
   /* z-index semantic layers */
   --z-nav: 2; --z-panel: 5; --z-canvas-ctl: 20; --z-menu: 50;
   --z-context: 100; --z-modal: 200; --z-toast: 300; --z-tour: 500;
+  /* Menus sit ABOVE toasts: a toast is transient and unrequested, a menu is
+     deliberately opened — and toasts intercept clicks, so one overlapping an
+     open menu makes the menu's covered items unclickable for its whole TTL. */
+  --z-menu-above-toast: 310; --z-context-above-toast: 320;
 
   /* Functional / semantic colours for canvas interactions. Selection is
      monochrome (near-black); MRCA / drop / connect stay as distinguishable
@@ -642,7 +647,11 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   padding: 4px;
-  z-index: 50;
+  /* Above the toast layer: the toast stack is anchored top-right, exactly where
+     the Preferences panel opens, and toast children intercept pointer events —
+     a lower z-index let a toast cover (and click-block) the open menu's first
+     items, including the language switch, for up to 7 s. */
+  z-index: var(--z-menu-above-toast);
   animation: dropdown-enter 0.12s ease;
 }
 @keyframes dropdown-enter {
@@ -1607,7 +1616,9 @@ body.panel-resizing {
 /* === Context Menu === */
 .context-menu {
   position: fixed;
-  z-index: 100;
+  /* Same reasoning as .dropdown-panel: a toast must never cover or
+     click-block a context menu the user just opened. */
+  z-index: var(--z-context-above-toast);
   min-width: 168px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2105,6 +2116,23 @@ body.panel-resizing {
   gap: 6px;
 }
 .env-row + .env-row { margin-top: 4px; }
+/* The hex readout needs ~66px next to the swatch; inside a ~200px env row that
+   squeezes the name input until the hex text is overlapped by it (measured:
+   hex right edge 214 px vs input left edge 189 px). The swatch already shows
+   and edits the colour, so the hex text stays for roomier rows only. */
+.env-row .color-hex { display: none; }
+/* Chromium reserves ~15px of layout space for the number spin buttons, which
+   in a 46px field clips "33.9" to "33.". These compact cells are keyboard- and
+   picker-editable, so the spinners yield their space. */
+.env-row input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.env-row input[type='number']::-webkit-outer-spin-button,
+.env-row input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .env-row input[type='text'] {
   flex: 1;
   min-width: 0;
@@ -3323,6 +3351,11 @@ pointer-events: auto;
 .export-panel-section h3:first-of-type {
   margin-top: 0;
 }
+/* The 「Export options…」 row opens the publication dialog; it sits above the
+   format groups, so give it the same breathing room a group heading would. */
+.export-panel-section .export-options {
+  margin-bottom: 12px;
+}
 .export-actions {
   display: flex;
   flex-direction: column;
@@ -3331,6 +3364,11 @@ pointer-events: auto;
 .export-btn {
   width: 100%;
   justify-content: center;
+}
+/* Long labels in narrow side panels: allow wrapping instead of overflowing. */
+.btn-multiline {
+  white-space: normal;
+  text-align: left;
 }
 
 .field-error {

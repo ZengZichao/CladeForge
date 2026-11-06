@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md. 
 import { describe, it, expect } from 'vitest';
 import { createSampleProject, createEmptyProject } from '../model/sampleTree';
 import { addChildren, toggleCollapse } from '../model/treeOps';
@@ -218,6 +219,36 @@ describe('computeLayout never invents branch lengths or ages', () => {
     addChildren(q, q.rootId, 2);
     q.layout.type = 'circular';
     expect(computeLayout(q).issues!.some((i) => i.kind === 'circular-ignores-ages')).toBe(false);
+  });
+
+  it('the circular time wheel keeps the root at the centre and extant tips on the rim', () => {
+    // The first implementation mapped radius ∝ node age, which put the ROOT on
+    // the rim and collapsed every age-0 tip onto one shared centre point (their
+    // labels and markers piled up). The chronogram convention — and the
+    // undated depth fallback — put the root at the centre instead.
+    const p = createSampleProject();
+    p.layout.type = 'circular';
+    const { positions } = computeLayout(p);
+    const maxAge = Math.max(...Object.values(p.nodes).map((n) => n.age ?? 0));
+    for (const n of Object.values(p.nodes)) {
+      const pt = positions.get(n.id)!;
+      const r = Math.hypot(pt.x, pt.y);
+      const age = n.age ?? 0;
+      if (age === maxAge) {
+        // The oldest node (the root) sits at the centre…
+        expect(r).toBeCloseTo(0, 6);
+      } else if (age === 0) {
+        // …and present-day tips sit on the rim, not in one central pile.
+        expect(r).toBeGreaterThan(0);
+      }
+    }
+    // Two same-age tips land on the same circle but at different angles.
+    const zeroTips = Object.values(p.nodes).filter((n) => (n.age ?? 0) === 0);
+    if (zeroTips.length >= 2) {
+      const [a, b] = zeroTips.map((n) => positions.get(n.id)!);
+      expect(Math.hypot(a.x, a.y)).toBeCloseTo(Math.hypot(b.x, b.y), 6);
+      expect(a.x === b.x && a.y === b.y).toBe(false);
+    }
   });
 
   it('a fully measured phylogram keeps its previous, data-driven depths', () => {

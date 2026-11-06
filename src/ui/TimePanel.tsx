@@ -123,31 +123,30 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
           </div>
           <div className="env-row">
             <label>{S.layoutPanel.envFrom}</label>
-            {/* BUG-8 unit pass: an age is meaningless without its unit. The
-                environmental-event intervals are read on the same time axis as
-                the node ages, so they show the project's own time unit (Ma by
-                default) rather than a hard-coded label. */}
+            {/* One shared unit chip instead of one per field: two chips in a
+                ~200 px row squeezed each input below two-digit width, so "34"
+                rendered as "3" plus a clipped digit. The unit is the project's
+                time unit, the same axis the node ages are read on. */}
             <NumberField
               value={e.from}
               step={0.1}
-              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
-              unitTitle={tr(
-                '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
-                'The same time unit as the node ages (change it under “Time unit” in this module)',
-              )}
               onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { from: v }))}
             />
             <label>{S.layoutPanel.envTo}</label>
             <NumberField
               value={e.to}
               step={0.1}
-              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
-              unitTitle={tr(
+              onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { to: v }))}
+            />
+            <span
+              className="number-unit"
+              title={tr(
                 '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
                 'The same time unit as the node ages (change it under “Time unit” in this module)',
               )}
-              onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { to: v }))}
-            />
+            >
+              {timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
+            </span>
           </div>
         </div>
       ))}
@@ -410,8 +409,11 @@ export function TimePanel() {
           </select>
         </Field>
         <div className="field row-actions">
+          {/* `.btn` is nowrap; this label ("Fill relative ages from topological
+              depth (heuristic)") is longer than the 272 px panel, so without
+              wrapping the button overflows into the canvas. */}
           <button
-            className="btn"
+            className="btn btn-multiline"
             onClick={() => {
               // `estimateAges` returns what it wrote, and that result drives the
               // toast. Discarding it and toasting a flat "done" would hide both

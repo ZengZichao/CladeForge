@@ -60,6 +60,7 @@ const zh = {
     toggleTitle: '切换语言（中文 / English）',
   },
   exportItems: {
+    options: '导出选项…',
     svg: 'SVG（矢量图）',
     png: 'PNG（位图）',
     pdf: 'PDF（矢量图）',
@@ -699,6 +700,7 @@ const zh = {
     timeUnitHint: (unit: string) => `数值本身不做换算：节点年龄与事件区间仍按输入的数字解释，标签只写为「${unit}」。例如 66 Ma = 66,000 ka；切换单位前请先换算数据。`,
     timeUnitBlocksEras: (unit: string) => `地质年代带按 Ma 定义（ICS 边界），当前单位「${unit}」不是 Ma ⇒ 色带已停用，以免整体错位 10³ 倍。`,
     showEras: '显示地质年代带',
+    circularTimeWheel: '环形布局按年龄映射半径（时间轮）：根位于圆心，年龄最小的类群位于外缘。此布局不绘制时间轴、地质年代带与环境事件带；年代信息只体现在半径上。',
     circularIgnoresAges: '环形布局只按拓扑层数排半径，不读取节点年龄：切到环形后时间轴、宙/代/纪色带与环境事件带都不再显示（数据未被破坏，只是不参与绘图）。',
     phylogramMissingLengths: (n: number, total: number) => `${n}/${total} 条枝没有可用枝长，已按 0 长度画在原层深位置并以灰色虚线标记：这些枝的横向距离没有含义，比例尺只描述有长度的那些枝。`,
     branchLengthUnknownLegend: '灰色虚线枝：未记录枝长（不是零长度）',
@@ -1238,6 +1240,7 @@ const en: Strings = {
     toggleTitle: 'Switch language (中文 / English)',
   },
   exportItems: {
+    options: 'Export options…',
     svg: 'SVG (vector)',
     png: 'PNG (raster)',
     pdf: 'PDF (vector)',
@@ -1873,6 +1876,7 @@ const en: Strings = {
     timeUnitHint: (unit: string) => `No conversion is applied: node ages and event intervals are still read as the numbers entered, and only the label says “${unit}”. For example, 66 Ma = 66,000 ka; convert the data before changing units.`,
     timeUnitBlocksEras: (unit: string) => `The geological bands are defined in Ma (ICS boundaries), and the current unit “${unit}” is not Ma ⇒ the bands are switched off rather than drawn 1000× out of place.`,
     showEras: 'Show geological time bands',
+    circularTimeWheel: 'The circular layout maps radii by node age (time wheel): the root sits at the centre and the youngest taxa fall on the rim. This layout draws no time axis, era bands or environmental-event ribbon; the ages show in the radii only.',
     circularIgnoresAges: 'The circular layout orders radii by topological depth only: it never reads node ages, so the time axis, the eon/era/period bands and the environmental-event ribbon all disappear (the data is untouched — it is simply not drawn).',
     phylogramMissingLengths: (n: number, total: number) => `${n} of ${total} branches have no usable length: they are drawn at zero length on their topological depth and marked grey dashed, because their horizontal distance means nothing — the scale bar describes only the branches that carry a length.`,
     branchLengthUnknownLegend: 'Grey dashed branch: length not recorded (not zero)',

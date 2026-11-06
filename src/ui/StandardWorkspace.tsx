@@ -368,6 +368,13 @@ function ExportPanel({ onNexusExport }: { onNexusExport: () => void }) {
         <span className="panel-header-title">{S.nav.export}</span>
       </div>
       <div className="panel-section export-panel-section">
+        {/* Publication controls (preset mode, DPI, support values, legend,
+            scale bar, grayscale, background). The dialog existed but had no
+            entry point — every figure button exported directly with the live
+            settings. The ellipsis marks that this opens another dialog. */}
+        <div className="export-actions export-options">
+          {row(S.exportItems.options, () => file.actionOpenExportSettings())}
+        </div>
         <h3>{S.exportGroup.vector}</h3>
         <div className="export-actions">
           {row(S.exportItems.svg, () => void file.actionExportSVG())}
