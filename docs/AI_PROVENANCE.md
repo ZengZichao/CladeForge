@@ -332,6 +332,34 @@ ai_provenance:
       of zooming. The zoom anchor, Ctrl/Meta zoom, the 12 px vertical-pan
       threshold and MIN/MAX clamps are unchanged.
     reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+  - release: "unreleased working tree (pointer-pan coalescing)"
+    date: "2026-11-06"
+    tool: "Qoder (Qoder Desktop)"
+    tool_version: "UNKNOWN - author to supply (model not exposed by the runtime)"
+    marker_in_files: true
+    files:
+      - "docs/AI_PROVENANCE.md"
+      - "src/canvas/TreeCanvas.tsx"
+      - "src/canvas/useDrag.ts"
+      - "src/canvas/treeCanvasWheel.test.ts"
+    scope: >
+      routes pointer panning through the same animation-frame-coalesced,
+      imperative view path as wheel navigation: each pointermove updates the
+      live transform ref and is painted at most once per frame, the store is
+      committed at the existing low-frequency cadence and once when the drag
+      ends, viewport culling is frozen for the drag and refreshed once on
+      release, and an interrupted (blur / pointercancel / Escape) pan commits
+      the painted transform instead of leaving the store behind it. Extends the
+      canvas navigation test with a background-drag case (30 moves: no
+      synchronous store/React update, one per-frame DOM write, one commit on
+      release).
+    behaviour_changed: >
+      canvas pointer panning only: dragging the background, Space+drag or
+      middle-button drag no longer re-renders the tree per pointermove; the
+      visible transform and the final committed view are unchanged. Culling is
+      refreshed when the drag ends rather than during it (the existing
+      one-viewport buffer covers the drag).
+    reviewer: "pending - Zichao Zeng (corresponding author) before committing"
 ```
 
 ## Tool names and versions: what could and could not be established

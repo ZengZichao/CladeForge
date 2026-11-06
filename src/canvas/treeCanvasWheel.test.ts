@@ -10,7 +10,10 @@
  *   (a) a burst of wheel ticks performs no synchronous store/React update;
  *   (b) the whole burst becomes ONE committed view + ONE group-attribute write;
  *   (c) the old semantics survive: pointer-anchored Ctrl-zoom, horizontal pan,
- *       small-delta trackpad pan, and MIN/MAX clamping.
+ *       small-delta trackpad pan, and MIN/MAX clamping;
+ *   (d) pointer panning paints through the same coalesced path — no store or
+ *       React update per pointermove, one DOM write per frame, one commit on
+ *       release.
  *
  * (`createElement` rather than JSX: vitest only collects `src/**\/*.test.ts`.)
  */
@@ -254,6 +257,67 @@ describe('wheel zoom/pan is coalesced into one frame and one commit', () => {
     act(() => s().setView({ tx: 0, ty: 0, scale: 0.1 }));
     wheel(svg, { deltaY: 100, deltaMode: 0, clientX: 200, clientY: 150 });
     expect(live()).toEqual({ tx: 0, ty: 0, scale: 0.1 });
+  }, 20000);
+});
+
+describe('pointer panning uses the coalesced view fast path', () => {
+  beforeEach(() => {
+    host = null;
+    root = null;
+    commits = 0;
+  });
+
+  afterEach(cleanup);
+
+  it('per pointermove: no store/React update; once per frame: one paint', async () => {
+    const svg = mount();
+    identity();
+    commits = 0;
+    let viewChanges = 0;
+    const unsubscribe = useStore.subscribe((state, prev) => {
+      if (state.view !== prev.view) viewChanges += 1;
+    });
+    const group = worldGroup(svg);
+    const setAttribute = vi.spyOn(group, 'setAttribute');
+    const transformWrites = () =>
+      setAttribute.mock.calls.filter(([name]) => name === 'transform').length;
+
+    const background = svg.querySelector('rect[data-role="background"]') as SVGRectElement;
+    const pointer = (type: string, clientX: number, clientY: number) => {
+      act(() => {
+        background.dispatchEvent(
+          new MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY, button: 0 }),
+        );
+      });
+    };
+
+    // Plain background drag: the first move crosses the 4 px threshold and
+    // becomes a pan; the following moves are pure view updates.
+    pointer('pointerdown', 5000, 5000);
+    for (let i = 1; i <= 20; i += 1) {
+      pointer('pointermove', 5000 + i * 10, 5000 + i * 5);
+    }
+
+    expect(viewChanges).toBe(0);
+    expect(commits).toBe(0);
+    expect(transformWrites()).toBe(0);
+    expect(s().view).toEqual({ tx: 0, ty: 0, scale: 1 });
+
+    await flushFrame();
+    expect(transformWrites()).toBe(1);
+    expect(live()).toEqual({ tx: 200, ty: 100, scale: 1 });
+    expect(viewChanges).toBeLessThanOrEqual(1);
+    expect(commits).toBeLessThanOrEqual(1);
+
+    pointer('pointerup', 5200, 5100);
+    await flushFrame();
+    // Released: one committed view and one culling refresh, not one per move.
+    expect(s().view).toEqual({ tx: 200, ty: 100, scale: 1 });
+    expect(viewChanges).toBeLessThanOrEqual(2);
+    expect(commits).toBeLessThanOrEqual(2);
+    expect(transformWrites()).toBe(1);
+    setAttribute.mockRestore();
+    unsubscribe();
   }, 20000);
 });
 

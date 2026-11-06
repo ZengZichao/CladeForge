@@ -110,16 +110,30 @@ export interface CanvasGestures {
   marquee: { x: number; y: number; w: number; h: number } | null;
 }
 
+/**
+ * Imperative view callbacks owned by TreeCanvas. Pointer panning paints through
+ * here instead of calling `setView` on every move — the same coalesced fast
+ * path the wheel uses, so a drag does not re-render the tree per pointermove.
+ */
+export interface CanvasViewControls {
+  /** The gesture will manage the view: stop the wheel idle flush. */
+  begin: () => void;
+  /** A pan step, in screen px terms: no React update, painted next frame. */
+  dragTo: (view: ViewTransform) => void;
+  /** Flush and commit the final transform, then refresh culling once. */
+  end: () => void;
+}
+
 export function useCanvasGestures(
   svgRef: MutableRefObject<SVGSVGElement | null>,
   layoutRef: MutableRefObject<LayoutResult>,
   spaceHeld: MutableRefObject<boolean>,
+  viewControls: CanvasViewControls,
 ): CanvasGestures {
-  // NO `s.view` subscription: a wheel burst must not re-render the canvas.
-  // Gesture handlers read the live transform (including wheel frames not yet
-  // committed to the store) at the moment of the event instead.
+  // NO `s.view` subscription: wheel bursts and pointer pans must not re-render
+  // the canvas. Gesture handlers read the live transform (including wheel/drag
+  // frames not yet committed to the store) at the moment of the event instead.
   const project = useStore((s) => s.project);
-  const setView = useStore((s) => s.setView);
   const apply = useStore((s) => s.apply);
   const live = useStore((s) => s.live);
   const beginInteraction = useStore((s) => s.beginInteraction);
@@ -214,15 +228,19 @@ export function useCanvasGestures(
   );
 
   const cancelGesture = useCallback(() => {
+    const wasPanning = gestureRef.current.kind === 'pan';
     if (gestureRef.current.kind === 'press-node') {
       useStore.getState().cancelInteraction();
     }
     gestureRef.current = { kind: 'none' };
+    // A pan has already been painted frame by frame; "cancel" must not leave
+    // the store behind the visible transform.
+    if (wasPanning) viewControls.end();
     setConnect(null);
     setDropTargetId(null);
     setSnapGuide(null);
     setMarquee(null);
-  }, []);
+  }, [viewControls]);
 
   // A gesture can end without ever delivering `pointerup`: the window losing
   // focus or being hidden (Alt-Tab, OS dialog, mobile backgrounding), or the
@@ -302,6 +320,7 @@ export function useCanvasGestures(
       return;
     }
     if (spaceHeld.current || e.button === 1) {
+      viewControls.begin();
       gestureRef.current = { kind: 'pan', startScreen: screen, startView: view };
     } else if (e.shiftKey || e.altKey) {
       // Shift/Alt + background drag = rubber-band selection (pan stays on the
@@ -325,7 +344,9 @@ export function useCanvasGestures(
 
     switch (g.kind) {
       case 'pan':
-        setView({
+        // No setView here: the live transform is painted once per frame and
+        // committed when the drag ends (see CanvasViewControls).
+        viewControls.dragTo({
           ...g.startView,
           tx: g.startView.tx + (screen.x - g.startScreen.x),
           ty: g.startView.ty + (screen.y - g.startScreen.y),
@@ -398,6 +419,7 @@ export function useCanvasGestures(
       case 'press-bg': {
         const dist = Math.hypot(screen.x - g.startScreen.x, screen.y - g.startScreen.y);
         if (!g.moved && dist > MOVE_THRESHOLD) {
+          viewControls.begin();
           gestureRef.current = { kind: 'pan', startScreen: g.startScreen, startView: view };
         }
         break;
@@ -420,6 +442,10 @@ export function useCanvasGestures(
     const screen = eventScreenPoint(svg, e);
 
     switch (g.kind) {
+      case 'pan':
+        // Flush the last frame, commit the final transform once, refresh culling.
+        viewControls.end();
+        break;
       case 'connect': {
         const t = findNodeAt(screen, new Set([g.sourceId]));
         if (t) {

@@ -135,7 +135,9 @@ export function TreeCanvas() {
   const [cullView, setCullView] = useState(useStore.getState().view);
   const frameRef = useRef<number | null>(null);
   const wheelIdleRef = useRef<number | null>(null);
-  const wheelActiveRef = useRef(false);
+  // True for the whole of a view gesture — a wheel burst OR a pointer pan.
+  // Culling is frozen while it is set and refreshed once when it ends.
+  const viewGestureActiveRef = useRef(false);
   // Zoom or pan, decided on the FIRST event of a burst and kept until it ends.
   // A high-resolution wheel / trackpad ramps deltaY across the pan threshold
   // mid-swipe; classifying each event separately made one gesture both pan
@@ -164,8 +166,8 @@ export function TreeCanvas() {
       // accumulator holds; anything else (fit, minimap click, undo, tab
       // switch) supersedes the pending transform, and its idle flush must not
       // overwrite the newer view.
-      if (wheelActiveRef.current && s.view !== liveViewRef.current) {
-        wheelActiveRef.current = false;
+      if (viewGestureActiveRef.current && s.view !== liveViewRef.current) {
+        viewGestureActiveRef.current = false;
         wheelModeRef.current = null;
         if (wheelIdleRef.current !== null) {
           window.clearTimeout(wheelIdleRef.current);
@@ -176,13 +178,13 @@ export function TreeCanvas() {
           frameRef.current = null;
         }
       }
-      if (!wheelActiveRef.current) liveViewRef.current = s.view;
+      if (!viewGestureActiveRef.current) liveViewRef.current = s.view;
       committedViewRef.current = s.view;
       applyViewToCanvas(s.view);
-      // Viewport culling is frozen while a wheel burst is in flight (the end of
-      // the burst recomputes it once): a per-tick cull set would rebuild the
+      // Viewport culling is frozen while a view gesture is in flight (the end of
+      // the gesture recomputes it once): a per-move cull set would rebuild the
       // branch list and every downstream memo.
-      if (!wheelActiveRef.current) setCullView(s.view);
+      if (!viewGestureActiveRef.current) setCullView(s.view);
     });
     return () => {
       unsubscribe();
@@ -192,7 +194,7 @@ export function TreeCanvas() {
     };
   }, [applyViewToCanvas]);
 
-  const commitWheelView = useCallback((force: boolean) => {
+  const commitLiveView = useCallback((force: boolean) => {
     // Long continuous gestures still get periodic overlay updates; short bursts
     // are committed once, when they end.
     const now = performance.now();
@@ -204,7 +206,40 @@ export function TreeCanvas() {
     useStore.getState().setView(next);
   }, []);
 
-  const finishWheelBurst = useCallback(() => {
+  // Paint the latest live transform at most once per frame, then update the
+  // store only at the low-frequency cadence above. This is the shared fast
+  // path for wheel navigation AND pointer panning.
+  const scheduleViewFrame = useCallback(() => {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      applyViewToCanvas(liveViewRef.current);
+      commitLiveView(false);
+    });
+  }, [applyViewToCanvas, commitLiveView]);
+
+  /** Start of a pointer pan: stop the wheel idle flush from ending it early. */
+  const beginPanView = useCallback(() => {
+    if (wheelIdleRef.current !== null) {
+      window.clearTimeout(wheelIdleRef.current);
+      wheelIdleRef.current = null;
+    }
+    wheelModeRef.current = null;
+    viewGestureActiveRef.current = true;
+  }, []);
+
+  /** A pointer-move pan step: no React update, painted on the next frame. */
+  const dragPanView = useCallback(
+    (next: ViewTransform) => {
+      liveViewRef.current = next;
+      viewGestureActiveRef.current = true;
+      scheduleViewFrame();
+    },
+    [scheduleViewFrame],
+  );
+
+  /** End of a view gesture (wheel burst idle or pointer pan release). */
+  const finishViewGesture = useCallback(() => {
     if (frameRef.current !== null) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
@@ -212,12 +247,12 @@ export function TreeCanvas() {
     wheelIdleRef.current = null;
     // Flush the last accumulated frame before committing its final value.
     applyViewToCanvas(liveViewRef.current);
-    wheelActiveRef.current = false;
+    viewGestureActiveRef.current = false;
     wheelModeRef.current = null;
-    commitWheelView(true);
-    // One culling refresh per burst, after the transform settles.
+    commitLiveView(true);
+    // One culling refresh per gesture, after the transform settles.
     setCullView(liveViewRef.current);
-  }, [applyViewToCanvas, commitWheelView]);
+  }, [applyViewToCanvas, commitLiveView]);
 
   // STATE MACHINE — the time-data mismatch is a PROPOSAL, never an imposition.
   //
@@ -323,8 +358,15 @@ export function TreeCanvas() {
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
+  // Pointer panning uses the same fast path as the wheel: per-move transforms
+  // stay in the live ref and are painted once per frame; the store (and the
+  // culling refresh) is touched once when the drag ends.
+  const viewControls = useMemo(
+    () => ({ begin: beginPanView, dragTo: dragPanView, end: finishViewGesture }),
+    [beginPanView, dragPanView, finishViewGesture],
+  );
   const { onPointerDown, onPointerMove, onPointerUp, cancelGesture, connect, dropTargetId, snapGuide, marquee } =
-    useCanvasGestures(svgRef, layoutRef, spaceHeld);
+    useCanvasGestures(svgRef, layoutRef, spaceHeld, viewControls);
   // Drop-zone feedback (PM-04/06): the overlay must be visible WHILE dragging,
   // or the user gets no signal that the canvas accepts files at all.
   const [dragActive, setDragActive] = useState(false);
@@ -444,21 +486,13 @@ export function TreeCanvas() {
       // no-op (preventDefault above still stops the page from scrolling).
       if (next.scale === current.scale && next.tx === current.tx && next.ty === current.ty) return;
       wheelModeRef.current = mode;
-      liveViewRef.current = next;
-      wheelActiveRef.current = true;
-      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
-      wheelIdleRef.current = window.setTimeout(finishWheelBurst, 140);
       // Coalesce every wheel event in this frame into ONE paint. The event
       // handler itself performs no React update.
-      if (frameRef.current === null) {
-        frameRef.current = requestAnimationFrame(() => {
-          frameRef.current = null;
-          applyViewToCanvas(liveViewRef.current);
-          commitWheelView(false);
-        });
-      }
+      dragPanView(next);
+      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
+      wheelIdleRef.current = window.setTimeout(finishViewGesture, 140);
     },
-    [applyViewToCanvas, commitWheelView, finishWheelBurst],
+    [dragPanView, finishViewGesture],
   );
   useWheel(svgRef, handleWheel);
 
