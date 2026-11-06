@@ -136,6 +136,11 @@ export function TreeCanvas() {
   const frameRef = useRef<number | null>(null);
   const wheelIdleRef = useRef<number | null>(null);
   const wheelActiveRef = useRef(false);
+  // Zoom or pan, decided on the FIRST event of a burst and kept until it ends.
+  // A high-resolution wheel / trackpad ramps deltaY across the pan threshold
+  // mid-swipe; classifying each event separately made one gesture both pan
+  // vertically and zoom.
+  const wheelModeRef = useRef<'zoom' | 'pan-x' | 'pan-y' | null>(null);
   // Last view object written to the group. A threshold commit republishes the
   // very object the frame just painted; deduping it keeps the DOM write at most
   // once per frame.
@@ -161,6 +166,7 @@ export function TreeCanvas() {
       // overwrite the newer view.
       if (wheelActiveRef.current && s.view !== liveViewRef.current) {
         wheelActiveRef.current = false;
+        wheelModeRef.current = null;
         if (wheelIdleRef.current !== null) {
           window.clearTimeout(wheelIdleRef.current);
           wheelIdleRef.current = null;
@@ -207,6 +213,7 @@ export function TreeCanvas() {
     // Flush the last accumulated frame before committing its final value.
     applyViewToCanvas(liveViewRef.current);
     wheelActiveRef.current = false;
+    wheelModeRef.current = null;
     commitWheelView(true);
     // One culling refresh per burst, after the transform settles.
     setCullView(liveViewRef.current);
@@ -387,35 +394,48 @@ export function TreeCanvas() {
   // pinch gestures ZOOM; a plain two-finger scroll PANS (deltaX moves
   // horizontally — on the old handler every trackpad swipe zoomed, and macOS
   // users read the canvas as "not native" within seconds).
+  //
+  // The MODE is latched on the first event of a burst. Classifying each event
+  // independently meant a high-resolution wheel (or a trackpad whose deltaY
+  // ramps across 12 px mid-swipe) panned on small ticks and zoomed on large
+  // ones — one physical scroll did both at once.
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
+      if (e.deltaX === 0 && e.deltaY === 0) return;
       // Build on the LIVE transform, not the last committed one: several wheel
       // events can arrive before the next frame, and each must compound on the
       // previous one (or fast trackpads would lose most of their delta).
       const current = liveViewRef.current;
       const pinch = e.ctrlKey || e.metaKey;
+      const absX = Math.abs(e.deltaX);
+      const absY = Math.abs(e.deltaY);
+      // Latched mode AND axis: a diagonal swipe keeps the axis it started on,
+      // so cross-axis jitter can never add an unintended pan.
+      const mode =
+        wheelModeRef.current ??
+        (pinch
+          ? 'zoom'
+          : // Two-finger pan: horizontal-dominant, or a sub-notch vertical delta
+            // (high-resolution wheels and trackpads both report pixel chunks;
+            // any horizontal noise must not turn a vertical swipe into a zoom).
+            absX > absY
+            ? 'pan-x'
+            : e.deltaMode === 0 && absY < 12
+              ? 'pan-y'
+              : 'zoom');
       let next: ViewTransform;
-      if (!pinch && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        // Horizontal two-finger pan, in screen px.
+      if (mode === 'pan-x') {
         next = { ...current, tx: current.tx - e.deltaX, ty: current.ty };
-      } else if (
-        !pinch &&
-        !e.shiftKey &&
-        e.deltaMode === 0 &&
-        Math.abs(e.deltaY) > 0 &&
-        e.deltaX === 0 &&
-        Math.abs(e.deltaY) < 12
-      ) {
-        // Plain vertical wheel: keep the classic zoom (mouse users expect it),
-        // but give trackpad-class small deltas a proportional pan instead of
-        // 10% zoom steps per pixel-row.
+      } else if (mode === 'pan-y') {
         next = { ...current, tx: current.tx, ty: current.ty - e.deltaY };
       } else {
         // Ctrl/Cmd wheel and pinch share this path; zoomAt keeps the pointer
         // anchor fixed and clamps to MIN_SCALE / MAX_SCALE exactly as before.
+        // A pure horizontal event inside a zoom burst carries no zoom amount.
+        if (e.deltaY === 0) return;
         const screen = eventScreenPoint(svg, e);
         const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
         next = zoomAt(current, screen, factor);
@@ -423,6 +443,7 @@ export function TreeCanvas() {
       // At a scale limit the transform is unchanged; do not open a burst for a
       // no-op (preventDefault above still stops the page from scrolling).
       if (next.scale === current.scale && next.tx === current.tx && next.ty === current.ty) return;
+      wheelModeRef.current = mode;
       liveViewRef.current = next;
       wheelActiveRef.current = true;
       if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);

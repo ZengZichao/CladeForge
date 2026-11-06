@@ -308,6 +308,30 @@ ai_provenance:
       nearest-node search because the DOM hit circle no longer grows with zoom.
       Rendering remains SVG; no document, layout or inference behaviour changed.
     reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+  - release: "unreleased working tree (wheel gesture-mode latch fix)"
+    date: "2026-11-06"
+    tool: "Qoder (Qoder Desktop)"
+    tool_version: "UNKNOWN - author to supply (model not exposed by the runtime)"
+    marker_in_files: true
+    files:
+      - "docs/AI_PROVENANCE.md"
+      - "src/canvas/TreeCanvas.tsx"
+      - "src/canvas/treeCanvasWheel.test.ts"
+    scope: >
+      latches the wheel gesture mode — anchored zoom, horizontal pan or
+      vertical pan — and its axis on the first event of a burst, so a
+      high-resolution wheel or a trackpad whose deltaY crosses the 12 px pan
+      threshold mid-swipe can no longer pan and zoom in the same physical
+      scroll. The latch clears with the existing 140 ms burst-end timer and on
+      external view changes. Adds a regression test mixing small and large
+      deltaY ticks in one burst.
+    behaviour_changed: >
+      canvas wheel navigation only: one scroll burst now performs exactly one
+      kind of movement (anchored zoom, horizontal pan or vertical pan), and a
+      vertical swipe with small horizontal jitter still pans vertically instead
+      of zooming. The zoom anchor, Ctrl/Meta zoom, the 12 px vertical-pan
+      threshold and MIN/MAX clamps are unchanged.
+    reviewer: "pending - Zichao Zeng (corresponding author) before committing"
 ```
 
 ## Tool names and versions: what could and could not be established
