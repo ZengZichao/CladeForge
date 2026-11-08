@@ -7,6 +7,91 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
 
+### Scientific-correctness and functional-test review round — 2026-11-07/08. Every
+finding of the 科学正确性与功能测试 review (13 S-items, 28 M-items and the minor
+§4 list) repaired, with 12 new regression-test files (66 cases) pinning the
+review's independent reference values.
+
+#### Fixed
+- **Reroot edge identity**: the reversal now carries split support
+  (value/kind/scale), branch style and branch-target events with the physical
+  edge; node-anchored evidence stays on the vertex. A unifurcate old root is
+  suppressed for 0 and 1 remaining children (no more fake unlabelled tip), an
+  unknown length propagates as unknown instead of silently 0, and a root
+  calibration follows the root rather than being re-read as a tip age.
+- **Support-scale inference** reads only bare numbers directly after `)`, so a
+  branch length of 12 or numeric tip names can no longer misclassify a file of
+  0–1 posteriors as percent.
+- **NEXUS matrices**: rows without TAXLABELS are one taxon per line; quoted
+  TAXA keep their rows; interleaved chunks concatenate instead of overwriting;
+  compact `01` cells expand to one column per character with `(`/`{`
+  polymorphism groups intact; STATELABELS bind by declared symbol position;
+  declared MISSING/GAP codes are honoured; CHARSTATELABELS is no longer
+  misread as STATELABELS; SYMBOLS is read from the raw (unmasked) text. The
+  writer emits a numbered STATELABELS and parenthesised polymorphs.
+- **Project reload** preserves every known-but-optional field (custom event
+  types, analysis runs, recon options, provenance, save path, timestamps,
+  sampleId) — analysis history and the custom event catalogue survive a
+  save/open cycle; a real migration re-stamps the schema version.
+- **Statistics**: faithPd counts the connecting internal branches with an
+  explicit root convention (picante-style); Fritz–Purvis D is rebuilt on
+  sister-tip contrasts with declared-order binarisation and the standard
+  (obs − BM)/(rand − BM) scale; Blomberg K uses the published GLS-centred
+  estimator (661/600 on the review's asymmetric-tree counterexample) and the
+  BM simulation computes the same statistic (two-sided p = 1/401 invariant
+  under a change of units); NRI/NTI carry the standard
+  positive-is-clustered sign.
+- **Analysis engines**: stochastic mapping samples child states from
+  transition × subtree likelihood and jump counts from the exact
+  endpoint-conditioned uniformised law (a recorded zero branch stays zero);
+  infeasible step matrices are reported (`feasible: false`) instead of scored
+  0; model:'dollo' runs a true single-gain-per-tree DP (losses allowed, no
+  re-gain) instead of an irreversible matrix wearing the name; DTL includes
+  the root fee in the fixed-vs-free comparison and never buys a sampled
+  lineage off with one loss (the exhaustive reference oracle was moved to the
+  same standard convention); reconciliation losses follow junction arity
+  (m−1 per hard polytomy, 0 through a unifurcation) and transfer timing is an
+  interval-overlap check; a single-tree consensus keeps tip lengths.
+- **Import**: matrix-only NEXUS files land as characters instead of dying on
+  "No TREES block"; CSV tables honour quoted newlines, keep leading-zero
+  identifiers as text, treat `(AB)` as a polymorphic set and escape state
+  labels on export; Newick refuses unterminated quotes and truncating branch
+  lengths; nested bracket comments parse; an explicitly rooted trifurcation
+  round-trips via `[&R]`; BEAST brace-set HPD intervals and colon-separated
+  NHX fields parse.
+- **Layout/export**: exports reuse the layout's unknown-branch sets (a
+  cladogram or fully dated time tree no longer exports dashed "unmeasured"
+  branches the screen draws solid); the PDF computes grey colours explicitly
+  (svg2pdf ignores SVG filters), renders CJK labels through the browser font
+  engine (legible instead of garbage glyphs), clamps the page to jsPDF's
+  14400-unit MediaBox, and PNGs carry a pHYs DPI chunk; transition markers and
+  support text anchor ON elbow polylines; the scale bar reads the layout's own
+  depthScale and is labelled substitutions/site (sqrt/log axes draw none);
+  negative ages are unknown; the circular time wheel scales by visible nodes
+  only and parks undated nodes on their topological level; deep trees no
+  longer overflow the export, sort or consensus-decoration stacks.
+- **Store**: undoing back to the saved document reports it clean; an `apply`
+  inside an unfinished interaction folds into the interaction's single undo
+  step (no half-finished drag resurrects on undo); cancelling restores the
+  view; bulk sort-by-state runs inside the Immer draft and is usable again.
+
+#### Added
+- `npm run test:coverage` (opt-in; `@vitest/coverage-v8`, no thresholds):
+  coverage is a gap visualiser, never a gate — the scientific oracles remain
+  the correctness evidence. Total line coverage 63.2%, with the report
+  exposing the UI-layer blind spots the review predicted.
+- 12 regression-test files (66 cases) pinning the review's acceptance matrix:
+  reroot identity, NEXUS matrix semantics, project-field persistence, the
+  statistics oracles above, Dollo/feasibility, stochastic mapping, store
+  history, export geometry, table handling, reconciliation losses, consensus
+  lengths and the PDF export under real jsPDF/svg2pdf.
+
+#### Notes
+- The two timing-gate failures on a loaded workstation (2 000-tip `mkAsr`
+  against the 400 ms budget) are unchanged by this round — the hot path was
+  not touched; per the review, the budget needs recalibration on fixed
+  hardware before it belongs in CI.
+
 ### UI design review round — 2026-11-06. Fresh headless-browser review of the
 shipped UI (4 layouts × 2 themes × 2 languages × 5 viewports, all dialogs,
 both workspaces) plus a code-level pass over the chrome; every confirmed
