@@ -360,6 +360,29 @@ ai_provenance:
       refreshed when the drag ends rather than during it (the existing
       one-viewport buffer covers the drag).
     reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+  - release: "unreleased working tree (menu internal-scroll dismissal fix)"
+    date: "2026-11-06"
+    tool: "Qoder (Qoder Desktop)"
+    tool_version: "UNKNOWN - author to supply (model not exposed by the runtime)"
+    marker_in_files: true
+    files:
+      - "docs/AI_PROVENANCE.md"
+      - "src/ui/PreferencesMenu.tsx"
+      - "src/ui/Dropdown.tsx"
+      - "src/ui/MenuBar.tsx"
+      - "src/ui/menuScrollDismiss.test.ts"
+    scope: >
+      the window-capture scroll dismissal shared by the Preferences, File/Recent
+      and Help menus now ignores scroll events whose target is inside the open
+      (portalled) menu, so scrolling a menu's own overflow no longer closes it.
+      A scroll elsewhere still dismisses the fixed panel, and the outside-click
+      check now recognises the portalled panel as "inside". Adds mounted
+      regression tests for all three menus.
+    behaviour_changed: >
+      menu interaction only: internally scrollable menus stay open while they
+      scroll; their options, language/theme/scale actions and outside-dismissal
+      behaviour are unchanged.
+    reviewer: "pending - Zichao Zeng (corresponding author) before committing"
 ```
 
 ## Tool names and versions: what could and could not be established

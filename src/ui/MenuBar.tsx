@@ -37,15 +37,24 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Close on outside click, any scrollable ancestor scrolling, resize or Escape.
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
-    const onDismiss = () => setOpen(false);
+    // The help panel scrolls internally when the list is taller than the
+    // viewport cap; that scroll belongs to the panel, not to the page.
+    const onDismiss = (e: Event) => {
+      const target = e.target;
+      if (panelRef.current && target instanceof Node && panelRef.current.contains(target)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -101,6 +110,7 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
         pos &&
         createPortal(
           <div
+            ref={panelRef}
             className="dropdown-panel help-panel"
             role="menu"
             aria-label={S.menu.helpGroup}

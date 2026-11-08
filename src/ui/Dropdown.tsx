@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Lightweight click-to-open dropdown used by the menu bar.
 //
 // The panel is rendered through a portal into document.body with fixed
@@ -34,6 +35,7 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Close on outside click, scroll (any scrollable ancestor) or resize —
@@ -41,9 +43,18 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
-    const onDismiss = () => setOpen(false);
+    // Long menus scroll internally (inline maxHeight/overflowY below); their own
+    // scroll must not dismiss the panel. Only a scroll elsewhere moves the
+    // trigger relative to the fixed panel.
+    const onDismiss = (e: Event) => {
+      const target = e.target;
+      if (panelRef.current && target instanceof Node && panelRef.current.contains(target)) return;
+      setOpen(false);
+    };
     window.addEventListener('mousedown', onDoc);
     window.addEventListener('scroll', onDismiss, true);
     window.addEventListener('resize', onDismiss);
@@ -85,6 +96,7 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
         pos &&
         createPortal(
           <div
+            ref={panelRef}
             className="dropdown-panel"
             role="menu"
             style={{
