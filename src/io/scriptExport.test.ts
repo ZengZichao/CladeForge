@@ -74,13 +74,15 @@ describe('buildRScript', () => {
       expect(code, `mk_asr should still call/use ${name}`).toMatch(new RegExp(`\\b${name}\\b`));
       expect(assigned.has(name), `${name} is read by mk_asr but never bound`).toBe(true);
     }
-    expect(params.replace(/\s/g, '')).toBe('tree,tip_states,states');
-    // The rate definition and the fallback it depends on. Averaging only the
-    // positive lengths would let a project with a recorded 0 (a synchronous
-    // divergence, which the application keeps and averages over) or an unset
-    // length reconstruct at a DIFFERENT rate than the app
-    // reports. The lengths are resolved before they are emitted, so the
-    // mean runs over all of them.
+    expect(params.replace(/\s/g, '')).toBe('tree,tip_states,states,rate');
+    // The rate FALLBACK definition and what it depends on. `rate` is the
+    // per-character application fit passed as an argument; this script-level
+    // binding is the fallback for a character the app could not fit. Averaging
+    // only the positive lengths would let a project with a recorded 0 (a
+    // synchronous divergence, which the application keeps and averages over)
+    // or an unset length reconstruct at a DIFFERENT rate than the app reports.
+    // The lengths are resolved before they are emitted, so the mean runs over
+    // all of them.
     expect(script).toMatch(/^rate <- 1 \/ mean\(bl\)$/m);
     expect(script).toMatch(/^bl <- tree\$edge\.length$/m);
     expect(script).toMatch(/^\s*bl <- rep\(1, nrow\(tree\$edge\)\)$/m);

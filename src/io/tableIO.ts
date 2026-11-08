@@ -59,9 +59,35 @@ export function parseTable(text: string): ParsedTable {
   const clean = text.replace(/^\uFEFF/, '').trim();
   if (!clean) throw new Error(tr('表格内容为空', 'Table text is empty'));
   const sep = detectDelimiter(clean);
-  const lines = clean.split(/\r?\n/).filter((l, i) => l.trim().length > 0 || i === 0);
-  const header = splitCsvLine(lines[0] ?? '', sep).map((h) => h.trim());
-  const rows = lines.slice(1).map((l) => splitCsvLine(l, sep));
+  // Split into RECORDS honouring quoted fields: a newline inside "…" belongs to
+  // the field (RFC 4180), not a row break. The old `split(/\r?\n/)` tore such
+  // fields apart and shifted every following cell of the row.
+  const lines: string[] = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < clean.length; i += 1) {
+    const c = clean[i];
+    if (inQuote) {
+      cur += c;
+      if (c === '"') {
+        if (clean[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else inQuote = false;
+      }
+    } else if (c === '"') {
+      inQuote = true;
+      cur += c;
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && clean[i + 1] === '\n') i += 1;
+      lines.push(cur);
+      cur = '';
+    } else cur += c;
+  }
+  lines.push(cur);
+  const nonEmpty = lines.filter((l, i) => l.trim().length > 0 || i === 0);
+  const header = splitCsvLine(nonEmpty[0] ?? '', sep).map((h) => h.trim());
+  const rows = nonEmpty.slice(1).map((l) => splitCsvLine(l, sep));
   return { header, rows, delimiter: sep };
 }
 
@@ -138,6 +164,21 @@ export function joinLabels(
   return { map, report };
 }
 
+/**
+ * The members of one discrete table cell. `A/B` lists its states; the compact
+ * `(AB)` form is the documented polymorphism syntax — splitting it per
+ * CHARACTER (NEXUS-style) is what the promise says and what makes `(AB)` a set
+ * of A and B rather than one monomorphic state labelled "AB".
+ */
+function polymorphicMembers(raw: string): string[] {
+  const t = raw.trim();
+  const paren = /^\((.*)\)$/.exec(t);
+  if (!paren) return t === '' ? [] : t.split('/').map((x) => x.trim());
+  const inner = paren[1];
+  if (inner.includes('/')) return inner.split('/').map((x) => x.trim());
+  return [...inner];
+}
+
 export interface MatrixImportResult {
   characters: Character[];
   /** rows joined to nodes: applied per character. */
@@ -202,9 +243,7 @@ export function importMatrixTable(text: string, projectName: string): MatrixImpo
     // with the same honest warning the manual pipeline uses.
     const used = new Set<string>();
     for (const raw of values) {
-      const cell = raw.replace(/^\((.*)\)$/, '$1');
-      for (const s of cell.split('/')) {
-        const t = s.trim();
+      for (const t of polymorphicMembers(raw)) {
         if (t && !MISSING_STATE_CODES.includes(t)) used.add(t);
       }
     }
@@ -234,10 +273,8 @@ export function importMatrixTable(text: string, projectName: string): MatrixImpo
     };
     const assignments: Record<string, string | string[]> = {};
     for (const [label, raw] of col.values) {
-      const cell = raw.replace(/^\((.*)\)$/, '$1');
       const ids: string[] = [];
-      for (const s of cell.split('/')) {
-        const t = s.trim();
+      for (const t of polymorphicMembers(raw)) {
         if (!t || MISSING_STATE_CODES.includes(t)) continue;
         const st = ch.states.find((x) => x.label === t);
         if (st) ids.push(st.id);
@@ -323,7 +360,12 @@ export function importAnnotationsTable(
       label,
       values: fields.map((_, i) => {
         const v = (row[i + 1] ?? '').trim();
-        return v === '' ? '' : Number.isFinite(Number(v.replace(/,/g, '.'))) && v !== '' ? Number(v.replace(/,/g, '.')) : v;
+        if (v === '') return '';
+        // Coerce to a number only for a PLAIN decimal: an identifier-shaped
+        // string with a leading zero ("007", "0042-B") must survive as text —
+        // Number() used to silently rewrite it as 7.
+        const norm = v.replace(/,/g, '.');
+        return /^-?\d+(\.\d+)?$/.test(norm) && !/^-?0\d/.test(norm) ? Number(norm) : v;
       }),
     });
   }
@@ -407,7 +449,9 @@ export function exportMatrixCsv(project: Project): string {
       if (typeof v === 'number') return String(v);
       return c.states.find((s) => s.id === v)?.label ?? v;
     });
-    lines.push([escape(tip.label), ...cells].join(','));
+    // State labels are user text too: a comma inside one used to break the
+    // column alignment of the whole exported matrix.
+    lines.push([escape(tip.label), ...cells.map(escape)].join(','));
   }
   return lines.join('\n');
 }

@@ -141,6 +141,8 @@ interface TabSnapshot {
   revision: number;
   /** Revision the tab last wrote to disk. */
   lastSavedRevision: number;
+  /** The document object that was on disk when the tab was last saved. */
+  savedProject: Project | null;
   selection: NodeId[];
   selectedEdgeId: EdgeId | null;
   view: ViewTransform;
@@ -163,6 +165,7 @@ function captureTab(s: AppState): TabSnapshot {
     future: s.future,
     revision: s.revision,
     lastSavedRevision: s.lastSavedRevision,
+    savedProject: s.savedProject,
     selection: s.selection,
     selectedEdgeId: s.selectedEdgeId,
     view: s.view,
@@ -186,6 +189,7 @@ function snapshotFor(project: Project): TabSnapshot {
     future: [],
     revision: 0,
     lastSavedRevision: 0,
+    savedProject: project,
     selection: [],
     selectedEdgeId: null,
     view: { ...IDENTITY_VIEW },
@@ -213,6 +217,7 @@ function docStateFor(project: Project): Partial<AppState> {
     // edit bumps `revision`, and a successful save pins `lastSavedRevision`.
     revision: 0 as number,
     lastSavedRevision: 0 as number,
+    savedProject: project as Project | null,
     selection: [] as NodeId[],
     selectedEdgeId: null as EdgeId | null,
     view: { ...IDENTITY_VIEW },
@@ -246,6 +251,7 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     draggingId: null as NodeId | null,
     revision: snap.revision,
     lastSavedRevision: snap.lastSavedRevision,
+    savedProject: snap.savedProject,
     selection: pruneSelection(snap.project, snap.selection),
     selectedEdgeId: snap.selectedEdgeId,
     view: snap.view,
@@ -290,6 +296,15 @@ export interface DocumentSlice {
   revision: number;
   /** Value `revision` had at the last successful disk save. */
   lastSavedRevision: number;
+  /**
+   * The exact document object that was last written to disk (or loaded from
+   * it). Undo/redo compares against this reference: a pure revision counter
+   * misreports "undo back to the saved content" as dirty, because the undo
+   * itself bumps the revision past `lastSavedRevision`. All document states
+   * are frozen and structurally shared, so reaching the saved state again can
+   * only happen by restoring this very reference.
+   */
+  savedProject: Project | null;
 
   apply: (recipe: Recipe) => void;
   beginInteraction: (dragId?: NodeId) => void;
@@ -524,6 +539,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
   draggingId: null,
   revision: 0,
   lastSavedRevision: 0,
+  savedProject: null,
 
   apply: (recipe) =>
     set((s) => {
@@ -547,7 +563,13 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         selection: keptSelection(next, s.selection),
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
-        past: pushSnapshot(s.past, entryOf(s)),
+        // Inside an unfinished interaction the live states are NOT history:
+        // `commitInteraction` collapses the whole begin→…→commit span into ONE
+        // undo step anchored at the pre-interaction snapshot. Pushing the
+        // mid-drag state here made the first undo resurrect a half-finished
+        // drag (e.g. begin → live move → apply delete → commit → undo restored
+        // the dragged position instead of the pre-drag document).
+        past: s.interactionBase ? s.past : pushSnapshot(s.past, entryOf(s)),
         future: [],
         // A completed ASR is marked STALE, not deleted: the posterior was
         // computed from data that just changed, but the reader may still want
@@ -618,6 +640,11 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
             project: s.interactionBase.project,
             selection: pruneSelection(s.interactionBase.project, s.interactionBase.selection),
             selectedEdgeId: s.interactionBase.selectedEdgeId,
+            // Cancel restores the view too — the same fields undo/redo restore —
+            // so aborting a drag cannot leave the canvas (or the coloured
+            // character) somewhere the reverted document does not match.
+            view: s.interactionBase.view,
+            activeCharacterId: s.interactionBase.activeCharacterId,
             interactionBase: null,
             draggingId: null,
           }
@@ -644,6 +671,10 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
         revision: s.revision + 1,
+        // Restoring the exact document that was last saved means the document
+        // is clean again, whatever the revision counter says (the undo itself
+        // bumped it past `lastSavedRevision`).
+        lastSavedRevision: previous.project === s.savedProject ? s.revision + 1 : s.lastSavedRevision,
         asr: s.asr ? { ...s.asr, stale: true } : null,
       };
     }),
@@ -664,6 +695,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
         revision: s.revision + 1,
+        lastSavedRevision: nextEntry.project === s.savedProject ? s.revision + 1 : s.lastSavedRevision,
         asr: s.asr ? { ...s.asr, stale: true } : null,
       };
     }),
@@ -671,7 +703,8 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
 
-  markSaved: () => set((s) => ({ lastSavedRevision: s.revision })),
+  markSaved: () =>
+    set((s) => ({ lastSavedRevision: s.revision, savedProject: s.project })),
 
   recordAnalysis: (result) =>
     get().apply((d) => {

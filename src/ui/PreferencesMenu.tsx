@@ -1,4 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Preferences dropdown: language, theme, UI scale, colour-vision-friendly
 // badges, diagnostics and local-data controls, consolidated into ONE target.
 //
@@ -79,6 +80,7 @@ export function PreferencesMenu() {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Track OS changes so the "system" row's active state stays honest even
@@ -104,9 +106,18 @@ export function PreferencesMenu() {
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
-    const onDismiss = () => setOpen(false);
+    // The panel scrolls internally (max-height in app.css). Its own scroll must
+    // not dismiss it — only a scroll elsewhere would drift the fixed panel away
+    // from its trigger.
+    const onDismiss = (e: Event) => {
+      const target = e.target;
+      if (panelRef.current && target instanceof Node && panelRef.current.contains(target)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -251,6 +262,7 @@ export function PreferencesMenu() {
         pos &&
         createPortal(
           <div
+            ref={panelRef}
             className="dropdown-panel prefs-panel"
             role="menu"
             aria-label={tr('偏好设置', 'Preferences')}

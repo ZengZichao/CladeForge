@@ -226,11 +226,19 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
     // Without ages the radius falls back to topological depth.
     const dated = Object.values(project.nodes).filter((n) => (finiteAge(n) ?? 0) > 0).length;
     let ageRadius: ((age: number) => number) | null = null;
+    // The wheel's oldest age comes from the VISIBLE nodes (the hierarchy skips
+    // collapsed / filtered-out subtrees): a hidden child aged 1000 Ma used to
+    // stretch the radius scale behind a 100 Ma root and silently shrink every
+    // drawn radius.
     let circMaxAge = 0;
-    for (const n of Object.values(project.nodes)) {
-      const a = finiteAge(n);
+    let visibleDated = 0;
+    let visibleUndated = 0;
+    root.each((hn) => {
+      const a = finiteAge(hn.data);
       if (a !== undefined && a > circMaxAge) circMaxAge = a;
-    }
+      if (a !== undefined && a > 0) visibleDated += 1;
+      else visibleUndated += 1;
+    });
     if (circMaxAge > 0) {
       const maxRadius = Math.max(1, root.height) * depthGap;
       const unitOf = (age: number): number => {
@@ -270,7 +278,18 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
       let r = hn.y ?? 0;
       if (ageRadius) {
         const a = finiteAge(hn.data);
-        r = a !== undefined ? ageRadius(a) : ((hn.depth / Math.max(1, root.height)) * radius);
+        if (a !== undefined) {
+          r = ageRadius(a);
+        } else {
+          // An undated node must not mix a raw topological radius into a time
+          // wheel (a dated parent at radius 100 with an undated child at
+          // radius 60 read as two different times). Park it on its topological
+          // level's pseudo-age — the same convention the rectangular time
+          // layout uses — and flag it unknown.
+          const pseudoAge = ((Math.max(1, root.height) - hn.depth) / Math.max(1, root.height)) * circMaxAge;
+          r = ageRadius(pseudoAge);
+          unknownAge.add(hn.data.id);
+        }
       }
       positions.set(hn.data.id, { x: r * Math.cos(angle), y: r * Math.sin(angle) });
     });
@@ -341,7 +360,10 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
       root.each((hn) => {
         const a = finiteAge(hn.data);
         if (a === undefined || a <= 0) undatable += 1;
-        if (a === undefined) {
+        if (a === undefined || a < 0) {
+          // A NEGATIVE age is unusable exactly like a missing one: the axis
+          // clamps ages at 0, so the old path silently drew age −5 on the
+          // present-day line while the document kept the bogus value.
           undated.push(hn.data.id);
           return;
         }

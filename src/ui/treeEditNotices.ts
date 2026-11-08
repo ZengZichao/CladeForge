@@ -48,6 +48,11 @@ export function outgroupFailureText(reason: OutgroupRerootFailure | null): strin
         '选定类群的最近共同祖先就是当前的根：外群已经挂在根上了，没有可以移根的枝。',
         'The most recent common ancestor of the selection IS the current root: the outgroup already hangs off the root, so there is no branch to move it onto.',
       );
+    case 'not-monophyletic':
+      return tr(
+        '选定类群与其补集都不是完整 clade：无论根放在哪条枝上，都会有未选中的分类单元被一并划入外群。请选择一个完整 clade（或其补集）。',
+        'Neither the selection nor its complement is a complete clade: no root placement makes exactly the selected taxa the outgroup. Select a whole clade (or its complement).',
+      );
     case 'unrootable':
       return tr(
         '树形结构不支持这次移根（找不到可放置新根的枝）。',

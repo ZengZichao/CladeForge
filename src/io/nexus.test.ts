@@ -256,7 +256,9 @@ END;`;
       expect(out).toContain('BEGIN CHARACTERS;');
       expect(out).toContain('DIMENSIONS NTAX=2 NCHAR=1;');
       expect(out).toContain('SYMBOLS="12"');
-      expect(out).toContain("STATELABELS '陆生' '水生';");
+      // STATELABELS carries the (block-local) character number — without it
+      // the statement is not valid NEXUS.
+      expect(out).toContain("STATELABELS 1 '陆生' '水生';");
       expect(out).toContain("CHARLABELS habitat;");
       // State 1 → '1' (never the 0-based '0'), and an undeclared value → MISSING.
       expect(out).toMatch(/'Taxon A'\s+1\s*\n/);

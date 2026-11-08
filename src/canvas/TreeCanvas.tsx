@@ -348,6 +348,12 @@ export function TreeCanvas() {
         maxDepth: base.maxDepth,
         timeAxis: base.timeAxis,
         depthScale: base.depthScale,
+        // The unknown-branch sets and the issue list must ride along: the
+        // unmeasured-marker rule reads them per frame, and a dropped set made
+        // every unmeasured branch render solid for the whole drag.
+        unknownDepth: base.unknownDepth,
+        unknownAge: base.unknownAge,
+        issues: base.issues,
       };
     }
     const full = computeLayout(project, { showEras, eraLevel });
@@ -1250,7 +1256,7 @@ export function TreeCanvas() {
         <ScaleBar depthScale={layout.depthScale as number} />
       ) : null}
       {project.layout.type === 'time-calibrated' && layout.timeAxis ? (
-        <TimeScaleBar timeAxis={layout.timeAxis} />
+        <TimeScaleBar timeAxis={layout.timeAxis} axisScale={project.layout.timeScale} />
       ) : null}
       {isEmpty && (
         <div className="empty-state">

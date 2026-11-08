@@ -111,7 +111,7 @@ const MIGRATIONS: Record<string, Migration> = {
   },
 };
 
-function migrate(raw: RawProject, fromVersion: string): { raw: RawProject; notes: string[] } {
+function migrate(raw: RawProject, fromVersion: string): { raw: RawProject; notes: string[]; version: string } {
   const notes: string[] = [];
   let version = fromVersion;
   const guard = new Set<string>();
@@ -125,7 +125,7 @@ function migrate(raw: RawProject, fromVersion: string): { raw: RawProject; notes
   if (version !== PROJECT_VERSION) {
     notes.push(tr(`文件版本为 ${fromVersion}，将按当前版本 ${PROJECT_VERSION} 尽力打开`, `File version ${fromVersion}; opening with best effort under current version ${PROJECT_VERSION}`));
   }
-  return { raw, notes };
+  return { raw, notes, version };
 }
 
 /**
@@ -189,16 +189,27 @@ function finalizeProject(
   rawSource: Project & RawProject,
   fileVersion: string,
 ): { project: Project; issues: string[] } {
-  const { raw: migrated, notes } = migrate(rawSource as RawProject, fileVersion);
+  const { raw: migrated, notes, version: migratedVersion } = migrate(rawSource as RawProject, fileVersion);
   const raw = migrated as unknown as Project;
 
   const defaults = raw.defaults ?? defaultStyleDefaults();
   const backfilled: Project = {
     id: raw.id ?? newId(),
     name: raw.name ?? 'Untitled',
-    // Keep the version the file declared; re-stamping it would make a lossy open
-    // look like a valid current document.
-    version: typeof raw.version === 'string' && raw.version ? raw.version : PROJECT_VERSION,
+    // A migration that actually ran upgrades the document: keeping the old
+    // version here made the "Migrated from 0.1.0 to 0.2.0" note contradict the
+    // envelope, which went on claiming 0.1.0 after a re-save. A version with NO
+    // migration path (a newer or unknown file) keeps its declared version, so a
+    // best-effort open still cannot masquerade as a validated document; a file
+    // that declared nothing usable is stamped with the current schema.
+    version:
+      typeof raw.version === 'string' && raw.version
+        ? migratedVersion === fileVersion
+          ? raw.version
+          : migratedVersion
+        : migratedVersion !== fileVersion
+          ? migratedVersion
+          : PROJECT_VERSION,
     nodes: raw.nodes,
     rootId: raw.rootId,
     customEdges: Array.isArray(raw.customEdges) ? raw.customEdges : [],
@@ -229,17 +240,22 @@ function finalizeProject(
     reconCosts: backfillCosts(raw.reconCosts, notes),
   };
 
-  // Carry unknown top-level fields through verbatim — a key written by a newer
-  // build, another tool or a hand-edit would otherwise vanish while the document
-  // is re-stamped as current. They live on the project object itself, so
-  // `serializeProject` writes them back exactly where they came from, and each
-  // preserved / discarded key is named in `issues`.
+  // Carry every top-level field that the explicit construction above did not
+  // build — KNOWN-but-optional fields included. The old rule ("copy the built
+  // keys; preserve only the UNKNOWN rest") let `customEventTypes`,
+  // `analysisResults`, `reconOptions`, `provenance`, `sourcePath`, the save
+  // timestamps and `sampleId` fall through the crack and vanish on reload,
+  // taking the user's run history and custom event catalogue with them.
+  // `hasOwnProperty` (not truthiness) guards the copy, so a stored `false`,
+  // `null` or empty value survives too. Unknown keys are additionally named in
+  // `issues`; they live on the project object itself, so `serializeProject`
+  // writes them back exactly where they came from.
   const extras = rawSource as RawProject;
   const preserved: string[] = [];
   for (const key of Object.keys(extras)) {
-    if (KNOWN_PROJECT_KEYS.includes(key)) continue;
+    if (Object.prototype.hasOwnProperty.call(backfilled, key)) continue;
     (backfilled as unknown as RawProject)[key] = extras[key];
-    preserved.push(key);
+    if (!KNOWN_PROJECT_KEYS.includes(key)) preserved.push(key);
   }
   if (preserved.length) {
     notes.push(

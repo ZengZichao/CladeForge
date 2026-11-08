@@ -14,7 +14,8 @@ import {
   planEraOverlay,
   type EraLevel,
 } from '../layout/timescale';
-import { branchPath, curveMidpoint, curvedPath, straightPath } from '../canvas/paths';
+import { branchMidpointOn, branchPath, curveMidpoint, curvedPath, straightPath } from '../canvas/paths';
+import { unmeasuredNodeIds } from '../canvas/branchFlags';
 import {
   HYPOTHESIS_NOTE_PAD,
   hypothesisNoteFontSize,
@@ -224,7 +225,15 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   // `positions`, `bounds` and `timeAxis` to place badges/labels exactly like the
   // canvas does.
   const layout = computeLayout(project, axisOverlay);
-  const { positions, visible, bounds, depths, maxDepth, timeAxis } = layout;
+  const { positions, visible, bounds, depths, maxDepth, timeAxis, unknownDepth, unknownAge } = layout;
+  // The SAME unknown-branch set the canvas draws from (computeLayout propagates
+  // an unmeasured branch to its whole downstream). The export used to run its
+  // own `branchLength === undefined` test instead, which disagreed with the
+  // layout in every mode where a branch needs no length to be drawn: a
+  // cladogram or a fully dated time tree would export dashed "unmeasured"
+  // branches the screen shows solid, and the downstream of an unknown branch
+  // lost its marker.
+  const unmeasuredSet = unmeasuredNodeIds(unknownDepth, unknownAge);
   const orientation = project.layout.orientation;
   const activeCharacter = findCharacter(project, opts.activeCharacterId);
   const colorTarget = opts.characterColorTarget ?? 'node';
@@ -468,8 +477,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     // An UNMEASURED branch must never export as a solid line — the screen marks
     // it (branchFlags) and hiding "no measurement" as "has length" in the
     // published figure is the single most misleading export defect. Same dash
-    // language as the canvas.
-    const unmeasured = node.branchLength === undefined;
+    // language as the canvas, from the SAME source: the layout's unknown sets,
+    // not a local branch-length guess.
+    const unmeasured = unmeasuredSet.has(id);
     const effDash = unmeasured ? '4 3' : dash;
     const effColor = unmeasured ? FIG_AXIS : safeColour(color);
     parts.push(
@@ -496,8 +506,9 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       // The `typeof support === 'number' && isFinite` guard above also makes
       // supportPercent(total) finite here, so the comparison is safe.
       const supportColor = (supportPercent(node) ?? 0) < threshold ? FIG_AXIS : '#1d1d1f';
+      const sm = branchMidpointOn(from, to, orientation, project.layout.type, bs.shape === 'curved');
       parts.push(
-        `<text x="${mx}" y="${my - 3}" text-anchor="middle" font-size="10" font-family="${FONT_FAMILY}" fill="${supportColor}">${escXml(String(node.support))}</text>`,
+        `<text x="${sm.x}" y="${sm.y - 3}" text-anchor="middle" font-size="10" font-family="${FONT_FAMILY}" fill="${supportColor}">${escXml(String(node.support))}</text>`,
       );
     }
   }
@@ -539,8 +550,12 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       const from = positions.get(t.parentId);
       const to = positions.get(t.nodeId);
       if (!from || !to) continue;
-      const mx = (from.x + to.x) / 2;
-      const my = (from.y + to.y) / 2;
+      // Anchor the marker ON the drawn branch (the canvas uses the same
+      // `branchMidpointOn`): for an elbow branch the bounding-box midpoint
+      // hangs in empty air beside the polyline.
+      const m = branchMidpointOn(from, to, orientation, project.layout.type, false);
+      const mx = m.x;
+      const my = m.y;
       if (t.involvesUnknown) {
         parts.push(
           `<circle cx="${mx}" cy="${my}" r="5.5" fill="#ffffff" stroke="${C_UNKNOWN}" stroke-width="1.6" stroke-dasharray="2.4 1.8"/>`,
@@ -563,22 +578,33 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   // badge a reader cannot tell a collapsed clade from a two-tips clade. The
   // canvas draws the same badge (NodeView), so the figure says it too.
   const collapsedTips = (() => {
+    // Iterative post-order: a recursive count overflowed the call stack on a
+    // 6000-level unifurcate tree even when the root was collapsed and the
+    // layout marked it invisible — the SVG build is shared by all three export
+    // formats, so layout-stack safety does not transfer for free.
     const map = new Map<NodeId, number>();
-    const countOf = (id: NodeId): number => {
-      const cached = map.get(id);
-      if (cached !== undefined) return cached;
+    const order: NodeId[] = [];
+    const seen = new Set<NodeId>();
+    const stack: NodeId[] = [...visible];
+    while (stack.length) {
+      const id = stack.pop() as NodeId;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      order.push(id);
       const n = project.nodes[id];
-      if (!n) return 0;
+      if (n) for (const c of n.childrenIds) if (!seen.has(c)) stack.push(c);
+    }
+    for (let i = order.length - 1; i >= 0; i -= 1) {
+      const n = project.nodes[order[i]];
+      if (!n) continue;
       let total = 0;
       for (const c of n.childrenIds) {
         const cn = project.nodes[c];
         if (!cn) continue;
-        total += cn.childrenIds.length === 0 ? 1 : countOf(c);
+        total += cn.childrenIds.length === 0 ? 1 : map.get(c) ?? 0;
       }
-      map.set(id, total);
-      return total;
-    };
-    for (const id of visible) countOf(id);
+      map.set(n.id, total);
+    }
     return map;
   })();
   for (const id of visible) {
@@ -781,15 +807,14 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   // ask for it first. Time-calibrated trees already carry the time axis, so the
   // bar is drawn only for phylograms. Screen-space placement: bottom-left.
   if ((opts.includeScaleBar ?? true) && project.layout.type === 'rectangular-phylogram') {
-    let pxPerUnit = 0;
-    for (const [id, p] of positions) {
-      const n = project.nodes[id];
-      if (!n?.parentId || typeof n.branchLength !== 'number' || n.branchLength <= 0) continue;
-      const par = positions.get(n.parentId);
-      if (!par) continue;
-      const dist = orientation === 'LR' || orientation === 'RL' ? Math.abs(p.x - par.x) : Math.abs(p.y - par.y);
-      if (dist > 0) pxPerUnit = Math.max(pxPerUnit, dist / n.branchLength);
-    }
+    // The scale is the LAYOUT's own depthScale — the same number the on-screen
+    // ScaleBar reads. Re-estimating px/unit from the drawn positions made a
+    // single pinned (manually dragged) node change the bar from 75px/0.5 to
+    // 65px/0.1, and placeholder distances downstream of an unmeasured ancestor
+    // participated in the estimate. depthScale is undefined exactly when the
+    // phylogram degraded to a cladogram, in which case there is nothing to
+    // measure and no bar is drawn.
+    const pxPerUnit = layout.depthScale ?? 0;
     if (pxPerUnit > 0) {
       const targetPx = 120;
       const rawUnit = targetPx / pxPerUnit;
@@ -797,8 +822,14 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       const nice = [1, 2, 5, 10].map((m) => m * mag).filter((v) => v >= rawUnit * 0.5)[0] ?? 10 * mag;
       const barPx = nice * pxPerUnit;
       const bx = minX + 12;
-      const by = minY + height - 14;
-      const unit = project.layout.timeUnit || '';
+      // Bottom of the TREE box, above the reserved legend strip — the old
+      // `minY + height` put the bar inside the legend's band, where its caps
+      // collided with the last legend row's descenders.
+      const by = minY + treeH - 14;
+      // Branch lengths on a phylogram are substitutions per site, not time —
+      // labelling the bar with the project's time unit claimed a Ma scale for
+      // a substitutions figure (the canvas bar says subst./site too).
+      const unit = tr('substitutions/site', 'subst./site');
       parts.push(
         `<line x1="${bx}" y1="${by}" x2="${bx + barPx}" y2="${by}" stroke="#1d1d1f" stroke-width="2"/>`,
       );
@@ -884,6 +915,11 @@ export function exportSVGString(project: Project, opts: ExportOptions = {}): str
  * `onClamp` is called when the browser's canvas budgets forced the scale down —
  * the caller MUST surface it (a silently lowered DPI is how a "300 dpi"
  * figure arrives at 90 dpi and fails review).
+ *
+ * The PNG also carries a pHYs chunk stating the figure's real pixel density
+ * (CSS px are treated as 96 dpi, so the chunk reports `scale × 96`): without
+ * it a "300 dpi" figure opens at 96 dpi in every layout program regardless of
+ * how many pixels it holds.
  */
 export async function toPngBlob(
   project: Project,
@@ -927,22 +963,208 @@ export async function toPngBlob(
   if (!ctx) throw new Error('Canvas 2D context unavailable');
   ctx.scale(s, s);
   ctx.drawImage(img, 0, 0, width, height);
-  return await new Promise<Blob>((resolve, reject) => {
+  const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png');
   });
+  const dpi = Math.round(s * 96);
+  if (dpi !== 96) {
+    try {
+      return await withPngDpi(blob, dpi);
+    } catch {
+      return blob; // metadata is best-effort; the pixels are already correct
+    }
+  }
+  return blob;
+}
+
+/**
+ * Insert a pHYs chunk (pixels per metre, one DPI statement per axis) after the
+ * IHDR of an encoded PNG. Pure byte surgery — the image data is untouched.
+ */
+async function withPngDpi(blob: Blob, dpi: number): Promise<Blob> {
+  const ppm = Math.round(dpi / 0.0254);
+  const src = new Uint8Array(await blob.arrayBuffer());
+  // IHDR: 8-byte signature, then len(4) type(4) data(13) crc(4).
+  const ihdrDataLen = new DataView(src.buffer, src.byteOffset + 8, 4).getUint32(0);
+  const insertAt = 8 + 12 + ihdrDataLen;
+  const out = new Uint8Array(src.length + 21);
+  out.set(src.subarray(0, insertAt), 0);
+  const view = new DataView(out.buffer, insertAt);
+  view.setUint32(0, 9); // data length
+  out[insertAt + 4] = 0x70; // 'p'
+  out[insertAt + 5] = 0x48; // 'H'
+  out[insertAt + 6] = 0x59; // 'Y'
+  out[insertAt + 7] = 0x73; // 's'
+  view.setUint32(8, ppm);
+  view.setUint32(12, ppm);
+  out[insertAt + 16] = 1; // unit: metre
+  view.setUint32(17, pngCrc(out.subarray(insertAt + 4, insertAt + 17)));
+  out.set(src.subarray(insertAt), insertAt + 21);
+  return new Blob([out], { type: 'image/png' });
+}
+
+/** CRC-32 (ISO 3309 / ITU-T V.42), the checksum PNG chunk framing requires. */
+function pngCrc(bytes: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    c ^= bytes[i];
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Convert a colour string to its luminance grey (Rec. 601: the same weighting
+ * the SVG saturate filter applies). svg2pdf.js ignores SVG filters, so the
+ * PDF path cannot lean on `<feColorMatrix type="saturate" values="0"/>` — the
+ * grey must be WRITTEN into the colours. Unknown formats pass through.
+ */
+function toGrayscaleColor(color: string): string {
+  const t = color.trim();
+  const hex6 = /^#([0-9a-fA-F]{6})$/.exec(t);
+  if (hex6) {
+    const v = parseInt(hex6[1], 16);
+    const r = (v >> 16) & 0xff;
+    const g = (v >> 8) & 0xff;
+    const b = v & 0xff;
+    const y = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    return `#${((y << 16) | (y << 8) | y).toString(16).padStart(6, '0')}`;
+  }
+  const fn = /^rgba?\(([^)]+)\)$/i.exec(t);
+  if (fn) {
+    const parts = fn[1].split(/[\s,\/]+/).filter(Boolean);
+    if (parts.length >= 3) {
+      const r = parseFloat(parts[0]);
+      const g = parseFloat(parts[1]);
+      const b = parseFloat(parts[2]);
+      if ([r, g, b].every((x) => Number.isFinite(x))) {
+        const y = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        return `rgb(${y},${y},${y})`;
+      }
+    }
+  }
+  return color;
+}
+
+/** Luminance-grey every colour in the SVG string (hex and rgb() forms). */
+function grayscaleSvg(svg: string): string {
+  return svg
+    .replace(/#[0-9a-fA-F]{6}\b/g, (h) => toGrayscaleColor(h))
+    .replace(/rgba?\(\s*[\d.]+%?\s*(,\s*[\d.]+%?\s*){2,3}\)/gi, (m) => toGrayscaleColor(m));
+}
+
+/**
+ * jsPDF's standard-14 fonts are WinAnsi-encoded: text outside Latin-1 came out
+ * of the PDF as garbage glyphs (`pdftotext` read CJK labels as noise) because
+ * no CJK font is embedded. Labels that need such characters are rendered by
+ * the BROWSER's own font engine into a high-resolution transparent image and
+ * embedded at their drawn position — legible CJK at the correct size, while
+ * Latin text stays real vector text. (These glyph images are not selectable;
+ * that is the documented trade of this export path.)
+ */
+const NEEDS_GLYPH_IMAGE = /[\u0100-\uFFFF]/;
+
+async function rasteriseExoticText(svg: string): Promise<string> {
+  // Cheap pre-check on the WHOLE string: the SVG's own markup is generated
+  // ASCII (palette hex colours, numeric geometry, ASCII attribute strings), so
+  // any non-Latin-1 character can only sit inside text content. No
+  // tag-stripping regex here — a strip pass is CodeQL's
+  // js/incomplete-multi-character-sanitization pattern AND the wrong tool: the
+  // per-node test below decides precisely which labels need glyph images.
+  if (!NEEDS_GLYPH_IMAGE.test(svg)) return svg;
+  const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+  const svgEl = doc.documentElement;
+  const texts = Array.from(svgEl.querySelectorAll('text'));
+  if (texts.length === 0) return svg;
+  const NS = 'http://www.w3.org/2000/svg';
+  let replaced = false;
+  let canvas: HTMLCanvasElement | null = null;
+  let ctx: CanvasRenderingContext2D | null = null;
+  for (const t of texts) {
+    const content = t.textContent ?? '';
+    if (!content || !NEEDS_GLYPH_IMAGE.test(content)) continue;
+    // An ancestor transform would shift the drawn image away from the text's
+    // own coordinates; leave such text to the (imperfect) default path rather
+    // than misplace it.
+    let transformed = false;
+    for (let el: Element | null = t; el; el = el.parentElement) {
+      if (el.getAttribute && el.getAttribute('transform')) transformed = true;
+    }
+    if (transformed) continue;
+    const sizeAttr = t.getAttribute('font-size');
+    const fontSize = sizeAttr ? parseFloat(sizeAttr) || 11 : 11;
+    const family = t.getAttribute('font-family') || 'sans-serif';
+    const weight = t.getAttribute('font-weight') || '400';
+    const fill = t.getAttribute('fill') || '#000000';
+    const anchor = t.getAttribute('text-anchor') || 'start';
+    const x = parseFloat(t.getAttribute('x') ?? '0') || 0;
+    const y = parseFloat(t.getAttribute('y') ?? '0') || 0;
+    if (!canvas || !ctx) {
+      canvas = document.createElement('canvas');
+      ctx = canvas.getContext('2d');
+      if (!ctx) return svg;
+    }
+    const font = `${weight} ${fontSize}px ${family}`;
+    ctx.font = font;
+    const metrics = ctx.measureText(content);
+    const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8;
+    const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2;
+    const w = Math.max(1, metrics.width);
+    const h = Math.max(1, ascent + descent);
+    const SCALE = 4; // supersample so the embedded glyphs stay crisp in print
+    canvas.width = Math.ceil(w * SCALE);
+    canvas.height = Math.ceil(h * SCALE);
+    // Resizing a canvas resets its state but the context object stays valid.
+    ctx.scale(SCALE, SCALE);
+    ctx.font = font;
+    ctx.fillStyle = fill;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(content, 0, ascent);
+    const href = canvas.toDataURL('image/png');
+    const img = doc.createElementNS(NS, 'image');
+    const x0 = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
+    img.setAttribute('x', String(x0));
+    img.setAttribute('y', String(y - ascent));
+    img.setAttribute('width', String(w));
+    img.setAttribute('height', String(h));
+    img.setAttribute('href', href);
+    img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', href);
+    img.setAttribute('preserveAspectRatio', 'none');
+    t.replaceWith(img);
+    replaced = true;
+  }
+  // Serialize only when something actually changed: a round trip through the
+  // DOM otherwise rewrites attribute order and namespace spellings for no gain.
+  return replaced ? new XMLSerializer().serializeToString(svgEl) : svg;
 }
 
 /** Produce a vector PDF blob using jsPDF + svg2pdf.js (lazy-loaded). */
 export async function toPdfBlob(project: Project, opts: ExportOptions = {}): Promise<Blob> {
-  const { svg, width, height } = buildSVG(project, opts);
+  let { svg, width, height } = buildSVG(project, opts);
+  // The PDF cannot lean on the SVG saturate filter (svg2pdf ignores filters):
+  // the grey is computed into every colour explicitly.
+  if (opts.grayscale) svg = grayscaleSvg(svg);
+  svg = await rasteriseExoticText(svg);
   const { jsPDF } = await import('jspdf');
   await import('svg2pdf.js');
+  // jsPDF caps a MediaBox at 14400 units per side; a 250-tip figure at the
+  // default spacing is taller than that. Scale the PAGE down (aspect kept) so
+  // the figure always fits instead of emitting a clipped/overflowing box —
+  // svg2pdf renders the content at the requested size either way.
+  const MAX_PDF_UNITS = 14400;
+  const fit = Math.min(
+    1,
+    MAX_PDF_UNITS / Math.max(1, width),
+    MAX_PDF_UNITS / Math.max(1, height),
+  );
+  const pageW = width * fit;
+  const pageH = height * fit;
   const doc = new jsPDF({
-    orientation: width >= height ? 'landscape' : 'portrait',
+    orientation: pageW >= pageH ? 'landscape' : 'portrait',
     // Use px units so the SVG's pixel geometry maps 1:1 into the PDF page;
     // 'pt' would treat each SVG px as a point and inflate the output ~1.33x.
     unit: 'px',
-    format: [width, height],
+    format: [pageW, pageH],
   });
   if (opts.metadata?.method || opts.metadata?.version) {
     doc.setProperties({
@@ -956,8 +1178,8 @@ export async function toPdfBlob(project: Project, opts: ExportOptions = {}): Pro
   await (doc as unknown as { svg: (n: Element, o: object) => Promise<unknown> }).svg(el, {
     x: 0,
     y: 0,
-    width,
-    height,
+    width: pageW,
+    height: pageH,
   });
   return doc.output('blob');
 }

@@ -73,6 +73,13 @@ export interface ParsimonyResult {
   mpStates: Map<NodeId, string[]>;
   /** Minimum total cost (= number of changes under a uniform matrix). */
   cost: number;
+  /**
+   * False when NO assignment of states can score a finite cost under the step
+   * matrix (e.g. both transition directions forbidden while tips observe two
+   * different states). The old reader collapsed that case to `cost = 0` — the
+   * best possible score — reporting an infeasible model as a perfect fit.
+   */
+  feasible: boolean;
   /** Child node ids whose entering branch carries a change in the chosen MP path. */
   changeBranches: Set<NodeId>;
 }
@@ -83,6 +90,7 @@ const EMPTY: ParsimonyResult = {
   chosen: new Map(),
   mpStates: new Map(),
   cost: 0,
+  feasible: true,
   changeBranches: new Set(),
 };
 
@@ -131,6 +139,17 @@ export function parsimony(
 
   const stateIds = character.states.map((s) => s.id);
   const k = stateIds.length;
+
+  // True Dollo (Farris 1977; PHYLIP DOLLOP): the derived state may be GAINED
+  // ONCE on the whole tree and lost any number of times. No step matrix can
+  // express "at most one gain" — the preset labelled `dollo` used to feed the
+  // DP an irreversible LOCAL-cost matrix, which quietly allowed a fresh gain on
+  // every branch (a Camin–Sokal-style irreversible model wearing Dollo's name).
+  // Binary characters tagged model:'dollo' therefore run a dedicated DP over
+  // (trait, gain-used) states instead of the matrix.
+  if (character.model === 'dollo' && k === 2) {
+    return dolloParsimony(project, character, options);
+  }
   const index = new Map(stateIds.map((id, i) => [id, i]));
   const matrix = character.costMatrix;
   const childrenOf = (n: TreeNode) =>
@@ -196,7 +215,11 @@ export function parsimony(
   const rootG = g.get(root.id) as number[];
   let rootMin = INF;
   for (let i = 0; i < k; i += 1) if (rootG[i] < rootMin) rootMin = rootG[i];
-  const cost = Number.isFinite(rootMin) ? rootMin : 0;
+  // An infinite root minimum means the matrix admits NO assignment consistent
+  // with the observed tips — that must be REPORTED, never flattened to 0 (the
+  // best conceivable score).
+  const feasible = Number.isFinite(rootMin);
+  const cost = feasible ? rootMin : INF;
 
   // Uppass: assign each node a state minimising cost given its parent's state,
   // recording tie sets for display and change branches for the chosen path.
@@ -361,8 +384,331 @@ export function parsimony(
     mpStates.set(n.id, keep);
   }
 
-  return { states, chosen: chosenStates, mpStates, cost, changeBranches };
+  return { states, chosen: chosenStates, mpStates, cost, feasible, changeBranches };
 }
+
+/**
+ * True-Dollo DP for binary characters tagged model:'dollo' (see parsimony()).
+ *
+ * The derived state is GAINED once on the whole tree (on one branch, or at the
+ * root) and may be LOST any number of times afterwards. A (trait, gain-used)
+ * per-node state cannot express this — the flag is a GLOBAL resource, and a
+ * path-local copy lets every sibling subtree buy its own gain. The exact
+ * decomposition instead enumerates the gain position: with the gain on the
+ * branch entering `c`, everything outside c's subtree is forced trait 0 (no
+ * gain is left there), c enters at trait 1, and c's subtree follows the
+ * post-gain model (1→0 losses allowed, 0→1 forbidden):
+ *
+ *   cost(gain at c) = 1 + down_post[c][1]    if every forced-1 tip is inside c
+ *                   = INF                    otherwise
+ *   cost(no gain)   = 0                      when no tip forces trait 1
+ *
+ * `down_post` is one O(n) bottom-up pass, so the whole analysis is O(n).
+ * Reconstruction picks the SHALLOWEST optimal gain position (ties only occur
+ * along unifurcation chains, where the extra segments carry no tips and cannot
+ * change any cost); `mpStates` reports the traits co-optimal under that gain
+ * position, plus trait 1 for any node that is itself an optimal gain position.
+ * A gain AT THE ROOT contributes to `cost` but has no entering branch, so it
+ * does not appear in `changeBranches`.
+ */
+function dolloParsimony(
+  project: Project,
+  character: Character,
+  options?: ParsimonyOptions,
+): ParsimonyResult {
+  const root = project.nodes[project.rootId];
+  if (!root) return EMPTY;
+  const stateIds = character.states.map((s) => s.id);
+  const zero = stateIds[0];
+  const one = stateIds[1];
+  const childrenOf = (n: TreeNode) =>
+    n.childrenIds.map((id) => project.nodes[id]).filter(Boolean) as TreeNode[];
+
+  // Post-order with the same cycle guard as the matrix path.
+  const order: TreeNode[] = [];
+  {
+    const stack: TreeNode[] = [root];
+    const seen = new Set<NodeId>([root.id]);
+    while (stack.length) {
+      const n = stack.pop() as TreeNode;
+      order.push(n);
+      for (const c of childrenOf(n)) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        stack.push(c);
+      }
+    }
+    // The DFS above yields a PRE-order; reversing makes it a post-order
+    // (children before parents), which the downpass requires.
+    order.reverse();
+  }
+
+  // Observed trait set of a tip: members of {zero, one}, or null when the tip
+  // is unconstrained (missing / an empty observation).
+  const observedOf = (n: TreeNode): string[] | null => {
+    const observed = tipStateSet(n, character.id);
+    if (!observed) return null;
+    const members = observed.filter((s) => s === zero || s === one);
+    return members.length > 0 ? members : null;
+  };
+
+  // Post-gain subtree cost: down[node][t] = min subtree cost with the node in
+  // trait t, losses allowed, re-gains forbidden. M[0][1] = INF is the whole
+  // constraint.
+  const M_POST = [
+    [0, INF],
+    [1, 0],
+  ];
+  const down = new Map<NodeId, number[]>();
+  const forcedOneBelow = new Map<NodeId, number>();
+  for (const n of order) {
+    const children = childrenOf(n);
+    const observed = observedOf(n);
+    const forced1 = observed !== null && !observed.includes(zero) ? 1 : 0;
+    const arr = new Array<number>(2).fill(0);
+    if (children.length === 0) {
+      if (observed !== null) {
+        for (let t = 0; t < 2; t += 1) arr[t] = observed.includes(t === 1 ? one : zero) ? 0 : INF;
+      }
+    } else {
+      for (let t = 0; t < 2; t += 1) {
+        let sum = 0;
+        for (const c of children) {
+          const gc = down.get(c.id) as number[];
+          let best = INF;
+          for (let u = 0; u < 2; u += 1) {
+            const v = M_POST[t][u] + gc[u];
+            if (v < best) best = v;
+          }
+          sum += best;
+        }
+        arr[t] = sum;
+      }
+    }
+    down.set(n.id, arr);
+    forcedOneBelow.set(
+      n.id,
+      forced1 + children.reduce((a, c) => a + (forcedOneBelow.get(c.id) ?? 0), 0),
+    );
+  }
+
+  // Enumerate gain positions. Every forced-1 tip must lie inside the chosen
+  // subtree; otherwise the outside would need a second gain.
+  const totalForced1 = forcedOneBelow.get(root.id) ?? 0;
+  const noGainCost = totalForced1 === 0 ? 0 : INF;
+  interface GainCandidate {
+    nodeId: NodeId | null; // null = the gain at the root itself
+    cost: number;
+    depth: number;
+  }
+  const candidates: GainCandidate[] = [];
+  if (Number.isFinite(noGainCost)) candidates.push({ nodeId: null, cost: 0, depth: -1 });
+  {
+    // depth of each node (edges from the root), iterative.
+    const depth = new Map<NodeId, number>([[root.id, 0]]);
+    const queue: NodeId[] = [root.id];
+    while (queue.length) {
+      const id = queue.shift() as NodeId;
+      const n = project.nodes[id];
+      if (!n) continue;
+      for (const c of n.childrenIds) {
+        if (!project.nodes[c] || depth.has(c)) continue;
+        depth.set(c, (depth.get(id) as number) + 1);
+        queue.push(c);
+      }
+    }
+    // The gain AT THE ROOT: the whole tree is post-gain. The root has no
+    // entering branch, so this candidate carries the gain cost without ever
+    // showing up in `changeBranches`.
+    const rootSubtreeCost = (down.get(root.id) as number[])[1];
+    if (Number.isFinite(rootSubtreeCost)) {
+      candidates.push({ nodeId: root.id, cost: 1 + rootSubtreeCost, depth: 0 });
+    }
+    for (const n of Object.values(project.nodes)) {
+      if (n.parentId === null) continue;
+      if ((forcedOneBelow.get(n.id) ?? 0) !== totalForced1) continue;
+      const subtreeCost = (down.get(n.id) as number[])[1];
+      if (!Number.isFinite(subtreeCost)) continue;
+      candidates.push({ nodeId: n.id, cost: 1 + subtreeCost, depth: depth.get(n.id) ?? 0 });
+    }
+  }
+  let best = noGainCost;
+  for (const c of candidates) if (c.cost < best) best = c.cost;
+  if (!Number.isFinite(best)) {
+    // Unreachable in practice (the all-0 assignment always exists), guarded so
+    // the contract cannot silently break.
+    return {
+      states: new Map(),
+      chosen: new Map(),
+      mpStates: new Map(),
+      cost: INF,
+      feasible: false,
+      changeBranches: new Set(),
+    };
+  }
+  // Shallowest optimal gain position; ties only occur along unifurcation
+  // chains, where the choice cannot change any cost.
+  const chosenGain = candidates
+    .filter((c) => c.cost === best)
+    .sort((a, b) => a.depth - b.depth)[0];
+
+  const states = new Map<NodeId, string[]>();
+  const chosenStates = new Map<NodeId, string>();
+  const changeBranches = new Set<NodeId>();
+
+  const optimization = options?.optimization ?? 'sankoff-min';
+  const rng = options?.rng;
+
+  if (chosenGain.nodeId === null) {
+    // No gain anywhere: every node is trait 0.
+    for (const n of order) {
+      states.set(n.id, [zero]);
+      chosenStates.set(n.id, zero);
+    }
+    return { states, chosen: chosenStates, mpStates: new Map(states), cost: 0, feasible: true, changeBranches };
+  }
+
+  // Nodes outside the gain subtree (above it): forced trait 0.
+  const gainId = chosenGain.nodeId;
+  const inside = new Set<NodeId>(collectSubtreeIds(project, gainId));
+
+  // Reconstruct: outside all 0; at the gain node trait 1 (the gain itself);
+  // below it the post-gain uppass with the shared tie-break family.
+  const parentTrait = new Map<NodeId, number | null>([[root.id, null]]);
+  // Process in pre-order (parents before children).
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    const n = order[i];
+    const pt = parentTrait.get(n.id) ?? null;
+    if (!inside.has(n.id) || (pt === 0 && n.id !== gainId)) {
+      // Outside the gained subtree, or on a 0-path inside it that cannot
+      // re-gain: trait 0 is the only reachable trait when the subtree cost
+      // under 0 is finite; if the node is INSIDE and its parent is 0 but the
+      // node is not below the gain, it can only be 0 as well.
+      const dn = down.get(n.id) as number[];
+      const t = Number.isFinite(dn[0]) ? 0 : 1;
+      states.set(n.id, [t === 1 ? one : zero]);
+      chosenStates.set(n.id, t === 1 ? one : zero);
+      if (pt !== null && t !== pt) changeBranches.add(n.id);
+      for (const c of n.childrenIds) parentTrait.set(c, t);
+      continue;
+    }
+    if (n.id === gainId) {
+      // The gain: trait 1 by construction.
+      states.set(n.id, [one]);
+      chosenStates.set(n.id, one);
+      if (pt !== null && pt !== 1) changeBranches.add(n.id);
+      for (const c of n.childrenIds) parentTrait.set(c, 1);
+      continue;
+    }
+    // Below the gain: post-gain uppass.
+    const dn = down.get(n.id) as number[];
+    const costFrom = (t: number): number => (pt === null ? 0 : M_POST[pt][t]) + dn[t];
+    let localBest = INF;
+    for (let t = 0; t < 2; t += 1) {
+      const v = costFrom(t);
+      if (v < localBest) localBest = v;
+    }
+    const ties: number[] = [];
+    for (let t = 0; t < 2; t += 1) if (costEquals(costFrom(t), localBest)) ties.push(t);
+    let chosen: number = ties[0];
+    if (rng) {
+      chosen = ties[Math.floor(rng() * ties.length) % ties.length];
+    } else if (optimization === 'acrtran' && pt !== null) {
+      const away = ties.filter((t) => t !== pt);
+      chosen = away.length > 0 ? away[0] : pt;
+    } else if (pt !== null && ties.includes(pt)) {
+      chosen = pt; // delayed / sankoff-min step 1: keep the parent's trait
+    }
+    states.set(n.id, ties.map((t) => (t === 1 ? one : zero)));
+    chosenStates.set(n.id, chosen === 1 ? one : zero);
+    if (pt !== null && chosen !== pt) changeBranches.add(n.id);
+    for (const c of n.childrenIds) parentTrait.set(c, chosen);
+  }
+
+  // Global MPR set. For nodes inside the gained subtree an exact outside pass
+  // over the post-gain model says which traits are co-optimal; for nodes above
+  // the gain only trait 0 is reachable — except where the gain itself can
+  // slide up an optimal unifurcation chain (`canOne` marks every node that is
+  // an optimal gain position).
+  const subtreeTotal = (down.get(gainId) as number[])[1];
+  const canOne = new Set<NodeId>();
+  for (const c of candidates) {
+    if (c.cost === best && c.nodeId !== null) canOne.add(c.nodeId);
+  }
+  // Pre-order walk from the gain node down (parents before children).
+  const outside2 = new Map<NodeId, number[]>();
+  outside2.set(gainId, [0, 0]);
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    const n = order[i];
+    if (n.id === gainId || !inside.has(n.id)) continue;
+    const parent = n.parentId !== null ? project.nodes[n.parentId] : null;
+    const un = parent ? outside2.get(parent.id) : undefined;
+    if (!parent || !un) continue;
+    const siblings = childrenOf(parent).filter((c) => c.id !== n.id);
+    const out = new Array<number>(2).fill(INF);
+    for (let t = 0; t < 2; t += 1) {
+      for (let p = 0; p < 2; p += 1) {
+        if (!Number.isFinite(un[p]) || !Number.isFinite(M_POST[p][t])) continue;
+        let sib = 0;
+        for (const sibNode of siblings) {
+          const gd = down.get(sibNode.id) as number[];
+          let m = INF;
+          for (let u = 0; u < 2; u += 1) {
+            const v = M_POST[p][u] + gd[u];
+            if (v < m) m = v;
+          }
+          sib += m;
+        }
+        const v = un[p] + M_POST[p][t] + sib;
+        if (v < out[t]) out[t] = v;
+      }
+    }
+    outside2.set(n.id, out);
+  }
+  const mpStates = new Map<NodeId, string[]>();
+  for (const n of order) {
+    const keep: string[] = [];
+    const dn = down.get(n.id) as number[];
+    if (!inside.has(n.id)) {
+      // Above the gained subtree: trait 0 forced, trait 1 only when the node
+      // is itself an optimal gain position (the gain slides up the chain).
+      keep.push(zero);
+      if (canOne.has(n.id) && Number.isFinite(dn[1])) keep.push(one);
+    } else {
+      const un = outside2.get(n.id) ?? [0, 0];
+      if (Number.isFinite(dn[0]) && costEquals(dn[0] + un[0], subtreeTotal)) keep.push(zero);
+      if (Number.isFinite(dn[1]) && costEquals(dn[1] + un[1], subtreeTotal)) keep.push(one);
+      // The gain node itself is trait 1 by construction; keep 1 visible even
+      // when the outside pass ties it with a slid-down gain.
+      if (n.id === gainId && !keep.includes(one)) keep.push(one);
+    }
+    if (keep.length === 0) keep.push(chosenStates.get(n.id) ?? zero);
+    mpStates.set(n.id, keep);
+  }
+
+  return { states, chosen: chosenStates, mpStates, cost: best, feasible: true, changeBranches };
+}
+
+/** Collect the ids of the subtree rooted at `id` (iterative, cycle-guarded). */
+function collectSubtreeIds(project: Project, id: NodeId): NodeId[] {
+  const out: NodeId[] = [];
+  const stack: NodeId[] = [id];
+  const seen = new Set<NodeId>([id]);
+  while (stack.length) {
+    const cur = stack.pop() as NodeId;
+    const n = project.nodes[cur];
+    if (!n) continue;
+    out.push(cur);
+    for (const c of n.childrenIds) {
+      if (!seen.has(c)) {
+        seen.add(c);
+        stack.push(c);
+      }
+    }
+  }
+  return out;
+}
+
 
 /**
  * Sample MPRs and report, per branch, the fraction of sampled optimal
@@ -390,6 +736,7 @@ export function sampleMprBranchRates(
   let used = 0;
   for (let i = 0; i < samples; i += 1) {
     const r = parsimony(project, character, { rng });
+    if (!r.feasible) continue;
     if (r.cost === 0 && r.changeBranches.size === 0 && r.chosen.size === 0) continue;
     used += 1;
     cost = r.cost;
@@ -414,7 +761,13 @@ export function uniformCostMatrix(k: number): number[][] {
  *  - unordered (Fitch): every change costs 1;
  *  - wagner: ordered — cost = |i − j| (adjacent states are cheapest);
  *  - dollo: irreversible — the 0→1 gain costs 1, everything else is forbidden.
- * The UI exposes these so a user does not have to hand-fill the matrix.
+ *
+ * NOTE the limit of what a matrix can say: a step matrix prices LOCAL changes,
+ * so this preset is an irreversible (Camin–Sokal-style) model that permits a
+ * fresh gain on every branch. The whole-tree single-gain constraint that
+ * defines true DOLLO is not expressible as a matrix — `parsimony()` enforces
+ * it with a dedicated (trait, gain-used) DP whenever a binary character is
+ * tagged model:'dollo', which supersedes this matrix for that tag.
  */
 export function presetCostMatrix(
   model: 'unordered' | 'wagner' | 'dollo',

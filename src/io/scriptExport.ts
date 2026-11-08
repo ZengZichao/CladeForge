@@ -19,6 +19,7 @@
 
 import { serializeNewick } from './newick';
 import { tipNames } from './nexus';
+import { DEFAULT_ASR_OPTIONS, reconstructMk } from '../model/asr';
 import { APP_VERSION, type LayoutType, type NodeId, type Project } from '../model/types';
 
 /** Escape a string for a double-quoted R literal. */
@@ -165,6 +166,19 @@ export function buildRScript(project: Project): string {
   const asrRateNote = project.analysisResults?.some((r) => r.kind === 'asr' && r.params?.['rateMethod'] === 'moment')
     ? 'moment estimate 1/mean(branch length) — a convention, not an ML fit; recomputing with ape::ace will differ'
     : 'maximum-likelihood fit (1-D profile over the pruning likelihood)';
+  // Per-character Mk rate, fitted the SAME way the application fits it. The
+  // script used to fix `rate <- 1 / mean(bl)` while the app ran an ML profile,
+  // so a scripted re-run disagreed wildly with the app's own numbers (a
+  // constant-state two-tip project fits r ≈ 0 in the app; 1/mean(bl) kept a
+  // live rate and produced a completely different posterior). A character the
+  // app itself refuses (guard / no data) falls back to NULL and the R side
+  // prices it at 1 / mean(bl) with a printed note.
+  const charRates = new Map<string, number | null>();
+  for (const c of project.characters) {
+    if (c.type !== 'discrete' || c.states.length < 2) continue;
+    const res = reconstructMk(project, c, { ...DEFAULT_ASR_OPTIONS, joint: false });
+    charRates.set(c.id, res && Number.isFinite(res.rate.rate) ? res.rate.rate : null);
+  }
 
   // Character payload as R list(...) literals. The keys of each `tips` vector are
   // the SAME de-duplicated names `tip.label` was written with, so a state can
@@ -231,6 +245,7 @@ export function buildRScript(project: Project): string {
             ]
           : []),
         `    cost = ${cost},`,
+        `    rate = ${charRates.get(c.id) === undefined || charRates.get(c.id) === null ? 'NULL' : String(charRates.get(c.id))},`,
         `    tips = c(${tips.join(', ')})`,
         '  )',
       ].join('\n'),
@@ -250,8 +265,12 @@ export function buildRScript(project: Project): string {
 #   * parsimony: tie-break = parent-state first, then tip frequency, then
 #     declaration order; the reported single path is ONE of possibly many
 #     equally parsimonious reconstructions.
-#   * Mk: rate ${'${asrRateNote}'}; display threshold applied post hoc; the
-#     posterior is marginal (per-node), NOT joint.
+#   * Mk: each character's rate is the application's own fit (${asrRateNote}),
+#     baked in at generation time; the script replays that number instead of
+#     re-fitting, so its posteriors match what the app reported. Characters the
+#     app could not fit fall back to 1 / mean(branch length) with a printed
+#     note. Display threshold applied post hoc; the posterior is marginal
+#     (per-node), NOT joint.
 #   * The R implementation below computes the likelihood in ORDINARY space
 #     while the app runs in log-space: values agree to floating-point noise on
 #     modest trees but can drift on very large or very unbalanced ones.
@@ -299,6 +318,11 @@ if (is.null(bl) || !any(is.finite(bl) & bl > 0)) {
 # edges from the average and make this script reconstruct at a different rate
 # than the application reports. Deriving it from the fallback-protected bl
 # above is what keeps the rate finite for a cladogram-only project.
+#
+# This fallback rate is used ONLY for a character the application itself could
+# not fit (NULL rate below); characters with a baked rate replay the
+# application's ML value, so the script's posteriors match the app's instead
+# of drifting with the branch-length mean.
 rate <- 1 / mean(bl)
 ${tree.substituted > 0 && tree.usable ? `cat("NOTE: ${tree.substituted} branch length${tree.substituted === 1 ? '' : 's'} were unset, negative or non-finite and are analysed as 1, matching the application.\n\n")` : ''}
 
@@ -367,10 +391,11 @@ sankoff <- function(tree, tip_states, states, cost) {
 ## Equal-rates Mk marginal ancestral reconstruction: Felsenstein pruning
 ## (down-pass) + parent/sibling up-pass, normal space. Uses the script-level
 ## 'bl' (which already falls back to unit lengths when the tree has none) and the
-## script-level 'rate' (= 1 / mean usable branch length); both are bound before
-## this function is ever called. For very large or very unbalanced trees prefer
-## log-space implementations (phangorn::ace, phytools).
-mk_asr <- function(tree, tip_states, states) {
+## 'rate' is passed per character: the application's own ML fit for that
+## character when it has one, else the 1 / mean usable branch length fallback.
+## For very large or very unbalanced trees prefer log-space implementations
+## (phangorn::ace, phytools).
+mk_asr <- function(tree, tip_states, states, rate) {
   ntip <- length(tree$tip.label)
   k <- length(states)
   sidx <- setNames(seq_len(k), states)
@@ -442,7 +467,11 @@ for (ch in characters) {
   }
   sp <- sankoff(tree, scored, ch$states, cost)
   cat(sprintf("   Sankoff minimum cost: %g (step-matrix units)\\n", sp$cost))
-  asr <- mk_asr(tree, scored, ch$states)
+  ch_rate <- if (is.null(ch$rate)) {
+    cat(sprintf("   NOTE: the application could not fit a rate for this character; using 1 / mean(branch length) = %g\\n", rate))
+    rate
+  } else ch$rate
+  asr <- mk_asr(tree, scored, ch$states, ch_rate)
   cat("   Mk posterior at each internal node (states:",
       paste(ch$states, collapse = " / "), ")\\n")
   print(round(asr$posterior[as.character(internal_nodes), , drop = FALSE], 3))
@@ -480,7 +509,7 @@ if (length(discrete) > 0) {
   for (lab in names(scored)) tip_col[[lab]] <- main$colors[[match(scored[[lab]], main$states)]]
   tiplabels(pch = 16, col = tip_col, cex = 1.4, offset = 0.15)
 
-  asr <- mk_asr(tree, scored, main$states)
+  asr <- mk_asr(tree, scored, main$states, if (is.null(main$rate)) rate else main$rate)
   nodelabels(node = internal_nodes, pie = asr$posterior[as.character(internal_nodes), , drop = FALSE],
              piecol = main$colors, cex = 0.7)
   legend("topleft", legend = main$states, fill = main$colors,

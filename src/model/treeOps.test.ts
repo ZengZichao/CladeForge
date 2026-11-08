@@ -484,18 +484,36 @@ describe('outgroupReroot', () => {
     expect(outgroupReroot(p, [])).toEqual({ ok: false, reason: 'empty-selection' });
     expect(outgroupReroot(p, ['nope'])).toEqual({ ok: false, reason: 'node-missing' });
     expect(outgroupReroot(p, [p.rootId])).toEqual({ ok: false, reason: 'outgroup-is-root' });
-    // Selecting both daughters of the root is the whole tree: no branch to move.
-    expect(outgroupReroot(p, ['c', 'd'])).toEqual({ ok: false, reason: 'outgroup-is-root' });
+    // Selecting ALL tips is the whole tree: no branch to move.
+    expect(outgroupReroot(p, ['a', 'b', 'c', 'd'])).toEqual({ ok: false, reason: 'outgroup-is-root' });
+    // {a,c} is not a clade and neither is its complement {b,d}: no root
+    // placement makes exactly {a,c} the outgroup (a partial clade selection
+    // must not silently drag unselected relatives along).
+    expect(outgroupReroot(p, ['a', 'c'])).toEqual({ ok: false, reason: 'not-monophyletic' });
     expect(skeleton(p)).toBe('(((A,B)Y,C)X,D)R');
+  });
+
+  it('roots a non-clade selection whose complement IS a clade on that complement’s edge', () => {
+    // {c,d} is not a clade (c hangs under X), but its complement {a,b} is Y's
+    // clade: rooting on Y's entering edge makes exactly {c,d} the outgroup.
+    const p = fourTipTree();
+    const res = outgroupReroot(p, ['c', 'd']);
+    expect(res).toEqual({ ok: true, rootEdgeOf: 'y' });
+    expect(skeleton(p)).toBe('((A,B)Y,(C,D)X)');
+    expectIntegrity(p);
   });
 
   it('the pre-flight check agrees with the operation', () => {
     expect(checkOutgroupReroot(fourTipTree(), ['a'])).toBeNull();
-    expect(checkOutgroupReroot(fourTipTree(), ['c', 'd'])).toBe('outgroup-is-root');
+    // {c,d} is not a clade, but its complement {a,b} is: allowed, roots on Y.
+    expect(checkOutgroupReroot(fourTipTree(), ['c', 'd'])).toBeNull();
+    // Neither {a,c} nor its complement {b,d} is a clade: refused.
+    expect(checkOutgroupReroot(fourTipTree(), ['a', 'c'])).toBe('not-monophyletic');
     expect(checkOutgroupReroot(fourTipTree(), [])).toBe('empty-selection');
     expect(checkOutgroupReroot(fourTipTree(), ['ghost'])).toBe('node-missing');
     const rooted = fourTipTree();
     expect(checkOutgroupReroot(rooted, [rooted.rootId])).toBe('outgroup-is-root');
+    expect(checkOutgroupReroot(fourTipTree(), ['a', 'b', 'c', 'd'])).toBe('outgroup-is-root');
   });
 });
 
@@ -547,7 +565,10 @@ describe('branch lengths and ages across a re-root', () => {
     expect(outgroupReroot(p, ['c']).ok).toBe(true);
     expect(p.events).toHaveLength(1);
     expect(p.events[0].nodeId).toBe('d'); // the surviving lineage of the old root
-    expect(p.calibrationPoints[0].nodeId).toBe('d');
+    // A ROOT calibration follows the ROOT: dropping it on the surviving
+    // lineage (a tip here) would re-read a root-divergence constraint as a
+    // tip-age constraint.
+    expect(p.calibrationPoints[0].nodeId).toBe(p.rootId);
   });
 
   it('midpoint rooting puts the root inside the branch, equalising both halves', () => {

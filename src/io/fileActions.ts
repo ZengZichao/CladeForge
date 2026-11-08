@@ -7,9 +7,12 @@ import { useStore } from '../model/store';
 import { parseNewickTrees, serializeNewick, type NewickParseResult } from './newick';
 import {
   DEFAULT_NEXUS_OPTIONS,
+  applyMatrixToProject,
+  parseNexusFile,
   parseNexusTrees,
   serializeNexus,
   tipNameNotices,
+  type NexusMatrixResult,
   type NexusParseResult,
   type NexusExportOptions,
 } from './nexus';
@@ -81,10 +84,13 @@ function reportParseIssues(issues: string[]): void {
   const MAX_TOASTS = 3;
   for (const msg of issues.slice(0, MAX_TOASTS)) notify.info(msg);
   if (issues.length > MAX_TOASTS) {
+    // The hidden notes are NOT persisted anywhere (they live only in this
+    // call), so pointing at "the exported project file" was a dead end — say
+    // re-import instead, which replays every note.
     notify.info(
       tr(
-        `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示（详见导出/工程文件）`,
-        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown`,
+        `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示（重新导入该文件可完整回放）`,
+        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown (re-import the file to see them all)`,
       ),
     );
   }
@@ -378,10 +384,64 @@ export async function actionRevertProject(): Promise<void> {
  * surface a toast instead of an unhandled rejection. */
 export function importTreeText(text: string, name: string, path?: string): void {
   try {
-    const { projects, issues } = parseTreeDocument(text, name);
+    if (looksLikeNexus(name, text)) {
+      // A NEXUS file may carry trees, a character matrix, or both. Going
+      // through `parseNexusFile` lets a matrix-ONLY .nex (the standard
+      // MrBayes / PAUP morphology input) land as characters on the active
+      // document instead of dying with "No TREES block" while the project sat
+      // untouched.
+      const parsed = parseNexusFile(text, baseName(name));
+      if (parsed.projects.length > 0) {
+        openTreeProjects(parsed.projects, name, path, parsed.issues);
+        return;
+      }
+      if (parsed.matrix && parsed.matrix.characters.length > 0) {
+        importMatrixOnly(parsed.matrix, name, parsed.issues);
+        return;
+      }
+      throw new Error(
+        parsed.issues[0] ||
+          tr('NEXUS 文件中没有可解析的树或性状矩阵', 'No parsable trees or character matrix in the NEXUS file'),
+      );
+    }
+    const { projects, issues } = parseNewickTrees(text, baseName(name));
     openTreeProjects(projects, name, path, issues);
   } catch (e) {
     reportError(S.notify.importFail, e);
+  }
+}
+
+/** Apply a matrix-only NEXUS import onto the ACTIVE document as characters. */
+function importMatrixOnly(matrix: NexusMatrixResult, name: string, issues: string[]): void {
+  const st = useStore.getState();
+  let matched = 0;
+  let unmatched = 0;
+  let added = 0;
+  st.apply((d) => {
+    added = matrix.characters.length;
+    d.characters = [...d.characters, ...matrix.characters];
+    const join = applyMatrixToProject(d, matrix);
+    matched = join.matched;
+    unmatched = join.unmatchedLabels.length;
+  });
+  if (matched > 0) {
+    notify.info(
+      tr(
+        `已从「${name}」导入 ${added} 个性状，${matched} 个末端匹配成功${unmatched > 0 ? `；${unmatched} 行未匹配到末端` : ''}${issues.length > 0 ? '；解析备注见控制台' : ''}`,
+        `Imported ${added} character${added === 1 ? '' : 's'} from "${name}"; ${matched} tip${matched === 1 ? '' : 's'} matched${unmatched > 0 ? `; ${unmatched} row${unmatched === 1 ? '' : 's'} matched no tip` : ''}`,
+      ),
+    );
+    for (const msg of issues) notify.info(msg);
+  } else {
+    reportError(
+      S.notify.importFail,
+      new Error(
+        tr(
+          `性状矩阵已读取（${added} 个性状），但没有一行能匹配当前文档的末端标签`,
+          `The matrix was read (${added} characters) but no row matched the current document's tip labels`,
+        ),
+      ),
+    );
   }
 }
 

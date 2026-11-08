@@ -157,6 +157,22 @@ export function checkConsistency(project: Project, character: Character): Consis
   }
 
   const mp = parsimony(project, character);
+  // An infeasible matrix (no assignment scores a finite cost under it) has no
+  // meaningful parsimony baseline: every comparison and message below would
+  // print `Infinity` or a nonsense gap, so the checks built on it are skipped
+  // and the reader is told why.
+  if (!mp.feasible) {
+    issues.push({
+      kind: 'excess-changes',
+      severity: 'warning',
+      message: tr(
+        '该性状的代价矩阵在当前观测下无可行解（矩阵禁止的转变与末端观测冲突），简约基线无法计算，基于它的检查已跳过。请修正代价矩阵或性状赋值。',
+        "This character's cost matrix has no feasible solution under the observed tips (a forbidden transition is required), so no parsimony baseline exists and the checks built on it were skipped. Fix the cost matrix or the assignments.",
+      ),
+      tag: tr('矩阵不可行', 'Infeasible matrix'),
+    });
+    return issues;
+  }
 
   // C2 — excess changes: the baseline shares the hypothesis's own evidence.
   //

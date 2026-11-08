@@ -45,14 +45,18 @@ describe('export ↔ canvas structure agreement', () => {
       showTransitions: true,
     });
 
-    // Unmeasured branches export DASHED, exactly like the canvas's branchFlags
-    // marks — the review's most damning export/canvas divergence.
-    // `b`'s subtree below a is measured; the ROOT's own edge is absent, so no
-    // unmeasured branch exists here — assert the mechanism via a missing length.
+    // Unmeasured branches export DASHED exactly when the layout cannot place
+    // them — the same branchFlags rule the canvas reads (the layout's unknown
+    // sets), not a private branch-length guess. A branch needs no length in a
+    // cladogram, so a missing length stays SOLID on screen and in the figure
+    // alike; switch the document to a phylogram and the same gap goes dashed.
     const a2 = Object.values(project.nodes).find((n) => n.label === 'x')!.id;
     project.nodes[a2].branchLength = undefined;
-    const withGap = buildSVG(project, {}).svg;
-    expect(withGap).toMatch(/stroke-dasharray="4 3"/);
+    const asCladogram = buildSVG(project, {}).svg;
+    expect(asCladogram).not.toMatch(/stroke-dasharray="4 3"/);
+    project.layout.type = 'rectangular-phylogram';
+    const asPhylogram = buildSVG(project, {}).svg;
+    expect(asPhylogram).toMatch(/stroke-dasharray="4 3"/);
 
     // A collapsed clade exports the +N disclosure badge.
     expect(svg).toMatch(/\+\d/);
