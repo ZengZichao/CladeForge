@@ -1065,12 +1065,19 @@ function grayscaleSvg(svg: string): string {
 const NEEDS_GLYPH_IMAGE = /[\u0100-\uFFFF]/;
 
 async function rasteriseExoticText(svg: string): Promise<string> {
-  if (!NEEDS_GLYPH_IMAGE.test(svg.replace(/<[^>]*>/g, ''))) return svg;
+  // Cheap pre-check on the WHOLE string: the SVG's own markup is generated
+  // ASCII (palette hex colours, numeric geometry, ASCII attribute strings), so
+  // any non-Latin-1 character can only sit inside text content. No
+  // tag-stripping regex here — a strip pass is CodeQL's
+  // js/incomplete-multi-character-sanitization pattern AND the wrong tool: the
+  // per-node test below decides precisely which labels need glyph images.
+  if (!NEEDS_GLYPH_IMAGE.test(svg)) return svg;
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const svgEl = doc.documentElement;
   const texts = Array.from(svgEl.querySelectorAll('text'));
   if (texts.length === 0) return svg;
   const NS = 'http://www.w3.org/2000/svg';
+  let replaced = false;
   let canvas: HTMLCanvasElement | null = null;
   let ctx: CanvasRenderingContext2D | null = null;
   for (const t of texts) {
@@ -1124,8 +1131,11 @@ async function rasteriseExoticText(svg: string): Promise<string> {
     img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', href);
     img.setAttribute('preserveAspectRatio', 'none');
     t.replaceWith(img);
+    replaced = true;
   }
-  return new XMLSerializer().serializeToString(svgEl);
+  // Serialize only when something actually changed: a round trip through the
+  // DOM otherwise rewrites attribute order and namespace spellings for no gain.
+  return replaced ? new XMLSerializer().serializeToString(svgEl) : svg;
 }
 
 /** Produce a vector PDF blob using jsPDF + svg2pdf.js (lazy-loaded). */
