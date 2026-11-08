@@ -81,5 +81,19 @@ export default defineConfig({
     // `__APP_VERSION__` reaches the tests through the TOP-LEVEL `define` above
     // (Vitest processes the same config through Vite). Vitest 4's own
     // `test.define` slot no longer exists in its config types.
+    //
+    // Coverage is OPT-IN (`npm run test:coverage`) and deliberately carries no
+    // thresholds: the scientific-correctness review is explicit that coverage
+    // is a gap VISUALISER, never a gate — the scientific oracles (independent
+    // enumerations, hand-computed anchors, exact repro values) are what
+    // actually verify correctness, and a percentage cannot.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: 'coverage',
+      include: ['src/**'],
+      // Test files and the ambient declarations measure nothing.
+      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts'],
+    },
   },
 });

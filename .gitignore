@@ -36,3 +36,6 @@ src-tauri/gen/
 
 # Logs
 *.log
+
+# Test coverage report (npm run test:coverage)
+coverage

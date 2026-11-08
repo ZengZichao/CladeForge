@@ -427,6 +427,35 @@ claim:
    style, commit-message style, or line counts. Only the author, who knows what was typed and
    what was accepted from a model, can fill them in.
 
+## Unreleased working tree (test-coverage tooling and changelog round)
+
+- release: "unreleased working tree (coverage tooling + changelog)"
+- date: "2026-11-08"
+- tool: "Claude Code (ZCode CLI)"
+- tool_version: "UNKNOWN — author to supply"
+- marker_in_files: false
+- files:
+  - "package.json"
+  - "package-lock.json"
+  - "vite.config.ts"
+  - ".gitignore"
+  - "CHANGELOG.md"
+- scope: >
+    Adds the opt-in `npm run test:coverage` script backed by
+    `@vitest/coverage-v8@4.1.11` (version-locked to the installed vitest), with
+    a vitest coverage block (v8 provider, text/html/lcov reporters, src
+    include, test/declaration excludes) and `coverage/` git-ignored. No
+    thresholds are configured: per the scientific-correctness review, coverage
+    is a gap visualiser, never a gate — the scientific oracles remain the
+    correctness evidence. Also writes the CHANGELOG [Unreleased] entry for the
+    scientific-correctness review round (S1–S13, M1–M28, §4 minors, 12
+    regression-test files).
+- behaviour_changed: >
+    Build/runtime behaviour unchanged; a new dev dependency is installed and a
+    new npm script exists. `npm test` is unaffected (coverage only runs under
+    `npm run test:coverage`).
+- reviewer: "pending - Zichao Zeng (corresponding author) before committing"
+
 ## Anonymisation note
 
 This record names people, tools and machine-local installation paths. It is **not** part of the
