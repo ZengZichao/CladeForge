@@ -126,21 +126,42 @@ export function mapTipsByLabel(
   return { mappings, unmatchedLabels, ambiguousLabels };
 }
 
-/** Edge-step distance on the unique species-tree path `from → to`. */
-function stepsOnPath(project: Project, from: NodeId, to: NodeId): number {
-  const a = mrcaOf(project, from, to);
-  if (a === null) return Number.POSITIVE_INFINITY;
-  // Index of the MRCA on each upward chain equals that chain's step count.
-  const up = pathToRoot(project, from).indexOf(a);
-  const down = pathToRoot(project, to).indexOf(a);
-  return up + down;
+/**
+ * Losses dropped when a lineage descends from `from` INTO `to` (to strictly
+ * below from): at every junction the lineage passes THROUGH — each species node
+ * strictly between the two — it takes one branch onward and drops the other
+ * branches. The count therefore follows the REAL arity of each junction, not a
+ * flat one-per-edge: a hard m-way polytomy junction drops m−1 copies, a
+ * unifurcation drops none (the lineage just continues), a binary junction one.
+ * The endpoints themselves are excluded: `from` is where the lineage already
+ * is (its other branches belong to sibling gene nodes' own placements), and
+ * `to` is where it ends up.
+ */
+function descentLosses(project: Project, from: NodeId, to: NodeId): number {
+  let total = 0;
+  const seen = new Set<NodeId>();
+  let cur: NodeId | null = to;
+  while (cur !== null && !seen.has(cur)) {
+    seen.add(cur);
+    const parent: NodeId | null = project.nodes[cur]?.parentId ?? null;
+    if (parent === null || parent === from) break;
+    const j = project.nodes[parent];
+    if (!j) break;
+    total += Math.max(0, j.childrenIds.length - 1);
+    cur = parent;
+  }
+  return total;
 }
 
 /**
  * Minimal number of lost lineages implied by placing a gene node's parent at
  * species node `u` and the node itself at `v`. Canonical conventions: staying
- * put costs 0; moving downward d>0 edges costs d−1 (one dropped copy per
- * un-taken junction); a lateral move costs both descents through the MRCA.
+ * put costs 0; a downward move is charged per junction it passes through at
+ * that junction's arity (see `descentLosses` — the flat "one per edge" of a
+ * binary tree generalises to m−1 per hard polytomy and 0 through a
+ * unifurcation); a lateral move costs both descents through the MRCA. The gene
+ * ROOT's own placement (the family's starting event) is priced by its callers
+ * as 0 — a starting lineage drops nothing.
  *
  * MOVING UPWARD (v is a strict ancestor of u) returns `Number.POSITIVE_INFINITY`
  * = infeasible. Such a placement is not a lineage that died, it is a lineage that
@@ -154,11 +175,9 @@ export function minLossesBetween(project: Project, u: NodeId | null, v: NodeId |
   const a = mrcaOf(project, u, v);
   if (a === null) return 0;
   if (a === v) return Number.POSITIVE_INFINITY; // upward move: infeasible, not free
-  if (a === u) return Math.max(0, stepsOnPath(project, u, v) - 1);
+  if (a === u) return descentLosses(project, u, v);
   // Lateral: descend from a to u (dropping siblings) then a to v.
-  const left = Math.max(0, stepsOnPath(project, a, u) - 1);
-  const right = Math.max(0, stepsOnPath(project, a, v) - 1);
-  return left + right;
+  return descentLosses(project, a, u) + descentLosses(project, a, v);
 }
 
 /** True when `v` is a strict ANCESTOR of `u` — a gene lineage mapping back in time. */
@@ -634,21 +653,39 @@ export function validateScenario(
           ),
         });
       } else {
-        // Coarse temporal sanity: a donor must not be strictly younger than
-        // the recipient (ages are "before present", larger = older). Skipped
-        // silently whenever either side lacks an explicit age.
-        const recvAge = species.nodes[s]?.age;
-        const donorAge = species.nodes[outside[0].p]?.age;
-        if (recvAge !== undefined && donorAge !== undefined && donorAge > recvAge) {
-          issues.push({
-            severity: 'warning',
-            kind: 'timing',
-            nodeId: n.id,
-            message: tr(
-              `${n.label || n.id.slice(0, 6)} 的水平转移方向与时间轴矛盾：供体晚于接收方`,
-              `Transfer on ${n.label || n.id.slice(0, 6)} contradicts the time axis: donor younger than recipient`,
-            ),
-          });
+        // Temporal compatibility: the transfer can sit at any instant that lies
+        // inside BOTH the donor lineage's branch interval and the recipient's.
+        // Ages run "before present" (larger = older) and a species node's
+        // lineage occupies the INTERVAL [age(node), age(parent)] — not an
+        // instant — so the test is interval overlap. A bare age comparison got
+        // the direction backwards (donor age 100 vs recipient age 10 share a
+        // 200 Ma parent and are perfectly compatible) and still would not be
+        // the right simultaneity test after flipping it.
+        const lineageInterval = (id: NodeId): [number, number] | null => {
+          const nd = species.nodes[id];
+          if (!nd || typeof nd.age !== 'number' || !Number.isFinite(nd.age)) return null;
+          const p = nd.parentId ? species.nodes[nd.parentId] : undefined;
+          const pa =
+            p && typeof p.age === 'number' && Number.isFinite(p.age) ? p.age : nd.age;
+          return pa >= nd.age ? [nd.age, pa] : [pa, nd.age];
+        };
+        const recvInterval = lineageInterval(s);
+        const donorInterval = lineageInterval(outside[0].p);
+        if (recvInterval && donorInterval) {
+          const overlaps =
+            recvInterval[0] <= donorInterval[1] + 1e-12 &&
+            donorInterval[0] <= recvInterval[1] + 1e-12;
+          if (!overlaps) {
+            issues.push({
+              severity: 'warning',
+              kind: 'timing',
+              nodeId: n.id,
+              message: tr(
+                `${n.label || n.id.slice(0, 6)} 的水平转移与时间轴不相容：供体枝与接收枝没有任何共同存在的时间点（供体 ${donorInterval[0]}–${donorInterval[1]}，接收 ${recvInterval[0]}–${recvInterval[1]}）`,
+                `Transfer on ${n.label || n.id.slice(0, 6)} is time-infeasible: the donor and recipient branches share no instant (donor ${donorInterval[0]}–${donorInterval[1]}, recipient ${recvInterval[0]}–${recvInterval[1]})`,
+              ),
+            });
+          }
         }
       }
     }

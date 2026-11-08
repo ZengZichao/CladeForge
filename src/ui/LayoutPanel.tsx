@@ -253,9 +253,15 @@ export function LayoutPanel() {
               onChange={(e) => {
                 const cid = e.target.value;
                 if (!cid) return;
-                const n = sortTipsByCharacter(project, cid);
+                // Sort ONCE, inside the draft: pre-counting on the live
+                // (frozen) project mutated `childrenIds` outside Immer and
+                // threw a read-only assignment error before the store ever
+                // saw the change — the control was simply unusable.
+                let n = 0;
+                set((d) => {
+                  n = sortTipsByCharacter(d, cid);
+                });
                 if (n > 0) {
-                  set((d) => void sortTipsByCharacter(d, cid));
                   notify.info(tr(`已按状态重排 ${n} 组姊妹枝`, `Reordered ${n} sibling group${n === 1 ? '' : 's'} by state`));
                 }
               }}

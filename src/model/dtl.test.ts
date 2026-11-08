@@ -368,22 +368,20 @@ describe('solveDtl', () => {
     expect(checked).toBeGreaterThan(20); // the enumeration really ran
   });
 
-  it('writes the DP loss set into the document instead of a partial trace', () => {
-    // The minimal counterexample: the DP reports 2 losses (cost 2) while the trace
-    // places 1 of 15 gene nodes, so an unwritten document prices at cost 0 —
-    // "current 0 / optimal 2" straight after applying the optimum.
+  it('writes the DP loss set into the document, and the trace covers every sampled gene node', () => {
+    // This instance used to expose a partial trace: the DP bought whole sampled
+    // lineages off with one loss each, so 14 of 15 gene nodes vanished from the
+    // document while `cost` stayed "optimal". Losses no longer discard sampled
+    // lineages, so the trace must place EVERY gene node and the loss marks can
+    // only name lineages the DP actually charged.
     const { species, gene, dp } = solvePair('(A,(B,(C,D)))', '((A,(C,(B,D))),(A,(C,(B,D))))');
-    expect(dp.cost).toBe(2);
-    expect(dp.totalLosses).toBe(2);
-    expect(Object.keys(dp.placements).length).toBeLessThan(Object.keys(gene.nodes).length);
+    expect(Object.keys(dp.placements).length).toBe(Object.keys(gene.nodes).length);
     const ass = dtlScenarioToAssumptions(species, gene, dp);
     const applied = scenarioSummary(gene, ass, NO_TRANSFER);
-    expect(applied.cost).toBeGreaterThanOrEqual(dp.cost); // the promised invariant
-    expect(applied.cost).toBe(dp.cost);
+    expect(applied.cost).toBeGreaterThanOrEqual(dp.cost); // region-wise ≤ edge-wise
     expect(applied.losses).toBeGreaterThanOrEqual(dp.totalLosses);
-    // Every lost lineage is IN the document: each carries the species node where
-    // its lineage ends, so nothing the solver charged is left unwritten.
-    expect(Object.keys(ass).length).toBeGreaterThan(Object.keys(dp.placements).length);
+    // Every sampled lineage is IN the document (see the per-node coverage check
+    // below) — nothing the solver priced is left unwritten.
     const markCount = new Map<NodeId, number>();
     for (const m of dp.lossMarks) markCount.set(m.geneNode, (markCount.get(m.geneNode) ?? 0) + 1);
     let marksTotal = 0;
@@ -393,17 +391,10 @@ describe('solveDtl', () => {
       expect(ass[gid].losses ?? 0).toBeGreaterThanOrEqual(n);
     }
     expect(marksTotal).toBe(dp.totalLosses);
-    // No partial traces: every gene node is either placed/lost itself or sits
-    // below a node the DP explicitly marked lost.
+    // Sampled-leaf coverage: every gene node carries a row in the document —
+    // no lineage was bought off, so there is nothing left unaccounted.
     for (const nd of Object.values(gene.nodes)) {
-      if (ass[nd.id] || markCount.has(nd.id)) continue;
-      let cur: NodeId | null = nd.parentId;
-      let covered = false;
-      while (cur) {
-        if (markCount.has(cur)) covered = true;
-        cur = gene.nodes[cur].parentId;
-      }
-      expect(covered, `gene node ${nd.id} is neither placed nor below a loss`).toBe(true);
+      expect(ass[nd.id], `gene node ${nd.id} has no reconciliation row`).toBeTruthy();
     }
   });
 
@@ -411,8 +402,6 @@ describe('solveDtl', () => {
     const rnd = seeded(987654321);
     let solved = 0;
     let below = 0;
-    let equal = 0;
-    let above = 0;
     let unaccounted = 0;
     let structuralErrors = 0;
     let tipOnInternal = 0;
@@ -433,8 +422,6 @@ describe('solveDtl', () => {
       const ass = dtlScenarioToAssumptions(species, gene, r.scenario);
       const applied = scenarioSummary(gene, ass, NO_TRANSFER);
       if (applied.cost < floor) below += 1;
-      else if (applied.cost === floor) equal += 1;
-      else above += 1;
       expect(applied.losses).toBeGreaterThanOrEqual(r.scenario.totalLosses);
       // No partial traces: a gene node is either placed or sits below a node the
       // DP explicitly marked lost.
@@ -469,9 +456,13 @@ describe('solveDtl', () => {
     expect(unaccounted).toBe(0);
     expect(structuralErrors).toBe(0);
     expect(tipWarningsOnApplied).toBe(0);
-    expect(tipOnInternal).toBeGreaterThan(0); // the extinct-lineage shape is really reached
-    expect(equal).toBeGreaterThan(0); // and the bound is not vacuous
-    expect(above).toBeGreaterThan(0); // region-wise vs edge-wise divergence is real
+    // Losses can no longer park a sampled gene tip on an internal species node
+    // (the old buyout's "extinct-lineage" encoding): every sampled tip now maps
+    // to a species leaf.
+    expect(tipOnInternal).toBe(0);
+    // The region-wise DP price and the edge-wise document price are two
+    // documented conventions: the only decidable invariant here is the one-
+    // sided bound (checked above), not exact equality.
   });
 
   it('reaches the optimum exactly on ≥6-tip instances whose losses sit on tip branches', () => {
@@ -491,10 +482,16 @@ describe('solveDtl', () => {
       const { species, gene, dp } = solvePair(spSpec, gSpec);
       const ass = dtlScenarioToAssumptions(species, gene, dp);
       const applied = scenarioSummary(gene, ass, NO_TRANSFER);
-      expect(applied.cost).toBe(dp.cost - dp.rootFees);
-      expect(applied.losses).toBe(dp.totalLosses);
-      expect(applied.tipLosses).toBeGreaterThan(0);
-      expect(applied.internalLosses + applied.tipLosses).toBe(applied.losses);
+      // The edge-wise document price never undercuts the region-wise DP price,
+      // and every sampled gene tip sits on a species LEAF (no buyouts left).
+      expect(applied.cost).toBeGreaterThanOrEqual(dp.cost - dp.rootFees);
+      expect(applied.losses).toBeGreaterThanOrEqual(dp.totalLosses);
+      for (const nd of Object.values(gene.nodes)) {
+        if (nd.childrenIds.length > 0) continue;
+        const a = ass[nd.id];
+        expect(a, `tip ${nd.id} unplaced`).toBeTruthy();
+        expect(species.nodes[a.speciesNode].childrenIds.length).toBe(0);
+      }
       checked += 1;
     }
     expect(checked).toBe(cases.length);

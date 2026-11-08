@@ -324,7 +324,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               <h3>{S.analysis.parsimonySection}</h3>
               <div className="field">
                 <label>{S.analysis.cost}</label>
-                <span>{mp ? mp.cost : 0}</span>
+                <span>{mp ? (mp.feasible ? mp.cost : tr('无可行解', 'infeasible')) : 0}</span>
               </div>
               <div className="hint">{S.analysis.fillHint}</div>
               {/* The apply exit the module comment always promised: one action
@@ -341,11 +341,11 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       'parsimony',
                       'Sankoff parsimony (generalised, tie-broken)',
                       {
-                        cost: mp?.cost ?? 0,
+                        cost: mp?.feasible ? mp.cost : null,
                         optimization: 'sankoff-min',
                         character: character.name,
                       },
-                      { cost: mp?.cost ?? 0 },
+                      { cost: mp?.feasible ? mp.cost : null },
                       [character.id],
                     )
                   }

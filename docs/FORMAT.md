@@ -68,7 +68,8 @@ every saved file as `project.appVersion`.
   "charStates": { "<characterId>": "s0" | 3.2 | ["s0","s1"] },
   "charMeta": { "<characterId>": {"confidence":"high","support":"…","accession":"…","doi":"…"} },
   "hypothesisNote": "…",
-  "annotations": { "host": "human", "country": "CN", "date": "2024-01-31" }
+  "annotations": { "host": "human", "country": "CN", "date": "2024-01-31" },
+  "meta": { "rooted": true, "comments": ["&note=…"], "nhx": {"S": "human"} }
 }
 ```
 
@@ -78,6 +79,18 @@ every saved file as `project.appVersion`.
 - `supportScale` is declared at import (0–1 fraction vs 0–100 percent); a value
   of `1` means **1%** under the percent convention and **100%** under the
   fraction convention — consumers MUST read the scale.
+- `meta` is ROUND-TRIP-CRITICAL and must survive a load/save cycle verbatim:
+  - `meta.rooted` records an explicit `[&R]` / `[&U]` declaration from the
+    source file (a trifurcate root is re-read as *unrooted*, so an explicitly
+    rooted wide root exports with `[&R]` to keep the round trip stable);
+  - `meta.comments` keeps every Newick bracket comment on the node, oldest
+    first, so annotations survive a write → read cycle;
+  - `meta.nhx` is the parsed `&&NHX:` key/value map of the node's NHX
+    annotation.
+- Newick comment POSITION is not part of the contract: a comment written
+  before a branch length (`A[comment]:1`) is written back after it
+  (`A:1[comment]`). The text is preserved verbatim, but strict third-party
+  parsers that key on comment position may read the two differently.
 
 ## Minimal file
 

@@ -374,6 +374,12 @@ export function buildConsensusTree(
       if (n.childrenIds.length === 0) {
         const idx = n.label ? indexOf.get(n.label) : undefined;
         members.set(n.id, idx === undefined ? [] : [idx]);
+        // TIP singleton: recorded so the consensus decorates tip branches with
+        // the mean incoming length across the inputs — a single-tree consensus
+        // used to come back with every tip stripped of its length.
+        if (n.id !== p.rootId && idx !== undefined) {
+          byKey.set(cladeKey([idx]), n.id);
+        }
         continue;
       }
       let acc: number[] = [];
@@ -416,33 +422,51 @@ export function buildConsensusTree(
   };
 
   const project2 = buildTreeFromClades(tips, selected, name, onIssues);
-  // Decorate the built tree with the consensus branch data.
+  let memberIdxByNode: Map<NodeId, number[]> = new Map();
+  // Decorate the built tree with the consensus branch data. TIPS participate
+  // through their singleton clade key: the branch-length contract of a
+  // consensus tree is "the MEAN incoming length over the input trees that carry
+  // this clade" — and a tip is the clade consisting of itself — so a
+  // single-tree consensus preserves its own lengths verbatim instead of
+  // returning bare tip names.
+  // Member lists are computed ONCE bottom-up (iterative): the old per-node
+  // recursive collect was O(n²) on unbalanced trees and a stack risk on deep
+  // ones, for data a single post-order sweep already holds.
+  {
+    const membersOf = new Map<NodeId, number[]>();
+    const order: NodeId[] = [];
+    const seen = new Set<NodeId>();
+    const stack: NodeId[] = [project2.rootId];
+    while (stack.length) {
+      const id = stack.pop() as NodeId;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      order.push(id);
+      const n = project2.nodes[id];
+      if (n) for (const c of n.childrenIds) if (!seen.has(c)) stack.push(c);
+    }
+    for (let i = order.length - 1; i >= 0; i -= 1) {
+      const n = project2.nodes[order[i]];
+      if (!n) continue;
+      if (n.childrenIds.length === 0) {
+        const ti = tips.indexOf(n.label);
+        membersOf.set(n.id, ti >= 0 ? [ti] : []);
+      } else {
+        const acc: number[] = [];
+        for (const c of n.childrenIds) {
+          for (const m of membersOf.get(c) ?? []) acc.push(m);
+        }
+        acc.sort((a, b) => a - b);
+        membersOf.set(n.id, acc);
+      }
+    }
+    memberIdxByNode = membersOf;
+  }
   for (const node of Object.values(project2.nodes)) {
     if (node.parentId === null) continue;
-    const memberIdx = node.childrenIds.length
-      ? undefined
-      : tips.indexOf(node.label);
-    const key =
-      memberIdx !== undefined && memberIdx >= 0
-        ? null
-        : (() => {
-            // internal node: recover its clade key from its descendants
-            const acc: number[] = [];
-            const collect = (id: NodeId): void => {
-              const n = project2.nodes[id];
-              if (!n) return;
-              if (n.childrenIds.length === 0) {
-                const i = tips.indexOf(n.label);
-                if (i >= 0) acc.push(i);
-                return;
-              }
-              for (const c of n.childrenIds) collect(c);
-            };
-            for (const c of node.childrenIds) collect(c);
-            acc.sort((a, b) => a - b);
-            return cladeKey(acc);
-          })();
-    if (!key) continue;
+    const members = memberIdxByNode.get(node.id) ?? [];
+    if (members.length === 0 || members.length >= tips.length) continue;
+    const key = cladeKey(members);
     const { lengths, ages } = cladeStats(key);
     if (lengths.length > 0) {
       node.branchLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;

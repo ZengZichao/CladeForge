@@ -41,9 +41,21 @@ export function ScaleBar({ depthScale }: { depthScale: number }) {
  * so readers can gauge geological time distances — the standard expectation
  * for published chronograms.
  */
-export function TimeScaleBar({ timeAxis }: { timeAxis: TimeAxisInfo }) {
+export function TimeScaleBar({
+  timeAxis,
+  axisScale = 'linear',
+}: {
+  timeAxis: TimeAxisInfo;
+  /** The depth-axis mapping: a global scale bar exists only on a LINEAR axis. */
+  axisScale?: 'linear' | 'sqrt' | 'log';
+}) {
   // Same low-frequency leaf subscription as ScaleBar above.
   const viewScale = useStore((s) => s.view.scale);
+  // A sqrt / log axis has no constant px-per-time: one "nice value" bar cannot
+  // represent distances anywhere else on the axis (on a 0–100 Ma sqrt axis the
+  // 0→5 span is twice the 5→10 span), so drawing one misstates every other
+  // interval. Refuse instead of anchoring an arbitrary local interval.
+  if (axisScale !== 'linear') return null;
   // The ageToCoord function maps an age to a world coordinate. We compute
   // px-per-time-unit from the tick spacing.
   if (!timeAxis || timeAxis.ticks.length < 2) return null;

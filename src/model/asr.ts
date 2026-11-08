@@ -172,6 +172,15 @@ export interface AsrResult {
   rate: AsrRateInfo;
   /** Joint MAP reconstruction (one state per node), when `options.joint` was set. */
   joint?: Map<NodeId, string>;
+  /**
+   * Per-node SUBTREE log-likelihood (the pruning down-pass L), aligned to
+   * character.states. Internal machinery for conditional stochastic mapping:
+   * sampling a child's state GIVEN its parent's must weight the transition
+   * matrix by the child's subtree likelihood, never by the child's marginal
+   * posterior (which already contains the data above the child and would
+   * double-count it).
+   */
+  subtreeLogLik?: Map<NodeId, number[]>;
   /** Node ids with no usable data (all-zero likelihood mass). */
   noData: NodeId[];
   /**
@@ -771,6 +780,7 @@ export function reconstructMk(
     threshold: options.threshold,
     rate: rateInfo,
     joint,
+    subtreeLogLik: L,
     noData: noDataNodes,
   };
 }
@@ -778,11 +788,25 @@ export function reconstructMk(
 /**
  * Stochastic character mapping (Nielsen 2002) under the ER model: sample joint
  * state histories conditioned on the observed tips, then count the changes per
- * branch. Sampling is by rejection on each branch — propose Poisson numbers of
- * jumps, route them through uniformly chosen intermediate states, accept the
- * branch history when its endpoint likelihood is consistent — so no matrix
- * exponential is needed. The result is the raw material for "expected number
- * of changes on this branch" event annotations, with the sample size stated.
+ * branch. Two properties make the sampler EXACT rather than an approximation:
+ *
+ *  1. Conditional states: a child's state is drawn from
+ *     P(child = j | parent = ps, data) ∝ P(ps→j | t) · L_child[j], where
+ *     L_child is the child's SUBTREE likelihood (the Mk pruning down-pass).
+ *     Weighting by the child's marginal posterior instead would double-count
+ *     every observation above the child.
+ *  2. Jump counts: under this model Q has all off-diagonal entries equal to r,
+ *     so the uniformised substitute chain jumps at rate (k−1)r and each jump
+ *     moves to a uniformly chosen DIFFERENT state — there are no self-jumps to
+ *     reject. The number of jumps on a branch is drawn from the endpoint-
+ *     conditioned law
+ *         P(N = n | ps→cs) ∝ Poisson((k−1)rt; n) · W_n(ps, cs) / (k−1)^n,
+ *     where W_n is the number of length-n self-avoiding walks from ps to cs in
+ *     the complete graph K_k: W_n = [(k−1)^n + (k−1)(−1)^n]/k (ps = cs) or
+ *     [(k−1)^n − (−1)^n]/k (ps ≠ cs). For k = 2 this reduces to the parity
+ *     rule; for k > 2 the endpoints do NOT determine the parity, which the
+ *     closed form handles exactly. A zero-length branch draws N = 0 with
+ *     probability 1 — a real recorded zero is data, not a unit branch.
  */
 export function sampleStochasticMap(
   project: Project,
@@ -794,7 +818,8 @@ export function sampleStochasticMap(
   if (!base || base.probs.size === 0) return null;
   const k = character.states.length;
   const root = project.nodes[project.rootId];
-  if (!root) return null;
+  const Lsub = base.subtreeLogLik;
+  if (!root || !Lsub || k < 2) return null;
 
   let s = seed >>> 0;
   const rng = (): number => {
@@ -815,12 +840,69 @@ export function sampleStochasticMap(
       Array.from({ length: k }, (_, j) => (i === j ? same : diff)),
     );
   };
+  // The transition class of reconstructMk: a recorded ZERO stays 0 (the
+  // transition matrix degenerates to the identity — synchronous divergence);
+  // only a missing / invalid / negative length is substituted by 1.
+  const branchLengthOf = (n: TreeNode): number => {
+    const bl = n.branchLength;
+    if (bl === undefined) return 1;
+    if (typeof bl !== 'number' || !Number.isFinite(bl) || bl < 0) return 1;
+    return bl;
+  };
+
+  // log n! for the Poisson weights.
+  const logFact: number[] = [0, 0];
+  const logFactorial = (n: number): number => {
+    for (let i = logFact.length; i <= n; i += 1) logFact[i] = logFact[i - 1] + Math.log(i);
+    return logFact[n];
+  };
+  // Number of length-n walks between two states in K_k without self-loops.
+  const walkCount = (n: number, sameEnd: boolean): number => {
+    const p = Math.pow(k - 1, n);
+    const sign = n % 2 === 0 ? 1 : -1;
+    return sameEnd ? (p + (k - 1) * sign) / k : (p - sign) / k;
+  };
+
+  /** Draw the number of jumps on a branch given its endpoints (exact). */
+  const sampleJumps = (t: number, r: number, ps: number, cs: number): number => {
+    const lambda = (k - 1) * r * t;
+    if (!(lambda > 0)) return 0;
+    const sameEnd = ps === cs;
+    // Truncate the Poisson far into its tail; the walk-count factor converges
+    // to 1/k, so the tail beyond the cutoff carries no mass worth naming.
+    const sd = Math.sqrt(lambda);
+    const nMax = Math.max(k + 4, Math.ceil(lambda + 10 * sd + 30));
+    const logW: number[] = [];
+    let maxLog = -Infinity;
+    for (let n = 0; n <= nMax; n += 1) {
+      const wc = walkCount(n, sameEnd);
+      if (!(wc > 0)) {
+        logW.push(-Infinity);
+        continue;
+      }
+      const lw = -lambda + n * Math.log(lambda) - logFactorial(n) + Math.log(wc) - n * Math.log(k - 1);
+      logW.push(lw);
+      if (lw > maxLog) maxLog = lw;
+    }
+    let z = 0;
+    const w = logW.map((lw) => {
+      const v = lw === -Infinity ? 0 : Math.exp(lw - maxLog);
+      z += v;
+      return v;
+    });
+    let u = rng() * z;
+    for (let n = 0; n <= nMax; n += 1) {
+      u -= w[n];
+      if (u <= 0) return n;
+    }
+    return 0;
+  };
 
   const perBranchChanges = new Map<NodeId, number>();
   let totalChanges = 0;
   for (let sample = 0; sample < samples; sample += 1) {
     // Sample the joint history top-down: root state ~ posterior; each child
-    // state ~ P(parent → child) × child posterior, rejection-free (exact).
+    // state ~ P(parent → child) × child subtree likelihood, rejection-free.
     const stateOf = new Map<NodeId, number>();
     const rootP = base.probs.get(root.id) as number[];
     let u = rng();
@@ -838,13 +920,13 @@ export function sampleStochasticMap(
       const n = stack.pop() as TreeNode;
       const ps = stateOf.get(n.id) as number;
       for (const c of childrenOf(n)) {
-        const bl = c.branchLength && Number.isFinite(c.branchLength) && c.branchLength > 0 ? c.branchLength : 1;
+        const bl = branchLengthOf(c);
         const M = P(bl, base.rate.rate);
-        const cp = base.probs.get(c.id) as number[];
+        const Lc = Lsub.get(c.id) as number[];
         const weights = new Array<number>(k);
         let z = 0;
         for (let j = 0; j < k; j += 1) {
-          weights[j] = M[ps][j] * cp[j];
+          weights[j] = M[ps][j] > 0 && Lc[j] > -Infinity ? M[ps][j] * Math.exp(Lc[j]) : 0;
           z += weights[j];
         }
         let u2 = rng() * (z > 0 ? z : 1);
@@ -857,29 +939,7 @@ export function sampleStochasticMap(
           }
         }
         stateOf.set(c.id, cs);
-        // Number of jumps on the branch: endpoints equal → even count (0, 2, …),
-        // endpoints differ → odd (1, 3, …). Weights e^{−λ} λ^n/n! with parity
-        // conditioning; use rejection with a geometric fallback.
-        const lambda = k * base.rate.rate * bl;
-        const parity = ps === cs ? 0 : 1;
-        let jumps = parity;
-        // Sample the smallest n ≥ parity consistent with endpoints via
-        // truncated-Poisson weights (k ≥ 2 keeps this finite and cheap).
-        const w: number[] = [];
-        let z2 = 0;
-        for (let nJumps = parity; nJumps <= parity + 12; nJumps += 2) {
-          const ww = (Math.exp(-lambda) * Math.pow(lambda, nJumps)) / factorial(nJumps);
-          w.push(ww);
-          z2 += ww;
-        }
-        let u3 = rng() * z2;
-        for (let idx = 0; idx < w.length; idx += 1) {
-          u3 -= w[idx];
-          if (u3 <= 0) {
-            jumps = parity + idx * 2;
-            break;
-          }
-        }
+        const jumps = sampleJumps(bl, base.rate.rate, ps, cs);
         if (jumps > 0) perBranchChanges.set(c.id, (perBranchChanges.get(c.id) ?? 0) + jumps);
         totalChanges += jumps;
         stack.push(c);

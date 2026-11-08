@@ -17,6 +17,7 @@ import type {
   CalibrationPoint,
   Point,
   Project,
+  SupportKind,
   SupportScale,
   TreeNode,
 } from './types';
@@ -300,17 +301,17 @@ export function deleteNode(project: Project, id: NodeId, cascade = true): boolea
     parent.childrenIds = [...before, ...node.childrenIds, ...after];
     // The node's incoming edge merges into each child's incoming edge: an edge
     // is a length, so removing the node in the middle adds the two segments.
-    // When the removed node has no recorded length there is nothing to add and
-    // the child's own segment is kept — never a made-up number.
+    // The sum is known only when BOTH segments are known — an unknown segment
+    // leaves the merged edge unknown (a distance through it must stay
+    // unmeasurable), never silently zero, and a recorded zero stays a zero.
     const ownLength = knownLength(node.branchLength);
     for (const cid of node.childrenIds) {
       const c = project.nodes[cid];
       if (!c) continue;
       c.parentId = parent.id;
-      if (ownLength !== undefined) {
-        const childLength = knownLength(c.branchLength);
-        c.branchLength = childLength === undefined ? undefined : ownLength + childLength;
-      }
+      const childLength = knownLength(c.branchLength);
+      c.branchLength =
+        ownLength === undefined || childLength === undefined ? undefined : ownLength + childLength;
     }
     delete project.nodes[id];
     project.customEdges = project.customEdges.filter(
@@ -536,9 +537,34 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
     c = project.nodes[c]?.parentId ?? null;
   }
 
-  // Snapshot every weight that is about to move, before anything is rewired.
-  const oldWeight = new Map<NodeId, number | undefined>();
-  for (const id of path) oldWeight.set(id, knownLength(project.nodes[id]?.branchLength));
+  // Snapshot everything that rides on a physical edge BEFORE anything is
+  // rewired. Reversing the edge between path[j+1] and path[j] keeps the edge's
+  // identity — it merely becomes path[j+1]'s incoming edge — so its length,
+  // its split support (value + declared kind/scale), its branch style and every
+  // branch-target event pinned to it must travel with it. Node-anchored
+  // evidence (node events, ages, calibrations) stays on the vertex, which
+  // keeps its identity; only edge-anchored state moves.
+  interface EdgeRiders {
+    branchLength: number | undefined;
+    support: number | undefined;
+    supportKind: SupportKind | undefined;
+    supportScale: SupportScale | undefined;
+    branchStyle: Partial<BranchStyle> | undefined;
+    branchEvents: EvolutionaryEvent[];
+  }
+  const riders = new Map<NodeId, EdgeRiders>();
+  for (const id of path) {
+    const n = project.nodes[id];
+    if (!n) continue;
+    riders.set(id, {
+      branchLength: knownLength(n.branchLength),
+      support: n.support,
+      supportKind: n.supportKind,
+      supportScale: n.supportScale,
+      branchStyle: n.branchStyle ? { ...n.branchStyle } : undefined,
+      branchEvents: project.events.filter((e) => e.nodeId === id && e.target === 'branch'),
+    });
+  }
   const splitEdge = knownLength(target.branchLength);
 
   const root = createNode({ parentId: null, childrenIds: [targetId, oldParentId] });
@@ -553,14 +579,22 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
   target.branchLength = splitEdge === undefined ? undefined : splitEdge * (1 - f);
   oldParent.branchLength = splitEdge === undefined ? undefined : splitEdge * f;
 
-  // Reverse each edge along the path up to the old root, carrying its weight to
+  // Reverse each edge along the path up to the old root, carrying its riders to
   // the new child end.
   for (let j = 0; j < path.length - 1; j += 1) {
     const upper = project.nodes[path[j + 1]];
     upper.childrenIds = upper.childrenIds.filter((x) => x !== path[j]);
     project.nodes[path[j]].childrenIds.push(path[j + 1]);
     upper.parentId = path[j];
-    project.nodes[path[j + 1]].branchLength = oldWeight.get(path[j]);
+    const rider = riders.get(path[j]);
+    if (rider) {
+      upper.branchLength = rider.branchLength;
+      upper.support = rider.support;
+      upper.supportKind = rider.supportKind;
+      upper.supportScale = rider.supportScale;
+      upper.branchStyle = rider.branchStyle;
+      for (const ev of rider.branchEvents) ev.nodeId = path[j + 1];
+    }
   }
 
   // Where the split branch sits between two dated endpoints, so does the root.
@@ -572,10 +606,19 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
 
   project.rootId = root.id;
 
-  // Suppress a unifurcation left at the former root.
+  // Suppress the former root when the reversal left it with a single child —
+  // or, when the old root was itself a unifurcation, with none at all: it
+  // would otherwise survive as an unlabelled fake tip and tip counts would
+  // stop being conserved.
   const formerRoot = project.nodes[oldRootId];
-  if (formerRoot && formerRoot.parentId !== null && formerRoot.childrenIds.length === 1) {
-    reattachNodeReferences(project, oldRootId, formerRoot.childrenIds[0]);
+  if (formerRoot && formerRoot.parentId !== null && formerRoot.childrenIds.length <= 1) {
+    const survivor = formerRoot.childrenIds[0] ?? root.id;
+    // A calibration on the former root constrains the ROOT divergence. Letting
+    // it follow the surviving lineage can land it on a tip, silently
+    // re-reading a root-age constraint as a tip-age constraint; it follows the
+    // tree's root instead. Everything else (events, hypothesis layers) rides
+    // with the surviving lineage as before.
+    reattachNodeReferences(project, oldRootId, survivor, root.id);
     deleteNode(project, oldRootId, false);
   }
   return true;
@@ -593,10 +636,17 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
  * one routine re-root was enough to silently delete a competing hypothesis's
  * evidence set.
  */
-function reattachNodeReferences(project: Project, fromId: NodeId, toId: NodeId): void {
+function reattachNodeReferences(
+  project: Project,
+  fromId: NodeId,
+  toId: NodeId,
+  calibrationTargetId: NodeId = toId,
+): void {
   if (fromId === toId) return;
   for (const e of project.events) if (e.nodeId === fromId) e.nodeId = toId;
-  for (const cp of project.calibrationPoints ?? []) if (cp.nodeId === fromId) cp.nodeId = toId;
+  for (const cp of project.calibrationPoints ?? []) {
+    if (cp.nodeId === fromId) cp.nodeId = calibrationTargetId;
+  }
   for (const stored of Object.values(project.layerStore)) {
     mergeNodeRecord(stored.states, fromId, toId);
     mergeNodeRecord(stored.meta, fromId, toId);
@@ -822,6 +872,7 @@ export type OutgroupRerootFailure =
   | 'empty-selection'
   | 'node-missing'
   | 'outgroup-is-root'
+  | 'not-monophyletic'
   | 'unrootable';
 
 export interface OutgroupRerootResult {
@@ -837,6 +888,46 @@ export interface OutgroupRerootResult {
  * on a draft is the only way to attempt it, and a silently rejected menu item is
  * what made the feature look broken.
  */
+/** Every tip below `id` (iterative, so a deep tree cannot overflow the stack). */
+function tipSetOf(project: Project, id: NodeId): Set<NodeId> {
+  const out = new Set<NodeId>();
+  const stack: NodeId[] = [id];
+  while (stack.length) {
+    const cur = stack.pop() as NodeId;
+    const n = project.nodes[cur];
+    if (!n) continue;
+    if (n.childrenIds.length === 0) {
+      out.add(cur);
+      continue;
+    }
+    for (const c of n.childrenIds) stack.push(c);
+  }
+  return out;
+}
+
+/**
+ * When the selected outgroup is not a complete clade, the root can still make
+ * it THE outgroup by sitting on the entering edge of the complement clade —
+ * but only when that complement is itself a complete clade. Returns that
+ * clade's root node, or null when no such placement exists.
+ */
+function complementCladeRoot(project: Project, ids: NodeId[]): NodeId | null {
+  const sel = new Set(ids);
+  const complement: NodeId[] = [];
+  for (const n of Object.values(project.nodes)) {
+    if (n.childrenIds.length === 0 && !sel.has(n.id)) complement.push(n.id);
+  }
+  if (complement.length === 0) return null;
+  let m: NodeId | null = complement[0];
+  for (let i = 1; i < complement.length; i += 1) {
+    m = mrcaOf(project, m as NodeId, complement[i]);
+    if (m === null) return null;
+  }
+  const tips = tipSetOf(project, m as NodeId);
+  const complete = tips.size === complement.length && complement.every((i) => tips.has(i));
+  return complete ? (m as NodeId) : null;
+}
+
 export function checkOutgroupReroot(project: Project, outgroupIds: NodeId[]): OutgroupRerootFailure | null {
   if (!Array.isArray(outgroupIds) || outgroupIds.length === 0) return 'empty-selection';
   const ids = [...new Set(outgroupIds)];
@@ -852,10 +943,22 @@ export function checkOutgroupReroot(project: Project, outgroupIds: NodeId[]): Ou
     m = mrcaOf(project, m as NodeId, ids[i]);
     if (m === null) return 'node-missing';
   }
-  // The outgroup MRCA is the root ⇒ its complement is empty ⇒ there is no
-  // branch to move the root onto.
-  if (m === project.rootId || project.nodes[m]?.parentId === null) return 'outgroup-is-root';
-  return null;
+  // The outgroup MRCA is the root ⇒ there is no branch below it. One
+  // legitimate placement survives: rooting on the entering edge of the
+  // COMPLEMENT clade, when the complement is itself a complete clade
+  // (selecting C,D in ((A,B)X,C,D)R roots on X's entering edge).
+  if (m === project.rootId || project.nodes[m]?.parentId === null) {
+    return complementCladeRoot(project, ids) !== null ? null : 'outgroup-is-root';
+  }
+  // MRCA strictly below the root: rooting on its entering edge would take the
+  // WHOLE clade below it as outgroup. That matches the selection only when the
+  // selection IS that clade; a partial selection (A,C out of (A,B,C)X) would
+  // silently drag the unselected relatives (B) along, so it needs the
+  // complement-clade placement instead.
+  const tips = tipSetOf(project, m as NodeId);
+  const complete = tips.size === ids.length && ids.every((i) => tips.has(i));
+  if (complete) return null;
+  return complementCladeRoot(project, ids) !== null ? null : 'not-monophyletic';
 }
 
 /**
@@ -879,6 +982,15 @@ export function outgroupReroot(project: Project, outgroupIds: NodeId[]): Outgrou
       target = mrcaOf(project, target as NodeId, ids[i]);
       if (target === null) return { ok: false, reason: 'node-missing' };
     }
+    // A selection that is only PART of its MRCA's clade gets the root placed
+    // on the complement clade's entering edge instead (see
+    // `checkOutgroupReroot`), so the outgroup is exactly the selection.
+    const tips = tipSetOf(project, target as NodeId);
+    const complete = tips.size === ids.length && ids.every((i) => tips.has(i));
+    if (!complete) {
+      target = complementCladeRoot(project, ids);
+      if (!target) return { ok: false, reason: 'not-monophyletic' };
+    }
   }
   const done = rerootAtNode(project, target as NodeId);
   if (!done) return { ok: false, reason: 'unrootable' };
@@ -890,6 +1002,22 @@ function copyMetaRecord(meta: Record<string, HypothesisMeta>): Record<string, Hy
   const out: Record<string, HypothesisMeta> = {};
   for (const [k, v] of Object.entries(meta)) out[k] = { ...v };
   return out;
+}
+
+/**
+ * Deep copy of JSON-shaped data (plain objects, arrays, primitives). Extracted
+ * subtrees must not share nested values with the source document — a shared
+ * polymorphic state array or a nested `meta` object would let an edit in the
+ * new tab silently rewrite the original.
+ */
+function cloneJsonish<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((v) => cloneJsonish(v)) as unknown as T;
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = cloneJsonish(v);
+    return out as T;
+  }
+  return value;
 }
 
 /**
@@ -917,11 +1045,12 @@ export function extractSubtree(project: Project, id: NodeId): Project | null {
       ...n,
       parentId: nid === id ? null : n.parentId,
       childrenIds: [...n.childrenIds],
-      charStates: n.charStates ? { ...n.charStates } : undefined,
+      charStates: n.charStates ? cloneJsonish(n.charStates) : undefined,
       charMeta: n.charMeta ? copyMetaRecord(n.charMeta) : undefined,
       style: n.style ? { ...n.style } : undefined,
       branchStyle: n.branchStyle ? { ...n.branchStyle } : undefined,
-      meta: n.meta ? { ...n.meta } : undefined,
+      meta: n.meta ? cloneJsonish(n.meta) : undefined,
+      annotations: n.annotations ? { ...n.annotations } : undefined,
     };
   }
   const newEvents = project.events
@@ -1390,8 +1519,12 @@ export function constrainedMoveNode(
       : layout.orientation === 'TB'
         ? -Infinity
         : Infinity;
+    // `seen` guard: corrupt parentId links (a parent cycle) must not spin here
+    // forever — load-time validation repairs them, but a drag can run first.
+    const seenAnc = new Set<NodeId>();
     let ancId: NodeId | undefined = n.parentId ?? undefined;
-    while (ancId) {
+    while (ancId && !seenAnc.has(ancId)) {
+      seenAnc.add(ancId);
       const ancPos = effectivePos(project, ancId, layoutPositions);
       if (ancPos) {
         if (horizontal) {
@@ -1671,37 +1804,115 @@ export function estimateAgesWithCalibrations(project: Project): CalibratedAgesRe
   const filled: NodeId[] = [];
   const conflicts: CalibratedAgesResult['conflicts'] = [];
   const valueOf = new Map<NodeId, number>();
+
+  const writeValue = (id: NodeId, v: number): void => {
+    const node = project.nodes[id];
+    if (!node) return;
+    const calibrated = calibByNode.has(id);
+    if (finiteAge(node) === undefined || calibrated) {
+      const prev = finiteAge(node);
+      node.age = Math.round(v * 1e6) / 1e6;
+      node.ageSource = calibrated ? 'fossil' : 'estimate';
+      node.meta = { ...node.meta, [AGE_ESTIMATED_META]: true };
+      if (prev === undefined) filled.push(id);
+      else if (Math.abs(prev - node.age) > 1e-9) filled.push(id);
+    }
+    valueOf.set(id, node.age ?? v);
+  };
+
+  /** Clamp into a calibration window, reporting a range that had to be bent. */
+  const applyWindow = (
+    id: NodeId,
+    v: number,
+  ): number => {
+    const window = calibByNode.get(id);
+    if (!window) return v;
+    if (v < window.min) {
+      conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
+      return window.min;
+    }
+    if (v > window.max) {
+      conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
+      return window.max;
+    }
+    return v;
+  };
+
   for (const id of order) {
     const node = project.nodes[id];
     if (!node) continue;
     const d = depth.get(id) ?? 0;
-    if (node.parentId !== null) {
+    if (node.parentId === null) {
+      // The root participates too: a calibrated root must see its window
+      // honoured (its range used to be consumed by the fit but never written
+      // back), and an uncalibrated root without a user age takes the fit value
+      // so the tree has a top of its time axis.
+      let v = applyWindow(id, intercept);
+      // Ages are "before present": a fitted value below 0 lies in the future.
+      if (v < 0) {
+        if (calibByNode.has(id)) conflicts.push({ nodeId: id, minAge: calibByNode.get(id)!.min, maxAge: calibByNode.get(id)!.max });
+        v = 0;
+      }
+      writeValue(id, v);
+    } else {
       const parentValue = valueOf.get(node.parentId) ?? intercept;
       let v = slope * d + intercept;
       // Monotonicity: a child can never be older than its parent.
       if (v > parentValue) v = parentValue;
-      const window = calibByNode.get(id);
-      if (window) {
-        if (v < window.min) {
-          conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
-          v = window.min;
-        } else if (v > window.max) {
-          conflicts.push({ nodeId: id, minAge: window.min, maxAge: window.max });
-          v = window.max;
-        }
+      v = applyWindow(id, v);
+      if (v < 0) {
+        if (calibByNode.has(id)) conflicts.push({ nodeId: id, minAge: calibByNode.get(id)!.min, maxAge: calibByNode.get(id)!.max });
+        v = 0;
       }
-      if (finiteAge(node) === undefined || calibByNode.has(id)) {
-        const prev = finiteAge(node);
-        node.age = Math.round(v * 1e6) / 1e6;
-        node.ageSource = calibByNode.has(id) ? 'fossil' : 'estimate';
-        node.meta = { ...node.meta, [AGE_ESTIMATED_META]: true };
-        if (prev === undefined) filled.push(id);
-        else if (Math.abs(prev - node.age) > 1e-9) filled.push(id);
-      }
-      valueOf.set(id, node.age ?? v);
-    } else {
-      valueOf.set(id, finiteAge(node) ?? intercept);
+      writeValue(id, v);
     }
+  }
+
+  // Bottom-up monotonicity repair: the window clamps run top-down, so a
+  // calibration window can push a node ABOVE its already-written parent.
+  // Raise the parent instead — as far as its own window allows — and report
+  // the window when it forbids the rise. A parent whose age is user data
+  // (manual entry / imported) is evidence and stays put; the conflicting
+  // child window is reported instead of silently bent.
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    const id = order[i];
+    const node = project.nodes[id];
+    if (!node || node.parentId === null) continue;
+    // Only a calibration window can push an estimated value above its parent
+    // (the monotonicity clamp runs before the window clamp, and the ≥0 clamp
+    // only lowers). Inversions between user-entered ages are data conflicts —
+    // `validateTimeData` reports those, this pass does not touch user data.
+    if (!calibByNode.has(id)) continue;
+    const childAge = valueOf.get(id);
+    const parentAge = valueOf.get(node.parentId);
+    if (childAge === undefined || parentAge === undefined || childAge <= parentAge) continue;
+    const parent = project.nodes[node.parentId];
+    if (!parent) continue;
+    const parentEstimated =
+      finiteAge(parent) === undefined ||
+      parent.ageSource === 'estimate' ||
+      parent.ageSource === 'fossil' ||
+      calibByNode.has(node.parentId);
+    if (!parentEstimated) {
+      const childWindow = calibByNode.get(id);
+      if (childWindow) conflicts.push({ nodeId: id, minAge: childWindow.min, maxAge: childWindow.max });
+      continue;
+    }
+    let target = childAge;
+    const window = calibByNode.get(node.parentId);
+    if (window && target > window.max) {
+      conflicts.push({ nodeId: node.parentId, minAge: window.min, maxAge: window.max });
+      target = window.max;
+    }
+    if (target < 0) target = 0;
+    if (finiteAge(parent) === undefined || Math.abs((parent.age as number) - target) > 1e-9) {
+      const prev = finiteAge(parent);
+      parent.age = Math.round(target * 1e6) / 1e6;
+      if (!calibByNode.has(node.parentId) && parent.ageSource !== 'fossil') parent.ageSource = 'estimate';
+      parent.meta = { ...parent.meta, [AGE_ESTIMATED_META]: true };
+      if (prev === undefined || Math.abs(prev - parent.age) > 1e-9) filled.push(node.parentId);
+    }
+    valueOf.set(node.parentId, parent.age ?? target);
   }
   return { filled, conflicts, changed: filled.length > 0 || conflicts.length > 0 };
 }
@@ -1782,33 +1993,66 @@ export function sortTipsByCharacter(project: Project, characterId: string): numb
   const stateOrder = new Map(character.states.map((s, i) => [s.id, i]));
   let reordered = 0;
 
-  const groupOf = (id: NodeId): number => {
+  // Group values are computed bottom-up and memoised, and the whole pass is
+  // iterative: a recursive helper overflowed the call stack on deep trees
+  // (a 10 000-level tree died with a RangeError). The sort key of a child is
+  // its subtree's minimum group value, which does not depend on sibling
+  // order, so one pass over the nodes is enough — no bottom-up reordering
+  // pass is needed before the parent sorts.
+  const groupOf = new Map<NodeId, number>();
+  const order: NodeId[] = [];
+  const stack: NodeId[] = [project.rootId];
+  while (stack.length) {
+    const id = stack.pop() as NodeId;
     const node = project.nodes[id];
-    if (!node) return Number.MAX_SAFE_INTEGER;
+    if (!node) continue;
+    order.push(id);
+    for (const c of node.childrenIds) stack.push(c);
+  }
+  const UNOBSERVED = Number.MAX_SAFE_INTEGER; // unobserved last
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    const id = order[i];
+    const node = project.nodes[id];
+    if (!node) continue;
     if (node.childrenIds.length === 0) {
       const v = node.charStates?.[characterId];
-      if (typeof v === 'string' && stateOrder.has(v)) return stateOrder.get(v) as number;
-      return Number.MAX_SAFE_INTEGER; // unobserved last
+      let g = UNOBSERVED;
+      if (typeof v === 'string' && stateOrder.has(v)) g = stateOrder.get(v) as number;
+      else if (Array.isArray(v)) {
+        // A polymorphic tip sorts by its earliest declared member state.
+        let best = UNOBSERVED;
+        for (const s of v) {
+          const o = stateOrder.get(s);
+          if (o !== undefined && o < best) best = o;
+        }
+        if (best !== UNOBSERVED) g = best;
+      }
+      groupOf.set(id, g);
+    } else {
+      let g = UNOBSERVED;
+      for (const c of node.childrenIds) {
+        const cg = groupOf.get(c);
+        if (cg !== undefined && cg < g) g = cg;
+      }
+      groupOf.set(id, g);
     }
-    return Math.min(...node.childrenIds.map(groupOf));
-  };
+  }
 
-  const walk = (id: NodeId) => {
+  for (const id of order) {
     const node = project.nodes[id];
-    if (!node) return;
-    for (const c of node.childrenIds) walk(c);
-    if (node.childrenIds.length < 2) return;
+    if (!node || node.childrenIds.length < 2) continue;
     const before = node.childrenIds.join('|');
     const sorted = [...node.childrenIds].sort((a, b) => {
-      const ga = groupOf(a);
-      const gb = groupOf(b);
+      const ga = groupOf.get(a) ?? UNOBSERVED;
+      const gb = groupOf.get(b) ?? UNOBSERVED;
       if (ga !== gb) return ga - gb;
       return (project.nodes[a]?.label ?? '').localeCompare(project.nodes[b]?.label ?? '');
     });
-    node.childrenIds = sorted;
-    if (before !== sorted.join('|')) reordered += 1;
-  };
-  walk(project.rootId);
+    if (before !== sorted.join('|')) {
+      node.childrenIds = sorted;
+      reordered += 1;
+    }
+  }
   return reordered;
 }
 

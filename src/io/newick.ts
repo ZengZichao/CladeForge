@@ -79,10 +79,12 @@ function tokenize(input: string): Token[] {
     } else if (c === "'" || c === '"') {
       // Quoted label: a doubled quote char is an escaped quote. Both styles are
       // accepted on input — `"` is what this writer emits, `'` is read because it
-      // is what other tools export.
+      // is what other tools export. A quote that never closes is a malformed
+      // file: refusing it beats silently accepting the half label.
       const q = c;
       i += 1;
       let v = '';
+      let closed = false;
       while (i < n) {
         if (input[i] === q) {
           if (input[i + 1] === q) {
@@ -91,17 +93,31 @@ function tokenize(input: string): Token[] {
             continue;
           }
           i += 1;
+          closed = true;
           break;
         }
         v += input[i];
         i += 1;
       }
+      if (!closed) throw new Error('Unterminated quote in Newick string');
       tokens.push({ t: 'label', v, quoted: true });
     } else if (c === '[') {
-      const end = input.indexOf(']', i);
-      if (end === -1) throw new Error('Unbalanced "[" in Newick string');
-      tokens.push({ t: 'comment', v: input.slice(i + 1, end) });
-      i = end + 1;
+      // Newick / NEXUS comments may NEST brackets — `(A[a[b]c],B)` is legal in a
+      // NEXUS TREE statement. Scan to the MATCHING `]` instead of the first one,
+      // which used to cut the comment short and leave `c]` to be read as a
+      // label plus a stray-bracket error.
+      let depth = 0;
+      let j = i;
+      for (; j < n; j += 1) {
+        if (input[j] === '[') depth += 1;
+        else if (input[j] === ']') {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      if (j >= n) throw new Error('Unbalanced "[" in Newick string');
+      tokens.push({ t: 'comment', v: input.slice(i + 1, j) });
+      i = j + 1;
     } else if (c === ']') {
       // A stray closing bracket has no matching '['. Reject it explicitly:
       // the label scanner below terminates on ']', so without this branch it
@@ -140,6 +156,25 @@ function tokenize(input: string): Token[] {
 /** A bare number (optionally signed / decimal / scientific) with nothing else. */
 function isNumericToken(s: string): boolean {
   return s !== '' && /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(s);
+}
+
+/** Split on `sep`, ignoring separators nested inside {…} / (…) groups. */
+function splitTopLevel(s: string, sep: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === '{' || ch === '(') depth += 1;
+    else if (ch === '}' || ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === sep && depth === 0) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
 }
 
 /**
@@ -331,10 +366,24 @@ function parseSegment(
       const isNhx = trimmed.startsWith('&&NHX:');
       const body = isNhx ? trimmed.slice(6) : trimmed.replace(/^&{1,2}/, '');
       const pairs: Record<string, string> = {};
-      for (const part of body.split(',')) {
-        const eq = part.indexOf('=');
-        if (eq <= 0) continue;
-        pairs[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+      if (isNhx) {
+        // NHX separates FIELDS with ':' (classic Bio::NHX); this app's own
+        // writer uses ','. Accept both — splitting on ',' alone glued the two
+        // fields of `&&NHX:S=human:D=Y` into one value.
+        for (const part of body.split(/[:,]/)) {
+          const eq = part.indexOf('=');
+          if (eq <= 0) continue;
+          pairs[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+        }
+      } else {
+        // BEAST values can be BRACE SETS (`height_95%_HPD={8,12}`), so the
+        // split must ignore commas inside braces — a naive split cut the value
+        // in half and the age interval was silently dropped.
+        for (const part of splitTopLevel(body, ',')) {
+          const eq = part.indexOf('=');
+          if (eq <= 0) continue;
+          pairs[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+        }
       }
       let consumed = false;
       const num = (v: string | undefined): number | undefined => {
@@ -408,15 +457,16 @@ function parseSegment(
       ti += 1;
       const raw = readLabel();
       if (raw !== null) {
-        const len = parseFloat(raw.v);
-        if (!Number.isFinite(len)) {
+        // A branch length must be a FULLY numeric token: parseFloat used to
+        // accept `1.5abc` as 1.5 with no warning, silently corrupting the edge.
+        if (!isNumericToken(raw.v)) {
           issues.push(
             tr(
               `节点「${who(current)}」的枝长「${raw.v}」不是数值，已按缺失枝长处理`,
               `Branch length "${raw.v}" on "${who(current)}" is not a number; treated as missing`,
             ),
           );
-        } else if (len < 0) {
+        } else if (Number(raw.v) < 0) {
           // Negative branch lengths are nonsensical and would corrupt the
           // phylogram layout (negative cumulative depth), so they cannot be
           // stored — but dropping them silently loses data, so the
@@ -428,7 +478,7 @@ function parseSegment(
             ),
           );
         } else {
-          current.branchLength = len;
+          current.branchLength = Number(raw.v);
         }
       }
     }
@@ -707,26 +757,33 @@ export function parseNewickTrees(
   // File-wide support convention: an explicit user choice, else inference —
   // any value above 1 can only be a percent; all-≤1 values are PROBABLY
   // fractions (posterior probabilities) but the inference is reported so the
-  // user can override it in the dialog.
+  // user knows what was chosen.
   let convention: SupportScale;
   if (options.supportConvention && options.supportConvention !== 'auto') {
     convention = options.supportConvention;
   } else {
     const numericSupports: number[] = [];
     for (const seg of segments) {
+      let prev: Token | undefined;
       for (const tok of seg) {
-        if (tok.t === 'label' && !tok.quoted) {
+        // Only a bare number DIRECTLY after ')' is a support candidate.
+        // Numbers after ':' are branch lengths and numbers after '(' / ','
+        // are tip names (or NEXUS TRANSLATE keys) — letting either into the
+        // inference let one branch length of 12 misclassify a whole file of
+        // posteriors as percent, a 100× error.
+        if (tok.t === 'label' && !tok.quoted && prev?.t === ')') {
           const v = Number(tok.v);
           if (Number.isFinite(v)) numericSupports.push(v);
         }
+        prev = tok;
       }
     }
     convention = inferSupportScaleFromValues(numericSupports);
     if (numericSupports.length > 0 && convention === 'fraction') {
       issues.push(
         tr(
-          `支持度全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 UFBoot=1 表示 1%），请在导入对话框中显式选择「百分比」`,
-          `All support values are ≤ 1 and were interpreted as 0–1 posteriors (fraction). If they are actually 0–100 percentages (e.g. UFBoot=1 meaning 1%), pick "percent" explicitly in the import dialog`,
+          `支持度全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 bootstrap=1 表示 1%），这一解释会相差 100 倍，请在使用支持度做阈值过滤/折叠/导出前先行校正`,
+          `All support values are ≤ 1 and were interpreted as 0–1 posteriors (fraction). If they are actually 0–100 percentages (e.g. bootstrap=1 meaning 1%), this reading is off by 100×; correct the scale before using support for thresholds, collapsing or export`,
         ),
       );
     }
@@ -843,9 +900,13 @@ export function serializeNewick(
   // Written as a comment on the ROOT node — `((A,B),C)R[&U];` — which is the
   // shape this parser itself reads back (`resolveRootedness`), so an unrooted
   // document survives a write → read cycle instead of silently becoming rooted.
-  const marker =
-    options.rootedMarker && nodes[rootId]?.meta?.rooted === false && !/\[&\s*[Uu]\s*\]$/.test(rootPart)
-      ? '[&U]'
-      : '';
+  // The mirror case needs the marker too: an EXPLICITLY rooted trifurcation is
+  // re-read as unrooted (a 3-way root is the unrooted signature), so a document
+  // that said "rooted" must leave `[&R]` behind or the round trip flips it.
+  const rootedMeta = nodes[rootId]?.meta?.rooted;
+  const needsU =
+    options.rootedMarker && rootedMeta === false && !/\[&\s*[Uu]\s*\]$/.test(rootPart);
+  const needsR = options.rootedMarker && rootedMeta === true && (nodes[rootId]?.childrenIds.length ?? 0) >= 3;
+  const marker = needsU ? '[&U]' : needsR ? '[&R]' : '';
   return `${rootPart}${marker};`;
 }

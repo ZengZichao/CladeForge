@@ -50,7 +50,7 @@ export interface AmbiguousGeneNode {
   nodeId: NodeId;
   /** Species placement of the gene root / node when the tie was resolved. */
   speciesNode: NodeId;
-  /** Every event class achieving the optimum at this node, in `TIE_PRIORITY` order. */
+  /** Every event class achieving the optimum at this node, in tie-priority order. */
   alternatives: ReconEventType[];
   /** The transfer's receiver/donor roles are interchangeable at equal cost. */
   directionTie?: boolean;
@@ -69,7 +69,10 @@ export interface DtlScenario {
    * Species node where each loss occurred, PLUS the gene node whose incoming
    * lineage it prunes. The gene node is what lets the loss set be written back
    * into a document: without it the converted scenario keeps the DP's cost but
-   * loses the events, i.e. it is only a partial trace.
+   * loses the events, i.e. it is only a partial trace. Losses price EMPTY
+   * lineages only (a unary node's surplus copy, a species branch the lineage
+   * never enters) — a lineage ancestral to sampled gene tips can never be
+   * bought off with one loss, so every sampled gene node keeps a placement.
    */
   lossMarks: { at: NodeId; geneNode: NodeId }[];
   /**
@@ -109,8 +112,10 @@ export interface DtlOptions {
    * Default FALSE (changed from the original free-floating behaviour): a free
    * root systematically lowers the absolute event totals and biases the family
    * origin toward the deepest nodes, which is one of the documented reasons
-   * the numbers are not comparable with standard DTL tools. Turn it on
-   * explicitly when that convention is what you want.
+   * the numbers are not comparable with standard DTL tools. When it wins, its
+   * candidate cost includes `rootTransferCost` — the fee is part of the
+   * fixed-vs-free comparison, never added afterwards. Turn it on explicitly
+   * when that convention is what you want.
    */
   allowFreeRoot?: boolean;
   /**
@@ -186,12 +191,18 @@ const KIND_EVENT: Record<Cell['kind'], ReconEventType | null> = {
 /** Priority used when several event classes tie (documented, not evidence). */
 const DEFAULT_TIE_PRIORITY: ReconEventType[] = ['duplication', 'speciation', 'transfer'];
 
-/** Priority of a solver run — the caller's `tiePriority` option, else the default. */
-let TIE_PRIORITY: ReconEventType[] = DEFAULT_TIE_PRIORITY;
-
-/** Union of `alts` and `ev`, kept in `TIE_PRIORITY` order. */
-function withAlt(alts: ReconEventType[], ev: ReconEventType): ReconEventType[] {
-  return TIE_PRIORITY.filter((e) => e === ev || alts.includes(e));
+/**
+ * Union of `alts` and `ev`, kept in `tiePriority` order. The priority travels
+ * as a parameter instead of a module-level variable: a shared mutable slot
+ * made two solver invocations able to observe each other's option (and a
+ * mid-solve throw left the default silently replaced by the caller's choice).
+ */
+function withAlt(
+  tiePriority: ReconEventType[],
+  alts: ReconEventType[],
+  ev: ReconEventType,
+): ReconEventType[] {
+  return tiePriority.filter((e) => e === ev || alts.includes(e));
 }
 
 export function solveDtl(
@@ -210,7 +221,7 @@ export function solveDtl(
   const rootTransferCost = Number.isFinite(options.rootTransferCost)
     ? Math.max(0, options.rootTransferCost as number)
     : 0;
-  TIE_PRIORITY =
+  const tiePriority: ReconEventType[] =
     options.tiePriority && options.tiePriority.length === 3
       ? options.tiePriority
       : DEFAULT_TIE_PRIORITY;
@@ -376,9 +387,17 @@ export function solveDtl(
 
   const key = (g: NodeId, s: NodeId) => `${g}|${s}`;
 
-  /** Cheapest fate for a child lineage entering region s: present below it, or lost. */
-  const childOpt = (g: NodeId, region: NodeId): number =>
-    Math.min(downOf(g, region), costs.loss);
+  /**
+   * Cheapest fate for a child lineage entering region s: it must PRESENT
+   * itself below s. The earlier `min(downOf(g, region), costs.loss)` let ONE
+   * loss buy off the whole lineage — silently deleting observed gene subtrees
+   * (two scored A tips vanished for a single λ) — which is not how standard
+   * DTL prices losses: a loss is an EMPTY species branch (a lineage that
+   * carries no gene node), never a discard of sampled gene nodes. A lineage
+   * that cannot survive below s makes the candidate event infeasible (INF)
+   * and the DP places the parent elsewhere instead.
+   */
+  const childOpt = (g: NodeId, region: NodeId): number => downOf(g, region);
 
   /**
    * Cells of gene node `g` ordered by cost. Scanning this from the front and
@@ -502,7 +521,7 @@ export function solveDtl(
         // Duplication and speciation cost the same — the textbook
         // non-identifiability. The reported class follows the documented
         // priority, and the tie is recorded instead of silently resolved.
-        alts = withAlt(alts, 'speciation');
+        alts = withAlt(tiePriority, alts, 'speciation');
       }
     } else if (spKids.length >= 1 && unary) {
       // Unary pass-through: the lineage continues into exactly one branch.
@@ -519,7 +538,7 @@ export function solveDtl(
         cell = { cost: best, kind: 'sigma', argI: bi };
         alts = ['speciation'];
       } else if (best === cell.cost) {
-        alts = withAlt(alts, 'speciation');
+        alts = withAlt(tiePriority, alts, 'speciation');
       }
     }
 
@@ -535,7 +554,7 @@ export function solveDtl(
         alts = ['transfer'];
         return;
       }
-      if (v === cell.cost && Number.isFinite(v)) alts = withAlt(alts, 'transfer');
+      if (v === cell.cost && Number.isFinite(v)) alts = withAlt(tiePriority, alts, 'transfer');
     };
     if (unary) {
       acceptTransfer(jumpCost(kids[0]), false);
@@ -633,14 +652,18 @@ export function solveDtl(
   // not comparable with standard DTL implementations. The anchor-at-root
   // default keeps counts comparable; turn `allowFreeRoot` on for the old
   // behaviour, and the panel states which convention ran.
-  const freeRoot =
-    options.allowFreeRoot === true && rootDown < rootCell.cost;
   // A free-floating root pays `rootTransferCost` (default 0) because the model
   // otherwise gets the arrival of the whole family at that depth for nothing,
   // which is what makes the absolute totals incomparable with standard DTL
-  // implementations. `originCost` prices the family origin.
+  // implementations. The fee is part of the CANDIDATE's cost: comparing the
+  // bare `rootDown` against the fixed-root cell first, and adding the fee only
+  // to the winner, let an expensive fee (5) still crown a cheaper-but-fee'd
+  // free root (0) over the genuinely better fixed root (1).
+  const freeRootTotal = rootDown + rootTransferCost;
+  const freeRoot = options.allowFreeRoot === true && freeRootTotal < rootCell.cost;
+  // `originCost` prices the family origin on either mode.
   const optimal =
-    (freeRoot ? rootDown + rootTransferCost : rootCell.cost) + originCost;
+    (freeRoot ? freeRootTotal : rootCell.cost) + originCost;
   if (!Number.isFinite(optimal)) {
     return { error: tr('无可行协调方案', 'No feasible reconciliation exists') };
   }
@@ -715,10 +738,12 @@ export function solveDtl(
     }
     if (task.t === 'lineage') {
       const direct = downOf(task.g, task.region);
-      // `direct === INF` (no placement anywhere below the entry point) and
-      // "pricier than one loss" both mean the DP bought this lineage's absence
-      // with a single loss: register it instead of dropping the subtree.
-      if (direct > costs.loss) registerLoss(task.g, task.region);
+      // The DP only routes a lineage here when it can actually be placed below
+      // the entry point, so a finite cost always places. INF (no placement
+      // anywhere below — e.g. a time-infeasible region reached only through a
+      // defensive path) is written down as a loss instead of silently dropping
+      // the subtree.
+      if (!Number.isFinite(direct)) registerLoss(task.g, task.region);
       else walk.push({ t: 'place', g: task.g, s: descArgmin(task.g, task.region) });
       continue;
     }

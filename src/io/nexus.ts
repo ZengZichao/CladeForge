@@ -442,13 +442,28 @@ function buildCharactersBlock(project: Project): string {
       `  DIMENSIONS NTAX=${leaves.length} NCHAR=1;`,
       `  FORMAT DATATYPE=STANDARD MISSING=? GAP=- SYMBOLS="${symbols}";`,
       `  CHARLABELS ${nexusName(c.name)};`,
-      `  STATELABELS ${c.states.slice(0, symbolCount).map((s) => nexusName(s.label)).join(' ')};`,
+      // STATELABELS takes the character NUMBER first — `STATELABELS s0 s1;` is
+      // not a valid statement and readers would misparse it.
+      `  STATELABELS 1 ${c.states.slice(0, symbolCount).map((s) => nexusName(s.label)).join(' ')};`,
       '  MATRIX',
     ];
     for (const n of leaves) {
       const v = n.charStates?.[c.id];
-      const idx = typeof v === 'string' ? c.states.findIndex((s) => s.id === v) : -1;
-      const cell = idx >= 0 && idx < symbolCount ? STATE_SYMBOLS[idx] : '?';
+      let cell = '?';
+      if (Array.isArray(v)) {
+        // A polymorphic / partially-resolved observation is written as the
+        // NEXUS polymorphism group — exporting `?` claimed the cell was
+        // MISSING and lost the observation.
+        const syms = v
+          .map((id) => c.states.findIndex((s) => s.id === id))
+          .filter((i) => i >= 0 && i < symbolCount)
+          .map((i) => STATE_SYMBOLS[i]);
+        if (syms.length === v.length && syms.length === 1) cell = syms[0];
+        else if (syms.length === v.length && syms.length > 1) cell = `(${syms.join('')})`;
+      } else if (typeof v === 'string') {
+        const idx = c.states.findIndex((s) => s.id === v);
+        cell = idx >= 0 && idx < symbolCount ? STATE_SYMBOLS[idx] : '?';
+      }
       lines.push(`    ${nexusName(names.get(n.id) ?? n.id)}  ${cell}`);
     }
     lines.push('  ;', 'END;', '');
@@ -681,11 +696,49 @@ interface MatrixBlock {
   symbols: string;
   /** Declared taxon labels (from TAXLABELS), when the block declares them. */
   declaredTaxa: string[];
-  /** taxon → the column tokens in file order (interleaved rows concatenated). */
+  /** taxon → one cell per column (interleaved rows concatenated, cells expanded). */
   rows: Map<string, string[]>;
   stateLabels: Map<number, string[]>;
+  /** Character number (1-based) → declared CHARSTATELABELS name. */
+  charNames: Map<number, string>;
+  /** Declared MISSING/GAP codes on top of the built-in `?` / `-`. */
+  missingCodes: string[];
   costMatrices: { applyTo: number[]; matrix: number[][] }[];
   columns: number;
+}
+
+/**
+ * Expand a STANDARD row's whitespace tokens into one cell per column. A
+ * compact (unspaced) token like `01` is TWO columns — reading it as one cell
+ * used to reinterpret whole columns as a single polymorphic state. `(`/`{`
+ * group their contents into ONE cell: that is the NEXUS polymorphism /
+ * uncertainty syntax and must survive as a single cell.
+ */
+function expandStandardCells(tokens: string[]): string[] {
+  const cells: string[] = [];
+  for (const tok of tokens) {
+    let cur = '';
+    let depth = 0;
+    for (const ch of tok) {
+      if (depth > 0) {
+        cur += ch;
+        if (ch === ')' || ch === '}') {
+          depth -= 1;
+          cells.push(cur);
+          cur = '';
+        }
+        continue;
+      }
+      if (ch === '(' || ch === '{') {
+        cur = ch;
+        depth = 1;
+        continue;
+      }
+      cells.push(ch);
+    }
+    if (cur) cells.push(cur); // unterminated group: keep it whole
+  }
+  return cells;
 }
 
 function blocksOf(input: string, kinds: string[]): { raw: string; masked: string }[] {
@@ -706,37 +759,102 @@ function blocksOf(input: string, kinds: string[]): { raw: string; masked: string
 function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
   const datatypeM = /datatype\s*=\s*([A-Za-z]+)/i.exec(masked);
   const datatype = (datatypeM?.[1] ?? 'STANDARD').toUpperCase();
+  // SYMBOLS is a QUOTED span, so the masked copy blanks its content; the value
+  // must be sliced from the RAW text at the same coordinates (masking preserves
+  // length). Reading it off the masked copy made `symbols` whitespace and
+  // silently broke every symbol-order decision downstream.
   const symbolsM = /symbols\s*=\s*"([^"]*)"/i.exec(masked);
-  const symbols = symbolsM?.[1] ?? '01';
+  const symbols = symbolsM
+    ? raw.slice(
+        symbolsM.index + symbolsM[0].length - symbolsM[1].length - 1,
+        symbolsM.index + symbolsM[0].length - 1,
+      )
+    : '01';
   const ncharM = /nchar\s*=\s*(\d+)/i.exec(masked);
   const columns = ncharM ? Number(ncharM[1]) : 0;
 
+  /**
+   * Read a `KEY=value` flag from the FORMAT line, slicing the value from the
+   * RAW text so a quoted value (`MISSING="?"`) survives the masking.
+   */
+  const formatFlag = (key: string): string => {
+    const m = new RegExp(`${key}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s;]+)`, 'i').exec(masked);
+    if (!m) return '';
+    const from = m.index + m[0].length - m[1].length;
+    return raw.slice(from, from + m[1].length).replace(/^["']|["']$/g, '');
+  };
+  // Declared missing / gap codes join the built-in `?` / `-`: a file that says
+  // MISSING=X means X is unobserved, not a third character state.
+  const extraMissing = [...(formatFlag('missing') || ''), ...(formatFlag('gap') || '')];
+
   const declaredTaxa: string[] = [];
   {
-    const taxM = /taxlabels\s+([^;]*);/i.exec(masked);
+    // The word boundary must not match the TAIL of CHARSTATELABELS, and the
+    // labels must be read from the RAW region: the masked copy blanks quoted
+    // names, which used to turn `'Taxon A'` into spaces and silently drop the
+    // row that used it.
+    const taxM = /(?:^|[^A-Za-z])taxlabels\s+([^;]*);/i.exec(masked);
     if (taxM) {
-      for (const tok of splitOutsideQuotes(taxM[1], ' ')) {
-        const t = tok.trim();
-        if (t) declaredTaxa.push(unquote(t));
+      const bodyStart = taxM.index + taxM[0].length - (taxM[1].length + 1);
+      const bodyRaw = raw.slice(bodyStart, bodyStart + taxM[1].length);
+      for (const tok of splitOutsideQuotes(bodyRaw, ' ')) {
+        const t = unquote(tok.trim());
+        if (t) declaredTaxa.push(t);
       }
     }
   }
 
   const stateLabels = new Map<number, string[]>();
+  const charNames = new Map<number, string>();
   {
-    const re = /statelabels\s+([^;]*);/gi;
+    // `(?:^|[^A-Za-z])` keeps CHARSTATELABELS from being read as STATELABELS —
+    // a bare `\b`-style match used to fire inside the longer keyword and its
+    // body then overwrote the real state labels.
+    const re = /(?:^|[^A-Za-z])statelabels\s+([^;]*);/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(masked))) {
-      const parts = splitOutsideQuotes(m[1], ' ').map((t) => t.trim()).filter(Boolean);
+      const bodyStart = m.index + m[0].length - (m[1].length + 1);
+      const bodyRaw = raw.slice(bodyStart, bodyStart + m[1].length);
+      const parts = splitOutsideQuotes(bodyRaw, ' ')
+        .map((t) => unquote(t.trim()))
+        .filter(Boolean);
       const charIdx = Number(parts[0]);
-      if (Number.isFinite(charIdx)) stateLabels.set(charIdx, parts.slice(1).map(unquote));
+      if (Number.isFinite(charIdx)) stateLabels.set(charIdx, parts.slice(1));
+    }
+    // CHARSTATELABELS <char> <name> / <state labels>; (comma-separated entries).
+    const cre = /(?:^|[^A-Za-z])charstatelabels\s+([^;]*);/gi;
+    while ((m = cre.exec(masked))) {
+      const bodyStart = m.index + m[0].length - (m[1].length + 1);
+      const bodyRaw = raw.slice(bodyStart, bodyStart + m[1].length);
+      for (const entry of splitOutsideQuotes(bodyRaw, ',')) {
+        const seg = entry.trim();
+        if (!seg) continue;
+        const slash = seg.indexOf('/');
+        const head = slash === -1 ? seg : seg.slice(0, slash);
+        const rest = slash === -1 ? '' : seg.slice(slash + 1);
+        const headToks = splitOutsideQuotes(head, ' ')
+          .map((t) => unquote(t.trim()))
+          .filter(Boolean);
+        const charIdx = Number(headToks[0]);
+        if (!Number.isFinite(charIdx)) continue;
+        if (headToks.length > 1) charNames.set(charIdx, headToks.slice(1).join(' '));
+        if (rest.trim()) {
+          const labels = splitOutsideQuotes(rest, ' ')
+            .map((t) => unquote(t.trim()))
+            .filter(Boolean);
+          if (labels.length > 0) stateLabels.set(charIdx, labels);
+        }
+      }
     }
   }
 
   // MATRIX (or CHARACTERS) body. Row starts are decided by the DECLARED taxa
-  // when the block has TAXLABELS (the reliable rule for interleaved files);
-  // otherwise a line whose first token is not a declared label is treated as a
-  // continuation of the previous row.
+  // when the block has TAXLABELS (the reliable rule for interleaved files).
+  // Without declared TAXLABELS every line names its own taxon — the old rule
+  // ("first undeclared line starts a row, the rest continue it") merged rows
+  // B and C into A's row and lost two taxa per matrix. A repeated taxon name
+  // APPENDS to its row: that is how INTERLEAVED files deliver the later
+  // columns, and overwriting them silently dropped every earlier chunk.
   const rows = new Map<string, string[]>();
   {
     const m = /(?:matrix|characters)\s+([\s\S]*?)(?:;|$)/i.exec(masked);
@@ -756,16 +874,24 @@ function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
         if (toksM.length === 0) continue;
         const firstRaw = unquote(toksR[0] ?? toksM[0]);
         const isTaxonStart =
-          declared.has(firstRaw.toLowerCase()) ||
-          (declaredTaxa.length === 0 && current === null);
+          declared.has(firstRaw.toLowerCase()) || declaredTaxa.length === 0;
         if (isTaxonStart) {
           current = firstRaw;
-          rows.set(current, [...toksM.slice(1)]);
+          const existing = rows.get(current);
+          rows.set(current, existing ? [...existing, ...toksM.slice(1)] : [...toksM.slice(1)]);
         } else if (current) {
           rows.set(current, [...(rows.get(current) as string[]), ...toksM]);
         }
       }
     }
+  }
+
+  // STANDARD cells are single characters: a compact (unspaced) row token like
+  // `01` is TWO columns, and reading it as one cell reinterpreted whole columns
+  // as a single polymorphic state. `(`/`{` groups stay ONE cell — that is the
+  // NEXUS polymorphism / uncertainty syntax.
+  if (datatype === 'STANDARD') {
+    for (const [taxon, toks] of rows) rows.set(taxon, expandStandardCells(toks));
   }
 
   // ASSUMPTIONS-style cost matrices can also ride inside a DATA block header
@@ -793,7 +919,7 @@ function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
   }
 
   if (rows.size === 0) return null;
-  return { datatype, symbols, declaredTaxa, rows, stateLabels, costMatrices, columns };
+  return { datatype, symbols, declaredTaxa, rows, stateLabels, charNames, missingCodes: extraMissing, costMatrices, columns };
 }
 
 /** ASSUMPTIONS blocks: OPTIONS DEFTYPE=… COSTMATRIX=(…) APPLYTO=…. */
@@ -874,32 +1000,62 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
         if (Object.keys(values).length >= 3) {
           (ch as Character & { __values?: Record<string, number> }).__values = values;
           characters.push(ch);
+        } else if (Object.keys(values).length > 0) {
+          // A column with usable numbers but fewer than three was silently
+          // dropped — say so, or the user loses data without a trace.
+          issues.push(
+            tr(
+              `连续列 ${col + 1} 仅有 ${Object.keys(values).length} 个有效数值（少于 3 个），未导入`,
+              `Continuous column ${col + 1} has only ${Object.keys(values).length} usable value(s) (fewer than 3) and was not imported`,
+            ),
+          );
         }
       }
       continue;
     }
 
     for (let col = 0; col < columnCount; col += 1) {
+      const isMissing = (s: string): boolean =>
+        MISSING_STATE_CODES.includes(s) || block.missingCodes.includes(s);
       const usedSymbols = new Set<string>();
       for (const taxon of taxa) {
         const tok = (block.rows.get(taxon) as string[])[col] ?? '?';
         const poly = /^\((.*)\)$/.exec(tok);
         for (const s of (poly ? poly[1] : tok).split('')) {
-          if (MISSING_STATE_CODES.includes(s)) continue;
+          if (isMissing(s)) continue;
           usedSymbols.add(s);
         }
       }
       const ordered = [...usedSymbols].sort(
         (a, b) => block.symbols.indexOf(a) - block.symbols.indexOf(b),
       );
-      if (ordered.length < 2) continue; // a column with one observed state has no signal
-      const labels = block.stateLabels.get(col + 1) ?? [];
+      if (ordered.length < 2) {
+        // a column with one observed state has no signal — but the drop must
+        // not be silent
+        if (ordered.length === 1) {
+          issues.push(
+            tr(
+              `列 ${col + 1} 仅观测到一种状态（${ordered[0]}），无变异信息，未导入`,
+              `Column ${col + 1} shows a single observed state (${ordered[0]}) — no variation, not imported`,
+            ),
+          );
+        }
+        continue;
+      }
+      const declaredLabels = block.stateLabels.get(col + 1) ?? [];
+      // STATELABELS order follows the DECLARED SYMBOLS order (s0 ↔ symbols[0]),
+      // NOT the order states happen to appear in the column: binding labels by
+      // observed order labelled a B=2 cell `s1` whenever state 1 was unobserved.
+      const labelFor = (s: string): string => {
+        const pos = block.symbols.indexOf(s);
+        return (pos >= 0 ? declaredLabels[pos] : undefined) ?? s;
+      };
       const ch: Character = {
         id: newId(),
-        name: tr(`性状 ${col + 1}`, `Character ${col + 1}`),
+        name: block.charNames.get(col + 1) ?? tr(`性状 ${col + 1}`, `Character ${col + 1}`),
         type: 'discrete',
         states: ordered.map((s, i) => ({
-          ...newCharacterState(labels[i] ?? s, i),
+          ...newCharacterState(labelFor(s), i),
           color: stateColorFor(i),
         })),
       };
@@ -910,7 +1066,7 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
         const cellSymbols = (poly ? poly[1] : tok).split('');
         const ids: string[] = [];
         for (const s of cellSymbols) {
-          if (MISSING_STATE_CODES.includes(s)) continue;
+          if (isMissing(s)) continue;
           const idx = ordered.indexOf(s);
           const st = ch.states[idx];
           if (st) ids.push(st.id);

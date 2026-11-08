@@ -64,7 +64,7 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
             </div>
             <div className="field">
               <label>{S.analysis.cost}</label>
-              <span className="field-value">{mp ? mp.cost : 0}</span>
+              <span className="field-value">{mp ? (mp.feasible ? mp.cost : tr('无可行解', 'infeasible')) : 0}</span>
             </div>
             {signal ? (
               <div className="field">

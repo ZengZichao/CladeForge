@@ -811,12 +811,15 @@ function feasibleEvents(
     if (!prev || cost < prev.cost) out.set(ev, { cost, losses });
   };
 
-  // duplication — every child lineage continues inside subtree(s) or is lost
+  // duplication — every child lineage continues inside subtree(s). The only
+  // loss a duplication can carry is a unary node's EMPTY surplus copy: a
+  // lineage ancestral to sampled gene tips can never be bought off with a
+  // loss (that would delete observed genes — standard DTL forbids it).
   {
     let losses = kids.length === 1 ? 1 : 0; // surplus copy of a unary duplication
     let ok = true;
     for (const c of kids) {
-      if (place[c] < 0) losses += 1;
+      if (place[c] < 0) ok = false;
       else if (!inSubtree(s, place[c])) ok = false;
     }
     if (ok) consider('dup', costs.dup + losses * costs.loss, losses);
@@ -829,13 +832,12 @@ function feasibleEvents(
       for (let j = 0; j < spKids.length; j += 1) {
         if (i === j) continue;
         const regions = [spKids[i], spKids[j]];
-        let losses = 0;
         let ok = true;
         kids.slice(0, 2).forEach((c, ci) => {
-          if (place[c] < 0) losses += 1;
+          if (place[c] < 0) ok = false;
           else if (!inSubtree(regions[ci], place[c])) ok = false;
         });
-        if (ok) consider('sigma', losses * costs.loss, losses);
+        if (ok) consider('sigma', 0, 0);
       }
     }
     // transfer — one lineage stays, the other arrives from outside
@@ -845,18 +847,18 @@ function feasibleEvents(
       const lv = place[leave];
       if (lv < 0) continue;
       if (inSubtree(s, lv) || inSubtree(lv, s)) continue; // own subtree or ancestor
-      let losses = 0;
       let ok = true;
-      if (place[stay] < 0) losses += 1;
+      if (place[stay] < 0) ok = false;
       else if (!inSubtree(s, place[stay])) ok = false;
-      if (ok) consider('transfer', costs.transfer + losses * costs.loss, losses);
+      if (ok) consider('transfer', costs.transfer, 0);
     }
   } else {
-    // unary — pass-through into one species child, or relocation out of it
+    // unary — pass-through into one species child, or relocation out of it.
+    // The single child carries sampled tips, so it cannot be bought off with a
+    // loss; only an in-subtree placement prices this event.
     for (const region of spKids) {
       const c = kids[0];
-      if (place[c] < 0) consider('sigma', costs.loss, 1);
-      else if (inSubtree(region, place[c])) consider('sigma', 0, 0);
+      if (place[c] >= 0 && inSubtree(region, place[c])) consider('sigma', 0, 0);
     }
     const lv = place[kids[0]];
     if (lv >= 0 && !inSubtree(s, lv) && !inSubtree(lv, s)) consider('transfer', costs.transfer, 0);
@@ -932,8 +934,10 @@ function bruteDtl(species: DtlTree, gene: DtlTree, costs: ReconCosts, rootFee = 
       place[g] = -1;
       return;
     }
-    place[g] = -1; // this lineage is bought out by one loss
-    rec(idx + 1);
+    // A lineage ancestral to sampled gene tips must BE placed: standard DTL
+    // never buys an observed subtree off with one loss. (The only losses this
+    // enumeration prices are the EMPTY surplus copy of a unary duplication,
+    // priced inside the parent's own event.)
     for (const s of gene.allowed[g]) {
       place[g] = s;
       rec(idx + 1);
@@ -2115,11 +2119,10 @@ describe('DTL reconciliation vs exhaustive placement enumeration', () => {
     }
   });
 
-  it('documents the two dtl.ts deviations this oracle pins as tripwires', () => {
-    // (1) `rootTransferCost` is ADDED to the free-root cost instead of the solver
-    //     re-comparing "gene root on the species root" against "gene root
-    //     elsewhere + fee", so the reported optimum can be worse than a scenario
-    //     the solver itself owns.
+  it('the former root-fee and sampled-lineage deviations are FIXED', () => {
+    // (1) The root fee is part of the free-root CANDIDATE's cost: "gene root on
+    //     the species root" (1) beats "gene root deeper + fee 5" (0 + 5), so the
+    //     solver reports the fixed-root optimum instead of the fee'd free one.
     const feeCase: DtlCase = {
       name: 'root-fee-tripwire',
       species: '(((A,B),C),D)root;',
@@ -2133,22 +2136,21 @@ describe('DTL reconciliation vs exhaustive placement enumeration', () => {
     const feeScenario = fee.dp.scenario as NonNullable<typeof fee.dp.scenario>;
     const feeBrute = fee.brute as BruteDtl;
     expect(feeBrute.cost).toBe(1);
-    expect(feeScenario.cost).toBe(5);
+    expect(feeScenario.cost).toBe(1); // the fee'd free root (5) loses to the fixed root (1)
+    expect(feeScenario.freeRoot).toBe(false);
     record(
       'dtl',
-      'deviation:root-fee',
+      'fixed:root-fee',
       'dp-minus-enumeration',
       feeScenario.cost - feeBrute.cost,
-      'rootTransferCost=5: the solver reports 5, the fee-aware enumeration reports 1 for the same pair of trees',
+      'rootTransferCost=5: solver and fee-aware enumeration both report 1 for the same pair of trees',
     );
 
-    // (2) When a loss is cheaper than a duplication the traced scenario deletes a
-    //     whole sampled lineage: the two gene copies mapped onto species A get
-    //     neither a placement nor a loss mark naming them, so the document handed
-    //     back holds a subset of the gene nodes — while `cost` stays optimal.
-    //     Standard DTL solvers (RIANA / Treerecon / CaSpec family) forbid losing a
-    //     lineage ancestral to sampled genes; this model does not, which is a
-    //     fourth reason its absolute totals read low (dtl.ts lists three others).
+    // (2) A loss can no longer buy off a lineage ancestral to sampled genes:
+    //     the two gene copies mapped onto species A keep their placements and
+    //     the scenario carries the duplication instead. Standard DTL solvers
+    //     (RIANA / Treerecon / CaSpec family) forbid losing a lineage
+    //     ancestral to sampled genes; this model now does too.
     const traceCase: DtlCase = {
       name: 'sampled-lineage-deleted',
       species: '((A,B),C)root;',
@@ -2160,18 +2162,20 @@ describe('DTL reconciliation vs exhaustive placement enumeration', () => {
     expect(traced.dp.error).toBeUndefined();
     const scenario = traced.dp.scenario as NonNullable<typeof traced.dp.scenario>;
     const bf = traced.brute as BruteDtl;
-    expect(scenario.cost).toBe(bf.cost); // the OPTIMUM still agrees: 1 loss vs 1 loss
+    expect(scenario.cost).toBe(bf.cost); // both price the duplication: 3
+    expect(scenario.cost).toBe(3);
+    // Sampled-leaf coverage: EVERY gene node carries a placement.
     const placed = new Set(Object.keys(scenario.placements));
-    const marked = new Set(scenario.lossMarks.map((m) => m.geneNode));
-    const unaccounted = traced.gene.flat.ids.filter((id) => !placed.has(id) && !marked.has(id));
+    const unaccounted = traced.gene.flat.ids.filter((id) => !placed.has(id));
+    expect(unaccounted).toEqual([]);
     const assumptions = dtlScenarioToAssumptions(traced.speciesProject, traced.geneProject, scenario);
-    expect(Object.keys(assumptions).length).toBeLessThan(traced.gene.flat.ids.length);
+    expect(Object.keys(assumptions).length).toBe(traced.gene.flat.ids.length);
     record(
       'dtl',
-      'deviation:sampled-lineage-deleted',
+      'fixed:sampled-lineage-covered',
       'gene-nodes-written-vs-total',
       `${Object.keys(assumptions).length}/${traced.gene.flat.ids.length}`,
-      `cost ${scenario.cost} agrees with the enumeration; ${unaccounted.length} sampled gene tips carry neither a placement nor a loss mark`,
+      `cost ${scenario.cost} agrees with the enumeration; every sampled gene node keeps a placement`,
     );
   });
 

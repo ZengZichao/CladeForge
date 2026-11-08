@@ -393,20 +393,17 @@ export interface BlombergKResult {
 /**
  * Blomberg's K statistic for continuous characters on a phylogeny
  * (Blomberg et al. 2003, Journal of Theoretical Biology 223:399–408, eq. 12),
- * as implemented by phytools::phylosig (Revell, 2012).
+ * as implemented by phytools::phylosig (Revell, 2012):
  *
- *   ahat = (1^T C^-1 x) / (1^T C^-1 1)      - phylogenetic (GLS) mean
- *   sig2 = (x - ahat*1)^T C^-1 (x - ahat*1) / (n - 1)   - REML variance
- *   K    = SUM (x_i - xbar)^2 / [ sig2 * (tr(C) - 1^T C 1 / n) ]
+ *   a  = (1ᵀC⁻¹x) / (1ᵀC⁻¹1)               - phylogenetic (GLS) mean
+ *   r  = x − a·1                            - GLS residuals
+ *   K  = (rᵀr / rᵀC⁻¹r) / [ (tr C − n/(1ᵀC⁻¹1)) / (n − 1) ]
  *
  * where C is the phylogenetic covariance matrix (C_ij = shared root→MRCA path
- * length, C_ii = root→tip length). Note the asymmetry, which is the whole point
- * of the normalisation: σ̂² is estimated by GLS (so it uses â), but the numerator
- * sums squared deviations from the ORDINARY mean x̄, because
- * E[Σ(xᵢ − x̄)²] = σ²·(tr C − 1ᵀC1/n). Using â in the numerator together with
- * n/(1ᵀC⁻¹1) in the denominator agrees with the published estimator only on
- * trees whose C has constant row sums, and biases E[K] to ≈ 0.51 on
- * unequal-depth trees.
+ * length, C_ii = root→tip length). Every piece is centred on the GLS mean and
+ * scaled by the matching GLS quadratic forms — mixing an ordinary-mean
+ * numerator with a GLS variance agrees with this only on trees whose C has
+ * constant row sums, and biases K on unequal-depth trees.
  *
  * Under Brownian motion K ≈ 1; K > 1 suggests more conservatism (phylogenetic
  * signal) than BM, K < 1 less.
@@ -543,36 +540,36 @@ function kAnalysis(project: Project, character: Character): {
   if (!(oneTinvOne > 0)) return { result: null, reason: tr('协方差矩阵非正定，K 无法估计', 'The covariance matrix is not positive definite; K is not estimable') };
   const phyloMean = oneTinvX / oneTinvOne;
 
-  // Numerator: Σ(xᵢ − x̄)² using the ORDINARY mean, paired with the matching
-  // normalisation tr(C) − 1ᵀC1/n below. Under Brownian motion
-  // E[Σ(xᵢ − x̄)²] = σ²·(tr C − 1ᵀC1/n), and that identity is exactly why this
-  // bracket is the denominator (Blomberg et al. 2003, eq. 12).
+  // The published estimator (Blomberg et al. 2003 eq. 12, as implemented by
+  // phytools::phylosig) centres EVERYTHING on the GLS mean â:
   //
-  // The ordinary-mean numerator pairs with the tr(C) − 1ᵀC1/n denominator below.
-  // A GLS-mean numerator would pair with n/(1ᵀC⁻¹1) instead, and the two forms
-  // agree only when C has constant row sums (ultrametric / symmetric trees); on
-  // unequal-depth trees only this pairing keeps E[K] ≈ 1 under Brownian motion.
-  const mean = values.reduce((a, b) => a + b, 0) / n;
-  let ss = 0;
-  for (const v of values) ss += (v - mean) ** 2;
-  // A constant trait carries no phylogenetic signal.
-  if (ss === 0) return { result: { k: 0, n, ...diag }, reason: null }; // zero variation, surfaced by the UI
+  //   r    = x − â1
+  //   K    = (rᵀr / rᵀC⁻¹r) / [ (tr C − n/(1ᵀC⁻¹1)) / (n − 1) ]
+  //
+  // Both pairings matter on unequal-depth trees. The previous implementation
+  // summed squared deviations from the ORDINARY mean while keeping a GLS
+  // variance — the two forms agree only when C has constant row sums, and on
+  // asymmetric trees the mixture biased E[K] (e.g. (A:1,B:2,C:3) with
+  // x=(1,2,4) gives the standard 661/600 ≈ 1.1017, not 77/75 ≈ 1.0267).
+  const r = values.map((v) => v - phyloMean);
+  let rTr = 0;
+  for (const v of r) rTr += v * v;
+  // A constant trait (under the GLS centreing) carries no phylogenetic signal.
+  if (rTr === 0) return { result: { k: 0, n, ...diag }, reason: null }; // zero variation, surfaced by the UI
 
-  // (x−â1)ᵀC⁻¹(x−â1) = xᵀC⁻¹x − 2â·1ᵀC⁻¹x + â²·1ᵀC⁻¹1
-  const quad = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
-  // REML variance estimate (n−1 denominator, not n).
-  const sig2 = quad / (n - 1);
-  if (!(sig2 > 0)) return { result: null, reason: tr('残差方差为 0 或非正，K 无法估计', 'Residual variance is zero or non-positive; K is not estimable') };
+  // rᵀC⁻¹r = xᵀC⁻¹x − 2â·1ᵀC⁻¹x + â²·1ᵀC⁻¹1
+  const rTinvR = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
+  if (!(rTinvR > 0)) return { result: null, reason: tr('残差方差为 0 或非正，K 无法估计', 'Residual variance is zero or non-positive; K is not estimable') };
 
-  // Normalization term: tr(C) − 1ᵀC1/n.
+  // Normalisation: tr(C) − n/(1ᵀC⁻¹1), the expectation identity that pairs
+  // with the GLS residuals (E[rᵀr] = σ²·(tr C − n/(1ᵀC⁻¹1))).
   let trC = 0;
   for (let i = 0; i < n; i += 1) trC += C[i][i];
-  let oneCOne = 0;
-  for (let i = 0; i < n; i += 1) for (let j = 0; j < n; j += 1) oneCOne += C[i][j];
-  const denom = sig2 * (trC - oneCOne / n);
-  if (!(denom > 0)) return { result: null, reason: tr('归一化项非正，K 无法估计', 'The normalisation term is not positive; K is not estimable') };
+  const norm = trC - n / oneTinvOne;
+  if (!(norm > 0)) return { result: null, reason: tr('归一化项非正，K 无法估计', 'The normalisation term is not positive; K is not estimable') };
 
-  return { result: { k: Math.max(0, ss / denom), n, ...diag }, reason: null };
+  const k = (rTr / rTinvR) / (norm / (n - 1));
+  return { result: { k: Math.max(0, k), n, ...diag }, reason: null };
 }
 
 export function blombergK(project: Project, character: Character): BlombergKResult | null {
@@ -727,32 +724,39 @@ export function blombergKNullTest(
 
   let trC = 0;
   for (let i = 0; i < n; i += 1) trC += C[i][i];
-  let oneCOne = 0;
-  for (let i = 0; i < n; i += 1) for (let j = 0; j < n; j += 1) oneCOne += C[i][j];
-  const norm = trC - oneCOne / n;
+  // z1 = L⁻¹1 ⇒ 1ᵀC⁻¹1 = z1·z1 (C⁻¹ = L⁻ᵀL⁻¹). The normalisation of the
+  // simulated K must be the SAME expression the point estimate uses:
+  // tr(C) − n/(1ᵀC⁻¹1).
+  const z1 = solveLower(L, new Array<number>(n).fill(1));
+  let oneTinvOne = 0;
+  for (let i = 0; i < n; i += 1) oneTinvOne += z1[i] * z1[i];
+  const norm = trC - n / oneTinvOne;
   if (!(norm > 0)) return null;
 
+  // The simulated statistic must be the SAME K as the point estimate: GLS
+  // residuals r = x − â1 with â = (1ᵀC⁻¹x)/(1ᵀC⁻¹1), K = (rᵀr / rᵀC⁻¹r) /
+  // [ (tr C − n/(1ᵀC⁻¹1)) / (n − 1) ]. With z1 = L⁻¹1, zx = L⁻¹x the needed
+  // quadratic forms are the DOT PRODUCTS z1·z1, z1·zx, zx·zx — summing the
+  // solve outputs directly treated L⁻¹b as C⁻¹b and made the simulated values
+  // a different statistic from the observed one (a change of units then moved
+  // the p-value from significance to 1).
   const kOf = (x: number[]): number => {
-    const mean = x.reduce((p, q) => p + q, 0) / n;
-    let ss = 0;
-    for (const v of x) ss += (v - mean) ** 2;
-    if (ss === 0) return 0;
-    // (x−â1)ᵀC⁻¹(x−â1) with â = (1ᵀC⁻¹x)/(1ᵀC⁻¹1) — two triangular solves each.
-    const z1 = solveLower(L, new Array<number>(n).fill(1));
     const zx = solveLower(L, x);
-    let oneTinvOne = 0;
     let oneTinvX = 0;
     let xTinvX = 0;
     for (let i = 0; i < n; i += 1) {
-      oneTinvOne += z1[i];
-      oneTinvX += zx[i];
-      xTinvX += x[i] * zx[i];
+      oneTinvX += z1[i] * zx[i];
+      xTinvX += zx[i] * zx[i];
     }
+    if (!(oneTinvOne > 0)) return 0;
     const phyloMean = oneTinvX / oneTinvOne;
-    const quad = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
-    const sig2 = quad / (n - 1);
-    if (!(sig2 > 0)) return 0;
-    return ss / (sig2 * norm);
+    const r = x.map((v) => v - phyloMean);
+    let rTr = 0;
+    for (const v of r) rTr += v * v;
+    if (rTr === 0) return 0;
+    const rTinvR = xTinvX - 2 * phyloMean * oneTinvX + phyloMean * phyloMean * oneTinvOne;
+    if (!(rTinvR > 0)) return 0;
+    return (rTr / rTinvR) / (norm / (n - 1));
   };
 
   const observedDev = Math.abs(k.k - 1);
@@ -1050,10 +1054,26 @@ function patristicMatrix(project: Project): { ids: NodeId[]; d: number[][] } | n
 /**
  * Faith's phylogenetic diversity (PD) of the tips carrying a given discrete
  * state: the total branch length of the minimum spanning subtree connecting
- * them (approximated here as the sum of terminal + path branches to their
- * MRCA — for a rooted tree this equals the classic PD of the set).
+ * them.
+ *
+ * Root convention (`includeRootPath`, mirroring picante::pd's `include.root`):
+ * the branches counted are always the CONNECTING ones — every branch whose
+ * subtree carries at least one present tip. With `includeRootPath = false`
+ * (default) the walk stops at the set's MRCA: the branch ENTERING that MRCA
+ * and everything above it is excluded, so a pair of sister tips contributes
+ * their two terminal branches only. With `includeRootPath = true` the path
+ * from the tips up to the root is included as well (the root's own stem has no
+ * branch and is never counted). The earlier implementation counted only the
+ * present tips' TERMINAL branches — an ancestor-of-a-present-tip test that no
+ * internal branch can pass — so the internal branches connecting the set were
+ * silently dropped.
  */
-export function faithPd(project: Project, characterId: string, stateId: string): number | null {
+export function faithPd(
+  project: Project,
+  characterId: string,
+  stateId: string,
+  includeRootPath = false,
+): number | null {
   const root = project.nodes[project.rootId];
   if (!root) return null;
   const present = new Set<NodeId>(
@@ -1062,44 +1082,83 @@ export function faithPd(project: Project, characterId: string, stateId: string):
       .map((n) => n.id),
   );
   if (present.size === 0) return null;
-  // Sum the branch length of every branch STRICTLY inside the subtree spanned
-  // by the present tips: a branch is inside when its subtree contains at least
-  // one present tip and every path from the root to a present tip crosses it.
+
+  // Whether any present tip sits in the subtree of `id` (iterative post-order
+  // so a deep tree cannot overflow the stack).
   const subtreeHasPresent = new Map<NodeId, boolean>();
-  const measure = (id: NodeId): boolean => {
-    if (subtreeHasPresent.has(id)) return subtreeHasPresent.get(id) as boolean;
-    const n = project.nodes[id];
-    if (!n) return false;
-    let any = present.has(id);
-    for (const c of n.childrenIds) if (measure(c)) any = true;
-    subtreeHasPresent.set(id, any);
-    return any;
-  };
-  measure(project.rootId);
-  let pd = 0;
-  for (const n of Object.values(project.nodes)) {
-    if (n.parentId === null) continue;
-    // The branch entering n is counted when n's subtree contains a present tip
-    // AND the sibling side of the tree (the rest of the parent's subtree)
-    // contains no other route — i.e. n is inside the minimal spanning subtree.
-    const inside = subtreeHasPresent.get(n.id) === true;
-    if (!inside) continue;
-    // Skip branches whose removal still connects all present tips (i.e. the
-    // branch does not separate any present tip from the root): count only
-    // branches on the path from the root to at least one present tip.
-    let cur: NodeId | null = n.id;
-    let onPath = false;
-    while (cur !== null) {
-      if (present.has(cur)) {
-        onPath = true;
-        break;
+  {
+    const order: NodeId[] = [];
+    const stack: NodeId[] = [project.rootId];
+    while (stack.length) {
+      const id = stack.pop() as NodeId;
+      const n = project.nodes[id];
+      if (!n) continue;
+      order.push(id);
+      for (const c of n.childrenIds) stack.push(c);
+    }
+    for (let i = order.length - 1; i >= 0; i -= 1) {
+      const n = project.nodes[order[i]];
+      if (!n) continue;
+      let any = present.has(n.id);
+      for (const c of n.childrenIds) {
+        if (subtreeHasPresent.get(c)) any = true;
       }
+      subtreeHasPresent.set(n.id, any);
+    }
+  }
+
+  // The MRCA of the present set: fold pairwise MRCAs. Iterative ancestor walks
+  // with cycle guards.
+  const mrcaOfPair = (a: NodeId, b: NodeId): NodeId => {
+    const anc = new Set<NodeId>();
+    let cur: NodeId | null = a;
+    while (cur !== null && !anc.has(cur)) {
+      anc.add(cur);
       cur = project.nodes[cur]?.parentId ?? null;
     }
-    if (onPath) {
-      const bl = typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) ? n.branchLength : 0;
-      pd += bl;
+    cur = b;
+    const seen = new Set<NodeId>();
+    while (cur !== null && !seen.has(cur)) {
+      if (anc.has(cur)) return cur;
+      seen.add(cur);
+      cur = project.nodes[cur]?.parentId ?? null;
     }
+    return project.rootId;
+  };
+  let setMrca: NodeId | null = null;
+  for (const id of present) setMrca = setMrca === null ? id : mrcaOfPair(setMrca, id);
+  if (setMrca === null) return null;
+
+  // A single present tip spans only its own terminal branch.
+  if (present.size === 1) {
+    const only = [...present][0];
+    const n = project.nodes[only];
+    const bl = n && typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) ? n.branchLength : 0;
+    return bl;
+  }
+
+  // Is `id` a strict descendant of the set MRCA (used to stop at the MRCA)?
+  const belowMrca = (id: NodeId): boolean => {
+    const seen = new Set<NodeId>();
+    let cur: NodeId | null = project.nodes[id]?.parentId ?? null;
+    while (cur !== null && !seen.has(cur)) {
+      if (cur === setMrca) return true;
+      seen.add(cur);
+      cur = project.nodes[cur]?.parentId ?? null;
+    }
+    return false;
+  };
+
+  let pd = 0;
+  for (const n of Object.values(project.nodes)) {
+    if (n.parentId === null) continue; // the root has no incoming branch
+    // A branch is connecting exactly when its subtree carries a present tip:
+    // every path from the root to that tip crosses it, and no other branch is
+    // needed to keep the set connected.
+    if (subtreeHasPresent.get(n.id) !== true) continue;
+    if (!includeRootPath && !belowMrca(n.id)) continue;
+    const bl = typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) ? n.branchLength : 0;
+    pd += bl;
   }
   return pd;
 }
@@ -1109,9 +1168,9 @@ export interface CommunityPhyloStats {
   mpd: number;
   /** Mean nearest-neighbour distance among the state's tips. */
   mntd: number;
-  /** NRI z-score against random tip sets of the same size (negative = clustered). */
+  /** NRI against random tip sets of the same size (positive = clustered). */
   nri: number;
-  /** NTI z-score (negative = clustered). */
+  /** NTI (positive = clustered). */
   nti: number;
   tips: number;
   replicates: number;
@@ -1123,6 +1182,12 @@ export interface CommunityPhyloStats {
  * against a random-tip null of the same size. This is the community-phylogenetics
  * read of "are the carriers of this trait clustered on the tree" — the same
  * question Blomberg's K answers for continuous traits.
+ *
+ * NRI/NTI are the NEGATED z-scores, per the published convention:
+ * NRI = −(MPD_obs − mean(MPD_null)) / sd(MPD_null) — so a set of close
+ * relatives (small MPD against the null) yields a POSITIVE index, and an
+ * overdispersed set a negative one. Returning the bare z-score flipped the
+ * sign of every conclusion the reader would draw.
  */
 export function communityPhyloStats(
   project: Project,
@@ -1192,8 +1257,9 @@ export function communityPhyloStats(
   return {
     mpd: obsMpd,
     mntd: obsMntd,
-    nri: zOf(obsMpd, mpdNull),
-    nti: zOf(obsMntd, mntdNull),
+    // Negated z-scores: the standard NRI/NTI sign (positive = clustered).
+    nri: -zOf(obsMpd, mpdNull),
+    nti: -zOf(obsMntd, mntdNull),
     tips: present.length,
     replicates,
     seed,
@@ -1201,11 +1267,27 @@ export function communityPhyloStats(
 }
 
 /**
- * Fritz–Purvis D for a binary discrete trait (Fritz & Purvis 2010): compares
- * the observed mean sister-clade difference of the trait's tip prevalence
- * against (a) a Brownian-motion expectation (1.0 by construction) and (b) a
- * random-tip-shuffle null. D ≈ 0 = BM-like, D ≈ 1 = random, D < 0 = clustered,
- * D > 1 = overdispersed. Requires at least 3 tips scored per state.
+ * Fritz–Purvis D for a binary discrete trait (Fritz & Purvis 2010, Methods in
+ * Ecology and Evolution 1:319–329; caper::phylo.d). The statistic compares the
+ * observed mean difference across SISTER TIPS (internal nodes whose two
+ * children are both tips) against two nulls simulated on the same tree:
+ *
+ *   mean_BM      — traits drawn from Brownian motion on the tree, thresholded
+ *                  at 0 (a binary trait with the same phylogenetic structure
+ *                  BM would give); D = 0 means BM-like.
+ *   mean_random  — tip values randomly permuted across the tips; D = 1 means
+ *                  phylogeny-independent.
+ *
+ *   D = (mean_obs − mean_BM) / (mean_random − mean_BM)
+ *
+ * so D < 0 = more clustered than BM, D > 1 = overdispersed. The binarisation
+ * uses the character's DECLARED state order (first state → 0, second → 1), so
+ * a bijective renaming of the state ids cannot change computability — reading
+ * only the literal id '1' used to return null for every trait whose states
+ * were named anything else. Branch lengths are scaled inside the simulation
+ * only through their sign effect: a uniform rescaling of the tree rescales the
+ * BM draws, and the 0-threshold keeps their sign pattern, so D is invariant to
+ * the branch-length unit.
  */
 export function fritzPurvisD(
   project: Project,
@@ -1215,35 +1297,69 @@ export function fritzPurvisD(
 ): { d: number; pValue: number; tips: number; replicates: number; seed: number } | null {
   const root = project.nodes[project.rootId];
   if (!root) return null;
+
+  // Binarise by DECLARED state order. A character with exactly two discrete
+  // states maps first → 0, second → 1; without one, the two distinct observed
+  // string values (in sorted order) are used. Any tip with another value is
+  // not scored.
+  const character = project.characters.find((c) => c.id === characterId);
+  let stateZero: string | null = null;
+  let stateOne: string | null = null;
+  if (character && character.type === 'discrete' && character.states.length === 2) {
+    stateZero = character.states[0].id;
+    stateOne = character.states[1].id;
+  } else {
+    const distinct = new Set<string>();
+    for (const n of Object.values(project.nodes)) {
+      if (n.childrenIds.length > 0) continue;
+      const v = n.charStates?.[characterId];
+      if (typeof v === 'string') distinct.add(v);
+    }
+    if (distinct.size === 2) [stateZero, stateOne] = [...distinct].sort();
+  }
+  if (stateZero === null || stateOne === null) return null;
+
   const scored: { id: NodeId; one: boolean }[] = [];
   for (const n of Object.values(project.nodes)) {
     if (n.childrenIds.length > 0) continue;
     const v = n.charStates?.[characterId];
-    if (typeof v === 'string') scored.push({ id: n.id, one: v === '1' });
+    if (v === stateOne) scored.push({ id: n.id, one: true });
+    else if (v === stateZero) scored.push({ id: n.id, one: false });
   }
   if (scored.length < 4) return null;
   const nOnes = scored.filter((s) => s.one).length;
   if (nOnes === 0 || nOnes === scored.length) return null;
-  // Precompute the variance-covariance shape: the D statistic uses the mean
-  // sister-clade difference of the trait's contrasts, computed from the tree's
-  // pairwise structure. We approximate via patristic-based contrasts.
-  const pm = patristicMatrix(project);
-  if (!pm) return null;
-  const obsVec = scored.map((s) => (s.one ? 1 : 0));
-  const meanSisterDiff = (vec: number[]): number => {
-    // mean |x_i − x_j| over all pairs (a variance-proxy contrast summary)
+
+  // Sister tips: internal nodes whose two children are both tips. The statistic
+  // is the mean |x1 − x2| across those pairs — the caper::phylo.d contrast.
+  const tipIds = new Set(scored.map((s) => s.id));
+  const sisterPairs: [NodeId, NodeId][] = [];
+  for (const n of Object.values(project.nodes)) {
+    if (n.childrenIds.length !== 2) continue;
+    const [a, b] = n.childrenIds;
+    if (tipIds.has(a) && tipIds.has(b)) sisterPairs.push([a, b]);
+  }
+  if (sisterPairs.length === 0) return null;
+  const valueOf = new Map(scored.map((s) => [s.id, s.one ? 1 : 0] as const));
+  const meanSisterDiff = (vec: Map<NodeId, number>): number => {
     let sum = 0;
-    let count = 0;
-    for (let i = 0; i < scored.length; i += 1) {
-      for (let j = i + 1; j < scored.length; j += 1) {
-        const w = Math.exp(-((pm.d[i]?.[j] ?? 0) + (pm.d[j]?.[i] ?? 0)));
-        sum += w * Math.abs(vec[i] - vec[j]);
-        count += w;
-      }
+    for (const [a, b] of sisterPairs) {
+      sum += Math.abs((vec.get(a) ?? 0) - (vec.get(b) ?? 0));
     }
-    return count > 0 ? sum / count : 0;
+    return sum / sisterPairs.length;
   };
-  const observed = meanSisterDiff(obsVec);
+  const observed = meanSisterDiff(valueOf);
+
+  // Branch length entering each node; missing/negative imputed to 1 (the same
+  // rule K uses), zero kept as a real zero.
+  const branchOf = (id: NodeId): number => {
+    const n = project.nodes[id];
+    if (!n || n.parentId === null) return 0;
+    const bl = n.branchLength;
+    if (typeof bl === 'number' && Number.isFinite(bl) && bl >= 0) return bl;
+    return 1;
+  };
+
   let a = seed >>> 0;
   const uniform = (): number => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -1252,35 +1368,69 @@ export function fritzPurvisD(
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  // Random-shuffle null: D ≈ 1 corresponds to the shuffle null's mean.
-  const shuffleDs: number[] = [];
-  for (let r = 0; r < replicates; r += 1) {
-    const idx = obsVec.map((_, i) => i);
-    for (let i = idx.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(uniform() * (i + 1));
-      [idx[i], idx[j]] = [idx[j], idx[i]];
+  const normal = (): number => {
+    const u1 = Math.max(uniform(), 1e-12);
+    const u2 = uniform();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  };
+
+  // Root→tip depth per scored tip (iterative, cycle-guarded).
+  const depthOf = new Map<NodeId, number>();
+  {
+    depthOf.set(project.rootId, 0);
+    const queue: NodeId[] = [project.rootId];
+    const seen = new Set<NodeId>([project.rootId]);
+    while (queue.length) {
+      const id = queue.shift() as NodeId;
+      const n = project.nodes[id];
+      if (!n) continue;
+      for (const c of n.childrenIds) {
+        if (!project.nodes[c] || seen.has(c)) continue;
+        seen.add(c);
+        depthOf.set(c, (depthOf.get(id) as number) + branchOf(c));
+        queue.push(c);
+      }
     }
-    shuffleDs.push(meanSisterDiff(idx.map((i) => obsVec[i])));
   }
-  const meanShuffle = shuffleDs.reduce((p, q) => p + q, 0) / shuffleDs.length;
-  const sdShuffle = Math.sqrt(
-    shuffleDs.reduce((p, q) => p + (q - meanShuffle) ** 2, 0) / Math.max(1, shuffleDs.length - 1),
+
+  // Randomisation null: permute the observed tip values across the tips.
+  const shuffleStats: number[] = [];
+  const ids = scored.map((s) => s.id);
+  for (let r = 0; r < replicates; r += 1) {
+    const perm = [...ids];
+    for (let i = perm.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(uniform() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    const vec = new Map<NodeId, number>();
+    ids.forEach((id, i) => vec.set(id, valueOf.get(perm[i]) ?? 0));
+    shuffleStats.push(meanSisterDiff(vec));
+  }
+  const meanRandom = shuffleStats.reduce((p, q) => p + q, 0) / shuffleStats.length;
+  const sdRandom = Math.sqrt(
+    shuffleStats.reduce((p, q) => p + (q - meanRandom) ** 2, 0) / Math.max(1, shuffleStats.length - 1),
   );
-  if (!(sdShuffle > 0)) return null;
-  // The BM expectation of the contrast summary: simulate a BM trait on the
-  // tree (same patristic structure), threshold at the observed prevalence.
-  const bmVecs: number[][] = [];
-  for (let r = 0; r < Math.min(replicates, 200); r += 1) {
-    const z = obsVec.map(() => {
-      const u1 = Math.max(uniform(), 1e-12);
-      const u2 = uniform();
-      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    });
-    bmVecs.push(z);
+  if (!(sdRandom > 0)) return null;
+
+  // BM null: draw a continuous trait root→tip (root 0, each branch adds
+  // N(0, sqrt(length))), threshold at 0. Thresholding keeps the draw's SIGN,
+  // so a uniform rescaling of the tree leaves the null — and D — unchanged.
+  const bmStats: number[] = [];
+  for (let r = 0; r < replicates; r += 1) {
+    const vec = new Map<NodeId, number>();
+    for (const s of scored) {
+      const draw = normal() * Math.sqrt(Math.max(0, depthOf.get(s.id) ?? 0));
+      vec.set(s.id, draw > 0 ? 1 : 0);
+    }
+    bmStats.push(meanSisterDiff(vec));
   }
-  const bmSummaries = bmVecs.map((z) => meanSisterDiff(z));
-  const meanBm = bmSummaries.reduce((p, q) => p + q, 0) / bmSummaries.length;
-  const d = (meanShuffle - observed) / (meanShuffle - meanBm || 1);
-  const pGreater = shuffleDs.filter((v) => v >= observed).length / shuffleDs.length;
-  return { d, pValue: pGreater, tips: scored.length, replicates, seed };
+  const meanBm = bmStats.reduce((p, q) => p + q, 0) / bmStats.length;
+  const denom = meanRandom - meanBm;
+  if (!(Math.abs(denom) > 1e-12)) return null;
+  const d = (observed - meanBm) / denom;
+  // Two-sided randomisation p: how often the shuffle null is at least as far
+  // from its own mean as the observation is.
+  const dev = Math.abs(observed - meanRandom);
+  const pValue = shuffleStats.filter((v) => Math.abs(v - meanRandom) >= dev - 1e-12).length / shuffleStats.length;
+  return { d, pValue, tips: scored.length, replicates, seed };
 }
