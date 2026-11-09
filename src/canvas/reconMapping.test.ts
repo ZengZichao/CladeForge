@@ -5,7 +5,17 @@
 // spaghetti must be testable without rendering anything.
 
 import { describe, it, expect } from 'vitest';
-import { collectMappingLines, eventToken, scopePasses, eventFilterPasses, bridgeLine, bundleTotals, type PaneView } from './reconMapping';
+import {
+  collectMappingLines,
+  collectMappingAnchors,
+  projectMappingAnchors,
+  eventToken,
+  scopePasses,
+  eventFilterPasses,
+  bridgeLine,
+  bundleTotals,
+  type PaneView,
+} from './reconMapping';
 import { computeLayout } from '../layout/autoLayout';
 import { createEmptyProject } from '../model/sampleTree';
 import { addChildren } from '../model/treeOps';
@@ -199,6 +209,40 @@ describe('collectMappingLines', () => {
     expect(lines[0].from.y).toBeGreaterThan(0);
     expect(lines[0].to.y).toBeGreaterThan(0);
     expect(bridgeLine(lines[0].from, lines[0].to)).toMatch(/^M [^ ]+ [^ ]+ L [^ ]+ [^ ]+$/);
+  });
+
+  it('the anchor pass is independent of pane geometry and the projection composes to the full line set', () => {
+    const { ge, sp } = build({});
+    const assumptions: Record<NodeId, GeneNodeAssumption> = {
+      [ge.ids.g1]: { speciesNode: sp.ids.AB, event: 'speciation' },
+      [ge.ids.tA]: { speciesNode: sp.ids.A },
+    };
+    const speciesLayout = computeLayout(sp.doc);
+    const geneLayout = computeLayout(ge.doc);
+    const input = {
+      speciesDoc: sp.doc,
+      geneDoc: ge.doc,
+      assumptions,
+      speciesLayout,
+      geneLayout,
+      options: options({ mappingScope: 'all' }),
+      selectedGeneIds: [ge.ids.g1],
+      hoveredGeneId: null,
+    };
+    const anchors = collectMappingAnchors(input);
+    expect(anchors).toHaveLength(2);
+    // World y comes straight from the layouts — no pane transform involved.
+    for (const a of anchors) {
+      expect(a.speciesY).toBe(speciesLayout.positions.get(a.speciesNodeId)!.y);
+      expect(a.geneY).toBe(geneLayout.positions.get(a.geneNodeId)!.y);
+    }
+    // Geometry does not change the line SET: only the projection does.
+    const otherPane: PaneView = { ...PANE, transform: { tx: 999, ty: -40, scale: 2 } };
+    const projected = projectMappingAnchors(anchors, PANE, otherPane);
+    expect(projected.map((l) => l.geneNodeId)).toEqual(anchors.map((a) => a.geneNodeId));
+    expect(projected).toEqual(
+      collectMappingLines({ ...input, speciesPane: PANE, genePane: otherPane }),
+    );
   });
 });
 

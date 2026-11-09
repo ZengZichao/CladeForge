@@ -85,4 +85,13 @@ describe('geneTreeRows — mapped-tip counting', () => {
     expect(rows[1].mappedTips).toBe(2); // label hits alone
     expect(rows[0].summary.totalInternal).toBeGreaterThan(0);
   });
+
+  it('caches rows per project reference so every consumer shares one pass', () => {
+    const { p } = withGene('((A,B),(C,D));', true);
+    expect(geneTreeRows(p)).toBe(geneTreeRows(p));
+    // A new immutable document reference (what every store apply produces)
+    // recomputes instead of serving the stale rows.
+    const next = { ...p, geneTrees: p.geneTrees ? [...p.geneTrees] : undefined };
+    expect(geneTreeRows(next)).not.toBe(geneTreeRows(p));
+  });
 });

@@ -20,7 +20,8 @@ import {
   type ReconIssue,
 } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
-import { solveDtl, dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
+import { dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
+import { solveDtlAsync } from '../model/dtlAsync';
 import { setAssumption } from '../model/geneTrees';
 import { GeneAssumptionInspector } from './GeneAssumptionInspector';
 import { Section } from './Section';
@@ -43,6 +44,8 @@ function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
   const selectGeneNode = useStore((s) => s.selectGeneNode);
   const focusGeneNode = useStore((s) => s.focusGeneNode);
   const [dp, setDp] = useState<{ geneId: string; scenario: DtlScenario } | null>(null);
+  /** True while the DTL worker is solving (the button is disabled meanwhile). */
+  const [solving, setSolving] = useState(false);
 
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
   const costs = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
@@ -66,6 +69,37 @@ function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
   }
 
   const topIssues = row.issues.slice(0, 3);
+
+  // The DP is a pure module, so it runs on the DTL worker and keeps the window
+  // responsive; a result solved against a document that has since changed is
+  // discarded rather than applied to a tree the user no longer sees.
+  const runOverviewDp = async () => {
+    if (solving) return;
+    const doc = project;
+    const geneDoc = entry.doc;
+    const entryId = entry.id;
+    setSolving(true);
+    try {
+      const r = await solveDtlAsync(doc, geneDoc, costs);
+      if (useStore.getState().project !== doc) {
+        notify.info(
+          tr(
+            '求解期间文档已更改，本次结果已丢弃，请重新运行',
+            'The document changed during the solve; the result was discarded — run it again',
+          ),
+        );
+        return;
+      }
+      if (r.error || !r.scenario) {
+        notify.info(r.error ?? tr('求解失败', 'Solver failed'));
+        setDp(null);
+        return;
+      }
+      setDp({ geneId: entryId, scenario: r.scenario });
+    } finally {
+      setSolving(false);
+    }
+  };
 
   return (
     <>
@@ -164,17 +198,10 @@ function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
           </button>
           <button
             className="btn"
-            onClick={() => {
-              const r = solveDtl(project, entry.doc, costs);
-              if (r.error || !r.scenario) {
-                notify.info(r.error ?? tr('求解失败', 'Solver failed'));
-                setDp(null);
-                return;
-              }
-              setDp({ geneId: entry.id, scenario: r.scenario });
-            }}
+            onClick={() => void runOverviewDp()}
+            disabled={solving}
           >
-            {S.recon.dpRun}
+            {solving ? tr('求解中…', 'Solving…') : S.recon.dpRun}
           </button>
         </div>
       </Section>

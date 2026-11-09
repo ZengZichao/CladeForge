@@ -32,6 +32,8 @@ export interface GeneRow {
   unmatchedLabels: string[];
   /** Labels dropped because several species tips share them. */
   ambiguousLabels: string[];
+  /** Label-matched tip placements (gene node → species node | null). */
+  tipMappings: Record<NodeId, NodeId | null>;
 }
 
 /**
@@ -52,7 +54,7 @@ export function countMappedTips(
   return mapped;
 }
 
-export function geneTreeRows(project: Project): GeneRow[] {
+function buildGeneTreeRows(project: Project): GeneRow[] {
   const costs: ReconCosts = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
   return (project.geneTrees ?? []).map((entry) => {
     const { mappings, unmatchedLabels, ambiguousLabels } = mapTipsByLabel(project, entry.doc);
@@ -72,6 +74,24 @@ export function geneTreeRows(project: Project): GeneRow[] {
       warnings: issues.length - errors,
       unmatchedLabels,
       ambiguousLabels,
+      tipMappings: mappings,
     };
   });
+}
+
+/**
+ * Rows are cached per PROJECT REFERENCE. The store hands out a new immutable
+ * project object on every edit, so a reference hit means the document (and thus
+ * every row) is unchanged — the panel, inspector and status bar then share ONE
+ * validateScenario/scenarioSummary/mapTipsByLabel pass per edit instead of each
+ * running its own copy on the hot `apply` path.
+ */
+const rowsCache = new WeakMap<Project, GeneRow[]>();
+
+export function geneTreeRows(project: Project): GeneRow[] {
+  const cached = rowsCache.get(project);
+  if (cached) return cached;
+  const rows = buildGeneTreeRows(project);
+  rowsCache.set(project, rows);
+  return rows;
 }

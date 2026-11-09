@@ -7,6 +7,45 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
 
+### Reconciliation-view lag (`性能分析-协调视图卡顿`) — 2026-11-09. Every finding
+of the coordination-view performance analysis (§3.1–§3.5) repaired.
+
+#### Fixed
+- **Hover cascade**: the reconciliation panes now render nodes, edges and guide
+  stubs as `React.memo` children whose props are world-space primitives, and
+  the bridge layer memoises each path by value. Moving the pointer across the
+  tree reconciles only the two nodes whose emphasis changed and their mapping
+  lines instead of the whole canvas (thousands of SVG elements); selection
+  membership uses a `Set` rather than a per-node `Array.includes`.
+- **Pan/zoom**: wheel and pointermove events accumulate into a ref and commit
+  at most once per animation frame — the same coalescing pattern as the main
+  canvas (`21ec332`) — so a 125–1000 Hz input device no longer drives one React
+  render per event; an interrupted gesture flushes the painted transform.
+  Mapping lines are split into a world-space anchor pass (scope/emphasis/
+  bundling decided without pane geometry) and a pure projection pass, so pans
+  and zooms only re-project instead of re-running the rules.
+- **Render scale**: both panes cull to the viewport plus one screen of buffer,
+  so off-screen subtrees no longer mount; labels keep the existing zoom-based
+  LOD. Pan/memoised rows mean a hover or pan touches a bounded number of DOM
+  elements regardless of the imported tree size.
+- **Repeated edit work**: `geneTreeRows` is cached per immutable project
+  reference, so the panel, inspector and status bar share one
+  validateScenario/scenarioSummary/mapTipsByLabel pass per edit; the
+  reconciliation canvas reuses that row's summary and label-matched tip
+  mappings instead of running its own copies.
+- **DP freeze**: the DTL solver (including the polytomy replicate sweep) runs
+  on a dedicated Web Worker with a synchronous fallback for environments
+  without workers. Both DP buttons show a solving state, disable re-entry, and
+  discard a result computed against a document that changed meanwhile.
+
+#### Added
+- Regression tests: world-space anchors/projection equivalence, per-project
+  `geneTreeRows` cache identity, viewport-culling maths, mounted-pane wheel/pan
+  coalescing and memoised hover (jsdom), hover → single emphasised bridge line
+  integration (jsdom), async-DTL fallback equivalence, and the Worker protocol
+  (request kind, worker reuse, error → synchronous fallback) — 5 new test files
+  plus 2 extended ones (17 cases).
+
 ### Scientific-correctness and functional-test review round — 2026-11-07/08. Every
 finding of the 科学正确性与功能测试 review (13 S-items, 28 M-items and the minor
 §4 list) repaired, with 12 new regression-test files (66 cases) pinning the

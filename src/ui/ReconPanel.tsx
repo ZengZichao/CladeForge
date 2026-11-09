@@ -26,8 +26,9 @@ import {
 import type { Project, ReconCosts, ReconSection, ReconEventType } from '../model/types';
 import { mapTipsByLabel, suggestLcaScenario, validateScenario, type ReconIssue } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
-import { solveDtl, dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
-import { rerootGeneTree, resolvePolytomiesRandom, solveDtlWithPolytomies } from '../model/geneTrees';
+import { dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
+import { rerootGeneTree } from '../model/geneTrees';
+import { solveDtlWithPolytomiesAsync } from '../model/dtlAsync';
 import { RECON_COST_PRESETS } from '../model/types';
 import * as file from '../io/fileActions';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
@@ -99,6 +100,8 @@ export function ReconPanel({
   const tabStore = useStore((s) => s.tabStore);
   /** Last DP run for the ACTIVE gene tree (id guarded) — transient, per panel. */
   const [dp, setDp] = useState<{ geneId: string; scenario: DtlScenario } | null>(null);
+  /** True while the DTL worker is solving; the button is disabled meanwhile. */
+  const [solving, setSolving] = useState(false);
 
   const [tabChoice, setTabChoice] = useState<string>('');
   const [listQuery, setListQuery] = useState('');
@@ -149,6 +152,50 @@ export function ReconPanel({
       g.assumptions = suggestLcaScenario(d, g.doc, tipMap, g.assumptions);
     });
     notify.success(tr('已生成 LCA 建议场景', 'LCA suggestion applied'));
+  };
+
+  /**
+   * Polytomy sweep: random binary resolutions × replicates. The pure solver
+   * runs on the DTL worker, so the window stays responsive even on large
+   * families; a result computed against a document that has since changed is
+   * discarded instead of being applied to a tree the user no longer sees.
+   */
+  const runPolytomyDp = async () => {
+    if (!activeEntry || solving) return;
+    const entryId = activeEntry.id;
+    const doc = project;
+    const geneDoc = activeEntry.doc;
+    const polytomies = Object.values(geneDoc.nodes).filter((n) => n.childrenIds.length > 2).length;
+    setSolving(true);
+    try {
+      const r = await solveDtlWithPolytomiesAsync(doc, geneDoc, costs, undefined, {}, 8);
+      if (useStore.getState().project !== doc) {
+        notify.info(
+          tr(
+            '求解期间文档已更改，本次结果已丢弃，请重新运行',
+            'The document changed during the solve; the result was discarded — run it again',
+          ),
+        );
+        return;
+      }
+      if (r.error || !r.scenario) {
+        notify.info(r.error ?? tr('求解失败', 'Solver failed'));
+        setDp(null);
+        return;
+      }
+      setDp({ geneId: entryId, scenario: r.scenario });
+      if (polytomies > 0 && r.polytomySummary) {
+        const c = r.polytomySummary.counts;
+        notify.info(
+          tr(
+            `${polytomies} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
+            `${polytomies} polytom${polytomies === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
+          ),
+        );
+      }
+    } finally {
+      setSolving(false);
+    }
   };
 
   const clearAll = () => {
@@ -413,33 +460,10 @@ export function ReconPanel({
               <button
                 className="btn"
                 title={tr('把每处多歧枝随机二叉化为多次求解（报告计数散布）', 'Randomly binary-resolve each polytomy across replicates (reports the count spread)')}
-                onClick={() => {
-                  // Polytomies are resolved by RANDOM binary splits across
-                  // replicates; the spread of the event counts IS the
-                  // uncertainty, so the panel reports it instead of refusing
-                  // the input. The resolved copy is solver-side only — the
-                  // document keeps the honest multifurcating tree.
-                  const { doc, resolved } = resolvePolytomiesRandom(activeEntry.doc);
-                  const r = solveDtlWithPolytomies(project, activeEntry.doc, costs, undefined, {}, 8);
-                  if (r.error || !r.scenario) {
-                    notify.info(r.error ?? tr('求解失败', 'Solver failed'));
-                    setDp(null);
-                    return;
-                  }
-                  setDp({ geneId: activeEntry.id, scenario: r.scenario });
-                  if (resolved > 0 && r.polytomySummary) {
-                    const c = r.polytomySummary.counts;
-                    notify.info(
-                      tr(
-                        `${resolved} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
-                        `${resolved} polytom${resolved === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
-                      ),
-                    );
-                  }
-                  void doc;
-                }}
+                onClick={() => void runPolytomyDp()}
+                disabled={solving}
               >
-                {S.recon.dpRun}
+                {solving ? tr('求解中…', 'Solving…') : S.recon.dpRun}
               </button>
               <button
                 className="btn"

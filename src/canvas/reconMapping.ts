@@ -7,6 +7,12 @@
 // Coordinates are computed from the pane rects + transforms the caller passes
 // in, in the coordinate space of the shared mapping host (the panes row), so
 // the renderer never calls getBoundingClientRect() during render.
+//
+// The view-model is split in two so pan/zoom never re-runs the rules: the
+// ANCHOR pass (filter/emphasis/bundling) depends only on the documents, the
+// assumptions and the view options, and records each line's WORLD-space y;
+// the PROJECTION pass is pure arithmetic over the pane rects + transforms.
+// `collectMappingLines` composes both for callers that want the old shape.
 
 import type {
   GeneNodeAssumption,
@@ -69,6 +75,27 @@ export interface ReconMappingInput {
   hoveredGeneId: NodeId | null;
 }
 
+/** Everything the anchor pass needs — no pane geometry, so pan/zoom cannot
+ *  invalidate it. */
+export type ReconMappingAnchorInput = Omit<ReconMappingInput, 'speciesPane' | 'genePane'>;
+
+/** One mapping line in WORLD coordinates: filters and emphasis are already
+ *  decided; only the pane rects + transforms are still missing. */
+export interface ReconMappingAnchor {
+  id: string;
+  geneNodeId: NodeId;
+  speciesNodeId: NodeId;
+  kind: 'tip' | 'internal';
+  event: ReconEventType | null;
+  token: MappingColorToken;
+  state: MappingLineState;
+  /** Species-layout y of the mapped node (world units). */
+  speciesY: number;
+  /** Gene-layout y of the mapped node (world units). */
+  geneY: number;
+  bundleCount: number;
+}
+
 /** Stable colour token for an event class; unresolved stays grey. */
 export function eventToken(event: ReconEventType | null | undefined): MappingColorToken {
   if (event === 'speciation') return 'sigma';
@@ -105,7 +132,8 @@ export function bridgeLine(from: { x: number; y: number }, to: { x: number; y: n
 }
 
 /**
- * Collect the mapping lines to draw under the current view options.
+ * Decide which mapping lines exist, their colour/emphasis and how they bundle,
+ * in WORLD coordinates (layout y only) — no pane rects, no transforms.
  *
  * Rules (each unit-tested):
  *  - both endpoints must exist and be visible in their layouts;
@@ -117,20 +145,18 @@ export function bridgeLine(from: { x: number; y: number }, to: { x: number; y: n
  *    with a `bundleCount` (first gene id wins, the rest are dropped from the
  *    output but counted).
  */
-export function collectMappingLines(input: ReconMappingInput): ReconMappingLine[] {
+export function collectMappingAnchors(input: ReconMappingAnchorInput): ReconMappingAnchor[] {
   const {
     speciesDoc,
     geneDoc,
     assumptions,
     speciesLayout,
     geneLayout,
-    speciesPane,
-    genePane,
     options,
     selectedGeneIds,
     hoveredGeneId,
   } = input;
-  const lines: ReconMappingLine[] = [];
+  const anchors: ReconMappingAnchor[] = [];
   const hasEmphasis = selectedGeneIds.length > 0 || hoveredGeneId !== null;
   const selected = new Set(selectedGeneIds);
 
@@ -151,9 +177,7 @@ export function collectMappingLines(input: ReconMappingInput): ReconMappingLine[
       if (!eventFilterPasses(a.event ?? null, options.eventFilter)) continue;
     }
     const state: MappingLineState = isSel ? 'selected' : isHover ? 'hovered' : hasEmphasis ? 'muted' : 'normal';
-    const s = speciesPane.transform;
-    const g = genePane.transform;
-    lines.push({
+    anchors.push({
       id: gid,
       geneNodeId: gid,
       speciesNodeId: target,
@@ -161,14 +185,8 @@ export function collectMappingLines(input: ReconMappingInput): ReconMappingLine[
       event: a.event ?? null,
       token: a.event ? eventToken(a.event) : kind === 'tip' ? 'tip' : 'unresolved',
       state,
-      from: {
-        x: speciesPane.left + speciesPane.width,
-        y: speciesPane.top + spPos.y * s.scale + s.ty,
-      },
-      to: {
-        x: genePane.left,
-        y: genePane.top + gPos.y * g.scale + g.ty,
-      },
+      speciesY: spPos.y,
+      geneY: gPos.y,
       bundleCount: 1,
     });
   }
@@ -176,19 +194,57 @@ export function collectMappingLines(input: ReconMappingInput): ReconMappingLine[
   // Bundle lines that land on the same species node with the same event class
   // and kind: the bridge stays readable when a large family collapses onto one
   // placement. The first gene node in iteration order carries the path.
-  const byKey = new Map<string, ReconMappingLine>();
-  const bundled: ReconMappingLine[] = [];
-  for (const line of lines) {
-    const key = `${line.speciesNodeId}|${line.event ?? '-'}|${line.kind}`;
+  const byKey = new Map<string, ReconMappingAnchor>();
+  const bundled: ReconMappingAnchor[] = [];
+  for (const anchor of anchors) {
+    const key = `${anchor.speciesNodeId}|${anchor.event ?? '-'}|${anchor.kind}`;
     const existing = byKey.get(key);
     if (existing) {
       existing.bundleCount += 1;
       continue;
     }
-    byKey.set(key, line);
-    bundled.push(line);
+    byKey.set(key, anchor);
+    bundled.push(anchor);
   }
   return bundled;
+}
+
+/** Project world-space anchors into the mapping host's screen coordinates.
+ *  Pure arithmetic: this is the only pass that runs during pan/zoom. */
+export function projectMappingAnchors(
+  anchors: readonly ReconMappingAnchor[],
+  speciesPane: PaneView,
+  genePane: PaneView,
+): ReconMappingLine[] {
+  const s = speciesPane.transform;
+  const g = genePane.transform;
+  const fromX = speciesPane.left + speciesPane.width;
+  const toX = genePane.left;
+  return anchors.map((a) => ({
+    id: a.id,
+    geneNodeId: a.geneNodeId,
+    speciesNodeId: a.speciesNodeId,
+    kind: a.kind,
+    event: a.event,
+    token: a.token,
+    state: a.state,
+    from: { x: fromX, y: speciesPane.top + a.speciesY * s.scale + s.ty },
+    to: { x: toX, y: genePane.top + a.geneY * g.scale + g.ty },
+    bundleCount: a.bundleCount,
+  }));
+}
+
+/**
+ * Collect the mapping lines to draw under the current view options.
+ * Composition of the anchor pass and the projection pass, kept for callers
+ * that want fully-projected lines in one call.
+ */
+export function collectMappingLines(input: ReconMappingInput): ReconMappingLine[] {
+  return projectMappingAnchors(
+    collectMappingAnchors(input),
+    input.speciesPane,
+    input.genePane,
+  );
 }
 
 /** Aggregate counts for one bundle member list (status-bar summary). */

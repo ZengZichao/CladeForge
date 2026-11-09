@@ -14,12 +14,33 @@
 //    ~7 px tip labels hide, so a fitted 21-node tree stays readable;
 //  - branches use `vector-effect: non-scaling-stroke` for a constant minimum
 //    stroke width and theme variables instead of hard-coded hex colours.
+//
+// PERFORMANCE (2026-11-08 reconciliation-lag analysis, §3.1–§3.3):
+//  - nodes, edges and guide stubs are `React.memo` children whose props are
+//    world-space primitives, so a hover change reconciles only the two nodes
+//    whose emphasis changed (and their lines), not every SVG element;
+//  - pan/zoom input events accumulate into a ref and commit at most once per
+//    animation frame — the coalescing pattern the main canvas uses
+//    (`21ec332`) — instead of one React render per input event;
+//  - only nodes inside the viewport (plus a one-viewport buffer) are mounted,
+//    so imported trees with thousands of tips do not create thousands of DOM
+//    elements the user cannot even see.
 
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { LayoutResult } from '../layout/autoLayout';
 import type { NodeId, Project, ReconViewOptions } from '../model/types';
 import { elbowPath } from './paths';
 import { estimateLabelWidth, type Box } from './labelBounds';
+import { cullPaneNodes } from './reconViewport';
 import type { MappingColorToken, PaneTransform } from './reconMapping';
 export type { PaneTransform };
 import { S, tr } from '../ui/strings';
@@ -66,7 +87,6 @@ interface ReconPaneProps {
   headerExtra?: ReactNode;
   nodeMeta?: Map<NodeId, PaneNodeMeta>;
   stubs?: PaneStub[];
-  highlightNodes?: Set<NodeId>;
   ariaLabel: string;
   options: ReconViewOptions;
   onNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
@@ -175,7 +195,236 @@ export function clampTransform(t: PaneTransform, bounds: Box, w: number, h: numb
   };
 }
 
-export function ReconPane({
+// --- memoised SVG primitives ----------------------------------------------------
+// Props are WORLD-SPACE primitives: a hover or pan re-render of the pane maps
+// over the same values and these children bail out, so React only touches the
+// nodes (and lines) whose emphasis actually changed.
+
+const PaneEdge = memo(function PaneEdge({
+  x1,
+  y1,
+  x2,
+  y2,
+  orientation,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  orientation: 'LR' | 'RL';
+}) {
+  return (
+    <path
+      d={elbowPath({ x: x1, y: y1 }, { x: x2, y: y2 }, orientation)}
+      fill="none"
+      stroke="var(--recon-branch)"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+});
+
+const PaneStubLine = memo(function PaneStubLine({
+  x1,
+  y1,
+  x2,
+  y2,
+  token,
+  emphasized,
+  muted,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  token: MappingColorToken;
+  emphasized: boolean;
+  muted: boolean;
+}) {
+  return (
+    <line
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      stroke={`var(--recon-map-${token})`}
+      strokeWidth={emphasized ? 2 : 1.2}
+      strokeOpacity={muted ? 0.2 : emphasized ? 0.95 : 0.6}
+      strokeLinecap="round"
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+});
+
+interface PaneNodeProps {
+  nodeId: NodeId;
+  /** Display label (falls back to a short id for unlabelled nodes). */
+  label: string;
+  /** Raw node label, drawn by the label texts and the LOD tooltip; '' when absent. */
+  rawLabel: string;
+  x: number;
+  y: number;
+  isTip: boolean;
+  fill: string;
+  stroke: string;
+  dashedRed: boolean;
+  selected: boolean;
+  hovered: boolean;
+  losses: number | undefined;
+  glyph: string | undefined;
+  showEventGlyph: boolean;
+  showLoss: boolean;
+  showTipLabel: boolean;
+  showInternalLabel: boolean;
+  showLodTooltip: boolean;
+  /** Inverse scale — only supplied when a screen-space element actually needs
+   *  it, so plain nodes survive zoom frames without re-rendering. */
+  invScale: number | undefined;
+  mirrored: boolean;
+  interactive: boolean;
+  paneAriaLabel: string;
+  onNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
+  onNodeHover?: (id: NodeId | null) => void;
+  onNodeKeyDown?: (id: NodeId, e: React.KeyboardEvent) => void;
+}
+
+const PaneNode = memo(function PaneNode({
+  nodeId,
+  label,
+  rawLabel,
+  x,
+  y,
+  isTip,
+  fill,
+  stroke,
+  dashedRed,
+  selected,
+  hovered,
+  losses,
+  glyph,
+  showEventGlyph,
+  showLoss,
+  showTipLabel,
+  showInternalLabel,
+  showLodTooltip,
+  invScale,
+  mirrored,
+  interactive,
+  paneAriaLabel,
+  onNodeClick,
+  onNodeHover,
+  onNodeKeyDown,
+}: PaneNodeProps) {
+  const inv = invScale ?? 1;
+  const r = isTip ? 5 : 6.5;
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => onNodeClick?.(nodeId, e),
+    [onNodeClick, nodeId],
+  );
+  const handleEnter = useCallback(() => onNodeHover?.(nodeId), [onNodeHover, nodeId]);
+  const handleLeave = useCallback(() => onNodeHover?.(null), [onNodeHover]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onNodeClick?.(nodeId, e as unknown as React.MouseEvent);
+      }
+      onNodeKeyDown?.(nodeId, e);
+    },
+    [onNodeClick, onNodeKeyDown, nodeId],
+  );
+  return (
+    <g
+      data-node-id={nodeId}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? `${paneAriaLabel} · ${label}` : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onPointerEnter={handleEnter}
+      onPointerLeave={handleLeave}
+      style={{ cursor: interactive ? 'pointer' : undefined, outline: 'none' }}
+    >
+      <circle
+        cx={x}
+        cy={y}
+        r={r + (selected ? 2 : 0)}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={selected ? 2.5 : 1.5}
+        strokeDasharray={dashedRed ? '3 2' : undefined}
+        vectorEffect="non-scaling-stroke"
+        className={dashedRed ? 'recon-node-unresolved' : undefined}
+      />
+      {/* selection / hover ring in screen space (never shrinks away) */}
+      {(selected || hovered) && (
+        <circle
+          cx={x}
+          cy={y}
+          r={r + 5 * inv}
+          fill="none"
+          stroke="var(--recon-select)"
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+          opacity={selected ? 0.9 : 0.5}
+        />
+      )}
+      {showEventGlyph && glyph && (
+        <text
+          transform={`translate(${x},${y - r - 4 * inv}) scale(${inv})`}
+          textAnchor="middle"
+          fontSize={11}
+          fontWeight={700}
+          fill={fill}
+          style={{ pointerEvents: 'none' }}
+        >
+          {glyph}
+        </text>
+      )}
+      {showLoss && typeof losses === 'number' && losses > 0 && (
+        <text
+          transform={`translate(${x},${y + r + 9 * inv}) scale(${inv})`}
+          textAnchor="middle"
+          fontSize={9.5}
+          fill="var(--recon-loss)"
+          style={{ pointerEvents: 'none' }}
+        >
+          λ{losses}
+        </text>
+      )}
+      {showTipLabel && (
+        <text
+          x={mirrored ? x - 9 : x + 9}
+          y={y + 4}
+          textAnchor={mirrored ? 'end' : 'start'}
+          fontSize={11.5}
+          fill="currentColor"
+          style={{ pointerEvents: 'none' }}
+        >
+          {rawLabel}
+        </text>
+      )}
+      {showInternalLabel && (
+        <text
+          x={mirrored ? x + r + 4 : x - r - 4}
+          y={y + 4}
+          textAnchor={mirrored ? 'start' : 'end'}
+          fontSize={10.5}
+          opacity={0.65}
+          fill="currentColor"
+          style={{ pointerEvents: 'none' }}
+        >
+          {rawLabel}
+        </text>
+      )}
+      {/* hidden-by-LOD labels stay reachable via the tooltip */}
+      {showLodTooltip && <title>{rawLabel}</title>}
+    </g>
+  );
+});
+
+export const ReconPane = memo(function ReconPane({
   doc,
   layout,
   transform,
@@ -192,7 +441,6 @@ export function ReconPane({
   headerExtra,
   nodeMeta,
   stubs,
-  highlightNodes,
   ariaLabel,
   options,
   onNodeClick,
@@ -203,6 +451,76 @@ export function ReconPane({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  // --- imperative transform fast path -----------------------------------------
+  // A wheel burst or pointer pan accumulates into `transformRef` and commits
+  // through `onTransform` at most once per animation frame. The parent still
+  // owns the committed transform, but input devices that report 125–1000 Hz no
+  // longer cause 125–1000 React renders.
+  const transformRef = useRef(transform);
+  const gestureRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const wheelIdleRef = useRef<number | null>(null);
+  const onTransformRef = useRef(onTransform);
+  onTransformRef.current = onTransform;
+
+  // External updates (Fit, 1:1, synced zoom from the sibling pane) win whenever
+  // no local gesture is in flight; a gesture's own commits are already the
+  // value held in the ref and must not be rewound by the prop echo.
+  useLayoutEffect(() => {
+    if (!gestureRef.current) transformRef.current = transform;
+  }, [transform]);
+
+  const commitFrame = useCallback(() => {
+    rafRef.current = null;
+    if (!dirtyRef.current) return;
+    onTransformRef.current(transformRef.current, true);
+  }, []);
+
+  const scheduleCommit = useCallback(() => {
+    dirtyRef.current = true;
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(commitFrame);
+  }, [commitFrame]);
+
+  /** Flush the painted transform and end the local gesture. */
+  const finishGesture = useCallback(() => {
+    if (wheelIdleRef.current !== null) {
+      window.clearTimeout(wheelIdleRef.current);
+      wheelIdleRef.current = null;
+    }
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (dirtyRef.current) {
+      dirtyRef.current = false;
+      onTransformRef.current(transformRef.current, true);
+    }
+    gestureRef.current = false;
+  }, []);
+
+  // A gesture can end without delivering pointerup (window blur, tab hidden,
+  // OS taking the pointer over): flush the painted transform so the parent
+  // state is not left behind the visible position.
+  useEffect(() => {
+    const onInterrupt = () => {
+      if (!drag.current && !gestureRef.current) return;
+      drag.current = null;
+      finishGesture();
+    };
+    window.addEventListener('blur', onInterrupt);
+    document.addEventListener('visibilitychange', onInterrupt);
+    return () => {
+      window.removeEventListener('blur', onInterrupt);
+      document.removeEventListener('visibilitychange', onInterrupt);
+      onInterrupt();
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
+    };
+  }, [finishGesture]);
 
   // Report the svg box size upward (fit needs the real content area). The
   // callback identity may change across renders, but a report only fires when
@@ -226,6 +544,7 @@ export function ReconPane({
       const last = lastSize.current;
       if (last && last.w === w && last.h === h && last.top === top) return;
       lastSize.current = { w, h, top };
+      setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
       reportSize.current(w, h, top);
     };
     report();
@@ -242,49 +561,74 @@ export function ReconPane({
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+      // Compound on the LIVE transform: several wheel events can arrive before
+      // the next frame, and each must build on the previous one.
+      const live = transformRef.current;
       const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, transform.scale * k));
-      const kk = scale / transform.scale;
-      onTransform(
-        {
-          scale,
-          tx: mx - (mx - transform.tx) * kk,
-          ty: my - (my - transform.ty) * kk,
-        },
-        true,
-      );
+      const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, live.scale * k));
+      const kk = scale / live.scale;
+      gestureRef.current = true;
+      transformRef.current = {
+        scale,
+        tx: mx - (mx - live.tx) * kk,
+        ty: my - (my - live.ty) * kk,
+      };
+      scheduleCommit();
+      // One final commit when the burst settles, mirroring the main canvas.
+      if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
+      wheelIdleRef.current = window.setTimeout(finishGesture, 140);
     },
-    [transform, onTransform],
+    [scheduleCommit, finishGesture],
   );
 
   const bgDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest('[data-node-id]')) return;
-    drag.current = { x: e.clientX, y: e.clientY, tx: transform.tx, ty: transform.ty };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const live = transformRef.current;
+    drag.current = { x: e.clientX, y: e.clientY, tx: live.tx, ty: live.ty };
+    gestureRef.current = true;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   };
   const bgMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    onTransform(
-      {
-        ...transform,
-        tx: drag.current.tx + (e.clientX - drag.current.x),
-        ty: drag.current.ty + (e.clientY - drag.current.y),
-      },
-      true,
-    );
+    const d = drag.current;
+    if (!d) return;
+    transformRef.current = {
+      ...transformRef.current,
+      tx: d.tx + (e.clientX - d.x),
+      ty: d.ty + (e.clientY - d.y),
+    };
+    scheduleCommit();
   };
   const bgUp = () => {
+    if (!drag.current) return;
     drag.current = null;
+    finishGesture();
   };
 
   // LOD thresholds: hide labels whose SCREEN font size drops below readability.
   const hideInternalLabels = options.showLabels && transform.scale * 10.5 < 8;
   const hideTipLabels = options.showLabels && transform.scale * 11.5 < 7;
-  const boxW = hostRef.current?.clientWidth ?? 0;
+  const boxW = box.w;
+  const boxH = box.h;
+  const invScale = 1 / transform.scale;
   // The two panes face each other: the species tree grows rightwards and the
   // gene tree is mirrored, so labels and mapping stubs swap sides too.
   const mirrored = side === 'gene';
   const branchOrientation = mirrored ? ('RL' as const) : ('LR' as const);
+
+  // --- viewport culling --------------------------------------------------------
+  // Only nodes inside this pane's viewport (plus one screen of buffer) mount.
+  // The buffer keeps elbow branches entering from off-screen connected; the
+  // committed-view cull the main canvas uses is not needed here because the
+  // parent re-renders per coalesced frame.
+  const visibleIds = useMemo(
+    () => cullPaneNodes(layout, transform, boxW, boxH),
+    [layout, transform, boxW, boxH],
+  );
+  const visibleSet = useMemo(() => new Set(visibleIds), [visibleIds]);
 
   return (
     <div className={`recon-pane recon-pane--${side ?? 'gene'}`} ref={hostRef} role="group" aria-label={ariaLabel}>
@@ -329,161 +673,101 @@ export function ReconPane({
         <svg>
           <g transform={`translate(${transform.tx},${transform.ty}) scale(${transform.scale})`}>
             {/* edges */}
-            {layout.visible.size > 0 &&
-              [...layout.visible].map((id) => {
-                const n = doc.nodes[id];
-                if (!n || !n.parentId) return null;
-                if (!layout.visible.has(n.parentId)) return null;
-                const from = layout.positions.get(id)!;
-                const to = layout.positions.get(n.parentId)!;
-                return (
-                  <path
-                    key={`e${id}`}
-                    d={elbowPath(from, to, branchOrientation)}
-                    fill="none"
-                    stroke="var(--recon-branch)"
-                    strokeWidth={1.4}
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                );
-              })}
+            {visibleIds.map((id) => {
+              const n = doc.nodes[id];
+              if (!n || !n.parentId) return null;
+              if (!visibleSet.has(n.parentId)) return null;
+              const from = layout.positions.get(id);
+              const to = layout.positions.get(n.parentId);
+              if (!from || !to) return null;
+              return (
+                <PaneEdge
+                  key={`e${id}`}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  orientation={branchOrientation}
+                />
+              );
+            })}
             {/* mapping guide stubs (layer 2, under nodes) */}
             {options.showMappings &&
               stubs?.map((stub) => {
+                if (!visibleSet.has(stub.nodeId)) return null;
                 const p = layout.positions.get(stub.nodeId);
                 if (!p) return null;
-                const edgeX = stubEdgeX(transform, boxW, mirrored);
                 return (
-                  <line
+                  <PaneStubLine
                     key={`s${stub.nodeId}`}
                     x1={p.x}
                     y1={p.y}
-                    x2={edgeX}
+                    x2={stubEdgeX(transform, boxW, mirrored)}
                     y2={p.y}
-                    stroke={`var(--recon-map-${stub.token})`}
-                    strokeWidth={stub.emphasized ? 2 : 1.2}
-                    strokeOpacity={stub.muted ? 0.2 : stub.emphasized ? 0.95 : 0.6}
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
+                    token={stub.token}
+                    emphasized={stub.emphasized}
+                    muted={stub.muted}
                   />
                 );
               })}
             {/* nodes */}
-            {[...layout.visible].map((id) => {
+            {visibleIds.map((id) => {
               const n = doc.nodes[id];
               if (!n) return null;
-              const p = layout.positions.get(id)!;
+              const p = layout.positions.get(id);
+              if (!p) return null;
               const meta = nodeMeta?.get(id);
               const isTip = n.childrenIds.length === 0;
-              const r = isTip ? 5 : 6.5;
               const fill = meta?.dashedRed ? 'var(--surface)' : meta?.fill ?? 'var(--recon-node-fill)';
-              const stroke =
-                meta?.selected || meta?.hovered
-                  ? 'var(--recon-select)'
-                  : meta?.dashedRed
-                    ? 'var(--danger)'
-                    : meta?.fill ?? 'var(--recon-node-stroke)';
-              const inv = 1 / transform.scale;
+              const stroke = meta?.selected || meta?.hovered
+                ? 'var(--recon-select)'
+                : meta?.dashedRed
+                  ? 'var(--danger)'
+                  : meta?.fill ?? 'var(--recon-node-stroke)';
               const label = n.label || n.id.slice(0, 6);
-              const showTipLabel = isTip && n.label && options.showLabels && !hideTipLabels;
-              const showInternalLabel = !isTip && n.label && options.showLabels && !hideInternalLabels;
+              const showTipLabel = isTip && !!n.label && options.showLabels && !hideTipLabels;
+              const showInternalLabel = !isTip && !!n.label && options.showLabels && !hideInternalLabels;
+              const selected = !!meta?.selected;
+              const hovered = !!meta?.hovered;
+              const glyph = meta?.glyph;
+              const losses = meta?.losses;
+              const showEventGlyph = options.showEventGlyphs && !!glyph;
+              const showLoss = options.showLosses && typeof losses === 'number' && losses > 0;
+              // `invScale` is the only transform-dependent prop, and only rows
+              // that draw screen-space chrome receive it — a zoom frame leaves
+              // every plain node's props unchanged.
+              const needsInv = selected || hovered || showEventGlyph || showLoss;
               return (
-                <g
+                <PaneNode
                   key={id}
-                  data-node-id={id}
-                  role={onNodeClick ? 'button' : undefined}
-                  tabIndex={onNodeClick ? 0 : undefined}
-                  aria-label={
-                    onNodeClick ? `${ariaLabel} · ${label}` : undefined
+                  nodeId={id}
+                  label={label}
+                  rawLabel={n.label ?? ''}
+                  x={p.x}
+                  y={p.y}
+                  isTip={isTip}
+                  fill={fill}
+                  stroke={stroke}
+                  dashedRed={!!meta?.dashedRed}
+                  selected={selected}
+                  hovered={hovered}
+                  losses={losses}
+                  glyph={glyph}
+                  showEventGlyph={showEventGlyph}
+                  showLoss={showLoss}
+                  showTipLabel={showTipLabel}
+                  showInternalLabel={showInternalLabel}
+                  showLodTooltip={
+                    options.showLabels && !showTipLabel && !showInternalLabel && !!n.label
                   }
-                  onClick={(e) => onNodeClick?.(id, e)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onNodeClick?.(id, e as unknown as React.MouseEvent);
-                    }
-                    onNodeKeyDown?.(id, e);
-                  }}
-                  onPointerEnter={onNodeHover ? () => onNodeHover(id) : undefined}
-                  onPointerLeave={onNodeHover ? () => onNodeHover(null) : undefined}
-                  style={{ cursor: onNodeClick ? 'pointer' : undefined, outline: 'none' }}
-                >
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={r + (meta?.selected ? 2 : 0)}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth={(meta?.selected ? 2.5 : 1.5) * inv}
-                    strokeDasharray={meta?.dashedRed ? '3 2' : undefined}
-                    className={meta?.dashedRed ? 'recon-node-unresolved' : undefined}
-                  />
-                  {/* selection / hover ring in screen space (never shrinks away) */}
-                  {(meta?.selected || meta?.hovered) && (
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={r + 5 * inv}
-                      fill="none"
-                      stroke="var(--recon-select)"
-                      strokeWidth={1.5 * inv}
-                      opacity={meta?.selected ? 0.9 : 0.5}
-                    />
-                  )}
-                  {options.showEventGlyphs && meta?.glyph && (
-                    <text
-                      transform={`translate(${p.x},${p.y - r - 4 * inv}) scale(${inv})`}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fontWeight={700}
-                      fill={meta.fill}
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      {meta.glyph}
-                    </text>
-                  )}
-                  {options.showLosses && typeof meta?.losses === 'number' && meta.losses > 0 && (
-                    <text
-                      transform={`translate(${p.x},${p.y + r + 9 * inv}) scale(${inv})`}
-                      textAnchor="middle"
-                      fontSize={9.5}
-                      fill="var(--recon-loss)"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      λ{meta.losses}
-                    </text>
-                  )}
-                  {showTipLabel && (
-                    <text
-                      x={mirrored ? p.x - 9 : p.x + 9}
-                      y={p.y + 4}
-                      textAnchor={mirrored ? 'end' : 'start'}
-                      fontSize={11.5}
-                      fill="currentColor"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      {n.label}
-                    </text>
-                  )}
-                  {showInternalLabel && (
-                    <text
-                      x={mirrored ? p.x + r + 4 : p.x - r - 4}
-                      y={p.y + 4}
-                      textAnchor={mirrored ? 'start' : 'end'}
-                      fontSize={10.5}
-                      opacity={0.65}
-                      fill="currentColor"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      {n.label}
-                    </text>
-                  )}
-                  {/* hidden-by-LOD labels stay reachable via the tooltip */}
-                  {options.showLabels && ((isTip && hideTipLabels) || (!isTip && hideInternalLabels)) && n.label && (
-                    <title>{n.label}</title>
-                  )}
-                </g>
+                  invScale={needsInv ? invScale : undefined}
+                  mirrored={mirrored}
+                  interactive={!!onNodeClick}
+                  paneAriaLabel={ariaLabel}
+                  onNodeClick={onNodeClick}
+                  onNodeHover={onNodeHover}
+                  onNodeKeyDown={onNodeKeyDown}
+                />
               );
             })}
           </g>
@@ -491,7 +775,7 @@ export function ReconPane({
       </div>
     </div>
   );
-}
+});
 
 /** Build stub descriptors for one pane's nodes from the collected lines. */
 export function stubsFromLines(
@@ -499,9 +783,13 @@ export function stubsFromLines(
   side: 'species' | 'gene',
 ): PaneStub[] {
   const out: PaneStub[] = [];
+  // Rebuilt on every hover/selection change, so dedupe through a Set: the old
+  // `out.some(...)` made this O(lines²) on large families.
+  const seen = new Set<NodeId>();
   for (const l of lines) {
     const id = side === 'species' ? l.speciesNodeId : l.geneNodeId;
-    if (out.some((s) => s.nodeId === id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
     out.push({
       nodeId: id,
       token: l.token,
