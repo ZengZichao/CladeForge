@@ -10,7 +10,7 @@
 // the panel can read "240/120".
 
 import { mapTipsByLabel, scenarioSummary, validateScenario, type ReconIssue } from '../model/reconciliation';
-import type { GeneTreeEntry, NodeId, Project, ReconCosts } from '../model/types';
+import { DEFAULT_RECON_COSTS, type GeneTreeEntry, type NodeId, type Project, type ReconCosts } from '../model/types';
 
 /** What `scenarioSummary` reports for one gene tree (its type is inline). */
 export type GeneSummary = ReturnType<typeof scenarioSummary>;
@@ -55,7 +55,7 @@ export function countMappedTips(
 }
 
 function buildGeneTreeRows(project: Project): GeneRow[] {
-  const costs: ReconCosts = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
+  const costs: ReconCosts = project.reconCosts ?? DEFAULT_RECON_COSTS;
   return (project.geneTrees ?? []).map((entry) => {
     const { mappings, unmatchedLabels, ambiguousLabels } = mapTipsByLabel(project, entry.doc);
     const tips = Object.values(entry.doc.nodes).filter((n) => n.childrenIds.length === 0).length;

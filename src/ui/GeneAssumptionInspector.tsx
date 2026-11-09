@@ -14,7 +14,7 @@ import { ArrowLeftIcon, ArrowRightIcon, Crosshair2Icon } from '@radix-ui/react-i
 import { useStore } from '../model/store';
 import { setAssumption } from '../model/geneTrees';
 import { validateScenario, type ReconIssue } from '../model/reconciliation';
-import type { Confidence, NodeId, Project } from '../model/types';
+import { DEFAULT_RECON_COSTS, type Confidence, type NodeId, type Project } from '../model/types';
 import { CheckboxField as _CheckboxField, Field, NumberField, TextField } from './fields';
 void _CheckboxField;
 import { Section } from './Section';
@@ -51,7 +51,7 @@ export function GeneAssumptionInspector({
   const entry = project.geneTrees?.find((g) => g.id === geneTreeId);
   const geneNode = entry?.doc.nodes[geneNodeId];
   const assumption = entry?.assumptions[geneNodeId];
-  const costs = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
+  const costs = project.reconCosts ?? DEFAULT_RECON_COSTS;
 
   // Per-node validation issues for inline display.
   const myIssues = useMemo(() => {

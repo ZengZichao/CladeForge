@@ -28,10 +28,11 @@
 
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use serde::Serialize;
+use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
 #[derive(Serialize)]
@@ -410,9 +411,15 @@ fn read_text_file(
 ) -> Result<String, String> {
     let target = validate_path_scoped(&path, false, window.try_fs_scope().as_ref())?;
     let limit = max_bytes.filter(|m| *m > 0).unwrap_or(MAX_READ_BYTES).min(MAX_READ_BYTES);
-    let size = std::fs::metadata(&target)
-        .map_err(|e| format!("Cannot stat {}: {e}", describe(&target)))?
-        .len();
+    let meta = std::fs::metadata(&target)
+        .map_err(|e| format!("Cannot stat {}: {e}", describe(&target)))?;
+    // Refuse anything that is not a regular file BEFORE opening it: a FIFO
+    // (named pipe) inside an allowed directory would block `read_to_string`
+    // forever with no timeout, freezing the UI with no error to show.
+    if !meta.is_file() {
+        return Err(format!("{} is not a regular file", describe(&target)));
+    }
+    let size = meta.len();
     if size > limit {
         return Err(format!(
             "{} is {} MB, above the {} MB limit for this kind of file",
@@ -424,9 +431,54 @@ fn read_text_file(
     // Name the file: a bare "stream did not contain valid UTF-8" tells the user that
     // *a* file was not text without saying which one, and the app can be pointed at
     // several per import. No translation is attempted — this string, like the other
-    // Rust-side errors, is English-only by design.
+    // Rust-side errors, is English-only by design; the webview maps the frequent
+    // cases (this one among them) to bilingual guidance.
     std::fs::read_to_string(&target)
         .map_err(|e| format!("Cannot read {} as a text file: {e}", describe(&target)))
+}
+
+/// Modification time of a file, in milliseconds since the Unix epoch — the
+/// disk-side half of the external-modification guard (M12): before an in-place
+/// ⌘S the webview compares the mtime it recorded at open with the file's mtime
+/// NOW and asks instead of silently overwriting a colleague's edit.
+#[tauri::command]
+fn stat_file_mtime(window: tauri::Window, path: String) -> Result<Option<u128>, String> {
+    let target = validate_path_scoped(&path, false, window.try_fs_scope().as_ref())?;
+    Ok(std::fs::metadata(&target)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis()))
+}
+
+/// Read raw bytes for the encoding-fallback open path. When `read_text_file`
+/// refuses a non-UTF-8 file (the default output of Chinese-locale Excel is
+/// GBK), the webview re-reads it as bytes and decodes with its own
+/// `TextDecoder('gb18030')` — no encoding crate on this side, same allow-list
+/// and size ceiling as the text path.
+#[tauri::command]
+fn read_binary_file(
+    window: tauri::Window,
+    path: String,
+    max_bytes: Option<u64>,
+) -> Result<Vec<u8>, String> {
+    let target = validate_path_scoped(&path, false, window.try_fs_scope().as_ref())?;
+    let limit = max_bytes.filter(|m| *m > 0).unwrap_or(MAX_READ_BYTES).min(MAX_READ_BYTES);
+    let meta = std::fs::metadata(&target)
+        .map_err(|e| format!("Cannot stat {}: {e}", describe(&target)))?;
+    // Same regular-file guard as the text path: never block on a FIFO.
+    if !meta.is_file() {
+        return Err(format!("{} is not a regular file", describe(&target)));
+    }
+    if meta.len() > limit {
+        return Err(format!(
+            "{} is {} MB, above the {} MB limit for this kind of file",
+            describe(&target),
+            meta.len() / (1024 * 1024),
+            limit / (1024 * 1024)
+        ));
+    }
+    std::fs::read(&target).map_err(|e| format!("Cannot read {}: {e}", describe(&target)))
 }
 
 /// Write UTF-8 text to a path the user selected via the save dialog.
@@ -437,21 +489,101 @@ fn write_text_file(
     window: tauri::Window,
     path: String,
     contents: String,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let target = validate_path_scoped(&path, true, window.try_fs_scope().as_ref())?;
     atomic_write(&target, contents.as_bytes())
 }
 
 /// Write raw bytes (PNG / PDF exports) to a user-selected save path.
 /// Uses atomic write (temp file + rename) for the same crash-safety reason.
+/// Largest file `write_binary_file` will accept. The canvas budget itself
+/// caps a figure at 67 Mpx (≈ 268 MB of RGBA), and PNG/PDF encodings of that
+/// are far smaller; anything larger means the webview was compromised or a
+/// bug is spiralling — refuse instead of writing a half-terabyte file.
+const MAX_WRITE_BYTES: usize = 512 * 1024 * 1024;
+
 #[tauri::command]
 fn write_binary_file(
     window: tauri::Window,
     path: String,
     contents: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
+    if contents.len() > MAX_WRITE_BYTES {
+        return Err(format!(
+            "Refusing to write {} MB (limit {} MB)",
+            contents.len() / (1024 * 1024),
+            MAX_WRITE_BYTES / (1024 * 1024)
+        ));
+    }
     let target = validate_path_scoped(&path, true, window.try_fs_scope().as_ref())?;
     atomic_write(&target, &contents)
+}
+
+// --- desktop shell wiring: close guard + file association -------------------
+//
+// Two OS-integration paths a browser build never sees, both flagged by the
+// 2026-11-10 review round (A-01 / A-02, C#1–C#3):
+//
+//   * CloseRequested — the window × button / Alt+F4 / ⌘Q used to exit with no
+//     unsaved-changes prompt: the only real data-loss path the app had (the
+//     autosave snapshot refuses writes when storage is unavailable or full).
+//     Dirty state lives in the webview, so the shell does the only thing it
+//     can: hold the close, ask the webview, and destroy the window when the
+//     webview confirms (or immediately, when nothing was dirty).
+//
+//   * Launch paths — the bundle declares file associations, so the OS hands us
+//     argv paths at startup; a second launch while we are already running is
+//     folded into this process by the single-instance plugin. Both are routed
+//     to the webview, which opens them through the same pipeline as ⌘O.
+
+/// True once the webview has registered its close-guard listener. Before that
+/// nothing can be dirty, and a failed frontend load must never wedge the
+/// window shut — so an early close falls through and the window closes.
+static WEBVIEW_READY: AtomicBool = AtomicBool::new(false);
+
+/// File paths this process was launched with, awaiting the webview. Consumed
+/// once by `take_launch_paths`; later launches arrive as events instead.
+static PENDING_LAUNCH_PATHS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+fn launch_paths_slot() -> &'static Mutex<Vec<String>> {
+    PENDING_LAUNCH_PATHS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// The argv entries that look like a document handed to us by the OS: existing
+/// regular files, not options. Everything else (flags, missing files,
+/// directories) is dropped, so a shell wrapper's arguments cannot inject a
+/// read and a stale shortcut cannot produce a confusing error dialog.
+fn document_paths_from_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
+    args.into_iter()
+        .filter(|arg| !arg.starts_with('-'))
+        .filter(|arg| std::fs::metadata(arg).map(|m| m.is_file()).unwrap_or(false))
+        .collect()
+}
+
+/// The webview signals that its shell listeners are registered. Only after
+/// this point does the close guard hold closes for confirmation.
+#[tauri::command]
+fn notify_webview_ready() {
+    WEBVIEW_READY.store(true, Ordering::SeqCst);
+}
+
+/// The webview confirmed the close (or there was nothing to confirm).
+#[tauri::command]
+fn confirm_close_window(window: tauri::Window) {
+    // `destroy` bypasses CloseRequested (which this shell now intercepts), so
+    // this is the one-way exit the confirmed dialog stands for.
+    let _ = window.destroy();
+}
+
+/// Paths this process itself was launched with (OS file association). Consumed
+/// once at webview startup; a launch while we are already running arrives via
+/// the single-instance plugin as a `cladeforge:open-path` event instead.
+#[tauri::command]
+fn take_launch_paths() -> Vec<String> {
+    match launch_paths_slot().lock() {
+        Ok(mut pending) => std::mem::take(&mut *pending),
+        Err(poisoned) => std::mem::take(&mut poisoned.into_inner()),
+    }
 }
 
 /// Where the temporary file is staged, and what this process owes the cleanup.
@@ -727,7 +859,10 @@ fn finalise_mode(_file: &std::fs::File, _dest: &Path) -> std::io::Result<()> {
 /// Write `data` to a private temporary file, then rename it into place.
 /// The rename is atomic on POSIX (same filesystem), so the destination
 /// file is either the old version or the new version — never a partial write.
-fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
+/// Non-fatal outcomes (parent-dir flush failure, a leftover staging dir) come
+/// back as WARNINGS in the `Ok` value — `eprintln!` is invisible in a release
+/// desktop build (no console), so the webview surfaces them (C#14).
+fn atomic_write(path: &Path, data: &[u8]) -> Result<Vec<String>, String> {
     use std::io::Write;
 
     let dest_dir = path
@@ -766,29 +901,57 @@ fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
         ));
     }
 
+    let mut warnings: Vec<String> = Vec::new();
+
     // The rename is only durable once the parent directory is flushed too. This
     // is deliberately not fatal: the bytes ARE in place, and reporting a failed
     // save would make the user overwrite a file that already exists. It is
-    // reported rather than swallowed, on the one channel this crate has.
+    // reported rather than swallowed — now through the command's return value,
+    // which the webview shows as a notice.
     if let Err(e) = sync_dir(dest_dir) {
-        eprintln!(
-            "CladeForge: {} was written, but its directory could not be flushed: {e}",
+        warnings.push(format!(
+            "{} was written, but its directory could not be flushed: {e}",
             describe(path)
-        );
+        ));
     }
 
     // Same reasoning as above — the user's file is saved, so a leftover private
     // staging directory must not turn the call into an error, but it must also not
     // be silent.
     if let Some(note) = discard_staging(&staging, &tmp_path) {
-        eprintln!("CladeForge: {note}");
+        warnings.push(note);
     }
-    Ok(())
+    Ok(warnings)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // File paths the OS passed on the command line (double-click on an
+    // associated file). Parked for the webview to consume via
+    // `take_launch_paths` once its listeners are registered.
+    let launch_paths = document_paths_from_args(std::env::args().skip(1));
+    if !launch_paths.is_empty() {
+        if let Ok(mut pending) = launch_paths_slot().lock() {
+            pending.extend(launch_paths);
+        }
+    }
+
     tauri::Builder::default()
+        // Fold a second launch (double-click while the app is already open)
+        // into this process: its document paths are forwarded as events and
+        // the running window comes to the front instead of a second instance
+        // racing for the approved-roots record. Registered first, as the
+        // plugin requires.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            for path in document_paths_from_args(argv) {
+                let _ = app.emit("cladeforge:open-path", path);
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         // `tauri-plugin-fs` is initialised for one reason: it owns the filesystem
         // scope (`tauri::fs::Scope`) that the dialog plugin writes every
         // human-selected path into, and that scope is what lets `validate_path`
@@ -800,11 +963,27 @@ pub fn run() {
         // module exists to avoid.
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        // Unsaved-changes close guard (A-01 / C#1): the × button / Alt+F4 / ⌘Q
+        // hold for a webview decision once the webview is up (WEBVIEW_READY);
+        // `confirm_close_window` is the one-way exit after that decision.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if WEBVIEW_READY.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.emit("cladeforge:close-requested", window.label().to_string());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             app_info,
             read_text_file,
+            read_binary_file,
+            stat_file_mtime,
             write_text_file,
-            write_binary_file
+            write_binary_file,
+            notify_webview_ready,
+            confirm_close_window,
+            take_launch_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running CladeForge");

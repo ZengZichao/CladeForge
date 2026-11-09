@@ -70,7 +70,18 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
       onCancel();
       return;
     }
-    const n = Math.max(1, Math.min(50, Math.round(count) || 1));
+    const requested = Math.round(count) || 1;
+    const n = Math.max(1, Math.min(50, requested));
+    // The clamp used to be silent: typing 999 produced 2 children, typing 0
+    // produced 1, with no word about it (M15).
+    if (n !== requested) {
+      notify.info(
+        tr(
+          `每节点子节点数限制为 1–50：输入的 ${requested} 已按 ${n} 处理。`,
+          `Children per node is capped at 1–50: the entered ${requested} was applied as ${n}.`,
+        ),
+      );
+    }
     apply((d) => {
       const ids = addChildrenSpaced(d, targetId, n);
       // Store polytomy type in each new child's meta for ≥3 children.

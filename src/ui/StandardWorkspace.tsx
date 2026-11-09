@@ -362,12 +362,27 @@ function ExportPanel({ onNexusExport }: { onNexusExport: () => void }) {
       {label}
     </button>
   );
+  // A-05: the mode the figure buttons will use is always stated — a user who
+  // thinks "导出 SVG" means "the preset figure" must not discover otherwise
+  // from the file itself.
+  const followView = useStore((s) => s.exportSettings.followView);
   return (
     <>
       <div className="panel-header">
         <span className="panel-header-title">{S.nav.export}</span>
       </div>
       <div className="panel-section export-panel-section">
+        <div className="hint" role="note">
+          {followView
+            ? tr(
+                '当前模式：跟随视图——下列图件按钮按画布当前状态导出（含正在显示的着色与图层）。DPI、图例等发表设置请用「导出选项…」。',
+                'Mode: follow view — the figure buttons below export the canvas as currently shown (including active colouring and layers). DPI, legend and other publication settings live in "Export options…".',
+              )
+            : tr(
+                '当前模式：导出预设——图件按导出选项中的设置生成，不随屏幕状态变化。',
+                'Mode: export preset — figures follow the export-options settings and do not vary with the screen state.',
+              )}
+        </div>
         {/* Publication controls (preset mode, DPI, support values, legend,
             scale bar, grayscale, background). The dialog existed but had no
             entry point — every figure button exported directly with the live

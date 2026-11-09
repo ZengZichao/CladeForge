@@ -21,6 +21,7 @@
 // left-aligned flyout used by the file menu would run off the viewport.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useStore } from '../model/store';
 import { createPortal } from 'react-dom';
 import {
   ChevronDownIcon,
@@ -74,6 +75,7 @@ interface ThemeOption {
 
 export function PreferencesMenu() {
   const lang = useLanguage();
+  const historyLimit = useStore((s) => s.historyLimit);
   const [pref, setPref] = useState<Theme>(storedTheme);
   const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
   const [cvd, setCvd] = useState<boolean>(storedCvdMode);
@@ -334,6 +336,28 @@ export function PreferencesMenu() {
                   </span>
                   <span>
                     {v === 1 ? tr('标准 100%', 'Standard 100%') : `${Math.round(v * 100)}%`}
+                  </span>
+                </span>
+              </button>
+            ))}
+            <div className="menu-sep" />
+            <div className="menu-section-label">{tr('撤销步数上限', 'Undo history limit')}</div>
+            {[100, 300, 1000].map((v) => (
+              <button
+                key={v}
+                className="menu-item prefs-item"
+                role="menuitemradio"
+                aria-checked={historyLimit === v}
+                onClick={() => useStore.getState().setHistoryLimit(v)}
+              >
+                <span className="prefs-item-label">
+                  <span className="prefs-check" aria-hidden="true">
+                    {historyLimit === v ? '✓' : ''}
+                  </span>
+                  <span>
+                    {v === 100
+                      ? tr('100 步（默认）', '100 steps (default)')
+                      : tr(`${v} 步（更大内存占用，适合超长编辑）`, `${v} steps (more memory, for very long sessions)`)}
                   </span>
                 </span>
               </button>

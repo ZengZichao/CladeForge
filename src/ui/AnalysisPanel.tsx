@@ -7,7 +7,7 @@
 // the whole CharacterPanel ("性状与状态"), duplicating the hypothesis module.
 // Character management stays under 假说; this module is purely analytical.
 
-import { useMemo } from 'react';
+import { useDeferredValue, useMemo } from 'react';
 import { useStore } from '../model/store';
 import { findCharacter } from '../model/characters';
 import { parsimony } from '../model/parsimony';
@@ -21,24 +21,31 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
   const activeCharacterId = useStore((s) => s.activeCharacterId);
   const characters = useStore((s) => s.project.characters);
   const runAsr = useStore((s) => s.runAsr);
+  const asrRunning = useStore((s) => s.asrRunning);
   const clearAsr = useStore((s) => s.clearAsr);
   const asr = useStore((s) => s.asr);
   const character = findCharacter(project, activeCharacterId ?? '');
 
+  // The heavy statistics run at LOWER priority than interactive edits: while
+  // the user types or drags, the panel's numbers refresh a beat later instead
+  // of every keystroke paying a multi-pass statistics toll (A-16). The dialog
+  // gates on `open`; this panel is visible by definition, so deferring is the
+  // honest equivalent.
+  const deferredProject = useDeferredValue(project);
   const mp = useMemo(
-    () => (character ? parsimony(project, character) : null),
-    [project, character],
+    () => (character ? parsimony(deferredProject, character) : null),
+    [deferredProject, character],
   );
   const issues = useMemo(
-    () => (character ? checkConsistency(project, character) : []),
-    [project, character],
+    () => (character ? checkConsistency(deferredProject, character) : []),
+    [deferredProject, character],
   );
   const signal = useMemo(
-    () => (character ? discreteSignal(project, character) : null),
-    [project, character],
+    () => (character ? discreteSignal(deferredProject, character) : null),
+    [deferredProject, character],
   );
-  const correlations = useMemo(() => characterCorrelations(project), [project]);
-  const summary = useMemo(() => treeSummary(project), [project]);
+  const correlations = useMemo(() => characterCorrelations(deferredProject), [deferredProject]);
+  const summary = useMemo(() => treeSummary(deferredProject), [deferredProject]);
 
   const asrDisabled = !character || character.type !== 'discrete';
 
@@ -121,11 +128,11 @@ export function AnalysisPanel({ onOpenAnalysis }: { onOpenAnalysis: () => void }
         <div className="field row-actions">
           <button
             className="btn"
-            disabled={asrDisabled}
+            disabled={asrDisabled || asrRunning}
             title={S.character.asrHint}
             onClick={() => runAsr()}
           >
-            {S.analysisMenu.asr}
+            {asrRunning ? S.analysis.asrRunningLabel : S.analysisMenu.asr}
           </button>
           {asr && (
             <button className="btn ghost" onClick={clearAsr}>

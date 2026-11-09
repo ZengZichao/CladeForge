@@ -385,14 +385,23 @@ export const MISSING_STATE_CODES: readonly string[] = ['?', '-'];
 
 /**
  * True when `value` is a genuine observation for `character`: a declared state
- * id. Undefined values, the missing-data codes, and stale ids left over from a
- * deleted state all mean "no data" (the shared guard for stats / consistency /
- * transition detection, so the three cannot disagree).
+ * id, or a non-empty set of them (a polymorphic assignment). Undefined values,
+ * the missing-data codes, and stale ids left over from a deleted state all mean
+ * "no data" (the shared guard for stats / consistency / transition detection,
+ * so the three cannot disagree).
+ *
+ * Deliberately a plain `boolean`, NOT a `value is string` type predicate: a
+ * polymorphic set passes this guard, and a predicate would let the compiler
+ * narrow an array value down to `string`, hiding exactly the "array reaching a
+ * string-only consumer" bug class this shared guard exists to prevent (it once
+ * silently corrupted CI/RI — an array object became a Map key and every
+ * polymorphic tip counted as its own state). Callers that need a single state
+ * id must go through `observedSingleState` and face the polymorphic case.
  */
 export function isObservedState(
   character: Character,
   value: string | number | string[] | undefined,
-): value is string {
+): boolean {
   // A polymorphic assignment (a set) is observed when it is non-empty and
   // every member is a declared state id; the statistics layer treats it as
   // real evidence, never as missing data.
@@ -405,6 +414,21 @@ export function isObservedState(
   if (typeof value !== 'string') return false;
   if (MISSING_STATE_CODES.includes(value)) return false;
   return character.states.some((s) => s.id === value);
+}
+
+/**
+ * The node's state id when the value is ONE declared state, or undefined when
+ * there is no observation or the observation is a polymorphic SET. Use this
+ * wherever a consumer can only handle a single state (string-keyed counts,
+ * transition endpoints, cost-matrix lookups) — never `isObservedState` with a
+ * blind cast.
+ */
+export function observedSingleState(
+  character: Character,
+  value: string | number | string[] | undefined,
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return isObservedState(character, value) ? value : undefined;
 }
 
 /** Number of nodes carrying a missing-data code rather than a declared state. */
@@ -529,14 +553,16 @@ export function detectTransitions(
   visible?: Set<NodeId>,
 ): Transition[] {
   const continuous = character.type === 'continuous';
+  // A polymorphic endpoint has no single state, so it cannot anchor a "state →
+  // state" transition: it is reported as unknown (involvesUnknown) rather than
+  // compared by object identity — two tips sharing one array reference would
+  // otherwise read as "no change" and two equal-content sets as a change.
   const observed = (v: string | number | string[] | undefined): string | number | undefined =>
     continuous
       ? typeof v === 'number' && Number.isFinite(v)
         ? v
         : undefined
-      : isObservedState(character, v)
-        ? v
-        : undefined;
+      : observedSingleState(character, v);
   const UNKNOWN_LABEL = tr('未知', 'Unknown');
   const out: Transition[] = [];
   for (const node of Object.values(project.nodes)) {

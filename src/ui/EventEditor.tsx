@@ -40,6 +40,7 @@ import { CheckboxField, ColorField, Field, TextField } from './fields';
 import { SliderNumberField } from './SliderNumberField';
 import { Section } from './Section';
 import { S, tr } from './strings';
+import { requestConfirm } from './confirmDialog';
 import { notify } from './toast';
 
 type Apply = (recipe: (d: Project) => void) => void;
@@ -313,7 +314,24 @@ function OneEvent({
           </div>
 
           <div className="field row-actions">
-            <button className="btn danger" onClick={() => apply((d) => removeEvent(d, id))}>
+            <button
+              className="btn danger"
+              onClick={() => {
+                // M7: an event carries occurrences and possibly layer copies;
+                // deleting it deserves the same confirm + ⌘Z story as a node.
+                requestConfirm({
+                  key: 'delete-event',
+                  title: S.event.delete,
+                  message: tr(
+                    '将删除该事件及其全部发生记录。该操作可通过 ⌘Z 撤销。',
+                    'This deletes the event with all of its occurrences. Undoable via ⌘Z.',
+                  ),
+                  confirmLabel: S.event.delete,
+                  danger: true,
+                  onConfirm: () => apply((d) => removeEvent(d, id)),
+                });
+              }}
+            >
               {S.event.delete}
             </button>
           </div>

@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from 'react';
 import { useStore } from '../model/store';
-import type { NodeId } from '../model/types';
+import { DEFAULT_RECON_COSTS, type NodeId } from '../model/types';
 import {
   mapTipsByLabel,
   suggestLcaScenario,
@@ -48,7 +48,7 @@ function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
   const [solving, setSolving] = useState(false);
 
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
-  const costs = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
+  const costs = project.reconCosts ?? DEFAULT_RECON_COSTS;
   const rows = useMemo(() => geneTreeRows(project), [project]);
   const row = rows.find((r) => r.id === activeGeneTreeId);
 

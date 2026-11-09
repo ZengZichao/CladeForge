@@ -7,6 +7,157 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
 
+### Review round A/B/C (`CladeForge-评审报告-A/B/C`) — 2026-11-10. Every finding of
+the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
+28 C-item list, plus the component-level test gap the reviews flagged (H6).
+
+#### Fixed — statistics honesty
+- **Polymorphic tips no longer corrupt CI/RI (A-13)**: the shared observation
+  guard `isObservedState` carried a `value is string` predicate while accepting
+  arrays, so `discreteSignal` keyed its state counts on array OBJECTS — every
+  polymorphic tip (e.g. the `(AB)` records a CSV import writes) became its own
+  "state", inflating m (hence CI) and deflating g (hence RI) with no warning.
+  A polymorphic tip now splits its evidence evenly across its member states,
+  the guard returns a plain boolean so the compiler exposes string/array
+  mix-ups, and the UI prints "N tips carry a polymorphic record" next to CI/RI.
+- **ASR refuses to fabricate numbers (A-14/H7)**: a character with fewer than
+  two scored tips, or whose rate profile is exactly flat (e.g. every tip the
+  same all-state polymorphic set), is refused with a bilingual reason instead
+  of printing r = 1e-12 with a 95% CI of [1e-24, 1e+14]. A profile-likelihood
+  bound that leaves the scan bracket is reported as "undetermined", not as the
+  bracket edge. The one-click parsimony baseline refuses on a character with
+  zero scored tips instead of filling every internal node with the first
+  declared state.
+- **Rate-sensitivity argmax counts DISTINCT nodes** (a node flipping in both
+  the 0.5× and 2× round counted twice); the copy states the semantics (A-19).
+- **Permutation-test description corrected** (C#16): the UI said the test
+  shuffles character B only, while the implementation (correctly) permutes
+  BOTH characters — the copy now matches the method and the manual.
+- **ASR threshold label** says ≥ (the implementation shows p == t), and the
+  weighted-cost label no longer equates cost with change count (A-19).
+
+#### Fixed — desktop shell (the "double-click / close" paths)
+- **Unsaved-changes close guard (A-01/C#1)**: `CloseRequested` (window ×,
+  Alt+F4, ⌘Q) now holds for a webview decision once the UI is up; a dirty tab
+  shows the standard confirm, a clean workspace closes straight through. A
+  close that arrives before the webview registered its listeners falls through,
+  so a failed frontend load can never wedge the window shut.
+- **File associations wired (A-02/C#3)**: launch arguments are collected and
+  routed through the same open pipeline as ⌘O; the single-instance plugin folds
+  a second launch into the running window, forwards its document paths and
+  brings the window to front. Double-clicking an associated file no longer
+  opens an empty app.
+- **Desktop drag-and-drop repaired (C#2)**: the window sets
+  `dragDropEnabled: false` so the HTML5 drop events the canvas already handles
+  reach the webview; a legal Newick in a `.txt` file is now accepted (M21).
+- **read/write hardening (M19/C#14)**: `read_text_file`/`read_binary_file`
+  refuse non-regular files (a FIFO in an allowed directory used to block
+  forever); `write_binary_file` carries a 512 MB ceiling; non-fatal write
+  outcomes (parent-dir flush failure, leftover staging directory) travel back
+  as warnings the webview toasts instead of disappearing into stderr.
+
+#### Fixed — import/export correctness
+- **Parse errors carry line/column and the offending line, bilingually**
+  (H5/C#6): the Newick tokenizer keeps token positions and `parseErrorAt`
+  reports "line L, column C, near: …"; NEXUS structural errors are bilingual
+  and an unclosed `[` names itself as the root cause instead of surfacing as a
+  misleading "No TREES block found" (M5); a failing NEXUS matrix read is
+  reported instead of swallowed with its issues (C#18).
+- **GBK/GB18030 files decode with a fallback and a notice (H4/C#7)**: browser
+  opens decode strictly as UTF-8 and fall back to GB18030 (Chinese-locale
+  Excel's default) with an explicit "re-save as UTF-8" note; the desktop path
+  re-reads the bytes via a new `read_binary_file` command and decodes in the
+  webview instead of dying on "stream did not contain valid UTF-8".
+- **CSV/TSV structural problems are reported, never silently repaired (C#5)**:
+  ragged rows (cell count ≠ header), key-empty skipped rows and a single stray
+  cell flipping a mostly-numeric column from continuous to discrete all
+  produce named, actionable notes.
+- **Import report dialog (A-03/M4/C#15)**: the full note list survives the
+  toasts (which now linger 12 s) and every truncation toast carries a
+  "View all import notes" action opening a reviewable, copyable dialog.
+- **projectIO/exportImage errors are bilingual** (A-04/C#20), the NEXUS matrix
+  failure reports instead of vanishing (C#18), and the clipboard failure no
+  longer points at a dialog that does not exist (C#11).
+- **Export feedback is uniform (A-08/C#9/M20)**: every export toast names the
+  file and its size (PDF/Newick/NEXUS/hypothesis/narrative/recon report
+  previously got a bare "已导出"); the correlation CSV goes through the same
+  native save pipeline as every other export (A-06); the R-script export runs
+  under the busy veil and its toast says what RUNNING the script needs
+  (local R + ape, outputs land in the working directory) (M13).
+- **NeXML polymorphic cells are announced** (C#10), the DTL worker fallback
+  tells the user the solve moved to the main thread (M6), and
+  `setAssumption` no longer silently deletes an assumption row on an invalid
+  species target (M6).
+- **Project files round-trip non-finite step-matrix costs** (∞ = forbidden
+  transition) via a tagged encoding; `JSON.stringify(Infinity)` used to write
+  `null` and poison the matrix on re-read.
+
+#### Fixed — interaction and feedback
+- **Analysis dialog is navigable (A-07/M1)**: a chip jump-nav scrolls to each
+  statistics block (ASR included), and the run history is a native collapsible.
+- **Command palette no-ops speak up (M3)**: reroot/collapse/extract-subtree
+  with no selection say what is missing instead of closing silently.
+- **Character and event deletion confirm, with the ⌘Z story stated (M7)**.
+- **Backdrop clicks no longer destroy work (M11)**: the gene-tree builder
+  confirms before discarding its draft; the analysis dialog confirms before
+  discarding unsaved test results; the confirm dialog learned `onCancel`.
+- **The ASR threshold slider takes effect immediately** (M9): the display set
+  is re-derived from the stored posterior on every commit.
+- **Interaction bookkeeping is defensive (M10)**: `live()` captures an
+  interaction base when the caller skipped `beginInteraction` (so commit can
+  always push history), and `cancelInteraction` restores the dirty marker the
+  same way undo does.
+- **ASR and the BM-null simulation show busy states** and disable re-entry
+  (H1/A-15); the left analysis panel defers its heavy statistics off the
+  interactive path (A-16).
+- **Window title follows the active document with a dirty dot** (A-10); the
+  language switch warns that the interface reloads, once, with an opt-out
+  (A-11); the undo limit is configurable in preferences (100/300/1000) and the
+  tooltip says so (A-12); tabs switch on click, not mousedown (M24); the
+  single-tab ⌘W chord routes through the close guard on the desktop and explains
+  itself in a browser (C#13); the File menu carries 树操作 entries for reroot and
+  ladderize, breaking the right-click-only entry point (C#27); the character
+  editor ends with a forward "what next" prompt (M2); binary-export toasts name
+  the chosen path and the browser save toast says "downloaded" instead of
+  implying a path-bound file (C#9/C#19); sliders
+  show their numeric value (M15) and the add-children clamp announces itself
+  (M15); in-place saves ask before overwriting a file modified outside the app
+  (M12, via a new `stat_file_mtime` command); the export panel always states
+  which mode (follow-view vs preset) its buttons will use (A-05) and PNG honours
+  the DPI setting in follow-view mode too (M8); a transparent-PNG option joins
+  the export settings (M22).
+
+#### Fixed — copy and docs
+- DTL scope/ambiguity strings that existed but never rendered are now rendered
+  next to the DP numbers they qualify (A-17); the four (1,2,1) cost fallbacks
+  now reference `DEFAULT_RECON_COSTS` (A-09); the palette categories say 协调
+  (H3); the pseudo-plural `branch length(s)`, the 兄弟/同级 split and the
+  zh/en sentence asymmetry are repaired (C#28).
+- MANUAL_ZH: 协同→协调 throughout (UI_GLOSSARY compliance), 支持率→支持度,
+  最近共祖→最近共同祖先, 多分叉→多歧枝; the support-threshold section now
+  describes the control that actually exists in the style panel and its
+  canvas+export effect (H2); version header 0.1.0→0.2.0; seven samples, not
+  six; the TOC anchor and the「场景 › 映射与事件」pointer repaired (M14/C#17).
+  MANUAL_EN: version header, sample count, and the residual Chinese in the
+  shortcut table.
+- CITATION.cff carries a bare version; a new `versionConsistency.test.ts`
+  pins package.json / Cargo.toml / tauri.conf.json / CITATION.cff to one
+  value (C#21).
+- `yuleBalanceZScores` refuses a degenerate null instead of writing NaN into
+  the result (M18); `consensus` clade stats drop a hidden O(clades × trees)
+  indexOf (M23); `sampleStochasticMap` defaults to 100 samples (M16); the
+  chars-as-bytes read ceiling is documented as deliberately conservative
+  (C#22).
+
+#### Added
+- **Component-level tests (H6)**: `reviewComponentTests.test.ts` renders the
+  Toaster, ConfirmDialog (onCancel contract), AnalysisDialog (jump-nav, no-data
+  guard, busy disable), ImportReportDialog and the close-guard dirty test —
+  the UI layer's first render-level suite, via the existing createRoot/jsdom
+  pattern.
+- Model-layer regression tests for the A-13 polymorphic counting, the A-14
+  guards and the undetermined CI bound.
+
 ### Reconciliation-view lag (`性能分析-协调视图卡顿`) — 2026-11-09. Every finding
 of the coordination-view performance analysis (§3.1–§3.5) repaired.
 

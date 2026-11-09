@@ -8,6 +8,7 @@
 // worker round-trip is a structured clone away.
 
 import { solveDtl } from './dtl';
+import { tr } from '../ui/strings';
 import type { DtlOptions } from './dtl';
 import { solveDtlWithPolytomies } from './geneTrees';
 import type { Project, ReconCosts } from './types';
@@ -58,6 +59,17 @@ function drainToSync(reason: unknown): void {
   pending.clear();
   for (const p of stalled) p.resolve(runSync(p.request));
   if (reason) console.warn('[dtl] worker unavailable, fell back to sync:', reason);
+  // The fallback solves on the MAIN thread: without this message the user only
+  // sees the window freeze with no explanation (M6). Late-imported to keep the
+  // model layer free of a static ui dependency.
+  void import('../ui/toast').then(({ notify }) =>
+    notify.info(
+      tr(
+        '后台求解线程不可用，DTL 求解已在主线程回退执行：大树上求解时界面可能短暂无响应。',
+        'The background solve thread is unavailable; DTL solving fell back to the main thread — the interface may briefly freeze on large trees.',
+      ),
+    ),
+  );
 }
 
 function getWorker(): Worker | null {

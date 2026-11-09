@@ -23,6 +23,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# Folds a second launch (double-click on an associated file while the app is
+# already open) into the running instance: its document paths arrive as events
+# and the existing window comes to the front. Registered first in `run()`.
+tauri-plugin-single-instance = "2"
 # Used for one thing: the `tauri::fs::Scope` state it manages is the record the
 # dialog plugin's Rust side writes when a person picks a file, and `validate_path`
 # in src/lib.rs consults that record instead of whitelisting all of $HOME. NO

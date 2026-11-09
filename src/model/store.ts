@@ -45,6 +45,8 @@ export interface ExportSettings {
   grayscale: boolean;
   /** White background regardless of theme (the default for publication). */
   whiteBackground: boolean;
+  /** Transparent PNG background instead of any fill (publication compositing). */
+  transparentBackground: boolean;
 }
 
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -58,11 +60,12 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   includeScaleBar: true,
   grayscale: false,
   whiteBackground: true,
+  transparentBackground: false,
 };
 import { DEFAULT_RECON_VIEW_OPTIONS, IDENTITY_VIEW } from './types';
-import { pushSnapshot, type HistoryEntry } from './history';
+import { HISTORY_LIMIT, pushSnapshot, type HistoryEntry } from './history';
 import { createEmptyProject, createSampleProject, SAMPLE_PROJECTS } from './sampleTree';
-import { reconstructMk, type AsrResult, type AsrOptions, DEFAULT_ASR_OPTIONS } from './asr';
+import { applyDisplayThreshold, reconstructMk, type AsrDisplayNode, type AsrResult, type AsrOptions, DEFAULT_ASR_OPTIONS } from './asr';
 import { tr } from '../ui/strings';
 // Side-effectful import ON PURPOSE: i18n.ts resolves the stored / OS locale at
 // module load and swaps the string catalogue via setLanguage(). ESM evaluates
@@ -230,7 +233,9 @@ function docStateFor(project: Project): Partial<AppState> {
     focusTarget: null,
     renameRequest: null,
     asr: null,
-  asrOptions: DEFAULT_ASR_OPTIONS,
+    asrRunning: false,
+    historyLimit: HISTORY_LIMIT,
+    asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: false,
     activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
     geneSelection: [] as NodeId[],
@@ -264,7 +269,9 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     focusTarget: null,
     renameRequest: null,
     asr: null,
-  asrOptions: DEFAULT_ASR_OPTIONS,
+    asrRunning: false,
+    historyLimit: HISTORY_LIMIT,
+    asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: snap.reconMode,
     // Drop a stale gene-tree pointer (e.g. removed while tab was parked).
     activeGeneTreeId:
@@ -360,6 +367,15 @@ export interface UISlice {
   renameRequest: { id: NodeId; seq: number } | null;
   /** Probabilistic ancestral-state reconstruction for the active character (transient). */
   asr: AsrResult | null;
+  /** True while the (synchronous) Mk fit is in flight — the UI disables the run buttons. */
+  asrRunning: boolean;
+  /**
+   * Undo-stack depth (A-12). Entries share structure with the document, so the
+   * memory cost of a deeper stack is the delta per edit, not a full copy —
+   * long editing sessions (batch renames, per-node state assignment) ran out
+   * of the fixed 100 too early with no way to widen it.
+   */
+  historyLimit: number;
   /** ASR model and display threshold options. */
   asrOptions: AsrOptions;
   /** Figure-export settings (decoupled from the live view; see ExportSettings). */
@@ -405,6 +421,7 @@ export interface UISlice {
   clearAsr: () => void;
   setAsrOptions: (opts: Partial<AsrOptions>) => void;
 
+  setHistoryLimit: (n: number) => void;
   setReconMode: (v: boolean) => void;
   setActiveGeneTree: (id: string | null) => void;
   selectGeneNode: (id: NodeId | null, additive?: boolean) => void;
@@ -569,7 +586,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         // mid-drag state here made the first undo resurrect a half-finished
         // drag (e.g. begin → live move → apply delete → commit → undo restored
         // the dragged position instead of the pre-drag document).
-        past: s.interactionBase ? s.past : pushSnapshot(s.past, entryOf(s)),
+        past: s.interactionBase ? s.past : pushSnapshot(s.past, entryOf(s), s.historyLimit),
         future: [],
         // A completed ASR is marked STALE, not deleted: the posterior was
         // computed from data that just changed, but the reader may still want
@@ -588,12 +605,19 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         recipe(d);
       });
       if (next === s.project) return {};
+      // A caller that forgot `beginInteraction` used to leave its live edits
+      // with no base, so the later commit could not push history (M10): the
+      // change silently bypassed undo AND the dirty counter. Capture the base
+      // here instead of trusting the contract — the interaction semantics then
+      // hold no matter who calls.
+      const base = s.interactionBase ?? entryOf(s);
       const pointers = reconciledGenePointers(next, s.activeGeneTreeId, s.geneSelection);
       return {
         project: next,
         selection: keptSelection(next, s.selection),
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
+        interactionBase: base,
       };
     }),
 
@@ -626,7 +650,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
           ? {
               revision: s.revision + 1,
               asr: s.asr ? { ...s.asr, stale: true } : null,
-              past: pushSnapshot(s.past, base),
+              past: pushSnapshot(s.past, base, s.historyLimit),
               future: [],
             }
           : {}),
@@ -647,6 +671,13 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
             activeCharacterId: s.interactionBase.activeCharacterId,
             interactionBase: null,
             draggingId: null,
+            // The abort must also restore the DIRTY bookkeeping: the reverted
+            // document is bit-identical to the base, so if the base was the
+            // last-saved document the tab is clean again — same rule undo
+            // applies when it restores a saved state (M10).
+            revision: s.revision + 1,
+            lastSavedRevision:
+              s.interactionBase.project === s.savedProject ? s.revision + 1 : s.lastSavedRevision,
           }
         : { draggingId: null },
     ),
@@ -686,7 +717,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       const pointers = reconciledGenePointers(nextEntry.project, s.activeGeneTreeId, s.geneSelection);
       return {
         project: nextEntry.project,
-        past: pushSnapshot(s.past, entryOf(s)),
+        past: pushSnapshot(s.past, entryOf(s), s.historyLimit),
         future: s.future.slice(1),
         selection: pruneSelection(nextEntry.project, nextEntry.selection),
         selectedEdgeId: nextEntry.selectedEdgeId,
@@ -759,6 +790,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   eraLevel: 'both',
   focusTarget: null,
   asr: null,
+  asrRunning: false,
+  historyLimit: HISTORY_LIMIT,
   asrOptions: DEFAULT_ASR_OPTIONS,
   exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
   renameRequest: null,
@@ -826,43 +859,75 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   requestRename: (id) =>
     set((s) => ({ renameRequest: { id, seq: (s.renameRequest?.seq ?? 0) + 1 } })),
 
-  runAsr: (force = false) =>
-    set((s) => {
-      const c = s.project.characters.find((x) => x.id === s.activeCharacterId);
-      if (!c || c.type !== 'discrete') return {};
-      const opts: AsrOptions = force ? { ...s.asrOptions, maxMissingBranchFraction: 1 } : s.asrOptions;
-      const result = reconstructMk(s.project, c, opts);
-      if (!result) {
-        // A null result means "this Mk model is not implemented here", and
-        // must never be left to read as "the data supports no reconstruction".
-        notify.error(
-          tr(
-            `Mk 模型「${s.asrOptions.model}」尚未实现：本软件只做等速率（ER）重建，因此不显示结果`,
-            `The Mk model "${s.asrOptions.model}" is not implemented: this software reconstructs only equal rates (ER), so no result is shown`,
-          ),
-        );
-        return {};
-      }
-      if (result.probs.size === 0) {
-        // The missing-branch guard refused the run. Say what to do — the UI
-        // surfaces a "continue with a unit-length topology model" action that
-        // calls back with force = true.
-        const refused = result.warnings.find((w) => w.kind === 'missing-branch-lengths-refused');
-        if (refused) notify.error(refused.message);
-        return {};
-      }
-      if (result.warnings.length) {
-        for (const w of result.warnings) {
-          notify.info(w.message);
+  runAsr: (force = false) => {
+    const s = get();
+    const c = s.project.characters.find((x) => x.id === s.activeCharacterId);
+    if (!c || c.type !== 'discrete') return;
+    if (s.asrRunning) return; // one fit at a time; the buttons are disabled anyway
+    // Mark busy and yield one frame FIRST: the ML fit is a synchronous
+    // ≈350-pruning pass on the main thread, and without this handoff the
+    // "running" state could never paint (the buttons would stay enabled and
+    // re-entrant clicks would queue more fits). The DTL solver already runs in
+    // a worker; ASR gets the same visible liveness until it moves there too.
+    set({ asrRunning: true });
+    setTimeout(() => {
+      try {
+        const live = get();
+        const opts: AsrOptions = force
+          ? { ...live.asrOptions, maxMissingBranchFraction: 1 }
+          : live.asrOptions;
+        const result = reconstructMk(live.project, c, opts);
+        if (!result) {
+          // A null result means "this Mk model is not implemented here", and
+          // must never be left to read as "the data supports no reconstruction".
+          notify.error(
+            tr(
+              `Mk 模型「${live.asrOptions.model}」尚未实现：本软件只做等速率（ER）重建，因此不显示结果`,
+              `The Mk model "${live.asrOptions.model}" is not implemented: this software reconstructs only equal rates (ER), so no result is shown`,
+            ),
+          );
+          return;
         }
+        if (result.probs.size === 0) {
+          // A guard refused the run (missing branch lengths, too few usable
+          // observations, a flat rate profile). Every refusal carries its own
+          // reason and what to do next — surface it, never a silent no-op.
+          for (const w of result.warnings) notify.error(w.message);
+          return;
+        }
+        for (const w of result.warnings) notify.info(w.message);
+        set({ asr: result });
+      } finally {
+        set({ asrRunning: false });
       }
-      return { asr: result };
-    }),
+    }, 0);
+  },
 
   clearAsr: () => set({ asr: null }),
 
   setAsrOptions: (opts) =>
-    set((s) => ({ asrOptions: { ...s.asrOptions, ...opts } })),
+    set((s) => {
+      const asrOptions = { ...s.asrOptions, ...opts };
+      let asr = s.asr;
+      // The threshold is presentation-only, so it must never demand a re-run:
+      // re-derive the display set from the STORED posterior the moment the
+      // slider moves (M9 — the old code only merged the option, so the canvas
+      // stayed frozen until the next run, contradicting the dialog's own hint).
+      if (asr && typeof opts.threshold === 'number' && opts.threshold !== asr.threshold && asr.probs.size > 0) {
+        const asrCurrent = asr;
+        const c = s.project.characters.find((x) => x.id === asrCurrent.characterId);
+        if (c) {
+          const stateIds = c.states.map((st) => st.id);
+          const display = new Map<NodeId, AsrDisplayNode>();
+          for (const [id, p] of asrCurrent.probs) display.set(id, applyDisplayThreshold(p, stateIds, opts.threshold));
+          asr = { ...asrCurrent, threshold: opts.threshold, display };
+        }
+      }
+      return { asrOptions, asr };
+    }),
+
+  setHistoryLimit: (n) =>
+    set({ historyLimit: Math.max(10, Math.min(5000, Math.round(n))) }),
 
   setReconMode: (v) => set({ reconMode: v }),
 

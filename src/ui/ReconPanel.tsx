@@ -23,7 +23,7 @@ import {
   renameGeneTree,
   setReconCosts,
 } from '../model/geneTrees';
-import type { Project, ReconCosts, ReconSection, ReconEventType } from '../model/types';
+import { DEFAULT_RECON_COSTS, type Project, type ReconCosts, type ReconSection, type ReconEventType } from '../model/types';
 import { mapTipsByLabel, suggestLcaScenario, validateScenario, type ReconIssue } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
 import { dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
@@ -119,7 +119,10 @@ export function ReconPanel({
     [tabs, tabStore, activeTabId],
   );
 
-  const costs = project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 };
+  // Fallback = the shipped default (1,1,1), not the pre-0.2 (1,2,1) bias: any
+  // path that builds a Project without serialization must solve with the same
+  // costs the UI advertises (A-09).
+  const costs = project.reconCosts ?? DEFAULT_RECON_COSTS;
 
   /**
    * `setReconCosts` validates the vector and may REFUSE a value (NaN,
@@ -493,27 +496,41 @@ export function ReconPanel({
             </div>
 
             {dp && dp.geneId === activeEntry.id && (
-              <div className="recon-stat-grid" style={{ marginTop: 8 }}>
-                <span className="recon-chip">
-                  {S.recon.dpCurrent} {activeStat.summary.cost}
-                </span>
-                <span className="recon-chip chip-sigma">
-                  {S.recon.dpOptimal} {dp.scenario.cost}
-                </span>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    apply((d) => {
-                      const g = d.geneTrees?.find((x) => x.id === activeEntry.id);
-                      if (!g) return;
-                      g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario);
-                    });
-                    notify.success(S.recon.dpApply);
-                  }}
-                >
-                  {S.recon.dpApply}
-                </button>
-              </div>
+              <>
+                <div className="recon-stat-grid" style={{ marginTop: 8 }}>
+                  <span className="recon-chip">
+                    {S.recon.dpCurrent} {activeStat.summary.cost}
+                  </span>
+                  <span className="recon-chip chip-sigma">
+                    {S.recon.dpOptimal} {dp.scenario.cost}
+                  </span>
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      apply((d) => {
+                        const g = d.geneTrees?.find((x) => x.id === activeEntry.id);
+                        if (!g) return;
+                        g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario);
+                      });
+                      notify.success(S.recon.dpApply);
+                    }}
+                  >
+                    {S.recon.dpApply}
+                  </button>
+                </div>
+                {/* The honesty strings the model already computes, rendered NEXT
+                    to the numbers they qualify (A-17): without them, "k equally
+                    optimal scenarios" and the free-root subsidy are invisible —
+                    the displayed event classes read as THE answer. */}
+                <div className="hint" style={{ marginTop: 6 }}>{S.recon.dpInvariant}</div>
+                {dp.scenario.ambiguous.length > 0 && (
+                  <div className="hint">{S.recon.dpAmbiguousNodes(dp.scenario.ambiguous.length)}</div>
+                )}
+                {dp.scenario.rootFees > 0 && (
+                  <div className="hint">{S.recon.dpFreeRoot(dp.scenario.rootFees)}</div>
+                )}
+                <div className="hint">{S.recon.dpComparability}</div>
+              </>
             )}
           </Section>
 
@@ -754,7 +771,9 @@ export function ReconPanel({
               ))}
             </select>
           </Field>
-          <div className="hint" style={{ marginTop: 6 }}>{S.recon.dpComparability}</div>
+          {/* The comparability statement moved next to the DP numbers it
+              qualifies (A-17): inside this collapsed section it never met the
+              "DP optimal cost" chip it is a scope declaration FOR. */}
         </Section>
       )}
     </>

@@ -11,7 +11,7 @@ import { useStore } from '../model/store';
 import { useDialogFocus } from './useDialogFocus';
 import { RangeField } from './fields';
 import { Field, CheckboxField } from './fields';
-import { S } from './strings';
+import { S, tr } from './strings';
 
 export function ExportSettingsDialog({
   open,
@@ -45,19 +45,33 @@ export function ExportSettingsDialog({
           checked={settings.followView}
           onChange={(v) => setExportSettings({ followView: v })}
         />
+        {/* DPI is DENSITY, not content: it applies in follow-view mode too now
+            that the rasteriser honours it there (M8), so the control is no
+            longer hidden behind the preset switch. */}
+        <Field label={S.review.exportDpi} title={S.review.exportDpiHint}>
+          <RangeField
+            value={settings.dpi}
+            min={96}
+            max={1200}
+            step={12}
+            onCommit={(v) => v !== undefined && setExportSettings({ dpi: v })}
+          />
+        </Field>
+        <div className="hint">
+          {tr(
+            `${settings.dpi} dpi ≈ ${Math.round((settings.dpi / 96) * 100) / 100}× 缩放`,
+            `${settings.dpi} dpi ≈ ${Math.round((settings.dpi / 96) * 100) / 100}× scale`,
+          )}
+        </div>
+        <CheckboxField
+          label={S.review.exportTransparentBg}
+          title={S.review.exportTransparentBgHint}
+          checked={settings.transparentBackground}
+          onChange={(v) => setExportSettings({ transparentBackground: v })}
+        />
         {!settings.followView && (
           <>
             <div className="hint">{S.review.exportDecoupledNote}</div>
-            <Field label={S.review.exportDpi} title={S.review.exportDpiHint}>
-              <RangeField
-                value={settings.dpi}
-                min={96}
-                max={1200}
-                step={12}
-                onCommit={(v) => v !== undefined && setExportSettings({ dpi: v })}
-              />
-            </Field>
-            <div className="hint">{`${settings.dpi} dpi ≈ ${Math.round((settings.dpi / 96) * 100) / 100}× scale`}</div>
             <CheckboxField
               label={S.review.exportShowSupport}
               title={S.review.exportShowSupportHint}

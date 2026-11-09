@@ -33,7 +33,7 @@ function metaJson(indent: string, rel: string, value: unknown): string {
  * edge is omitted per NeXML convention), the character matrices, and the
  * semantic layer as annotations.
  */
-export function serializeNexml(project: Project): string {
+export function serializeNexml(project: Project, notes?: string[]): string {
   const tips = Object.values(project.nodes).filter((n) => n.childrenIds.length === 0);
   const otuId = new Map<NodeId, string>();
   tips.forEach((t, i) => otuId.set(t.id, `otu${i + 1}`));
@@ -78,11 +78,20 @@ export function serializeNexml(project: Project): string {
       lines.push('    </states>');
     });
     lines.push('    <matrix>');
+    let droppedPolymorphic = 0;
     for (const t of tips) {
       const cells: string[] = [];
       discrete.forEach((c, ci) => {
         const v = t.charStates?.[c.id];
-        if (v === undefined || Array.isArray(v)) return; // polymorphic rows skipped (noted below)
+        if (v === undefined) return;
+        if (Array.isArray(v)) {
+          // NeXML's one-state cell format cannot carry a polymorphic set. The
+          // old comment claimed "(noted below)" while nothing below noted
+          // anything; the drop is now REPORTED through `notes` so the caller
+          // can surface it (the project's own partial-data rule).
+          droppedPolymorphic += 1;
+          return;
+        }
         const si = c.states.findIndex((s) => s.id === v);
         if (si >= 0) cells.push(`<cell char="char${ci + 1}" state="states${ci + 1}_s${si + 1}"/>`);
       });
@@ -91,6 +100,14 @@ export function serializeNexml(project: Project): string {
       }
     }
     lines.push('    </matrix>');
+    if (droppedPolymorphic > 0 && notes) {
+      notes.push(
+        tr(
+          `NeXML 导出丢弃了 ${droppedPolymorphic} 个多态（多状态）单元格：NeXML 的单状态 cell 格式无法表达多态记载。如需完整数据请导出 CSV 或 NEXUS。`,
+          `The NeXML export dropped ${droppedPolymorphic} polymorphic (multi-state) cell${droppedPolymorphic === 1 ? '' : 's'}: NeXML's one-state cell format cannot carry a polymorphic record. Export CSV or NEXUS for the full data.`,
+        ),
+      );
+    }
     lines.push('  </characters>');
   }
   if (continuous.length > 0) {

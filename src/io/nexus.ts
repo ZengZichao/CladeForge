@@ -44,9 +44,10 @@ export const DEFAULT_NEXUS_OPTIONS: NexusExportOptions = {
  * never split a statement in the wrong place, while every piece of *content* is
  * sliced from the raw string (which is what keeps NHX / FigTree annotations).
  */
-function maskNexus(s: string): string {
+function maskNexus(s: string): { masked: string; unterminatedComment: boolean } {
   const out = s.split('');
   let i = 0;
+  let unterminatedComment = false;
   const blank = (from: number, to: number) => {
     for (let k = from; k < to; k += 1) {
       if (out[k] !== '\n') out[k] = ' ';
@@ -56,9 +57,17 @@ function maskNexus(s: string): string {
     const c = s[i];
     if (c === '[') {
       const end = s.indexOf(']', i);
-      if (end === -1) break; // unterminated comment: blank to the end
-      blank(i + 1, end === -1 ? s.length : end);
-      i = end === -1 ? s.length : end + 1;
+      if (end === -1) {
+        // Unterminated comment. The tail IS blanked (the parser still sees the
+        // structure before it), but the caller must report the root cause: the
+        // old silent swallow masked everything after the stray "[" — including
+        // the TREES block — and surfaced as a misleading "No TREES block found".
+        unterminatedComment = true;
+        blank(i + 1, s.length);
+        break;
+      }
+      blank(i + 1, end);
+      i = end + 1;
       continue;
     }
     if (c === "'" || c === '"') {
@@ -83,7 +92,7 @@ function maskNexus(s: string): string {
     }
     i += 1;
   }
-  return out.join('');
+  return { masked: out.join(''), unterminatedComment };
 }
 
 /** Split on `sep` only when outside single-quoted spans ('' is an escaped quote). */
@@ -179,7 +188,7 @@ function findTreeStatements(raw: string, masked: string): NexusTreeStatement[] {
 
 /** Raw + masked text of every `BEGIN TREES; … END;` block in the file. */
 function treesBlocks(input: string): { raw: string; masked: string }[] {
-  const maskedAll = maskNexus(input);
+  const maskedAll = maskNexus(input).masked;
   const blocks: { raw: string; masked: string }[] = [];
   const re = /begin\s+trees\s*;/gi;
   let m: RegExpExecArray | null;
@@ -207,8 +216,24 @@ export interface NexusParseResult {
  */
 export function parseNexusTrees(input: string, name = 'Imported tree'): NexusParseResult {
   assertTreeInput(input);
+  const { masked: maskedAll, unterminatedComment } = maskNexus(input);
+  if (unterminatedComment) {
+    throw new Error(
+      tr(
+        `NEXUS 解析错误：文件中有一个未闭合的「[」注释——从它到文件尾的全部内容都被当作注释忽略了（因此找不到 BEGIN TREES）。请补上对应的「]」或删掉这个「[」。`,
+        `NEXUS parse error: the file contains an unclosed "[" comment — everything from it to the end of the file was ignored as a comment (so no BEGIN TREES can be found). Close it with "]" or remove the "[".`,
+      ),
+    );
+  }
   const blocks = treesBlocks(input);
-  if (blocks.length === 0) throw new Error('No TREES block found in NEXUS file');
+  if (blocks.length === 0) {
+    throw new Error(
+      tr(
+        'NEXUS 文件中没有 TREES 块（需要 BEGIN TREES; ... END; 语句）',
+        'No TREES block found in the NEXUS file (expected BEGIN TREES; ... END;)',
+      ),
+    );
+  }
 
   // Each statement carries the TRANSLATE table of the block it came from: a single
   // hoisted table would let a later BEGIN TREES block rename the trees declared by
@@ -218,7 +243,14 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
     const translate = parseTranslateTable(b.raw, b.masked);
     for (const stmt of findTreeStatements(b.raw, b.masked)) statements.push({ stmt, translate });
   }
-  if (statements.length === 0) throw new Error('No TREE statement found in NEXUS TREES block');
+  if (statements.length === 0) {
+    throw new Error(
+      tr(
+        'NEXUS 文件的 TREES 块中没有 TREE 语句（需要 Tree tree_name = ...; 形式）',
+        'No TREE statement found in the NEXUS TREES block (expected "Tree <name> = ...;")',
+      ),
+    );
+  }
   // A NEXUS file may hold thousands of TREE statements; if each got its own node
   // budget the document-level ceilings would not bind, so one budget is shared.
   assertTreeCount(statements.length);
@@ -263,7 +295,14 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
     }
     projects.push(project);
   });
-  if (projects.length === 0) throw new Error('No TREE statement found in NEXUS TREES block');
+  if (projects.length === 0) {
+    throw new Error(
+      tr(
+        'NEXUS 文件的 TREE 语句未能解析出任何树',
+        'The TREE statements of the NEXUS file produced no parsable tree',
+      ),
+    );
+  }
 
   // A file that carries BOTH trees and a character matrix gets the matrix
   // attached to the first tree, joined by label — the "trees + traits travel
@@ -319,11 +358,26 @@ export function parseNexusFile(
   try {
     const m = parseNexusMatrix(input);
     if (m.characters.length > 0 || m.unsupported.length > 0) matrix = m;
-  } catch {
+  } catch (e) {
+    // A matrix that fails to read is not "no matrix": swallowing the error (and
+    // the issues it had already accumulated) made a malformed DATA block
+    // indistinguishable from an absent one. Report the reason and carry on.
     matrix = null;
+    issues.push(
+      tr(
+        `性状矩阵读取失败：${e instanceof Error ? e.message : String(e)}`,
+        `Reading the character matrix failed: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
   if (projects.length === 0 && !matrix) {
-    throw new Error('No TREES block found in NEXUS file');
+    throw new Error(
+      issues[0] ||
+        tr(
+          'NEXUS 文件中没有可解析的树或性状矩阵（需要 BEGIN TREES 或 BEGIN DATA/CHARACTERS 块）',
+          'No parsable trees or character matrix in the NEXUS file (expected a BEGIN TREES or BEGIN DATA/CHARACTERS block)',
+        ),
+    );
   }
   return { projects, matrix, issues };
 }
@@ -742,7 +796,7 @@ function expandStandardCells(tokens: string[]): string[] {
 }
 
 function blocksOf(input: string, kinds: string[]): { raw: string; masked: string }[] {
-  const maskedAll = maskNexus(input);
+  const maskedAll = maskNexus(input).masked;
   const out: { raw: string; masked: string }[] = [];
   const re = new RegExp(`begin\\s+(${kinds.join('|')})\\s*;`, 'gi');
   let m: RegExpExecArray | null;

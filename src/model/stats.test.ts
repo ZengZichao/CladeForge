@@ -216,6 +216,92 @@ describe('discreteSignal', () => {
     expect(sig.ci).toBeCloseTo(1, 10);
   });
 
+  it('counts a polymorphic tip as a share across its member states, not as a state of its own', () => {
+    // Regression for the review finding A-13: the shared guard used to carry a
+    // `value is string` predicate while accepting arrays, so an array object
+    // became a Map key here — every polymorphic tip invented a fresh "state"
+    // (observedStates and m inflated → CI biased) and counted 1 in the largest
+    // class (g deflated → RI biased), silently, on CSV-imported matrices.
+    const p = createEmptyProject();
+    const mk = (label: string, parentId: string) => {
+      const id = `p_${label}`;
+      p.nodes[id] = { id, label, parentId, childrenIds: [] };
+      p.nodes[parentId].childrenIds.push(id);
+      return id;
+    };
+    const n1 = mk('n1', p.rootId);
+    const t1 = mk('t1', n1);
+    const t2 = mk('t2', n1);
+    const t3 = mk('t3', p.rootId);
+    const t4 = mk('t4', p.rootId);
+    const ch: Character = {
+      id: 'hc',
+      name: 'state',
+      type: 'discrete',
+      states: [
+        { id: 's0', label: 'zero', color: '#000' },
+        { id: 's1', label: 'one', color: '#fff' },
+        { id: 's2', label: 'two', color: '#0f0' },
+      ],
+    };
+    p.characters = [ch];
+    p.nodes[t1].charStates = { hc: 's0' };
+    p.nodes[t2].charStates = { hc: ['s0', 's1'] }; // polymorphic record, as CSV import writes it
+    p.nodes[t3].charStates = { hc: 's1' };
+    p.nodes[t4].charStates = { hc: 's2' };
+
+    const sig = discreteSignal(p, ch)!;
+    // Three declared states observed (s0, s1, s2), four scored tips — the
+    // polymorphic tip is ONE tip, not a fourth state.
+    expect(sig.polymorphicTips).toBe(1);
+    expect(sig.observedStates).toBe(3);
+    expect(sig.tips).toBe(4);
+    expect(sig.missingCodes).toBe(0);
+    expect(sig.minSteps).toBe(2); // states − 1, NOT one per polymorphic tip
+    // Hand-computed: t1=s0 and t2={s0,s1} intersect to {s0} below n1; the root
+    // joins n1, t3=s1, t4=s2 → 2 changes. m = 2 → CI = 1 (no homoplasy); the
+    // corrupted counter produced m = 3 over 5 "tips".
+    expect(sig.steps).toBe(2);
+    expect(sig.ci).toBeCloseTo(1, 10);
+    // g = tips − modal share = 4 − 1.5 = 2.5 (the polymorphic tip splits its
+    // evidence evenly), and with s ≤ g the retention index saturates at 1.
+    expect(sig.maxSteps).toBeCloseTo(2.5, 10);
+    expect(sig.ri).toBeCloseTo(1, 10);
+  });
+
+  it('treats a polymorphic set referencing only deleted states as no observation', () => {
+    const p = createEmptyProject();
+    const mk = (label: string, parentId: string) => {
+      const id = `pd_${label}`;
+      p.nodes[id] = { id, label, parentId, childrenIds: [] };
+      p.nodes[parentId].childrenIds.push(id);
+      return id;
+    };
+    mk('n1', p.rootId);
+    const t1 = mk('t1', p.rootId);
+    const t2 = mk('t2', p.rootId);
+    const t3 = mk('t3', p.rootId);
+    const t4 = mk('t4', p.rootId);
+    const ch: Character = {
+      id: 'hc',
+      name: 'state',
+      type: 'discrete',
+      states: [
+        { id: 's0', label: 'zero', color: '#000' },
+        { id: 's1', label: 'one', color: '#fff' },
+      ],
+    };
+    p.characters = [ch];
+    p.nodes[t1].charStates = { hc: 's0' };
+    p.nodes[t2].charStates = { hc: 's1' };
+    p.nodes[t3].charStates = { hc: 's1' };
+    p.nodes[t4].charStates = { hc: ['gone1', 'gone2'] }; // stale ids of deleted states
+
+    const sig = discreteSignal(p, ch)!;
+    expect(sig.polymorphicTips).toBe(0);
+    expect(sig.tips).toBe(3);
+  });
+
   it('refuses CI/RI for a weighted character', () => {
     const p = createEmptyProject();
     const mk = (label: string, parentId: string) => {

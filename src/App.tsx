@@ -10,13 +10,14 @@
 // the workspace exists — so "no gene tree" can no longer produce the old
 // half-standard, half-reconciled chimera.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './model/store';
 import type { Project } from './model/types';
 import { requestConfirm } from './ui/confirmDialog';
 import * as file from './io/fileActions';
 import { registerMultiTreeHandler, registerExportSettingsHandler } from './io/fileActions';
 import { getAppInfo, isTauri } from './io/native';
+import { initDesktopShell, requestWindowClose } from './io/desktopShell';
 import { readAutoSave, readWorkspace, writeWorkspace } from './io/projectIO';
 import { isImeComposing } from './ui/imeGuard';
 import { MenuBar } from './ui/MenuBar';
@@ -33,6 +34,7 @@ import { ShortcutsDialog } from './ui/ShortcutsDialog';
 import { FirstRunTour, type TourMode } from './ui/FirstRunTour';
 import { NarrowScreenHint } from './ui/NarrowScreenHint';
 import { ImportTreesDialog } from './ui/ImportTreesDialog';
+import { ImportReportDialog } from './ui/ImportReportDialog';
 import { notify } from './ui/toast';
 import { S, skippedTabs } from './ui/strings';
 import { useLanguage, onLanguageChange, currentLanguage } from './ui/i18n';
@@ -106,7 +108,7 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
           key={id}
           className={`tab${id === activeTabId ? ' active' : ''}`}
           title={titleOf(id)}
-          onMouseDown={() => switchTab(id)}
+          onClick={() => switchTab(id)}
         >
           {/* The title attribute also sits on the inner span: the tab bar is
               a window drag region in Tauri and some builds suppress the
@@ -279,10 +281,14 @@ export function App() {
         if (e.shiftKey) void file.actionSaveProjectAs();
         else void file.actionSaveProject();
       } else if (k === 'w') {
-        // ⌘W closes the ACTIVE TAB (with the dirty confirm), not the window:
+        // ⌘W closes the ACTIVE TAB (with the dirty confirm), not the window;
         // the system window-close used to bypass the unsaved-changes guard.
+        // With a single tab the chord MEANS "close the window": desktop routes
+        // through the same dirty-check guard, and a browser says why the chord
+        // cannot act (C#13 — both used to be silent no-ops).
         e.preventDefault();
         if (s.tabs.length > 1) s.closeTab(s.activeTabId);
+        else requestWindowClose();
       } else if (k === '0') {
         e.preventDefault();
         s.requestFit();
@@ -380,10 +386,13 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Reflect native app + version into the window title.
+  // A-10: the title used to be stamped once at startup, so every window in the
+  // task switcher read "CladeForge 0.2.0" with no document name and no dirty
+  // marker. Follow the ACTIVE tab like any desktop editor does.
+  const appNameRef = useRef('CladeForge');
   useEffect(() => {
     void getAppInfo().then((info) => {
-      if (info) document.title = `${info.name} ${info.version}`;
+      if (info) appNameRef.current = info.name;
     });
   }, []);
 
@@ -410,6 +419,11 @@ export function App() {
   const tabs = useStore((s) => s.tabs);
   const activeTabId = useStore((s) => s.activeTabId);
   const tabStore = useStore((s) => s.tabStore);
+  // The title tracks the active document and the dirty marker (A-10).
+  const activeTabDirty = useStore((s) => s.revision !== s.lastSavedRevision);
+  useEffect(() => {
+    document.title = `${activeTabDirty ? '● ' : ''}${project.name || S.tabs.untitled} — ${appNameRef.current}`;
+  }, [project.name, activeTabDirty]);
   useEffect(() => {
     const t = setTimeout(() => {
       const s = useStore.getState();
@@ -432,6 +446,10 @@ export function App() {
       registerExportSettingsHandler(null);
     };
   }, []);
+
+  // Desktop shell (Tauri only, no-op in a browser): the unsaved-changes close
+  // guard and the OS file association. Returns its unlisten cleanup.
+  useEffect(() => initDesktopShell(), []);
 
   return (
     <div className={`app${macosTitlebar ? ' macos-titlebar' : ''}`} key={lang}>
@@ -505,6 +523,7 @@ export function App() {
       <BusyOverlay />
       <Toaster />
       <ConfirmDialog />
+      <ImportReportDialog />
       <ShortcutsDialog
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}

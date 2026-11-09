@@ -52,6 +52,16 @@ export interface ParsedTable {
   header: string[];
   rows: string[][];
   delimiter: string;
+  /**
+   * Structural problems of the table itself, reported to the user and never
+   * silently repaired: rows whose cell count differs from the header (missing
+   * cells read as empty, extra cells are dropped) and data rows skipped for an
+   * empty key cell. Every consumer appends these to its own issue list — a
+   * repair nobody hears about is indistinguishable from data loss.
+   */
+  issues: string[];
+  /** Data rows whose first cell was empty (skipped by every importer). */
+  skippedEmptyKeyRows: number;
 }
 
 /** Parse a CSV/TSV table (header row required). */
@@ -87,8 +97,39 @@ export function parseTable(text: string): ParsedTable {
   lines.push(cur);
   const nonEmpty = lines.filter((l, i) => l.trim().length > 0 || i === 0);
   const header = splitCsvLine(nonEmpty[0] ?? '', sep).map((h) => h.trim());
-  const rows = nonEmpty.slice(1).map((l) => splitCsvLine(l, sep));
-  return { header, rows, delimiter: sep };
+  const body = nonEmpty.slice(1).map((l) => splitCsvLine(l, sep));
+
+  // Shape problems are REPORTED, never silently repaired: a ragged row means
+  // cells the user typed are about to be read as empty or dropped, and the
+  // downstream "N rows unmatched" toast says nothing about why.
+  const issues: string[] = [];
+  const raggedRows: number[] = [];
+  let skippedEmptyKeyRows = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    const row = body[i];
+    if (row.length !== header.length) raggedRows.push(i + 1);
+    if (!(row[0] ?? '').trim()) skippedEmptyKeyRows += 1;
+  }
+  if (raggedRows.length > 0) {
+    const shown = raggedRows.slice(0, 3).join('、');
+    const suffix = raggedRows.length > 3 ? tr('等', '…') : '';
+    issues.push(
+      tr(
+        `${raggedRows.length} 个数据行的列数与表头不符（第 ${shown}${suffix} 行）：缺的单元格按空值读取，多余的丢弃。请检查这些行是否漏了分隔符或引号。`,
+        `${raggedRows.length} data row${raggedRows.length === 1 ? ' does' : 's do'} not match the header width (row${raggedRows.length === 1 ? '' : 's'} ${shown}${suffix}): missing cells read as empty and extra cells are dropped. Check for a missing separator or quote.`,
+      ),
+    );
+  }
+  if (skippedEmptyKeyRows > 0) {
+    issues.push(
+      tr(
+        `${skippedEmptyKeyRows} 个数据行的第一列为空，已整行跳过（第一列是用于匹配的名称列）。`,
+        `${skippedEmptyKeyRows} data row${skippedEmptyKeyRows === 1 ? ' has' : 's have'} an empty first column and ${skippedEmptyKeyRows === 1 ? 'was' : 'were'} skipped (column 1 is the label column used for matching).`,
+      ),
+    );
+  }
+
+  return { header, rows: body, delimiter: sep, issues, skippedEmptyKeyRows };
 }
 
 /** The label-normalisation used everywhere a tip label is matched. */
@@ -222,10 +263,13 @@ export function importMatrixTable(text: string, projectName: string): MatrixImpo
   }
 
   const characters: Character[] = [];
-  const issues: string[] = [];
+  // Shape problems of the table itself (ragged rows, skipped key-empty rows)
+  // surface alongside the per-column notes below.
+  const issues: string[] = [...table.issues];
   for (const col of columns) {
     const values = [...col.values.values()];
-    const allNumeric = values.length > 0 && values.every((v) => Number.isFinite(Number(v.replace(/,/g, '.'))));
+    const toNumber = (v: string): number => Number(v.replace(/,/g, '.'));
+    const allNumeric = values.length > 0 && values.every((v) => Number.isFinite(toNumber(v)));
     if (allNumeric) {
       characters.push({
         id: newId(),
@@ -236,8 +280,29 @@ export function importMatrixTable(text: string, projectName: string): MatrixImpo
         highColor: '#f97316',
       });
       (characters[characters.length - 1] as Character & { __values?: Map<string, number> }).__values =
-        new Map([...col.values.entries()].map(([k, v]) => [k, Number(v.replace(/,/g, '.'))]));
+        new Map([...col.values.entries()].map(([k, v]) => [k, toNumber(v)]));
       continue;
+    }
+    // NEAR-continuous column: most values parse as numbers but a few do not.
+    // This is exactly how a single stray cell ("N/A", a stray footnote, a
+    // decimal comma mis-locale) silently flipped a whole column from a
+    // continuous trait to a discrete one — every downstream statistic then ran
+    // on a different kind of data with no warning. Say which cells did it; the
+    // column is still discrete (the values ARE non-numeric), but the user can
+    // fix the sheet and re-import instead of trusting a quietly changed type.
+    const numericCount = values.filter((v) => Number.isFinite(toNumber(v))).length;
+    if (numericCount > 0 && numericCount >= values.length / 2) {
+      const offenders = [...col.values.entries()]
+        .filter(([, v]) => !Number.isFinite(toNumber(v)))
+        .slice(0, 3)
+        .map(([label, v]) => tr(`「${label}」的「${v}」`, `"${v}" (row ${JSON.stringify(label)})`));
+      const suffix = values.length - numericCount > 3 ? tr('等', '…') : '';
+      issues.push(
+        tr(
+          `列「${col.name}」以数值为主，但 ${values.length - numericCount} 个单元格不是数值（${offenders.join('、')}${suffix}），整列因此按离散性状处理。若这些值本应是缺失，请留空或写 ?，重新导入即按连续性状处理。`,
+          `Column "${col.name}" is mostly numeric, but ${values.length - numericCount} cell${values.length - numericCount === 1 ? ' is' : 's are'} not numbers (${offenders.join('; ')}${suffix}), so the whole column is imported as DISCRETE. If those cells should be missing, leave them empty or write ? and re-import to get a continuous character.`,
+        ),
+      );
     }
     // Discrete: state universe = observed values (minus missing codes), capped
     // with the same honest warning the manual pipeline uses.
@@ -339,8 +404,11 @@ export function applyMatrixImport(project: Project, result: MatrixImportResult):
 export function importAnnotationsTable(
   project: Project,
   text: string,
-): { applied: number; report: LabelJoinReport } {
+): { applied: number; report: LabelJoinReport; issues: string[] } {
   const table = parseTable(text);
+  // Ragged rows / key-empty rows are structural: they change what a join can
+  // match, so they travel back with the result for the caller to surface.
+  const shapeIssues = [...table.issues];
   if (table.header.length < 2) {
     throw new Error(
       tr(
@@ -382,7 +450,7 @@ export function importAnnotationsTable(
     });
     applied += 1;
   }
-  return { applied, report };
+  return { applied, report, issues: shapeIssues };
 }
 
 /** Calibration table: node label, min age, max age, optional label/source. */
@@ -391,7 +459,7 @@ export function importCalibrationTable(
   text: string,
 ): { applied: number; report: LabelJoinReport; issues: string[] } {
   const table = parseTable(text);
-  const issues: string[] = [];
+  const issues: string[] = [...table.issues];
   const labels: string[] = [];
   const rows: { label: string; min: number; max: number; name?: string; source?: string }[] = [];
   for (const row of table.rows) {

@@ -112,7 +112,7 @@ export function CommandPalette({
         const r = deriveBranchLengthsFromAges(d);
         msg = tr(
           `已从年龄推导 ${r.derived} 条枝长（仍缺 ${r.stillMissing} 条）`,
-          `Derived ${r.derived} branch length(s) from ages (${r.stillMissing} still missing)`,
+          `Derived ${r.derived} branch length${r.derived === 1 ? '' : 's'} from ages (${r.stillMissing} still missing)`,
         );
       });
       return msg;
@@ -239,7 +239,14 @@ export function CommandPalette({
         aliases: ['reroot', 're-root', 'dinggen', 'root'],
         run: () => {
           const id = sel();
-          if (id && id !== st().project.rootId) { apply((d) => rerootAtNode(d, id)); fit(); }
+          if (!id) {
+            // Keyboard users got a closed palette and nothing else (M3): say
+            // what is missing, exactly like the midpoint-reroot command does.
+            notify.info(tr('请先选中一个节点，再执行「在此重新定根」', 'Select a node first, then run "Reroot here"'));
+            return;
+          }
+          if (id !== st().project.rootId) { apply((d) => rerootAtNode(d, id)); fit(); }
+          else notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead'));
         },
       },
       {
@@ -273,7 +280,14 @@ export function CommandPalette({
         category: tr('树操作','Tree'),
         icon: <EyeOpenIcon />,
         aliases: ['collapse', 'fold', 'zhedie'],
-        run: () => { const id = sel(); if (id) apply((d) => toggleCollapse(d, id)); },
+        run: () => {
+          const id = sel();
+          if (!id) {
+            notify.info(tr('请先选中一个节点，再折叠/展开该枝', 'Select a node first to collapse/expand its clade'));
+            return;
+          }
+          apply((d) => toggleCollapse(d, id));
+        },
       },
       {
         id: 'selectLeaves',
@@ -297,19 +311,22 @@ export function CommandPalette({
         aliases: ['extract', 'subtree', 'tiqu', 'zishu'],
         run: () => {
           const id = sel();
-          if (!id) return;
+          if (!id) {
+            notify.info(tr('请先选中一个节点，再提取其子树为新标签页', 'Select a node first to extract its subtree into a new tab'));
+            return;
+          }
           const sub = extractSubtree(st().project, id);
           if (sub) st().openInNewTab(sub);
         },
       },
       // --- 协同 ---
-      { id: 'reconImport', label: S.recon.importFile, category: tr('协同', 'Reconcile'), icon: <ShuffleIcon />, aliases: ['gene tree', 'import gene', 'jiyin', 'xietong'], run: () => void file.actionImportGeneTree() },
+      { id: 'reconImport', label: S.recon.importFile, category: tr('协调', 'Reconcile'), icon: <ShuffleIcon />, aliases: ['gene tree', 'import gene', 'jiyin', 'xietong'], run: () => void file.actionImportGeneTree() },
       {
         id: 'reconView',
         // Derived from the `reconMode` this render was built for (see above), not
         // from a `st()` read at memo-construction time.
         label: reconMode ? S.recon.exitView : S.recon.enterView,
-        category: tr('协同', 'Reconcile'),
+        category: tr('协调', 'Reconcile'),
         icon: <ShuffleIcon />,
         aliases: ['reconciliation view', 'xietong shitu'],
         run: () => {
@@ -323,7 +340,7 @@ export function CommandPalette({
         // on an empty canvas, so this command is the non-empty-document entry.
         id: 'reconSample',
         label: S.recon.loadReconSample,
-        category: tr('协同', 'Reconcile'),
+        category: tr('协调', 'Reconcile'),
         icon: <ShuffleIcon />,
         aliases: ['sample', 'demo', 'reconciliation sample', 'xietong shili', 'yangli'],
         run: () => {
@@ -331,7 +348,7 @@ export function CommandPalette({
           if (d) openSample(d);
         },
       },
-      { id: 'reconReport', label: S.exportItems.reconReport, category: tr('协同', 'Reconcile'), icon: <DownloadIcon />, aliases: ['report', 'recon export'], run: () => void file.actionExportReconciliationReport() },
+      { id: 'reconReport', label: S.exportItems.reconReport, category: tr('协调', 'Reconcile'), icon: <DownloadIcon />, aliases: ['report', 'recon export'], run: () => void file.actionExportReconciliationReport() },
       // --- 分析 ---
       { id: 'collapseAll', label: S.review.cmdCollapseAll, category: tr('树操作','Tree'), icon: <FrameIcon />, aliases: ['collapse all', 'zhedie'], run: () => apply((d) => void collapseAll(d)) },
       { id: 'expandAll', label: S.review.cmdExpandAll, category: tr('树操作','Tree'), icon: <FrameIcon />, aliases: ['expand all', 'zhangkai'], run: () => apply((d) => void expandAll(d)) },

@@ -23,7 +23,7 @@
 
 import { tr } from '../ui/strings';
 import type { Character, NodeId, Project, TreeNode } from './types';
-import { isObservedState, stateLabel } from './characters';
+import { isObservedState, observedSingleState, stateLabel } from './characters';
 import { costOf, parsimony } from './parsimony';
 import { holmAdjustFamily, type HolmAdjusted } from './stats';
 
@@ -133,13 +133,18 @@ export function checkConsistency(project: Project, character: Character): Consis
 
   // C1 — local mismatch: a node asserted as X whose every assigned child is Y ≠ X.
   for (const n of Object.values(nodes)) {
-    const state = n.charStates?.[character.id];
-    if (!isObservedState(character, state)) continue;
+    // C1 reasons about ONE asserted state; a polymorphic parent is evidence but
+    // not a single hypothesis, so it is left to the parsimony-based checks.
+    const state = observedSingleState(character, n.charStates?.[character.id]);
+    if (state === undefined) continue;
     const kids = childrenOf(n);
     if (kids.length === 0) continue;
     const kidStates = kids
       .map((c) => c.charStates?.[character.id])
-      .filter((s): s is string => isObservedState(character, s));
+      // C1 compares single states; a polymorphic kid is evidence but not ONE
+      // state, so it voids the check (kidStates.length !== kids.length) instead
+      // of leaking an array into a string-typed set.
+      .filter((s): s is string => observedSingleState(character, s) !== undefined);
     if (kidStates.length !== kids.length) continue;
     const uniq = new Set(kidStates);
     if (uniq.size === 1 && !uniq.has(state)) {
@@ -212,13 +217,18 @@ export function checkConsistency(project: Project, character: Character): Consis
       if (n.childrenIds.length > 0 && isObservedState(character, s)) assertedInternals += 1;
       if (!n.parentId) continue;
       const p = nodes[n.parentId]?.charStates?.[character.id];
-      if (!isObservedState(character, s) || !isObservedState(character, p)) {
+      // Compare SINGLE states only: a polymorphic assertion cannot be priced
+      // through the cost matrix (it is a set, not an index), so it voids the
+      // "fully assigned" premise instead of leaking an array into a lookup.
+      const sid = observedSingleState(character, s);
+      const pid = observedSingleState(character, p);
+      if (sid === undefined || pid === undefined) {
         fullyAssigned = false;
         continue;
       }
-      if (s !== p) {
+      if (sid !== pid) {
         userChanges += 1;
-        userCost += costOf(character.costMatrix, stateIndex.get(p) as number, stateIndex.get(s) as number);
+        userCost += costOf(character.costMatrix, stateIndex.get(pid) as number, stateIndex.get(sid) as number);
       }
     }
     const minGivenAssertions = parsimonyCostGivenAssertions(project, character);
@@ -567,8 +577,10 @@ export interface CorrelationTest extends CharacterCorrelation {
 export type AdjustedCorrelationTest = HolmAdjusted<CorrelationTest>;
 
 const DEFAULT_PERMUTATIONS = 999;
-/** Default seed: the same seed always replays the same p-value. */
-const DEFAULT_PERMUTATION_SEED = 20260919;
+/** Default seed: the same seed always replays the same p-value. Exported so the
+ * UI can print it next to every p-value — reproducibility a reader cannot see
+ * is not reproducibility (A-18). */
+export const DEFAULT_PERMUTATION_SEED = 20260919;
 /** Work budget: ≈ this many (node × parsimony-solve) steps per call. */
 const PERMUTATION_WORK_BUDGET = 400_000;
 /**
@@ -612,13 +624,19 @@ interface PermutationSide {
   observed: Set<NodeId>;
   /** Tips scored for this character — the states move within this set only. */
   tips: NodeId[];
-  /** The tips' observed states, in the same order as `tips`. */
-  states: string[];
+  /**
+   * The tips' observed states, in the same order as `tips`. A polymorphic tip
+   * contributes its SET (re-drawn as a set — `parsimony` scores it with set
+   * semantics), so this vector is honest about holding arrays; permuting within
+   * the scored tips keeps both the missing-data pattern and the polymorphism
+   * pattern exactly as recorded.
+   */
+  states: (string | string[])[];
 }
 
 function permutationSide(project: Project, character: Character): PermutationSide {
   const tips: NodeId[] = [];
-  const states: string[] = [];
+  const states: (string | string[])[] = [];
   for (const n of Object.values(project.nodes)) {
     if (n.childrenIds.length > 0) continue;
     const v = n.charStates?.[character.id];
@@ -626,7 +644,7 @@ function permutationSide(project: Project, character: Character): PermutationSid
     // number of observations — exactly as recorded.
     if (isObservedState(character, v)) {
       tips.push(n.id);
-      states.push(v);
+      states.push(v as string | string[]);
     }
   }
   return { character, observed: changeSetOf(project, character), tips, states };

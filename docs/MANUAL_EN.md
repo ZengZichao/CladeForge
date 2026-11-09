@@ -2,7 +2,7 @@
 
 # CladeForge — User Manual (English)
 
-**Applies to CladeForge v0.1.0**
+**Applies to CladeForge v0.2.0**
 
 中文版本：[MANUAL_ZH.md](./MANUAL_ZH.md)
 
@@ -85,7 +85,7 @@ On first launch, CladeForge opens an empty workspace and offers a four-step guid
 To start immediately, you can:
 - **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex` or `.nexus` file onto the window, or choose **Import tree** in the File menu. ⌘O / Ctrl+O is **Open project**, which reads a `.cladeforge.json` file.
 - **Build from scratch** — Select the root and click the header's **+ Add children** button, which opens one dialog for binary, ternary and polytomy splits.
-- **Load a sample project** — Click "Load sample tree" on the empty-state screen, or pick from the sample grid. Six built-in samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), and every sample tree is strictly binary: aquatic transition (habitat and locomotion), deep-domain radiation (energy metabolism and temperature adaptation), wall type & oxygen, viral evolution (genome types and host range), plant terrestrialization (vascular tissue and seeds), and tetrapod land invasion (limbs, amniotic egg, and flight). Each sample comes pre-loaded with characters, events, and hypothesis layers.
+- **Load a sample project** — Click "Load sample tree" on the empty-state screen, or pick from the sample grid. Seven built-in samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), and every sample tree is strictly binary: aquatic transition (habitat and locomotion), deep-domain radiation (energy metabolism and temperature adaptation), wall type & oxygen, viral evolution (genome types and host range), plant terrestrialization (vascular tissue and seeds), tetrapod land invasion (limbs, amniotic egg, and flight), plus a **gene-family reconciliation** sample (a pre-wired gene tree and DTL assumptions that opens straight into the reconciliation view). Each sample comes pre-loaded with characters, events, and hypothesis layers.
 
 ### Language and Theme
 
@@ -706,7 +706,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | ⌘T / ⌘N | New tab |
 | ⌘W | Close tab |
 | ⌘A | Select all tips |
-| ⌘F / Ctrl+F | Search nodes · in the reconciliation view this only points at 场景 › 假设清单 |
+| ⌘F / Ctrl+F | Search nodes · in the reconciliation view this only points at Scene › Mappings & events |
 | ⌘⇧F | Fit to window |
 | ⌘0 | Fit to window |
 | ⌘K | Command palette |

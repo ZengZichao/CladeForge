@@ -15,8 +15,10 @@
 
 import * as file from '../io/fileActions';
 import type { DropdownItem } from './Dropdown';
-import { S } from './strings';
+import { S, tr } from './strings';
 import type { RecentEntry } from '../io/recent';
+import { useStore } from '../model/store';
+import { ladderize, rerootAtNode } from '../model/treeOps';
 
 /** The consolidated "文件" dropdown: lifecycle, import, and every export target. */
 export function buildFileMenuItems(
@@ -42,6 +44,37 @@ export function buildFileMenuItems(
       },
     },
     { sep: true },
+    // C#27: reroot and ladderize used to exist ONLY in the right-click menu —
+    // a discovery dead-end for trackpad users and anyone who does not think to
+    // right-click. The menu bar carries the two safe, self-explanatory ones.
+    { heading: tr('树操作', 'Tree operations') },
+    {
+      label: tr('在选中节点重新定根', 'Reroot at the selected node'),
+      onClick: () => {
+        const st = useStore.getState();
+        const id = st.selection[0];
+        if (!id) {
+          import('./toast').then(({ notify }) =>
+            notify.info(tr('请先在画布上选中一个节点', 'Select a node on the canvas first')),
+          );
+          return;
+        }
+        if (id === st.project.rootId) {
+          import('./toast').then(({ notify }) =>
+            notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead')),
+          );
+          return;
+        }
+        st.apply((d) => rerootAtNode(d, id));
+      },
+    },
+    {
+      label: tr('阶梯化整树', 'Ladderize the tree'),
+      onClick: () => {
+        const st = useStore.getState();
+        st.apply((d) => ladderize(d, false));
+      },
+    },
     { heading: S.review.importGroup },
     { label: S.menu.importTree, onClick: () => void file.actionImportTree() },
     { label: S.review.importTable, onClick: () => void file.actionImportTable('matrix') },

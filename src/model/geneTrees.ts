@@ -83,7 +83,11 @@ export function setAssumption(
   const cur = g.assumptions[nodeId] ?? { speciesNode: '' };
   const nextSpecies = speciesNode !== undefined ? speciesNode : cur.speciesNode;
   if (!nextSpecies || !project.nodes[nextSpecies]) {
-    delete g.assumptions[nodeId];
+    // An invalid species target used to DELETE the whole assumption row in
+    // silence — data loss with no message (M6). The caller's intent was an
+    // update, not a wipe, so the existing row is left untouched; a missing
+    // species mapping is exactly what validateScenario reports, so the user
+    // still hears about it through the normal channel.
     return;
   }
   g.assumptions[nodeId] = { ...cur, ...patch, speciesNode: nextSpecies };

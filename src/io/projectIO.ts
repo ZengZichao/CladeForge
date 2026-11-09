@@ -84,7 +84,39 @@ export function serializeProject(project: Project): string {
     version: project.version || PROJECT_VERSION,
     project: stamped,
   };
-  return JSON.stringify(payload, null, 2);
+  return JSON.stringify(payload, nonFiniteReplacer, 2);
+}
+
+/**
+ * Marker key for a non-finite number on the wire. `JSON.stringify(Infinity)`
+ * emits `null` — a re-read would put a `null` into a Sankoff step matrix and
+ * poison every cost lookup, so a legal `Infinity` entry (a forbidden
+ * transition) travels as a tagged object and is revived below.
+ */
+const NONFINITE_TAG = 'cf-nonfinite';
+
+function nonFiniteReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return { [NONFINITE_TAG]: value > 0 ? 'Infinity' : value < 0 ? '-Infinity' : 'NaN' };
+  }
+  return value;
+}
+
+/** Revive the tagged non-finite numbers `nonFiniteReplacer` wrote. */
+function reviveNonFinite(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reviveNonFinite);
+  if (value && typeof value === 'object') {
+    const tagged = (value as Record<string, unknown>)[NONFINITE_TAG];
+    if (typeof tagged === 'string') {
+      if (tagged === 'Infinity') return Number.POSITIVE_INFINITY;
+      if (tagged === '-Infinity') return Number.NEGATIVE_INFINITY;
+      if (tagged === 'NaN') return Number.NaN;
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = reviveNonFinite(v);
+    return out;
+  }
+  return value;
 }
 
 // --- version migration -------------------------------------------------------
@@ -167,7 +199,7 @@ export function readProjectFile(text: string): { project: Project; issues: strin
   // A BOM would make JSON.parse fail on a file merely resaved by Notepad.
   const source = stripBom(text);
   assertProjectInput(source);
-  const data = JSON.parse(source) as Partial<ProjectFile> & Partial<Project>;
+  const data = reviveNonFinite(JSON.parse(source)) as Partial<ProjectFile> & Partial<Project>;
   const fileVersion = (data as ProjectFile).version ?? (data as Project).version ?? '0';
 
   // Accept either the wrapped file or a bare Project object.
@@ -175,10 +207,23 @@ export function readProjectFile(text: string): { project: Project; issues: strin
     | (Project & RawProject)
     | undefined;
   if (!rawSource || typeof rawSource !== 'object' || !rawSource.nodes || !rawSource.rootId) {
-    throw new Error('Not a valid CladeForge project file');
+    // Bilingual through tr(): a hand-edited / truncated project file is exactly
+    // where a non-programmer lands after their first JSON experiment, and an
+    // English-only message here read as "the product does not care".
+    throw new Error(
+      tr(
+        '这不是有效的 CladeForge 项目文件（缺少 nodes/rootId 结构）。请确认打开的是 .cladeforge.json 项目文件；如果是手改过的文件，请检查 JSON 是否完整。',
+        'Not a valid CladeForge project file (missing the nodes/rootId structure). Check that this is a .cladeforge.json project; if it was hand-edited, check that the JSON is complete.',
+      ),
+    );
   }
   if (!rawSource.nodes[rawSource.rootId]) {
-    throw new Error('Project root node is missing');
+    throw new Error(
+      tr(
+        '项目文件的根节点缺失（rootId 指向的节点不存在）。文件可能被截断或手改损坏。',
+        'The project file\'s root node is missing (rootId points at no node). The file may be truncated or hand-edited.',
+      ),
+    );
   }
 
   return finalizeProject(rawSource as Project & RawProject, String(fileVersion));

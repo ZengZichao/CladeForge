@@ -60,7 +60,7 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
       { keys: 'Esc', label: tr('取消选择 / 中断手势', 'Clear selection / abort gesture') },
       { keys: 'Esc', label: S.review.shortcutEscExitRecon, mode: tr('仅协调视图', 'reconciliation view only') },
       { keys: 'Arrow keys', label: tr('微调选中节点（Shift = 10px 步进）', 'Nudge selected nodes (Shift = 10px steps)') },
-      { keys: 'Alt + ← / ↑ · Alt + → / ↓', label: tr('在树节点间移动焦点（父/子/兄弟）', 'Move focus between nodes (parent/child/sibling)') },
+      { keys: 'Alt + ← / ↑ · Alt + → / ↓', label: tr('在树节点间移动焦点（父/子/同级）', 'Move focus between nodes (parent/child/sibling)') },
       { keys: 'Wheel', label: tr('缩放（Ctrl/⌘ + 滚轮 = 捏合缩放；双指平移 = 平移画布）', 'Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan)') },
       { keys: 'Space / middle-drag', label: tr('平移画布', 'Pan canvas') },
       { keys: 'Shift/Alt + background drag', label: tr('框选节点', 'Marquee-select nodes') },
