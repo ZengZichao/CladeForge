@@ -17,13 +17,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout } from '../layout/autoLayout';
 import type { GeneNodeAssumption, NodeId, Project } from '../model/types';
-import { mapTipsByLabel, scenarioSummary } from '../model/reconciliation';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from '../ui/sampleOpener';
 import * as file from '../io/fileActions';
-import { S, tr } from '../ui/strings';
+import { S } from '../ui/strings';
 import { notify } from '../ui/toast';
 import { isImeComposing } from '../ui/imeGuard';
+import { geneTreeRows } from '../ui/reconStats';
 import {
   ReconPane,
   RECON_HEADER_H,
@@ -34,7 +34,7 @@ import {
   type PaneNodeMeta,
   type PaneTransform,
 } from './ReconPane';
-import { collectMappingLines, type PaneView } from './reconMapping';
+import { collectMappingAnchors, projectMappingAnchors, type PaneView } from './reconMapping';
 import { ReconMappingLayer } from './ReconMappingLayer';
 import { Cross1Icon } from '@radix-ui/react-icons';
 
@@ -71,10 +71,8 @@ export function ReconciliationView({
   const hoveredGeneId = useStore((s) => s.reconHoverGeneId);
   const focusTarget = useStore((s) => s.reconFocusTarget);
   const setActiveGeneTree = useStore((s) => s.setActiveGeneTree);
-  const selectGeneNode = useStore((s) => s.selectGeneNode);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
   const setReconMode = useStore((s) => s.setReconMode);
-  const apply = useStore((s) => s.apply);
 
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
 
@@ -295,6 +293,15 @@ export function ReconciliationView({
   }, [focusSeq]);
 
   // --- derived display metadata ----------------------------------------------
+  // The panel, inspector and status bar share this cached row set; the summary
+  // and the label-matched tip mappings are reused below instead of running
+  // scenarioSummary/mapTipsByLabel a second and third time per edit.
+  const activeRow = useMemo(
+    () => geneTreeRows(project).find((r) => r.id === activeGeneTreeId) ?? null,
+    [project, activeGeneTreeId],
+  );
+  const geneSelectionSet = useMemo(() => new Set(geneSelection), [geneSelection]);
+
   const geneMeta = useMemo(() => {
     const map = new Map<NodeId, PaneNodeMeta>();
     if (!entry) return map;
@@ -312,45 +319,50 @@ export function ReconciliationView({
         fill: style ? style.color : 'var(--recon-tip)',
         glyph: internal && a ? style?.glyph : undefined,
         dashedRed: internal && (!a || !a.event),
-        selected: geneSelection.includes(n.id),
+        selected: geneSelectionSet.has(n.id),
         hovered: hoveredGeneId === n.id,
         losses: a?.losses,
       });
     }
     return map;
-  }, [entry, geneSelection, hoveredGeneId]);
+  }, [entry, geneSelectionSet, hoveredGeneId]);
 
   // Mapping lines (pure) + per-pane stubs + species-side highlights.
   // Tip mappings come from LABEL matching even where no explicit assumption
   // exists — they are the anchors of the reconciliation (§5.6.2), so the
   // default tips-only view must show them, not just the hand/DP-written rows.
   const mappingAssumptions = useMemo(() => {
-    if (!entry) return {} as Record<NodeId, GeneNodeAssumption>;
+    if (!entry || !activeRow) return {} as Record<NodeId, GeneNodeAssumption>;
     const merged: Record<NodeId, GeneNodeAssumption> = { ...entry.assumptions };
-    for (const [gid, target] of Object.entries(mapTipsByLabel(project, entry.doc).mappings)) {
+    for (const [gid, target] of Object.entries(activeRow.tipMappings)) {
       if (target && !merged[gid]) merged[gid] = { speciesNode: target };
     }
     return merged;
-  }, [entry, project]);
+  }, [entry, activeRow]);
 
-  const mappingLines = useMemo(() => {
+  // The rules (filter / emphasis / bundling) run once per document/view-option
+  // or hover change; pan/zoom only re-runs the pure projection below.
+  const mappingAnchors = useMemo(() => {
     if (!entry || !geneLayout) return [];
-    return collectMappingLines({
+    return collectMappingAnchors({
       speciesDoc: project,
       geneDoc: entry.doc,
       assumptions: mappingAssumptions,
       speciesLayout,
       geneLayout,
-      speciesPane,
-      genePane,
       options,
       selectedGeneIds: geneSelection,
       hoveredGeneId,
     });
-  }, [entry, geneLayout, project, speciesLayout, speciesPane, genePane, options, geneSelection, hoveredGeneId, mappingAssumptions]);
+  }, [entry, geneLayout, project, speciesLayout, mappingAssumptions, options, geneSelection, hoveredGeneId]);
 
-  const speciesStubs = useMemo(() => stubsFromLines(mappingLines, 'species'), [mappingLines]);
-  const geneStubs = useMemo(() => stubsFromLines(mappingLines, 'gene'), [mappingLines]);
+  const mappingLines = useMemo(
+    () => projectMappingAnchors(mappingAnchors, speciesPane, genePane),
+    [mappingAnchors, speciesPane, genePane],
+  );
+
+  const speciesStubs = useMemo(() => stubsFromLines(mappingAnchors, 'species'), [mappingAnchors]);
+  const geneStubs = useMemo(() => stubsFromLines(mappingAnchors, 'gene'), [mappingAnchors]);
 
   const speciesMeta = useMemo(() => {
     const map = new Map<NodeId, PaneNodeMeta>();
@@ -367,16 +379,21 @@ export function ReconciliationView({
   const geneNodeCount = entry ? Object.keys(entry.doc.nodes).length : 0;
 
   // --- interactions -----------------------------------------------------------
-  const assignSelectedToSpecies = (speciesNodeId: NodeId) => {
-    if (!entry) return;
-    if (geneSelection.length !== 1) {
+  // Stable callbacks: the memoised pane rows receive these as props, so they
+  // must not change identity on hover/selection re-renders. Dynamic state is
+  // read from the store at call time instead of being closed over.
+  const assignSelectedToSpecies = useCallback((speciesNodeId: NodeId) => {
+    const st = useStore.getState();
+    const entryId = st.activeGeneTreeId;
+    const gid = st.geneSelection[0];
+    if (!entryId) return;
+    if (st.geneSelection.length !== 1) {
       // R-15: Alt+click with no selected gene node must not fail silently.
       notify.info(S.recon.mapSelectedHereNeedGene);
       return;
     }
-    const gid = geneSelection[0];
-    apply((d) => {
-      const g = d.geneTrees?.find((x) => x.id === entry.id);
+    st.apply((d) => {
+      const g = d.geneTrees?.find((x) => x.id === entryId);
       if (!g || !d.nodes[speciesNodeId]) return;
       const n = g.doc.nodes[gid];
       if (!n) return;
@@ -409,37 +426,32 @@ export function ReconciliationView({
       }
       g.assumptions[gid] = next;
     });
-  };
+  }, []);
 
-  const onSpeciesNodeClick = (id: NodeId, e: React.MouseEvent) => {
-    if (e.altKey) {
-      e.stopPropagation();
-      assignSelectedToSpecies(id);
-      return;
-    }
-    // One active selection system at a time: a species click retires the gene
-    // selection so the inspector's four states switch cleanly (§5.4).
-    const st = useStore.getState();
-    st.select(id);
-    st.clearGeneSelection();
-  };
-
-  const onGeneNodeClick = (id: NodeId, e: React.MouseEvent) => {
-    selectGeneNode(id, e.shiftKey || e.metaKey);
-    if (useStore.getState().selection.length > 0) useStore.getState().clearSelection();
-  };
-
-  const summary = useMemo(
-    () =>
-      entry
-        ? scenarioSummary(
-            entry.doc,
-            entry.assumptions,
-            project.reconCosts ?? { dup: 1, transfer: 2, loss: 1 },
-          )
-        : null,
-    [project, entry],
+  const onSpeciesNodeClick = useCallback(
+    (id: NodeId, e: React.MouseEvent) => {
+      if (e.altKey) {
+        e.stopPropagation();
+        assignSelectedToSpecies(id);
+        return;
+      }
+      // One active selection system at a time: a species click retires the gene
+      // selection so the inspector's four states switch cleanly (§5.4).
+      const st = useStore.getState();
+      st.select(id);
+      st.clearGeneSelection();
+    },
+    [assignSelectedToSpecies],
   );
+
+  const onGeneNodeClick = useCallback((id: NodeId, e: React.MouseEvent) => {
+    const st = useStore.getState();
+    st.selectGeneNode(id, e.shiftKey || e.metaKey);
+    if (st.selection.length > 0) st.clearSelection();
+  }, []);
+
+  // The active row's cached summary replaces the per-render scenarioSummary.
+  const summary = activeRow?.summary ?? null;
 
   // Screen-reader announcement of selection changes (§5.6.8).
   const announcement = useMemo(() => {
