@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Table I/O — CSV/TSV in and out.
 //
 // Real trait data lives in spreadsheets (MorphoBank exports, IUCN tables,
@@ -137,8 +138,6 @@ export function normalizeLabelKey(s: string): string {
   return s.trim().toLowerCase().replace(/_/g, ' ');
 }
 
-export type MatchKind = 'exact' | 'normalized' | 'unmatched' | 'duplicate';
-
 export interface LabelJoinReport {
   matched: number;
   exact: number;
@@ -235,7 +234,7 @@ export interface MatrixImportResult {
  * `(AB)` → polymorphic set), `?`/`-`/empty → missing. Returns the built
  * characters with transient per-label assignments for the caller to apply.
  */
-export function importMatrixTable(text: string, projectName: string): MatrixImportResult {
+export function importMatrixTable(text: string, _projectName: string): MatrixImportResult {
   const table = parseTable(text);
   if (table.header.length < 2) {
     throw new Error(

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // High-level document actions wiring the store, parsers and file service
 // together. These are called from menus / keyboard shortcuts. User feedback is
 // delivered through non-blocking toasts (see ui/toast) and all copy comes from
@@ -34,7 +35,6 @@ import {
   importAnnotationsTable,
   importCalibrationTable,
   importMatrixTable,
-  parseTable,
   type MatrixImportResult,
 } from './tableIO';
 import { readClipboardText, clipboardUnavailableMessage } from './clipboardIO';
@@ -1095,17 +1095,6 @@ export async function actionPasteTreeFromClipboard(): Promise<void> {
   importTreeText(text, tr('剪贴板树', 'Clipboard tree'));
 }
 
-/** Copy the current character-state matrix as CSV to the clipboard. */
-export async function actionCopyMatrixToClipboard(): Promise<void> {
-  const { writeClipboardText } = await import('./clipboardIO');
-  const csv = exportMatrixCsv(useStore.getState().project);
-  const ok = await writeClipboardText(csv);
-  notify.success(
-    ok
-      ? tr('性状表已复制到剪贴板（CSV），可直接粘贴进 Excel', 'Matrix copied to the clipboard as CSV — paste straight into Excel')
-      : tr('无法写入剪贴板', 'Could not write to the clipboard'),
-  );
-}
 
 /**
  * Open a project from TEXT already in memory (drop-zone path): same pipeline

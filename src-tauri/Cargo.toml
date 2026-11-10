@@ -1,6 +1,6 @@
 [package]
 name = "cladeforge"
-version = "0.2.0"
+version = "0.3.0"
 description = "CladeForge - local interactive phylogenetic tree editor"
 authors = ["曾子超 <zengzichao@sjtu.edu.cn>"]
 license = "MIT"

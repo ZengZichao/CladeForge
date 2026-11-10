@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # Cross-checking CladeForge against ape and phangorn
 
 > 中文版：[README_ZH.md](./README_ZH.md)
@@ -18,7 +20,7 @@ of evidence:
 | --- | --- | --- |
 | code | `src/model/independentReference.test.ts` | `dump-fixtures.ts` + `dump-fixtures.mjs` + `ape_agreement.R` + `run-cross-check.mjs` |
 | command | `npx vitest run src/model/independentReference.test.ts` | `node scripts/cross-check/run-cross-check.mjs` |
-| dependencies | Node plus the repository's own dev dependencies | R with the `ape` and `phangorn` packages; the per-leg totals below were checked against R 4.5.3, ape 5.8.1, phangorn 2.12.1 |
+| dependencies | Node plus the repository's own dev dependencies | R with the `ape` and `phangorn` packages; the per-leg totals below were checked against R 4.5.3 and 4.4.1, ape 5.8.1, phangorn 2.12.1 |
 
 ## 1. Dump the fixtures (Node only, no new dependencies)
 
@@ -29,15 +31,15 @@ node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit dir
 ```
 
 `dump-fixtures.mjs` is a plain-Node wrapper: it executes `dump-fixtures.ts` with
-the repository's own `vite-node` (already installed as a `vitest` dependency), so
+the repository's own `vite-node` (an explicit devDependency; Vitest 4 no longer bundles it), so
 the fixtures are produced by the *same* modules the application uses
 (`sampleTree`, `parsimony`, `asr`, `scriptExport`, `io/newick`) rather than by a
 re-implementation. If `vite-node` is absent it says so and exits 2 without
 writing anything.
 
-Per project — the six built-in samples (`archaea`, `bacteria`, `virus`,
-`cetacean`, `plant`, `animal`) plus the `er-control` control document described
-under "The `er-control` control document" — it writes ten files, plus
+Per project — the seven built-in samples (`archaea`, `bacteria`, `virus`,
+`cetacean`, `plant`, `animal`, `recon-family`) plus the `er-control` control
+document described under "The `er-control` control document" — it writes ten files, plus
 `manifest.tsv` and `names.tsv` at the top:
 
 | file | content | what the R leg does with it |
@@ -51,13 +53,13 @@ under "The `er-control` control document" — it writes ten files, plus
 | `asr_posteriors.tsv` | CladeForge's ER-Mk marginal posterior per node × state | marginal-state comparison |
 | `parsimony.tsv` | chosen state, **both** tie sets — `tie_state_indexes` (what survives the resolved ancestor path) and `mp_state_indexes` (every state in some optimal reconstruction, the set `phangorn::MPR` returns) — plus the change-branch flag; min cost in `summary.tsv` | parsimony comparison |
 | `summary.tsv` | mean branch length, `r = 1/mean`, minimum parsimony cost | cost comparison |
-| `cladeforge_analysis.R` | **the app's own exported reproducible script** (`buildRScript`), verbatim | runs standalone under `Rscript`; kept as the "second implementation" evidence |
+| `cladeforge_analysis.R` | **the app's own exported reproducible script** (`buildRScript`), verbatim except its volatile generation timestamp (normalised so fixtures are reproducible) | runs standalone under `Rscript`; kept as the "second implementation" evidence |
 
 Results are joined on a topological key, not on labels: `T:<tip label>` for tips
 and `N:<sorted tip set>|<number of nodes in that sub-tree>` for internal nodes.
-The sub-tree-size term is not decoration: in the cetacean project
-*Basilosauridae* and *Neoceti* cover exactly the same two tips, so a tip-set key
-alone would silently compare the wrong pair of nodes. Because `nodes.tsv` carries
+The sub-tree-size term is not decoration: two internal nodes can cover exactly
+the same tips when one is a one-child stem lineage, so a tip-set key alone would
+silently compare the wrong pair of nodes. Because `nodes.tsv` carries
 those keys, the tree is rebuilt from the node table rather than parsed from
 Newick — which also sidesteps the two ape reader bugs noted below.
 
@@ -95,6 +97,8 @@ file), but the child still needs it to echo Chinese labels in its own output.
 | `step-count(phangorn::parsimony)` | phangorn's Fitch score, unordered unit costs (branch lengths irrelevant) | `summary.tsv` minimum cost under a uniform matrix | **gated** — exact match |
 | `ER-marginals(ape::ace)` | `ape::ace(model = "ER", method = "ML")$lik.anc`, joined to `asr_posteriors.tsv` on the clade key | CladeForge's posteriors | **measured only — `compared` stays 0** |
 | `exported-R-script-Sankoff` | the app's own `cladeforge_analysis.R`, re-run with `Rscript` in a throwaway directory | `manifest.tsv` minimum cost, per project | **gated** — exact match |
+
+`ape-agreement.tsv` carries some non-gated `ape::ace` marginal details (e.g. argmax tie counts) that can differ between R/ape versions; the CI fixture diff therefore excludes that one generated table, while the comparable/gated rows are checked by the manifest↔agreement consistency step. All other fixture files are diff-gated.
 
 The ER leg cannot be an agreement test, and that is a fact about ape rather than
 a hedge: `ace(model = "ER")` **estimates** the transition rate by maximum
@@ -162,7 +166,7 @@ leg of `src/model/independentReference.test.ts`.
 ## Reproducing from a clean checkout
 
 ```sh
-npm install                                              # vite-node comes with vitest
+npm install                                              # vite-node is an explicit devDependency
 node scripts/cross-check/dump-fixtures.mjs               # regenerate fixtures
 npx vitest run src/model/independentReference.test.ts    # oracle legs
 Rscript scripts/cross-check/ape_agreement.R              # third-party leg (needs R)
@@ -178,8 +182,9 @@ stay random, because no fixture column carries them.
 
 ## Reading the output
 
-The shipped `manifest.tsv` holds 14 project × character rows over seven fixture
-documents. The per-leg totals are:
+The shipped `manifest.tsv` holds 14 project × character rows over the six
+character-bearing samples plus the `er-control` document; the fixture set also
+contains `recon-family`, which has no character rows. The per-leg totals are:
 
 ```
 step-count(phangorn::parsimony)   compared 10  agreed 10
@@ -214,7 +219,7 @@ Exit status **0**: every comparison the harness attempted agreed.
   thing.
 * **The app's own exported script — 14/14.** Re-running `cladeforge_analysis.R`
   under `Rscript` prints exactly the Sankoff minima `manifest.tsv` records for all
-  seven fixture documents, including the two asymmetric `cetacean` matrices — there
+  eight fixture directories, including the two asymmetric `cetacean` matrices — there
   the exported script pays 3 rather than Fitch's 5, so the step matrix really is
   honoured. The reproducibility claim the export makes is therefore executed, not
   inferred.

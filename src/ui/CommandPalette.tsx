@@ -132,7 +132,7 @@ export function CommandPalette({
       const cur = st().project;
       const others: { name: string; project: ReturnType<typeof st>['project'] }[] = [];
       const s0 = st();
-      for (const [id, snap] of Object.entries(s0.tabStore)) {
+      for (const snap of Object.values(s0.tabStore)) {
         others.push({ name: snap.project.name, project: snap.project });
       }
       for (const g of cur.geneTrees ?? []) others.push({ name: g.name, project: g.doc });

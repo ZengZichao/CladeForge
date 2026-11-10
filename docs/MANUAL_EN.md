@@ -2,7 +2,7 @@
 
 # CladeForge — User Manual (English)
 
-**Applies to CladeForge v0.2.0**
+**Applies to CladeForge v0.3.0**
 
 中文版本：[MANUAL_ZH.md](./MANUAL_ZH.md)
 
@@ -21,7 +21,7 @@ This manual covers every feature of the application, organised by workflow stage
 5. [Characters and States](#5-characters-and-states)
 6. [Evolutionary Events](#6-evolutionary-events)
 7. [Hypothesis Layers](#7-hypothesis-layers)
-8. [Inference Assistant](#8-inference-assistant)
+8. [Trait Evolution Inference](#8-trait-evolution-inference)
 9. [DTL Reconciliation](#9-dtl-reconciliation)
 10. [Time Calibration](#10-time-calibration)
 11. [Styling and Themes](#11-styling-and-themes)
@@ -38,31 +38,29 @@ This manual covers every feature of the application, organised by workflow stage
 
 | Platform | Minimum OS | Architecture | Disk | RAM |
 |----------|-----------|-------------|------|-----|
-| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 12.4 MiB measured (v0.1.0, arm64 bundle; installer image 4.6 MiB) | 512 MB |
-| Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
-| Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
+| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0 not re-measured | 512 MB |
+| Windows | 10 (64-bit) | x86_64 | v0.2.0 release includes `.msi`; size not measured | 512 MB |
+| Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 release includes `.deb`/AppImage; size not measured | 512 MB |
 
 ¹ 11.0 (Big Sur) is the supported floor and is declared in `src-tauri/tauri.conf.json`
 (`bundle.macOS.minimumSystemVersion`), so a packaged build writes it into the bundle's
 `LSMinimumSystemVersion`. The v0.1.0 bundle predates that key and still carries Tauri's
-default `10.13`, which is the linker/deployment baseline rather than a tested minimum; no
-macOS release older than 11.0 has been tested.
+default `10.13`; v0.2.0/v0.3.0 use the declared floor. No macOS release older than 11.0 has
+been tested.
 
-² The only macOS artifact produced for v0.1.0 is `CladeForge_0.1.0_aarch64.dmg`, whose
-executable `lipo -info` reports as a non-fat arm64 binary. x86_64 and universal macOS builds
-have not been produced or tested; building a universal `.dmg` is a documented but untested
-option (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`, then
+² v0.1.0 produced only `CladeForge_0.1.0_aarch64.dmg` (non-fat arm64). The v0.2.0 release
+page lists arm64 and x86_64 macOS builds; v0.3.0 is the current source line and has not been
+packaged yet. Universal builds remain documented but untested (`rustup target add
+aarch64-apple-darwin x86_64-apple-darwin`, then
 `npm run tauri build -- --target universal-apple-darwin`, which needs `lipo`).
 
 The application ships no browser engine of its own, but it renders into the operating system's own web view (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), which must therefore be present on the host; no other runtime (Java, Python, or Node.js) is needed to run the app.
 
 ### Installation
 
-**Pre-built binaries** — Download the release build for your platform from the project release page:
-- macOS: `.dmg` — arm64 (Apple Silicon) only; v0.1.0 ships `CladeForge_0.1.0_aarch64.dmg`.
-  No Intel-only or universal macOS installer has been released (see note ² above).
-- Windows: `.msi` (x64)
-- Linux: `.deb` or AppImage
+**Pre-built binaries** — Download from the [Releases page](https://github.com/ZengZichao/CladeForge/releases):
+- v0.2.0: macOS `.dmg` (arm64 and x86_64), Windows `.msi` (x64), Linux `.deb` or AppImage (x86_64).
+- v0.3.0: pre-built artifacts are produced by `.github/workflows/release.yml` as a draft; build from source below if none are attached yet.
 
 **Build from source** — clone the repository:
 
@@ -76,7 +74,7 @@ npm test               # run the Vitest suite
 npm run tauri build    # produces the packaged .app / installer
 ```
 
-Prerequisites: Node.js ≥ 18, Rust toolchain ≥ 1.70, npm.
+Prerequisites: Node.js ≥ 20.19, Rust toolchain ≥ 1.90, npm.
 
 ### First Launch
 
@@ -117,9 +115,9 @@ Organised into three groups:
 
 | Group | Modules | Purpose |
 |-------|---------|---------|
-| **Content** | Traits · Hypotheses · Time | Define characters, manage hypothesis layers, and configure time calibration |
-| **View** | Style | Global layout and styling |
-| **Output** | Analysis · Export | Inference assistants and file export |
+| **Content** | Characters · Hypotheses · Time · Style | Define characters, manage hypothesis layers, configure time calibration and global styling |
+| **Inference** | Analysis | Inference assistants and their results |
+| **Output** | Export | File export |
 
 Each module is a collapsible section. Pin a section to keep it expanded, or unpin to let it collapse.
 
@@ -252,7 +250,7 @@ The character system is the core of CladeForge's evolutionary semantic layer. It
 
 ### Creating Characters
 
-1. Open the **Traits** module (left panel, Content group).
+1. Open the **Characters** module (left panel, Content group).
 2. Click **+ New character**.
 3. Enter a name and choose the type:
    - **Discrete** — Define a set of named states, each with a colour (e.g., "Aquatic" = blue, "Terrestrial" = green).
@@ -261,7 +259,7 @@ The character system is the core of CladeForge's evolutionary semantic layer. It
 
 ### Assigning States
 
-- **Tips (leaves)** — Observed/known states. Assign via the **Character Matrix** dialog (click "Character matrix…" in the Traits module) or per-node in the inspector panel.
+- **Tips (leaves)** — Observed/known states. Assign via the **Character Matrix** dialog (click "Character matrix…" in the Characters module) or per-node in the inspector panel.
 - **Internal nodes** — These are your *ancestral-state hypotheses*. Select an internal node on the canvas, then assign its character state in the inspector's "Character states" section. Each assignment can carry a confidence level (High/Medium/Low) and supporting/contradicting evidence text.
 
 ### Character Matrix
@@ -274,7 +272,7 @@ For discrete characters, you can define an optional **cost matrix** (Sankoff ste
 
 ### Colour Mapping
 
-In the Traits module, choose a character under "Colour by", then use the **Paint on** toggle to switch between **Nodes** and **Branches**: node mode paints the node markers, branch mode paints the incoming branch of each child (unassigned branches keep their normal style). Change markers can be drawn at branch midpoints; discrete and continuous characters follow the same rule — both endpoints must carry a value and differ — and the markers can be switched off with "Change markers".
+In the Characters module, choose a character under "Colour by", then use the **Paint on** toggle to switch between **Nodes** and **Branches**: node mode paints the node markers, branch mode paints the incoming branch of each child (unassigned branches keep their normal style). Change markers can be drawn at branch midpoints; discrete and continuous characters follow the same rule — both endpoints must carry a value and differ — and the markers can be switched off with "Change markers".
 
 ### Missing and Not-Applicable Data
 
@@ -285,7 +283,7 @@ In the Traits module, choose a character under "Colour by", then use the **Paint
 
 ## 6. Evolutionary Events
 
-CladeForge provides 15 built-in evolutionary event types across six groups — Speciation, Extinction, Key evolution, Gene flow, Biogeography, and a General group whose single member is the user-definable custom event. Events are *asserted by the user* — they represent your hypotheses about what happened at specific points in the tree.
+CladeForge provides 27 built-in evolutionary event types across nine groups (26 predefined + 1 user-definable custom): Speciation, Extinction, Evolutionary innovations, Gene flow, Biogeography, Microbial, Gene family evolution, Deep time, and General. Events are *asserted by the user* — they represent your hypotheses about what happened at specific points in the tree.
 
 ### Event Catalogue
 
@@ -293,12 +291,15 @@ CladeForge provides 15 built-in evolutionary event types across six groups — S
 |-------|--------|
 | **Speciation** | `AL` Allopatric, `SY` Sympatric, `PA` Parapatric, `PO` Polyploid |
 | **Extinction** | `LX` Local extinction, `MX` Mass extinction |
-| **Key evolution** | `KI` Key innovation, `AR` Adaptive radiation, `BN` Bottleneck |
+| **Evolutionary innovations** | `KI` Key innovation, `AR` Adaptive radiation, `BN` Bottleneck |
 | **Gene flow** | `HG` Horizontal gene transfer, `HY` Hybridisation |
 | **Biogeography** | `DI` Dispersal, `VI` Vicariance, `RE` Regional extirpation |
+| **Microbial** | `SB` Endosymbiotic origin, `GR` Genome reduction, `PG` Plasmid gain, `PH` Viral reassortment, `MG` Metabolic pathway gain, `ML` Metabolic pathway loss, `CR` CRISPR spacer acquisition, `TI` Transposon/ICE integration, `HU` HGT from unsampled donor |
+| **Gene family evolution** | `FE` Gene family expansion, `FC` Gene family contraction |
+| **Deep time** | `OC` Ocean chemistry shift |
 | **General** | `CU` Custom event |
 
-Each event type has a code — two uppercase letters taken from its English name — a default colour, and a default anchor: node, branch, or either. **By default a badge draws only its shape and colour, with no letters inside.** To add text, open “Evolutionary events → Marker style” in the inspector and tick “Show text”; the badge then draws the type code, or up to 4 custom characters (a short Chinese label, for example). You can override the anchor when placing the event.
+Each event type has a code — two uppercase letters taken from its English name — a default colour, and a default anchor: node, branch, or either. **By default a badge draws its two-letter type code inside the marker.** Text can be turned off per event under “Evolutionary events → Marker style”; the badge then shows only shape and colour. You can override the anchor when placing the event.
 
 ### Marker style
 
@@ -307,7 +308,7 @@ Select a node that carries events, expand the event in the inspector, and adjust
 - **Shape** — circle, square, diamond, triangle, star, hexagon;
 - **Size** — 5–24 px;
 - **Colour** — the badge outline, following the event type or chosen by hand;
-- **Show text** — off by default; turn on to draw text inside the badge;
+- **Show text** — on by default; turn off to draw only shape and colour;
 - **Marker text** — leave empty for the type code, or type up to 4 custom characters.
 
 Badges are pure vector graphics: canvas, legend and SVG/PNG/PDF export share the same shape, colour and text rules, and stay readable in greyscale print.
@@ -364,7 +365,7 @@ Open the **Hypotheses** module (left panel, Content group):
 
 Trait evolution inference provides *advisory* suggestions — it does not overwrite your hypotheses. You choose which suggestions to accept.
 
-Open the **Analysis** module (left panel, Output group) and click **Trait evolution inference…**, or use the ⌘K command palette. The Analysis module now owns results and inference only: it summarises the active character's parsimony cost, CI/RI, consistency and correlations, then offers “Trait evolution inference” and Mk reconstruction. The tree-summary statistics are collapsed by default so they no longer push the tools below the fold. The **character matrix** belongs to character management and stays in the Traits module.
+Open the **Analysis** module (left panel, Inference group) and click **Trait evolution inference…**, or use the ⌘K command palette. The Analysis module now owns results and inference only: it summarises the active character's parsimony cost, CI/RI, consistency and correlations, then offers “Trait evolution inference” and Mk reconstruction. The tree-summary statistics are collapsed by default so they no longer push the tools below the fold. The **character matrix** belongs to character management and stays in the Characters module.
 
 The full dialog covers parsimony ancestral-state suggestions, consistency checks, character correlations and permutation tests; the Analysis module itself only summarises and links to it. Suggestions only enter a hypothesis when you accept them node by node in the inspector.
 
@@ -464,11 +465,11 @@ CladeForge implements gene-tree/species-tree reconciliation using a Duplication�
 ### Setting Up
 
 1. The **current project's tree is the species tree**.
-2. Open the **Reconcile** module (left panel, Content group).
+2. Use the **Reconciliation view** toggle in the header to enter the reconciliation workspace.
 3. No file is required up front — choose a construction path:
    - **Build gene tree…** — open the builder and start from a blank root, adding children/siblings, renaming nodes or deleting subtrees;
    - **Create from species tree** — copy the current species topology as the gene-tree starting point;
-   - **Import gene tree from file** (Newick/Nexus) and **Import from open tab** remain optional alternatives.
+   - **Import gene tree from file** (Newick/NEXUS) and **Import from open tab** remain optional alternatives.
 4. The gene tree's tips are matched to the species tree's tips by label. Matching tips are mapped automatically and an LCA-based initial scenario is suggested; unmatched or normalisation-colliding labels are reported rather than dropped quietly.
 
 ### Building a Gene Tree Directly
@@ -494,7 +495,7 @@ After creating or importing, you can manually refine the reconciliation:
 
 ### DP Solver
 
-1. Set the **costs** for duplication (δ), transfer (τ), and loss (λ) in the Reconcile module.
+1. Set the **costs** for duplication (δ), transfer (τ), and loss (λ) in the Reconciliation panel of the reconciliation workspace.
 2. Click **Compute optimum (DP)** to run the dynamic-programming solver.
 3. The solver returns the minimum-cost scenario and a back-traced event assignment.
 4. Click **Apply optimum as assumptions** to load the solver's result as the starting point for manual refinement.
@@ -515,7 +516,7 @@ The module keeps running tallies for the active gene tree as you edit: speciatio
 
 ### Reconciliation View (a workspace of its own)
 
-Click **Reconciliation view** in the header (or any entry in the Reconcile module) to enter the reconciliation **workspace** — a second, complete workspace with its own rail, left panel, inspector, toolbar and status bar rather than a swapped-in canvas:
+Click **Reconciliation view** in the header  to enter the reconciliation **workspace** — a second, complete workspace with its own rail, left panel, inspector, toolbar and status bar rather than a swapped-in canvas:
 
 - **Left:** the reconciliation rail (Trees / Scenario / Validation / View). The *Scenario* section carries a searchable, filterable **assumption list** (all / unresolved / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom.
 - **Centre:** a toolbar row (active gene tree, Fit both, sync zoom, mapping scope), two titled panes (species tree · analysis cladogram; gene tree · read-only, each with node count, zoom readout and per-pane Fit / 1:1), the **mapping bridge** (the trees face each other — species rightwards, gene leftwards — with event-coloured straight mapping lines precisely aligned to the branches on both sides instead of painting over nodes and labels), and a legend row.
@@ -753,7 +754,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 
 ## 14. Project File Format
 
-CladeForge projects are stored as JSON files with the `.cladeforge.json` extension. The current schema version is **0.2.0** (kept in lock-step with the application minor version; see `docs/FORMAT.md` for the machine-readable schema, a field-by-field reference and a minimal 20-line example file).
+CladeForge projects are stored as JSON files with the `.cladeforge.json` extension. The current schema version is **0.2.0** (independent of the application version; see `docs/FORMAT.md` for the field-by-field reference and a minimal example).
 
 The file is an envelope rather than a bare project: `app` (`"CladeForge"`), `version`, and `project` (the document described below). Reading runs an explicit, ordered version-migration step: a `0.1.0` file migrates forward to `0.2.0` (the new fields — support kind/scale, node-age intervals, tip annotations, hypothesis-layer statements, analysis results, provenance, save-path memory — all backfill with defaults), while a file stamped newer than this build is opened on a best-effort basis and tells you so. The envelope deliberately keeps the version the document was actually validated against rather than re-stamping it with this build's version, so a partially understood file cannot come back claiming to be migrated.
 
@@ -778,7 +779,7 @@ A project file contains:
 
 ### Undo/Redo
 
-CladeForge maintains up to 100 undo steps using structural sharing (Immer). All topology edits, style changes, character assignments, and event placements are undoable.
+CladeForge maintains 100 undo steps by default (300 or 1000 can be selected in Preferences) using structural sharing (Immer). All topology edits, style changes, character assignments, and event placements are undoable.
 
 ### Autosave and Recovery
 

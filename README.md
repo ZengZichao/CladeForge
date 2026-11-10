@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge
 
 **An Interactive Phylogenetic Tree Editor for Evolutionary Scenario Construction and Hypothesis Generation**
@@ -22,7 +24,7 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 - **Interactive tree editing** — Rooted trees with binary/ternary/polytomy branching, node and branch styling, collapse/expand, rerooting, ladderize.
 - **Multiple layouts** — Rectangular cladogram, rectangular phylogram, time-calibrated (with geological era bands), and circular; four orientations (LR/RL/TB/BT); auto and manual layout modes.
 - **Character/state system** — Discrete and continuous characters with color-blind-friendly palettes; Sankoff step matrices for asymmetric evolutionary costs.
-- **Evolutionary events** — 15 built-in event types across six groups (Speciation, Extinction, Key evolution, Gene flow, Biogeography, and a General group whose single member is the user-definable custom event), each marked with a distinct two-letter code and colour, with causal-chain links.
+- **Evolutionary events** — 27 built-in event types across nine groups (26 predefined + 1 custom): Speciation (4), Extinction (2), Evolutionary innovations (3), Gene flow (2), Biogeography (3), Microbial (9), Gene family evolution (2), Deep time (1), General (1). Each type has a unique two-letter code; the palette may reuse colours. Events link into causal chains.
 - **Hypothesis layers** — Manage multiple competing hypotheses on a shared topology; tip states shared, internal-node hypotheses diverge.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
 - **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and side-by-side reconciliation view.
@@ -41,9 +43,9 @@ equal-rates (ER) sub-model.
 
 | Platform | Minimum OS | Architecture | Disk Space | RAM |
 |----------|-----------|-------------|-----------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.8 MiB measured (v0.2.0, arm64 bundle; installer image 4.8 MiB) | 512 MB |
-| Windows | 10 (64-bit) | x86_64 | not yet measured — no Windows build has been produced | 512 MB |
-| Linux | glibc ≥ 2.28 | x86_64 | not yet measured — no Linux build has been produced | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0 not re-measured | 512 MB |
+| Windows | 10 (64-bit) | x86_64 | v0.2.0 release includes `.msi`; size not measured | 512 MB |
+| Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 release includes `.deb`/AppImage; size not measured | 512 MB |
 
 The application ships no browser engine of its own, but it renders into the operating system's
 own web view (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), which must therefore
@@ -57,14 +59,16 @@ What is actually attached to a release varies by version, so this is stated per 
 than promised for all of them. Check the [Releases page](https://github.com/ZengZichao/CladeForge/releases)
 for what a given tag carries.
 
+- **v0.3.0** — tagged release line. Pre-built artifacts are produced by
+  `.github/workflows/release.yml` as a draft; check the Releases page for the assets actually attached.
+- **v0.2.0** — release page assets: `.dmg` for macOS on both Apple Silicon and Intel, `.msi`
+  for Windows x64, and `.deb` plus an AppImage for Linux x86_64 (macOS bundle 12.8 MiB;
+  installer 4.8 MiB; Windows/Linux sizes not measured). This version repairs the
+  window-drag regions, rebuilds all sample projects around strictly binary fictional taxa
+  named `Taxon_*`, and adds per-event marker customisation (shape / size / colour / inner text).
 - **v0.1.0** — one artifact only: `CladeForge_0.1.0_aarch64.dmg` (macOS, Apple Silicon).
   No Intel, Windows or Linux build was produced for this version, and it was built by hand
-  rather than by the release pipeline described below.
-- **v0.2.0** — produced by `.github/workflows/release.yml`: `.dmg` for macOS on both
-  Apple Silicon and Intel, `.msi` for Windows x64, and `.deb` plus an AppImage for
-  Linux x86_64. This version repairs the window-drag regions, rebuilds all sample
-  projects around strictly binary fictional taxa named `Taxon_*`, and adds per-event
-  marker customisation (shape / size / colour / inner text).
+  rather than by `.github/workflows/release.yml`.
 
 These artifacts are **unsigned**. macOS Gatekeeper will refuse to open them on first launch;
 see the note below.
@@ -97,7 +101,7 @@ npm test               # run the Vitest suite
 npm run tauri build    # build the packaged .app / installer
 ```
 
-**Prerequisites for source build:** Node.js ≥ 20.19, Rust toolchain, npm. The Node floor is
+**Prerequisites for source build:** Node.js ≥ 20.19, Rust toolchain ≥ 1.90, npm. The Node floor is
 `>=20.19` in `package.json` and is the same version CI builds with — see the note in
 `ci.yml` on why it is 20 rather than a newer major.
 
@@ -107,11 +111,11 @@ npm run tauri build    # build the packaged .app / installer
 2. Edit the tree in the main canvas — right-click a node for topology operations (add branches, insert parent, reroot, delete, collapse).
 3. Use the side panels to define characters, assign states, place events, manage hypothesis layers, and set calibration points.
 4. Run inference assistants (parsimony, Mk ASR, consistency checks) for advisory suggestions.
-5. Export via the export panel: SVG/PNG/PDF for figures, Newick/Nexus for trees, JSON for hypothesis archival.
+5. Export via the export panel: SVG/PNG/PDF for figures, Newick/NEXUS for trees, JSON for hypothesis archival.
 
 ## Project File Format
 
-CladeForge projects are stored as JSON (`.cladeforge.json`), schema version `0.1.0`.
+CladeForge projects are stored as JSON (`.cladeforge.json`), schema version `0.2.0`.
 
 ## Documentation
 
@@ -139,15 +143,16 @@ concept DOI always resolves to the newest archived version.
 
 - **Concept DOI (all versions):** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
 - **v0.1.0:** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
-- **v0.2.0 (this release):** the version DOI is assigned by Zenodo when the release is
-  archived; until it appears there, cite via the concept DOI above.
+- **v0.2.0:** the version DOI is assigned by Zenodo when the release is archived.
+- **v0.3.0:** the version DOI is assigned by Zenodo when the release is archived.
 
-> Zeng, Z. (2026). *CladeForge* (Version v0.2.0) [Computer software]. Zenodo.
+> Zeng, Z. (2026). *CladeForge* (Version v0.3.0) [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.23053393
 
 No journal citation is available yet. The machine-readable form is in [`CITATION.cff`](./CITATION.cff).
 
 ## Funding
 
-This project has received funding from national research programmes. Grant identifiers will be
-listed in this section once they can be disclosed.
+This project has received funding from the National Natural Science Foundation of China
+(grant nos. 42422209 and 42272354) and the National Key Research and Development Program of
+China (grant no. 2023YFC3108600).

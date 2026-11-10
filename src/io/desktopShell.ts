@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Desktop-shell wiring: the two OS-integration paths the browser build never
 // sees, both requested by the 2026-11-10 review round (A-01 / A-02 / C#1–C#3):
 //

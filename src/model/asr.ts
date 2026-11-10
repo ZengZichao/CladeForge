@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Probabilistic ancestral-state reconstruction for discrete characters under
 // the equal-rates Mk (Markov-k) model.
 //
@@ -241,53 +242,6 @@ function logsumexp(values: number[]): number {
     if (d > -30) sum += Math.exp(d);
   }
   return max + Math.log(sum);
-}
-
-/**
- * Symmetric-matrix eigen-decomposition (cyclic Jacobi). Used only by the SYM
- * transition-probability path; returns eigenvectors as COLUMNS of `v`.
- * Converges for any real symmetric matrix; off-diagonal mass under 1e-12.
- */
-function jacobiEigen(matrix: number[][]): { values: number[]; v: number[][] } {
-  const n = matrix.length;
-  const a = matrix.map((row) => [...row]);
-  const v: number[][] = Array.from({ length: n }, (_, i) =>
-    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
-  );
-  for (let sweep = 0; sweep < 100; sweep += 1) {
-    let off = 0;
-    for (let i = 0; i < n; i += 1) for (let j = i + 1; j < n; j += 1) off += a[i][j] * a[i][j];
-    if (off < 1e-24) break;
-    for (let p = 0; p < n - 1; p += 1) {
-      for (let q = p + 1; q < n; q += 1) {
-        if (Math.abs(a[p][q]) < 1e-15) continue;
-        const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
-        const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
-        const c = 1 / Math.sqrt(t * t + 1);
-        const s = t * c;
-        for (let i = 0; i < n; i += 1) {
-          const aip = a[i][p];
-          const aiq = a[i][q];
-          a[i][p] = c * aip - s * aiq;
-          a[i][q] = s * aip + c * aiq;
-        }
-        for (let i = 0; i < n; i += 1) {
-          const api = a[p][i];
-          const aqi = a[q][i];
-          a[p][i] = c * api - s * aqi;
-          a[q][i] = s * api + c * aqi;
-        }
-        for (let i = 0; i < n; i += 1) {
-          const vip = v[i][p];
-          const viq = v[i][q];
-          v[i][p] = c * vip - s * viq;
-          v[i][q] = s * vip + c * viq;
-        }
-      }
-    }
-  }
-  const values = a.map((row, i) => row[i]);
-  return { values, v };
 }
 
 interface PruningContext {
@@ -690,7 +644,7 @@ export function reconstructMk(
     rateInfo = { rate: momentRate, method: 'moment' };
   }
 
-  const { L, G, logRoot } = runPruning(project, { ...ctxBase, logP: logPofRate(rateInfo.rate) });
+  const { L, G } = runPruning(project, { ...ctxBase, logP: logPofRate(rateInfo.rate) });
 
   // Marginal posterior: p[i] = exp(logL[i] + logG[i] - logZ), where logZ = logsumexp.
   const collapsedNodes: NodeId[] = [];
@@ -1032,10 +986,4 @@ export function sampleStochasticMap(
     }
   }
   return { perBranchChanges, meanChangesPerSample: samples > 0 ? totalChanges / samples : 0, samples };
-}
-
-function factorial(n: number): number {
-  let f = 1;
-  for (let i = 2; i <= n; i += 1) f *= i;
-  return f;
 }

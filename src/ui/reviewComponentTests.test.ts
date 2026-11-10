@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Component tests for the 2026-11-10 review-round fixes (H6): the UI layer
 // had no render-level tests at all, and the review's own defect history shows
 // regressions concentrate exactly there. This suite pins the new user-visible

@@ -160,7 +160,6 @@ describe('review: outgroup selection (M28)', () => {
     expect(res.rootEdgeOf).toBe(nodeByLabel(p, 'X').id);
     // {C,D} sit together on one side of the new root.
     const c = nodeByLabel(p, 'C');
-    const d = nodeByLabel(p, 'D');
     expect(c.parentId).toBe(p.rootId === c.id ? c.parentId : c.parentId);
     const siblings = Object.values(p.nodes).filter((n) => n.parentId === c.parentId && n.childrenIds.length === 0).map((n) => n.label);
     expect(siblings).toContain('C');

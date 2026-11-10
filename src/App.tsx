@@ -47,7 +47,6 @@ import { ExportSettingsDialog } from './ui/ExportSettingsDialog';
 import { StandardWorkspace } from './ui/StandardWorkspace';
 import { ReconWorkspace } from './canvas/ReconWorkspace';
 import { AddChildrenDialog } from './ui/AddChildrenDialog';
-import { addChildrenSpaced } from './model/treeOps';
 import type { NavModule } from './ui/NavigationRail';
 
 // Locale switch side effect OUTSIDE the React tree: sample documents that the
@@ -245,14 +244,6 @@ export function App() {
     setAddTarget(parentId);
     setAddOpen(true);
   }, []);
-
-  const confirmAdd = useCallback(
-    (count: number) => {
-      if (addTarget) useStore.getState().apply((d) => addChildrenSpaced(d, addTarget, count));
-      setAddOpen(false);
-    },
-    [addTarget],
-  );
 
   // Global (modifier) shortcuts.
   useEffect(() => {

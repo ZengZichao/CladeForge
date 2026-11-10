@@ -1,14 +1,16 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # Security Policy
 
 ## Supported versions
 
-CladeForge is at v0.2.0 and pre-1.0. Fixes land on the default branch and are picked up by
+CladeForge is at v0.3.0 and pre-1.0. Fixes land on the default branch and are picked up by
 whatever release is current at the time; there is no long-term-support branch.
 
 | Version | Supported |
 |---------|-----------|
-| 0.2.x   | Yes       |
-| < 0.2.0 | No        |
+| 0.3.x   | Yes       |
+| < 0.3.0 | No        |
 
 ## Reporting a vulnerability
 
@@ -38,9 +40,9 @@ In scope:
   security weight;
 - the Tauri capability set (`src-tauri/capabilities/default.json`) and the CSP in
   `src-tauri/tauri.conf.json` — anything that widens what the webview may reach;
-- the dependency tree. Automated dependency updates are in place, but a fix that only exists in
-  a newer major version is not something Dependabot will propose, so a vulnerable pinned
-  version can persist. Reporting it is useful even if `npm audit` already knows.
+- the dependency tree. Regular version updates ignore major versions; security updates are
+  enabled and can cross a major when an advisory requires it. A vulnerable pinned version can
+  still persist, so reporting it is useful even if `npm audit` already knows.
 
 Out of scope:
 

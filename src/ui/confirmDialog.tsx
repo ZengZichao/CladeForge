@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Lightweight confirm-dialog infrastructure.
 //
 // Rather than threading callback props through every delete / reroot entry

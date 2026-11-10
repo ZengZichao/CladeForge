@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left-column "分析" module panel: tree summary statistics, inference-assist
 // summary for the active character (parsimony cost, CI/RI, consistency issues,
 // correlations), and the full set of analysis action buttons (matrix, inference,

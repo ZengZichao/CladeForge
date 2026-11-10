@@ -5,9 +5,12 @@
 All notable changes to CladeForge are documented here. Format: Keep a
 Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
-## [Unreleased]
+## [0.3.0] — 2026-11-10
 
-### Review round A/B/C (`CladeForge-评审报告-A/B/C`) — 2026-11-10. Every finding of
+Tagged release line. Pre-built artifacts are produced by `.github/workflows/release.yml`
+as a draft (unsigned); the entries below are the changes since v0.2.0.
+
+### Review round A/B/C (`CladeForge-评审报告-A/B/C`; author’s archive, not checked in) — 2026-11-10. Every finding of
 the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
 28 C-item list, plus the component-level test gap the reviews flagged (H6).
 
@@ -432,10 +435,14 @@ numbered findings from `CladeForge-审查文档/`.
 - CI gained a cross-check job (R + ape/phangorn, fresh agreement table,
   manifest↔agreement staleness gate) and the tip-scaling benchmark. (B6/E2/E3)
 
-### [0.2.0] — 2026-10-29
+## [0.2.0] — 2026-10-29
+
+Tag created 2026-10-26; release published 2026-10-29. `CITATION.cff` date-released
+`2026-10-25` is the UTC date of the tag.
+
 Initial tagged release line: local interactive phylogenetic tree editor with
 character/event/hypothesis layers, time calibration, DTL reconciliation,
 Sankoff/Mk inference assists, SVG/PNG/PDF export, zh/en UI.
 
-### [0.1.0] — earlier
+## [0.1.0] — earlier
 Internal development line (single-arm64 build).

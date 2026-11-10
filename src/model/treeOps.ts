@@ -776,7 +776,7 @@ export function midpointRoot(project: Project): MidpointResult {
   for (const start of ids) {
     if (swept.has(start)) continue;
     const first = farthest(start);
-    const { far: a, farD: d1, dist } = first;
+    const { far: a } = first;
     swept.add(a);
     const { far: b, farD: total, dist: distFromA, prev } = farthest(a);
     for (const id of distFromA.keys()) swept.add(id);
@@ -1682,7 +1682,7 @@ export function estimateAges(project: Project): EstimateAgesResult {
   let maxDepth = 0;
   let calibrationAge = 0;
   let preserved = 0;
-  for (const [id, h] of heights) if (h > maxDepth) maxDepth = h;
+  for (const h of heights.values()) if (h > maxDepth) maxDepth = h;
   for (const n of Object.values(project.nodes)) {
     const a = finiteAge(n);
     if (a === undefined) continue;

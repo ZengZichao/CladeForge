@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { createEmptyProject } from './sampleTree';
 import { addChildren } from './treeOps';

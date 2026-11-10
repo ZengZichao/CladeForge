@@ -23,8 +23,8 @@ import {
   renameGeneTree,
   setReconCosts,
 } from '../model/geneTrees';
-import { DEFAULT_RECON_COSTS, type Project, type ReconCosts, type ReconSection, type ReconEventType } from '../model/types';
-import { mapTipsByLabel, suggestLcaScenario, validateScenario, type ReconIssue } from '../model/reconciliation';
+import { DEFAULT_RECON_COSTS, type ReconCosts, type ReconSection, type ReconEventType } from '../model/types';
+import { mapTipsByLabel, suggestLcaScenario, type ReconIssue } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
 import { dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
 import { rerootGeneTree } from '../model/geneTrees';

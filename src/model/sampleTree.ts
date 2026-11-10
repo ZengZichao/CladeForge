@@ -458,10 +458,10 @@ export function createDeepDomainSample(): Project {
   const branchC = mkNode(project, nextTaxon(), rootId, 3400, 600);
   const cladeD = mkNode(project, nextTaxon(), branchC, 3250, 150);
   const cladeE = mkNode(project, nextTaxon(), cladeD, 3200, 50);
-  const cladeF = mkNode(project, nextTaxon(), cladeD, 3100, 150);
+  mkNode(project, nextTaxon(), cladeD, 3100, 150);
   const cladeG = mkNode(project, nextTaxon(), branchC, 3050, 350);
-  const tipH = mkNode(project, nextTaxon(), cladeG, 3000, 50);
-  const tipI = mkNode(project, nextTaxon(), cladeG, 2900, 150);
+  mkNode(project, nextTaxon(), cladeG, 3000, 50);
+  mkNode(project, nextTaxon(), cladeG, 2900, 150);
   const cladeJ = mkNode(project, nextTaxon(), branchB, 2800, 700);
   const cladeK = mkNode(project, nextTaxon(), branchB, 2700, 800);
   const cladeL = mkNode(project, nextTaxon(), cladeE, 2600, 600);
@@ -793,7 +793,7 @@ export function createVirusSample(): Project {
   const tipsRetro2 = mkNode(project, nextTaxon(), retroClade, 0, 2700);
   const duplivira = mkNode(project, nextTaxon(), dnaClade, 2500, 1300);
   const dnaDown = mkNode(project, nextTaxon(), dnaClade, 2450, 1350);
-  const tipBig = mkNode(project, nextTaxon(), duplivira, 0, 2500);
+  mkNode(project, nextTaxon(), duplivira, 0, 2500);
   const tailClade = mkNode(project, nextTaxon(), duplivira, 1250, 1250);
   const latClade = mkNode(project, nextTaxon(), tailClade, 1200, 50);
   const caudClade = mkNode(project, nextTaxon(), tailClade, 1100, 150);
@@ -1337,14 +1337,14 @@ export function createReconciliationSample(): Project {
   project.nodes[rootId].age = 100;
   const n1 = mkNode(project, 'N1', rootId, 60, 40);
   const tipA = mkNode(project, 'Taxon_A', n1, 0, 60);
-  const tipB = mkNode(project, 'Taxon_B', n1, 0, 60);
+  mkNode(project, 'Taxon_B', n1, 0, 60);
   const n2 = mkNode(project, 'N2', rootId, 60, 40);
-  const tipC = mkNode(project, 'Taxon_C', n2, 0, 60);
+  mkNode(project, 'Taxon_C', n2, 0, 60);
   const n3 = mkNode(project, 'N3', n2, 30, 30);
-  const tipD = mkNode(project, 'Taxon_D', n3, 0, 30);
+  mkNode(project, 'Taxon_D', n3, 0, 30);
   const n4 = mkNode(project, 'N4', n3, 15, 15);
-  const tipE = mkNode(project, 'Taxon_E', n4, 0, 15);
-  const tipF = mkNode(project, 'Taxon_F', n4, 0, 15);
+  mkNode(project, 'Taxon_E', n4, 0, 15);
+  mkNode(project, 'Taxon_F', n4, 0, 15);
   assertBinary(project);
 
   // --- gene tree α: same tip labels, different topology, full scenario -------

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left-column character / state manager (evolutionary semantic layer).
 //
 // Lets the user define traits ("characters") and their coloured states, choose
@@ -21,7 +22,7 @@ import {
 import { newCharacter, newCharacterState, stateColorLimitWarning } from '../model/characters';
 import { uniformCostMatrix } from '../model/parsimony';
 import type { Character, Project } from '../model/types';
-import { Field, TextField, CheckboxField, ColorField, DismissibleHint } from './fields';
+import { Field, TextField, CheckboxField, ColorField } from './fields';
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { notify } from './toast';

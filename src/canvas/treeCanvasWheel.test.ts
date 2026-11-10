@@ -111,12 +111,6 @@ async function endBurst(): Promise<void> {
   });
 }
 
-/** Let the rAF paint and the burst-end flush run. */
-async function settle(): Promise<void> {
-  await flushFrame();
-  await endBurst();
-}
-
 const live = (): ViewTransform => getLiveView(s().view);
 
 function sourceOf(relative: string): string {

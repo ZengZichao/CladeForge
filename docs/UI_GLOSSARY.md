@@ -1,4 +1,8 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge UI 术语表 / UI Glossary
+
+> **规范性文件。** 界面文案以本表为准；`docs/GLOSSARY.md` 为历史对照。
 
 > 本表是界面文字的唯一事实来源。新增或修改 UI 文案时，先查此表；同一概念只能有一个中英文写法。
 > 本表取代 `docs/GLOSSARY.md` 中与本表冲突的旧条目（后者保留为历史记录）。

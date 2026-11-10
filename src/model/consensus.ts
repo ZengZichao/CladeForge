@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Consensus tree construction from multiple phylogenetic trees.
 //
 // Two methods are supported:
@@ -94,7 +95,7 @@ export function checkConsensusInputs(projects: Project[]): ConsensusInputCheck {
 
   const shared = perTree[0];
   const sharedSet = new Set(shared);
-  projects.forEach((project, i) => {
+  projects.forEach((_project, i) => {
     if (i === 0) return;
     const other = new Set(perTree[i]);
     const missing = shared.filter((t) => !other.has(t));

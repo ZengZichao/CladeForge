@@ -41,7 +41,7 @@ function speciesLabel(project: Project, id: NodeId): string {
 
 /** Species label actually in effect for a gene node (assumption or label match). */
 function effectiveMapping(
-  project: Project,
+  _project: Project,
   gene: Project,
   n: { id: NodeId },
   assumptions: Record<NodeId, GeneNodeAssumption>,

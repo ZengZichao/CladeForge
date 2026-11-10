@@ -8,7 +8,7 @@
 // the whole window.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createElement, useState, act, type ReactNode } from 'react';
+import { createElement, act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Section } from './Section';
 

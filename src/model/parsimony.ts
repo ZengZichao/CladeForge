@@ -773,7 +773,7 @@ export function presetCostMatrix(
   model: 'unordered' | 'wagner' | 'dollo',
   k: number,
 ): number[][] {
-  const m = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => 0));
+  const m = Array.from({ length: k }, () => Array.from({ length: k }, () => 0));
   for (let i = 0; i < k; i += 1) {
     for (let j = 0; j < k; j += 1) {
       if (i === j) continue;

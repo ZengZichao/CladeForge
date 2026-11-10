@@ -1,4 +1,8 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge 术语表 / Glossary
+
+> **历史对照（非规范性）。** 界面文案以 `docs/UI_GLOSSARY.md` 为准；本表仅保留领域/手册用词的历史对照。
 
 One concept, one word — in the UI, the manual and the exports. The review round
 found the same object called 枝/边/连线/入边 in different places, and "二分分支"

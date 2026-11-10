@@ -82,7 +82,6 @@ describe('layer switching after a character deletion', () => {
     expect(p.nodes[p.rootId].charStates?.[habitat.id]).toBeDefined();
 
     removeCharacter(p, habitat.id);
-    const other = p.characters[0];
     switchLayer(p, p.layers[1].id);
     for (const n of Object.values(p.nodes)) {
       expect(n.charStates?.[habitat.id]).toBeUndefined();

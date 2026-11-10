@@ -770,7 +770,7 @@ function speciesTree(project: Project): DtlTree {
 
 function geneTree(project: Project, tipMap: Record<string, string>, species: DtlTree): DtlTree {
   const flat = flatten(project);
-  const allowed = flat.ids.map((id, i) => {
+  const allowed = flat.ids.map((_id, i) => {
     if (!flat.isTip[i]) return species.flat.ids.map((_, s) => s);
     const target = tipMap[flat.label[i]];
     const s = target === undefined ? -1 : species.flat.label.indexOf(target);
@@ -2306,7 +2306,6 @@ describe('guard: no oracle may be skipped silently', () => {
     const counts = new Map<Leg, number>();
     for (const row of evidence) counts.set(row.leg, (counts.get(row.leg) ?? 0) + 1);
     for (const row of evidence) {
-      // eslint-disable-next-line no-console
       console.log(
         `EVIDENCE|leg=${row.leg}|case=${row.case}|metric=${row.metric}|value=${row.value}${row.detail ? `|${row.detail}` : ''}`,
       );

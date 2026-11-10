@@ -31,8 +31,9 @@ Thanks for your interest in contributing. This document covers setup and the con
 
 ### What CI actually runs, and how to reproduce it
 
-CI runs two independent jobs. Neither depends on the other, so a failure on the web side no
-longer skips the Rust side. Reproduce both before you push:
+CI runs four jobs: `web`, `desktop`, `cross-check` and `audit`. The first three run on every
+push and pull request; `audit` runs on the weekly schedule or by manual dispatch. CodeQL is a
+separate workflow. Reproduce the relevant jobs before you push:
 
 ```bash
 # web job
@@ -44,6 +45,9 @@ npm run build
 # desktop job — needed if you touched anything under src-tauri/
 cargo test  --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+# cross-check job — fixtures, R, ape/phangorn (needed if sample data or fixtures changed)
+node scripts/cross-check/run-cross-check.mjs
 ```
 
 The `cargo clippy` line is not optional. CI runs clippy with `-D warnings`, so a lint is a hard

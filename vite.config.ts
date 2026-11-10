@@ -50,9 +50,9 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        // Manual vendor splitting. The export libraries — jspdf, svg2pdf.js and
-        // html2canvas — are dynamic-imported in exportImage.ts and land in their
-        // own chunks, so they are not what makes the main chunk large: left
+        // Manual vendor splitting. The export libraries — jspdf and svg2pdf.js —
+        // are dynamic-imported in exportImage.ts (jspdf in turn loads html2canvas
+        // lazily) and land in their own chunks, so they are not what makes the main chunk large: left
         // unsplit, the main chunk carries the app plus every vendor module
         // (~601 kB). Splitting the vendors out keeps the code that must be
         // re-fetched on an app update small and brings the bundle under the size

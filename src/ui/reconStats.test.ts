@@ -53,7 +53,7 @@ describe('geneTreeRows — mapped-tip counting', () => {
   });
 
   it('unmatched gene tips stay unmapped and the count never exceeds the tips', () => {
-    const { p, entry, mappings } = withGene('((A,B),(X,Y));', true);
+    const { p } = withGene('((A,B),(X,Y));', true);
     const row = geneTreeRows(p)[0];
     expect(row.tips).toBe(4);
     expect(row.mappedTips).toBe(2); // A and B only
@@ -63,7 +63,7 @@ describe('geneTreeRows — mapped-tip counting', () => {
   });
 
   it('a hand-made assumption counts even when the label matches nothing', () => {
-    const { p, entry, mappings } = withGene('((A,B),(X,Y));');
+    const { p, entry } = withGene('((A,B),(X,Y));');
     entry.assumptions[tipIdOf(entry.doc, 'X')] = { speciesNode: tipIdOf(p, 'C') };
     const row = geneTreeRows(p)[0];
     expect(row.mappedTips).toBe(3); // A, B by label; X by hypothesis

@@ -16,7 +16,6 @@ import { DEFAULT_RECON_COSTS, type NodeId } from '../model/types';
 import {
   mapTipsByLabel,
   suggestLcaScenario,
-  validateScenario,
   type ReconIssue,
 } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';

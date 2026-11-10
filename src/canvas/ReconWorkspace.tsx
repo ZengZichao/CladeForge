@@ -13,7 +13,7 @@
 //    <1024 both drawers (full overlay)
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Cross1Icon, PinLeftIcon, PinRightIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, PinLeftIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { S, tr } from '../ui/strings';
 import { ReconRail } from '../ui/ReconRail';
@@ -143,7 +143,6 @@ export function ReconWorkspace({
     if (windowWidth < WIDE && (geneSelection.length > 0 || speciesSelection.length > 0)) {
       setRightDrawerOpen(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geneSelection.length, speciesSelection.length]);
 
   useEffect(() => {

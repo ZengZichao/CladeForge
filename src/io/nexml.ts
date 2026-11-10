@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // NeXML export — the one exchange format designed for "tree + characters +
 // metadata" together, readable by RNeXML / pynexml / DendroPy.
 //

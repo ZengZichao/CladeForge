@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Hypothesis consistency checks + character-correlation hints.
 //
 // These SURFACE possible logical tensions in the user's hypotheses; they never

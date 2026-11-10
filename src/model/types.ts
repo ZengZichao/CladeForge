@@ -698,7 +698,7 @@ export interface Project {
 
 /**
  * A user-defined event type. Extends the built-in catalogue so a figure is not
- * locked to the author's 15 built-ins — microbial / deep-time semantics
+ * locked to a fixed list — project-specific microbial / deep-time semantics
  * (genome reduction, plasmid gain, CRISPR acquisition, …) can be first-class.
  * Loaded from `project.customEventTypes`, importable/exportable as a JSON
  * ontology file.
@@ -733,7 +733,7 @@ export const PROJECT_VERSION = '0.2.0';
  */
 declare const __APP_VERSION__: string | undefined;
 export const APP_VERSION: string =
-  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.2.0';
+  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : '0.3.0';
 
 export const DEFAULT_NODE_STYLE: NodeStyle = {
   shape: 'circle',

@@ -105,10 +105,6 @@ export function GeneAssumptionInspector({
     });
   };
 
-  const targetLabel = assumption?.speciesNode
-    ? project.nodes[assumption.speciesNode]?.label || assumption.speciesNode.slice(0, 6)
-    : S.reconInspector.unmappedTarget;
-
   return (
     <>
       <div className="panel-header">

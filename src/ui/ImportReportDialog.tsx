@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Reviewable list of every note the last import produced (A-03 / M4 / C#15):
 // the toast channel truncates at three items and evaporates in seconds; this
 // dialog stays until dismissed and can be copied for a bug report or a lab

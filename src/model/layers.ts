@@ -13,7 +13,6 @@
 import { tr } from '../ui/strings';
 import type {
   EvolutionaryEvent,
-  HypothesisLayer,
   HypothesisMeta,
   NodeId,
   Project,

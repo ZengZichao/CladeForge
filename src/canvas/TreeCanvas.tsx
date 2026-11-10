@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
-import { fitView, zoomAt, type Bounds } from './coords';
+import { fitView, zoomAt } from './coords';
 import { getLiveView, resetLiveView, setLiveView, viewTransformAttr } from './liveView';
 import { SelectedCustomEdgeDelete, SnapGuide } from './ViewOverlays';
 import { boundsWithLabels } from './labelBounds';
@@ -302,7 +302,6 @@ export function TreeCanvas() {
     );
     // Deliberately NOT keyed on `project.layout.type`: this effect must never be
     // re-triggered by the state it is proposing a change to.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeChartWouldHelp, project.id, switchToTimeChart]);
 
   // An arrow-key nudge held down repeats at the OS rate, so applying every
@@ -359,7 +358,6 @@ export function TreeCanvas() {
     const full = computeLayout(project, { showEras, eraLevel });
     baseLayoutRef.current = full;
     return full;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, draggingId, interactionActive, dragNode, showEras, eraLevel]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -423,7 +421,6 @@ export function TreeCanvas() {
   }, [loadCounter, size.w, size.h, fitNow]);
   useEffect(() => {
     if (fitRequests > 0) fitNow(layoutRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitRequests]);
 
   // --- pan to a searched node, keeping the current zoom ---
@@ -434,7 +431,6 @@ export function TreeCanvas() {
     if (!el || !p) return;
     const scale = getLiveView(useStore.getState().view).scale;
     setView({ scale, tx: el.clientWidth / 2 - p.x * scale, ty: el.clientHeight / 2 - p.y * scale });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTarget]);
 
   // --- wheel zoom / trackpad pan (non-passive so preventDefault works) ---

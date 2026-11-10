@@ -1,18 +1,22 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 虚拟类群 · 四足登陆
+# Project : 四足登陆
 # Format  : CladeForge project v0.2.0
-# Software: CladeForge 0.2.0 (this header is the provenance stamp a
+# Software: CladeForge 0.3.0 (this header is the provenance stamp a
 #           reproducibility checklist asks for: software version, generation
 #           time and the analysis parameters are printed beside the numbers)
-# Generated: 2026-11-01T09:41:59.533Z
+# Generated: (timestamp omitted in fixture)
 #
 # PARAMETER SUMMARY (what the app used):
 #   * parsimony: tie-break = parent-state first, then tip frequency, then
 #     declaration order; the reported single path is ONE of possibly many
 #     equally parsimonious reconstructions.
-#   * Mk: rate ${asrRateNote}; display threshold applied post hoc; the
-#     posterior is marginal (per-node), NOT joint.
+#   * Mk: each character's rate is the application's own fit (maximum-likelihood fit (1-D profile over the pruning likelihood)),
+#     baked in at generation time; the script replays that number instead of
+#     re-fitting, so its posteriors match what the app reported. Characters the
+#     app could not fit fall back to 1 / mean(branch length) with a printed
+#     note. Display threshold applied post hoc; the posterior is marginal
+#     (per-node), NOT joint.
 #   * The R implementation below computes the likelihood in ORDINARY space
 #     while the app runs in log-space: values agree to floating-point noise on
 #     modest trees but can drift on very large or very unbalanced ones.
@@ -69,6 +73,11 @@ if (is.null(bl) || !any(is.finite(bl) & bl > 0)) {
 # edges from the average and make this script reconstruct at a different rate
 # than the application reports. Deriving it from the fallback-protected bl
 # above is what keeps the rate finite for a cladogram-only project.
+#
+# This fallback rate is used ONLY for a character the application itself could
+# not fit (NULL rate below); characters with a baked rate replay the
+# application's ML value, so the script's posteriors match the app's instead
+# of drifting with the branch-length mean.
 rate <- 1 / mean(bl)
 
 
@@ -79,6 +88,7 @@ characters <- list(
     states = c("水生", "半水生", "陆生", "飞行"),
     colors = c("#0ea5e9", "#3b82f6", "#22c55e", "#8b5cf6"),
     cost = NULL,
+    rate = 0.0005273315201987984,
     tips = c("Taxon_C" = "水生", "Taxon_E" = "水生", "Taxon_F" = "半水生", "Taxon_L" = "半水生", "Taxon_M" = "半水生", "Taxon_N" = "半水生", "Taxon_O" = "半水生", "Taxon_U" = "陆生", "Taxon_V" = "陆生", "Taxon_W" = "陆生", "Taxon_Y" = "半水生", "Taxon_AA" = "陆生", "Taxon_AC" = "陆生", "Taxon_AD" = "飞行", "Taxon_AE" = "飞行", "Taxon_AF" = "半水生", "Taxon_AI" = "陆生", "Taxon_AK" = "陆生", "Taxon_AL" = "陆生", "Taxon_AM" = "陆生")
   ),
   list(
@@ -87,6 +97,7 @@ characters <- list(
     states = c("鳍", "趾型", "翼"),
     colors = c("#0284c7", "#b45309", "#8b5cf6"),
     cost = NULL,
+    rate = 0.00024282325865354306,
     tips = c("Taxon_C" = "鳍", "Taxon_E" = "鳍", "Taxon_F" = "鳍", "Taxon_L" = "趾型", "Taxon_M" = "趾型", "Taxon_N" = "趾型", "Taxon_O" = "趾型", "Taxon_U" = "趾型", "Taxon_V" = "趾型", "Taxon_W" = "趾型", "Taxon_Y" = "趾型", "Taxon_AA" = "趾型", "Taxon_AC" = "趾型", "Taxon_AD" = "翼", "Taxon_AE" = "翼", "Taxon_AF" = "趾型", "Taxon_AI" = "趾型", "Taxon_AK" = "趾型", "Taxon_AL" = "趾型", "Taxon_AM" = "趾型")
   )
 )
@@ -152,10 +163,11 @@ sankoff <- function(tree, tip_states, states, cost) {
 ## Equal-rates Mk marginal ancestral reconstruction: Felsenstein pruning
 ## (down-pass) + parent/sibling up-pass, normal space. Uses the script-level
 ## 'bl' (which already falls back to unit lengths when the tree has none) and the
-## script-level 'rate' (= 1 / mean usable branch length); both are bound before
-## this function is ever called. For very large or very unbalanced trees prefer
-## log-space implementations (phangorn::ace, phytools).
-mk_asr <- function(tree, tip_states, states) {
+## 'rate' is passed per character: the application's own ML fit for that
+## character when it has one, else the 1 / mean usable branch length fallback.
+## For very large or very unbalanced trees prefer log-space implementations
+## (phangorn::ace, phytools).
+mk_asr <- function(tree, tip_states, states, rate) {
   ntip <- length(tree$tip.label)
   k <- length(states)
   sidx <- setNames(seq_len(k), states)
@@ -227,7 +239,11 @@ for (ch in characters) {
   }
   sp <- sankoff(tree, scored, ch$states, cost)
   cat(sprintf("   Sankoff minimum cost: %g (step-matrix units)\n", sp$cost))
-  asr <- mk_asr(tree, scored, ch$states)
+  ch_rate <- if (is.null(ch$rate)) {
+    cat(sprintf("   NOTE: the application could not fit a rate for this character; using 1 / mean(branch length) = %g\n", rate))
+    rate
+  } else ch$rate
+  asr <- mk_asr(tree, scored, ch$states, ch_rate)
   cat("   Mk posterior at each internal node (states:",
       paste(ch$states, collapse = " / "), ")\n")
   print(round(asr$posterior[as.character(internal_nodes), , drop = FALSE], 3))
@@ -251,7 +267,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "虚拟类群 · 四足登陆", cex.main = 1.0)
+title(main = "四足登陆", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]
@@ -265,7 +281,7 @@ if (length(discrete) > 0) {
   for (lab in names(scored)) tip_col[[lab]] <- main$colors[[match(scored[[lab]], main$states)]]
   tiplabels(pch = 16, col = tip_col, cex = 1.4, offset = 0.15)
 
-  asr <- mk_asr(tree, scored, main$states)
+  asr <- mk_asr(tree, scored, main$states, if (is.null(main$rate)) rate else main$rate)
   nodelabels(node = internal_nodes, pie = asr$posterior[as.character(internal_nodes), , drop = FALSE],
              piecol = main$colors, cex = 0.7)
   legend("topleft", legend = main$states, fill = main$colors,

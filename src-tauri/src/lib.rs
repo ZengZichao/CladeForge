@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // CladeForge desktop shell.
 //
 // The frontend (React) does all tree editing, parsing and rendering. The Rust

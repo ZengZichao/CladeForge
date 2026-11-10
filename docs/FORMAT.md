@@ -1,6 +1,8 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge Project File Format (.cladeforge.json)
 
-Machine-readable companion to MANUAL §14. One envelope, explicit versions, and
+Prose field reference companion to MANUAL §14. One envelope, explicit versions, and
 an ordered migration path — a third party can produce or consume this file
 without reading the source.
 
@@ -127,6 +129,6 @@ whole format for a two-tip tree.
 
 ## JSON Schema
 
-A machine-readable JSON Schema for the envelope is planned as
-`schemas/project-0.2.0.schema.json`; the authoritative field reference until
-then is this document plus `src/model/types.ts` (single source of truth).
+A separate JSON Schema file is not published yet. This document is the prose field
+reference, and `src/model/types.ts` is the single source of truth; do not assume a
+`schemas/project-0.2.0.schema.json` file exists.

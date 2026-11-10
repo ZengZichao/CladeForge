@@ -61,10 +61,10 @@ function squeezedTree(type: LayoutType): Project {
   const rootId = p.rootId;
   p.nodes[rootId].label = nextTaxon(); // R
   p.nodes[rootId].age = 10.2;
-  const tipA = mkRaw(p, nextTaxon(), rootId, 10);
+  mkRaw(p, nextTaxon(), rootId, 10);
   const innerD = mkRaw(p, nextTaxon(), rootId, 0.2);
-  const tipB = mkRaw(p, nextTaxon(), innerD, 0.05);
-  const tipC = mkRaw(p, nextTaxon(), innerD, 0.05);
+  mkRaw(p, nextTaxon(), innerD, 0.05);
+  mkRaw(p, nextTaxon(), innerD, 0.05);
   p.layout.type = type;
   return p;
 
@@ -314,7 +314,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
     for (const type of LAYOUTS) {
       const project = cetacean(type);
       const layout = computeLayout(project);
-      const plan = getCanvasCollisionPlan(project, AXIS)!;
+      getCanvasCollisionPlan(project, AXIS);
       const planAnchors = planEventAnchors(anchorInput(project, layout));
       const input = anchorInput(project, layout);
       const events = project.events;
