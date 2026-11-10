@@ -18,6 +18,12 @@ export interface ConfirmRequest {
   confirmLabel: string;
   danger?: boolean;
   onConfirm: () => void;
+  /**
+   * Runs when the dialog is dismissed WITHOUT confirming (cancel button,
+   * backdrop, Escape). Lets a caller that must branch on the answer (the M12
+   * overwrite question resolves a promise) tidy up instead of hanging.
+   */
+  onCancel?: () => void;
 }
 
 type Handler = (req: ConfirmRequest) => void;
@@ -56,7 +62,11 @@ export function requestConfirm(req: ConfirmRequest): void {
 export function ConfirmDialog() {
   const [req, setReq] = useState<ConfirmRequest | null>(null);
   const [skip, setSkip] = useState(false);
-  const ref = useDialogFocus(Boolean(req), () => setReq(null));
+  const ref = useDialogFocus(Boolean(req), () => {
+    const cancel = req?.onCancel;
+    setReq(null);
+    cancel?.();
+  });
 
   const open = useCallback((r: ConfirmRequest) => {
     setSkip(false);
@@ -68,6 +78,12 @@ export function ConfirmDialog() {
   useEffect(() => registerConfirmHandler(open), [open]);
 
   if (!req) return null;
+
+  const dismiss = () => {
+    const cancel = req.onCancel;
+    setReq(null);
+    cancel?.();
+  };
 
   const confirm = () => {
     if (skip) {
@@ -83,7 +99,7 @@ export function ConfirmDialog() {
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={() => setReq(null)}>
+    <div className="dialog-backdrop" onMouseDown={dismiss}>
       <div
         ref={ref}
         className="dialog confirm-dialog"
@@ -101,7 +117,14 @@ export function ConfirmDialog() {
           </label>
         )}
         <div className="actions">
-          <button className="btn" onClick={() => setReq(null)}>
+          <button
+            className="btn"
+            onClick={() => {
+              const cancel = req.onCancel;
+              setReq(null);
+              cancel?.();
+            }}
+          >
             {S.confirm.cancel}
           </button>
           <button className={`btn ${req.danger ? 'danger' : 'primary'}`} onClick={confirm}>

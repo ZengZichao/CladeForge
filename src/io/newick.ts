@@ -51,16 +51,58 @@ function inferSupportScaleFromValues(values: number[]): SupportScale {
 // --- tokeniser -----------------------------------------------------------------
 
 type Token =
-  | { t: '(' }
-  | { t: ')' }
-  | { t: ',' }
-  | { t: ':' }
-  | { t: ';' }
+  | { t: '('; at: number }
+  | { t: ')'; at: number }
+  | { t: ','; at: number }
+  | { t: ':'; at: number }
+  | { t: ';'; at: number }
   /** `quoted` records that the label arrived inside single quotes, which is
    *  how a *deliberate* numeric node name is distinguished from a support
-   *  value on an internal node. */
-  | { t: 'label'; v: string; quoted: boolean }
-  | { t: 'comment'; v: string };
+   *  value on an internal node. `at` is the input index where the token
+   *  starts, so a parse error can name the line and column. */
+  | { t: 'label'; v: string; quoted: boolean; at: number }
+  | { t: 'comment'; v: string; at: number };
+
+/** 1-based line/column of a character index — what a user needs to actually
+ *  FIND a syntax error in a thousands-line MrBayes or IQ-TREE output. */
+export function lineColOf(input: string, index: number): { line: number; col: number } {
+  let line = 1;
+  let col = 1;
+  const stop = Math.min(Math.max(index, 0), input.length);
+  for (let i = 0; i < stop; i += 1) {
+    if (input[i] === '\n') {
+      line += 1;
+      col = 1;
+    } else {
+      col += 1;
+    }
+  }
+  return { line, col };
+}
+
+/** The line containing `index`, trimmed to a readable excerpt. */
+function excerptOf(input: string, index: number): string {
+  const lineStart = input.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
+  let lineEnd = input.indexOf('\n', index);
+  if (lineEnd === -1) lineEnd = input.length;
+  const text = input.slice(lineStart, lineEnd).trim();
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text;
+}
+
+/**
+ * A parse error that says WHERE — line, column and the offending line — in
+ * the user's language. Without the position, "Unbalanced (" on a 5 000-line
+ * file asks the user to eyeball-scan the whole document.
+ */
+function parseErrorAt(input: string, index: number, zh: string, en: string): Error {
+  const { line, col } = lineColOf(input, index);
+  const where = tr(`第 ${line} 行第 ${col} 列`, `line ${line}, column ${col}`);
+  const context = excerptOf(input, index);
+  const ctx = context
+    ? tr(`，出错位置附近：「${context}」`, `, near: "${context}"`)
+    : '';
+  return new Error(tr(`Newick 解析错误（${where}）：${zh}${ctx}`, `Newick parse error (${where}): ${en}${ctx}`));
+}
 
 function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
@@ -74,7 +116,7 @@ function tokenize(input: string): Token[] {
     if (i >= n) break;
     const c = input[i];
     if ('(),:;'.includes(c)) {
-      tokens.push({ t: c } as Token);
+      tokens.push({ t: c, at: i } as Token);
       i += 1;
     } else if (c === "'" || c === '"') {
       // Quoted label: a doubled quote char is an escaped quote. Both styles are
@@ -82,6 +124,7 @@ function tokenize(input: string): Token[] {
       // is what other tools export. A quote that never closes is a malformed
       // file: refusing it beats silently accepting the half label.
       const q = c;
+      const quoteStart = i;
       i += 1;
       let v = '';
       let closed = false;
@@ -99,8 +142,8 @@ function tokenize(input: string): Token[] {
         v += input[i];
         i += 1;
       }
-      if (!closed) throw new Error('Unterminated quote in Newick string');
-      tokens.push({ t: 'label', v, quoted: true });
+      if (!closed) throw parseErrorAt(input, i, '引号未闭合', 'unterminated quote');
+      tokens.push({ t: 'label', v, quoted: true, at: quoteStart });
     } else if (c === '[') {
       // Newick / NEXUS comments may NEST brackets — `(A[a[b]c],B)` is legal in a
       // NEXUS TREE statement. Scan to the MATCHING `]` instead of the first one,
@@ -115,15 +158,16 @@ function tokenize(input: string): Token[] {
           if (depth === 0) break;
         }
       }
-      if (j >= n) throw new Error('Unbalanced "[" in Newick string');
-      tokens.push({ t: 'comment', v: input.slice(i + 1, j) });
+      if (j >= n) throw parseErrorAt(input, i, '注释「[」没有对应的「]」', 'unbalanced "["');
+      tokens.push({ t: 'comment', v: input.slice(i + 1, j), at: i });
       i = j + 1;
     } else if (c === ']') {
       // A stray closing bracket has no matching '['. Reject it explicitly:
       // the label scanner below terminates on ']', so without this branch it
       // would consume nothing and spin forever (index never advances).
-      throw new Error('Unbalanced "]" in Newick string');
+      throw parseErrorAt(input, i, '出现多余的「]」（没有对应的「[」）', 'unbalanced "]"');
     } else {
+      const labelStart = i;
       let v = '';
       while (i < n && !'(),:;[]'.includes(input[i]) && !/\s/.test(input[i])) {
         v += input[i];
@@ -145,7 +189,7 @@ function tokenize(input: string): Token[] {
         v += ' ' + input.slice(k, m);
         i = m;
       }
-      tokens.push({ t: 'label', v: v.replace(/_/g, ' '), quoted: false });
+      tokens.push({ t: 'label', v: v.replace(/_/g, ' '), quoted: false, at: labelStart });
     }
   }
   return tokens;
@@ -295,6 +339,8 @@ function parseSegment(
   issues: string[],
   budget: ParseBudget = newParseBudget(),
   supportConvention: 'auto' | SupportScale = 'auto',
+  /** The raw segment text, for line/column positions in parse errors. */
+  source = '',
 ): Project {
   const nodes: Record<NodeId, TreeNode> = {};
   // The node-count guard below must not ask `Object.keys(nodes).length` for every
@@ -507,7 +553,7 @@ function parseSegment(
       case ',': {
         ti += 1;
         const parent = stack[stack.length - 1];
-        if (!parent) throw new Error("Unexpected ',' in Newick string");
+        if (!parent) throw parseErrorAt(source, tok.at, "出现多余的「,」（当前不在任何括号内）", "unexpected ',' outside any subtree");
         const sibling = makeNode(parent.id);
         parent.childrenIds.push(sibling.id);
         current = sibling;
@@ -516,7 +562,7 @@ function parseSegment(
       case ')': {
         ti += 1;
         const parent = stack.pop();
-        if (!parent) throw new Error("Unbalanced ')' in Newick string");
+        if (!parent) throw parseErrorAt(source, tok.at, "出现多余的「)」（没有对应的「(」）", "unbalanced ')'");
         current = parent;
         const label = readLabel();
         if (label) {
@@ -552,7 +598,14 @@ function parseSegment(
     }
   }
 
-  if (stack.length > 0) throw new Error('Unbalanced "(" in Newick string');
+  if (stack.length > 0) {
+    throw parseErrorAt(
+      source,
+      source.length,
+      `输入结束时仍有 ${stack.length} 个未闭合的「(」`,
+      `${stack.length} unclosed "(" at the end of the input`,
+    );
+  }
 
   const project = createEmptyProject(name);
   project.nodes = nodes;
@@ -742,17 +795,36 @@ export function parseNewickTrees(
   }
 
   const segments: Token[][] = [];
+  const segSources: string[] = [];
   let cur: Token[] = [];
-  for (const tok of tokenize(trimmed)) {
+  let curStart = 0;
+  // Walk the input WITH the token stream so each segment keeps its raw text:
+  // parse errors can then quote the actual line the user needs to look at.
+  const tokens = tokenize(trimmed);
+  for (const tok of tokens) {
+    if (cur.length === 0) curStart = tok.at;
     if (tok.t === ';') {
-      if (cur.length > 0) segments.push(cur);
+      if (cur.length > 0) {
+        segments.push(cur);
+        segSources.push(trimmed.slice(curStart, tok.at));
+      }
       cur = [];
     } else {
       cur.push(tok);
     }
   }
-  if (cur.length > 0) segments.push(cur);
-  if (segments.length === 0) throw new Error('No tree found in Newick string (missing ";"?)');
+  if (cur.length > 0) {
+    segments.push(cur);
+    segSources.push(trimmed.slice(curStart));
+  }
+  if (segments.length === 0) {
+    throw parseErrorAt(
+      input,
+      trimmed.length,
+      '没有找到任何树（缺少表示树结束的分号「;」？）',
+      'no tree found (missing the terminating ";"?)',
+    );
+  }
 
   // File-wide support convention: an explicit user choice, else inference —
   // any value above 1 can only be a percent; all-≤1 values are PROBABLY
@@ -792,7 +864,7 @@ export function parseNewickTrees(
   assertTreeCount(segments.length);
   const projects = segments.map((seg, idx) => {
     budget.tree = 0; // per-tree ceiling resets; the document ceiling does not
-    return parseSegment(seg, segments.length > 1 ? `${name} (${idx + 1})` : name, issues, budget, convention);
+    return parseSegment(seg, segments.length > 1 ? `${name} (${idx + 1})` : name, issues, budget, convention, segSources[idx]);
   });
   return { projects, issues };
 }

@@ -121,6 +121,12 @@ export interface ExportOptions {
    * mode — the exported figure is always explicit).
    */
   background?: string;
+  /**
+   * Skip the background rect entirely (M22): publication pipelines sometimes
+   * need a transparent PNG so the figure composites onto the page. Only the
+   * raster exporter exposes it — an SVG keeps its explicit rect.
+   */
+  transparentBackground?: boolean;
   /** SVG/PDF metadata: method fingerprint, version, timestamp. */
   metadata?: { method?: string; version?: string; generatedAt?: string };
 }
@@ -373,12 +379,15 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   const parts: string[] = [];
   const defs: string[] = [];
 
-  parts.push(
-    // EXPLICIT colour, never the live canvas's CSS variable: in dark mode the
-    // on-screen background resolves from the theme while `project.canvas.background`
-    // still says light, and the figure must state its own ground truth.
-    `<rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${safeColour(opts.background ?? project.canvas.background, '#ffffff')}"/>`,
-  );
+  // The transparent-PNG option (M22) removes the background rect entirely.
+  if (!opts.transparentBackground) {
+    parts.push(
+      // EXPLICIT colour, never the live canvas's CSS variable: in dark mode the
+      // on-screen background resolves from the theme while `project.canvas.background`
+      // still says light, and the figure must state its own ground truth.
+      `<rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${safeColour(opts.background ?? project.canvas.background, '#ffffff')}"/>`,
+    );
+  }
 
   // --- time axis (era bands + ticks + environmental events) -------------------
   if (timeAxis) {
@@ -933,7 +942,7 @@ export async function toPngBlob(
   img.decoding = 'sync';
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
-    img.onerror = () => reject(new Error('Failed to render SVG for PNG export'));
+    img.onerror = () => reject(new Error(tr('渲染 SVG 为位图失败，无法导出 PNG', 'Failed to render the SVG for PNG export')));
     img.src = url;
   });
   // Browsers cap canvas dimensions (~16k px per side) AND total bitmap area; a
@@ -960,11 +969,11 @@ export async function toPngBlob(
   canvas.width = Math.ceil(width * s);
   canvas.height = Math.ceil(height * s);
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  if (!ctx) throw new Error(tr('画布 2D 上下文不可用，无法导出位图', 'Canvas 2D context unavailable; cannot export a bitmap'));
   ctx.scale(s, s);
   ctx.drawImage(img, 0, 0, width, height);
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png');
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(tr('PNG 编码失败', 'PNG encoding failed')))), 'image/png');
   });
   const dpi = Math.round(s * 96);
   if (dpi !== 96) {

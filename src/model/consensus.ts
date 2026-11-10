@@ -391,13 +391,17 @@ export function buildConsensusTree(
     }
     return byKey;
   });
+  // The tree index rides ALONG with each map instead of being re-derived with
+  // `indexOf` per lookup — a hidden O(clades × trees) term inside an O(trees)
+  // loop (M23).
+  const perTreeCladeIndexed = perTreeCladeNode.map((byKey, treeIdx) => ({ byKey, treeIdx }));
   const cladeStats = (key: string): { lengths: number[]; ages: number[] } => {
     const lengths: number[] = [];
     const ages: number[] = [];
-    for (const byKey of perTreeCladeNode) {
+    for (const { byKey, treeIdx } of perTreeCladeIndexed) {
       const nid = byKey.get(key);
       if (nid === undefined) continue;
-      const n = projects[perTreeCladeNode.indexOf(byKey)].nodes[nid];
+      const n = projects[treeIdx].nodes[nid];
       if (!n) continue;
       if (typeof n.branchLength === 'number' && Number.isFinite(n.branchLength) && n.branchLength >= 0) {
         lengths.push(n.branchLength);

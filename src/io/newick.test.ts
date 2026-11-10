@@ -104,18 +104,20 @@ describe('newick', () => {
     // '((A,B),C' closes its inner group but never the root group, so the stack
     // is non-empty when the token run ends. Handing back the half-built tree
     // would put a topology on the canvas that silently differs from the file.
-    expect(() => parseNewick('((A,B),C;')).toThrow(/Unbalanced "\("/);
-    expect(() => parseNewickTrees('((A,B),C)R;((A,B),C;')).toThrow(/Unbalanced "\("/);
+    // The error names the position (line/column) and quotes the offending
+    // line, so the user can find it in a large file (review finding H5).
+    expect(() => parseNewick('((A,B),C;')).toThrow(/(未闭合|unclosed)/);
+    expect(() => parseNewickTrees('((A,B),C)R;((A,B),C;')).toThrow(/(未闭合|unclosed)/);
   });
 
   it('rejects an unbalanced ")" instead of popping past the root', () => {
     // '(A,B))' pops the one group it opened and then pops again on an empty
     // stack; re-parenting onto a non-existent ancestor must throw, not produce
     // a tree whose root is the wrong node.
-    expect(() => parseNewick('(A,B));')).toThrow(/Unbalanced '\)'/);
-    expect(() => parseNewick('((A,B),C));')).toThrow(/Unbalanced '\)'/);
+    expect(() => parseNewick('(A,B));')).toThrow(/(多余|unbalanced)/i);
+    expect(() => parseNewick('((A,B),C));')).toThrow(/(多余|unbalanced)/i);
     // A stray comma outside any group is the same class of defect.
-    expect(() => parseNewick('A,B;')).toThrow(/Unexpected ','/);
+    expect(() => parseNewick('A,B;')).toThrow(/(多余|unexpected)/i);
   });
 
   it('accepts a complete tree that lacks its terminating semicolon', () => {

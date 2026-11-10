@@ -97,7 +97,11 @@ export type AsrWarningKind =
   | 'invalid-branch-length'
   | 'posterior-collapse'
   /** Too many missing branch lengths — the run was refused by the guard. */
-  | 'missing-branch-lengths-refused';
+  | 'missing-branch-lengths-refused'
+  /** Fewer than two tips carry an observation — nothing constrains a rate. */
+  | 'no-usable-observations'
+  /** Observed tips exist, but the rate profile is completely flat (no information). */
+  | 'flat-rate-profile';
 
 export interface AsrWarning {
   kind: AsrWarningKind;
@@ -386,7 +390,7 @@ function mlRateEr(
   project: Project,
   ctxBase: Omit<PruningContext, 'logP'>,
   logPofRate: (rate: number) => (t: number) => number[][],
-): { rate: number; logLikelihood: number; ci: [number, number] } {
+): { rate: number; logLikelihood: number; ci: [number, number]; flat: boolean } {
   // Grid + golden section over log10(rate). The grid comes FIRST, deliberately
   // in the reference implementation's bracket (log10 r ∈ [-12, 2], step 0.25):
   // on conflict-heavy data the profile has no interior maximum — it rises
@@ -401,12 +405,25 @@ function mlRateEr(
   const gridStep = 0.25;
   let bestLog = -12;
   let bestVal = f(bestLog);
+  // A profile where EVERY grid value is equal is flat: the data constrain no
+  // rate at all (e.g. every tip uninformative), and the strict `>` below keeps
+  // the first grid point as the "optimum" — a starting artefact, not a fit.
+  // A monotone profile whose maximum sits ON the first grid point is a
+  // legitimate boundary optimum (unanimous data → rate ≈ 0) and must fit.
+  let minVal = bestVal;
+  let maxVal = bestVal;
   for (let x = -12; x <= 2.0001; x += gridStep) {
     const v = f(x);
     if (v > bestVal) {
       bestVal = v;
       bestLog = x;
     }
+    if (v < minVal) minVal = v;
+    if (v > maxVal) maxVal = v;
+  }
+  const flat = maxVal - minVal <= 1e-9 * (1 + Math.abs(maxVal));
+  if (flat) {
+    return { rate: Number.NaN, logLikelihood: bestVal, ci: [Number.NaN, Number.NaN], flat };
   }
   let a = bestLog - gridStep;
   let b = bestLog + gridStep;
@@ -434,11 +451,19 @@ function mlRateEr(
   const rate = 10 ** log10Rate;
   const logL = f(log10Rate);
   // Profile-likelihood 95% interval: the log10 r range where lnL drops by 1.92.
+  // When the likelihood at the bracket edge is still above the target, the
+  // interval genuinely extends beyond it — the bound is UNDETERMINED, so it is
+  // reported as ±Infinity (the UI prints "undetermined") instead of the bracket
+  // edge, which used to masquerade as a finite confidence bound like 1e-24.
   const target = logL - 1.920729;
   const bisect = (from: number, dir: -1 | 1): number => {
     let inner = from;
     let outer = from + dir * 12; // 12 decades: beyond any resolvable interval
-    if (f(outer) > target) return outer; // interval extends beyond the bracket
+    if (f(outer) > target) {
+      // Undetermined in log space; `10 ** NaN` keeps the endpoint non-finite so
+      // the UI prints "undetermined" instead of a fabricated number.
+      return Number.NaN;
+    }
     for (let i = 0; i < 50; i += 1) {
       const mid = (inner + outer) / 2;
       if (f(mid) > target) inner = mid;
@@ -447,7 +472,7 @@ function mlRateEr(
     return (inner + outer) / 2;
   };
   const ci: [number, number] = [10 ** bisect(log10Rate, -1), 10 ** bisect(log10Rate, 1)];
-  return { rate, logLikelihood: logL, ci };
+  return { rate, logLikelihood: logL, ci, flat };
 }
 
 export function reconstructMk(
@@ -580,6 +605,47 @@ export function reconstructMk(
   const ctxBase = { k, childrenOf, post, pre, branchLen, tipLogVec };
   let rateInfo: AsrRateInfo;
 
+  // No-observation guard — runs BEFORE the branch-length guard, because "this
+  // character has nothing to reconstruct" is the more fundamental statement.
+  // The likelihood of a tree with fewer than two observed tips is flat (or
+  // near-flat) in the rate: one observation cannot pin down a substitution
+  // rate, and zero observations make every rate exactly equally likely. The
+  // ML grid scan would then keep its FIRST point (log10 r = −12) as the
+  // "optimum" and print r = 1e-12 with a 95% CI of [1e-24, 1e+14] — a complete
+  // fabrication that looks like a finished analysis. Refuse and say why.
+  const scoredTipCount = post.filter((n) => {
+    if (n.childrenIds.length > 0) return false;
+    const v = n.charStates?.[character.id];
+    if (typeof v === 'string') return index.has(v);
+    if (Array.isArray(v)) return v.some((sid) => index.has(sid));
+    return false;
+  }).length;
+  const refuseWith = (warning: AsrWarning): AsrResult => {
+    warnings.push(warning);
+    return {
+      characterId: character.id,
+      probs: new Map(),
+      display: new Map(),
+      warnings,
+      model: options.model,
+      threshold: options.threshold,
+      rate: { rate: Number.NaN, method: options.rateMethod ?? 'ml' },
+      noData: [],
+    };
+  };
+
+  if (scoredTipCount < 2) {
+    return refuseWith({
+      kind: 'no-usable-observations',
+      message: tr(
+        `本性状只有 ${scoredTipCount} 个末端带有可用观测（需要 ≥ 2）：Mk 重建已被拒绝。一个观测约束不了一个替换速率，此时运行只会输出网格起点的伪影而非估计值。请先在性状模块为末端赋值。`,
+        `Only ${scoredTipCount} tip${scoredTipCount === 1 ? '' : 's'} carry a usable observation (≥ 2 required): the Mk reconstruction was refused. One observation cannot constrain a substitution rate, and running anyway would print grid-start artefacts, not an estimate. Assign states to tips in the Traits module first.`,
+      ),
+      count: scoredTipCount,
+      nodeIds: [],
+    });
+  }
+
   if (missingFraction > guard) {
     warnings.push({
       kind: 'missing-branch-lengths-refused',
@@ -605,6 +671,20 @@ export function reconstructMk(
   const rateMethod = options.rateMethod ?? 'ml';
   if (rateMethod === 'ml') {
     const ml = mlRateEr(project, ctxBase, logPofRate);
+    // Observed tips exist, but the profile never left its first grid value:
+    // every rate explains the data equally well (e.g. every observation is a
+    // polymorphic set spanning all states). Same fabrication trap as above.
+    if (ml.flat) {
+      return refuseWith({
+        kind: 'flat-rate-profile',
+        message: tr(
+          '速率剖面完全平坦：现有观测对任何替换速率给出相同的似然，无法拟合速率，Mk 重建已被拒绝。请检查末端赋值是否真的区分了不同状态（例如全部末端都记为同一多态集合时没有信息）。',
+          'The rate profile is completely flat: every substitution rate explains the observations equally well, so no rate can be fitted and the Mk reconstruction was refused. Check whether the tip assignments actually distinguish states (e.g. every tip recorded as the same all-state polymorphic set carries no information).',
+        ),
+        count: scoredTipCount,
+        nodeIds: [],
+      });
+    }
     rateInfo = { rate: ml.rate, method: 'ml', logLikelihood: ml.logLikelihood, logLikelihoodCi: ml.ci };
   } else {
     rateInfo = { rate: momentRate, method: 'moment' };
@@ -639,7 +719,9 @@ export function reconstructMk(
   // the number of nodes whose argmax flips — the two numbers a reader needs to
   // judge whether the rate choice matters for this tree.
   let maxDelta = 0;
-  let nodesChangedArgmax = 0;
+  // DISTINCT nodes whose MAP state changes: a node flipping in BOTH the 0.5×
+  // and the 2× round used to count twice, inflating "N nodes changed" (A-19).
+  const argmaxChanged = new Set<NodeId>();
   {
     for (const factor of [0.5, 2]) {
       const alt = runPruning(project, { ...ctxBase, logP: logPofRate(rateInfo.rate * factor) });
@@ -657,11 +739,11 @@ export function reconstructMk(
         for (let i = 1; i < k; i += 1) if (base[i] > base[am]) am = i;
         let aq = 0;
         for (let i = 1; i < k; i += 1) if (q[i] > q[aq]) aq = i;
-        if (am !== aq) nodesChangedArgmax += 1;
+        if (am !== aq) argmaxChanged.add(n.id);
       }
     }
   }
-  rateInfo.sensitivity = { maxDelta, nodesChangedArgmax };
+  rateInfo.sensitivity = { maxDelta, nodesChangedArgmax: argmaxChanged.size };
 
   // Compile warnings for user-facing feedback. Each class counts NODES.
   const pushNodeWarning = (
@@ -812,7 +894,10 @@ export function sampleStochasticMap(
   project: Project,
   character: Character,
   seed = 20260919,
-  samples = 1,
+  // A single random map has no statistical meaning (the same reason
+  // `sampleMprBranchRates` defaults to 100): the MEAN across samples is the
+  // quantity a reader can interpret, and one draw is not a mean (M16).
+  samples = 100,
 ): { perBranchChanges: Map<NodeId, number>; meanChangesPerSample: number; samples: number } | null {
   const base = reconstructMk(project, character, { ...DEFAULT_ASR_OPTIONS, joint: false });
   if (!base || base.probs.size === 0) return null;

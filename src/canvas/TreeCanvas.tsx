@@ -926,7 +926,10 @@ export function TreeCanvas() {
         setDragActive(false);
         const files = Array.from(e.dataTransfer?.files ?? []);
         const projectFile = files.find((f) => /\.cladeforge\.json$|\.json$/i.test(f.name));
-        const treeFiles = files.filter((f) => /\.(nwk|newick|tree|tre|nex|nexus)$/i.test(f.name));
+        // .txt is accepted here (M21): a legal Newick shipped as tree.txt used
+        // to be refused until renamed — the CONTENT parsers are the real gate,
+        // the extension list only decides what gets a chance.
+        const treeFiles = files.filter((f) => /\.(nwk|newick|tree|tre|nex|nexus|txt)$/i.test(f.name));
         if (projectFile) {
           // A project (.cladeforge.json) dropped on the canvas opens as a tab —
           // the review's PM-06: the project format used to be un-droppable.
@@ -951,8 +954,8 @@ export function TreeCanvas() {
         const rejected = files.map((f) => f.name).slice(0, 3).join(', ');
         notify.error(
           tr(
-            `暂不支持拖入的文件（${rejected || '未知'}）：请拖入 .nwk/.newick/.tree/.tre/.nex/.nexus 树文件或 .cladeforge.json 项目；CSV/TSV 性状表请用 文件 › 导入表格`,
-            `Unsupported dropped file${files.length === 1 ? '' : 's'} (${rejected || 'unknown'}): drop a .nwk/.newick/.tree/.tre/.nex/.nexus tree or a .cladeforge.json project; CSV/TSV tables go through File › Import table`,
+            `暂不支持拖入的文件（${rejected || '未知'}）：请拖入 .nwk/.newick/.tree/.tre/.nex/.nexus/.txt 树文件或 .cladeforge.json 项目；CSV/TSV 性状表请用 文件 › 导入表格`,
+            `Unsupported dropped file${files.length === 1 ? '' : 's'} (${rejected || 'unknown'}): drop a .nwk/.newick/.tree/.tre/.nex/.nexus/.txt tree or a .cladeforge.json project; CSV/TSV tables go through File › Import table`,
           ),
         );
       }}

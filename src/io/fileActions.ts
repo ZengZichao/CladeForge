@@ -22,8 +22,9 @@ import { exportSVGString, toPdfBlob, toPngBlob, type ExportOptions } from './exp
 import { buildHypothesisJSON, buildNarrative } from './hypothesisExport';
 import { buildRScript } from './scriptExport';
 import { buildReconciliationReport } from './reconExport';
-import { openText, saveBinary, saveText, saveTextWithResult, isTauri, type DialogFilter } from './fileService';
-import { readTextFileNative } from './native';
+import { openText, saveBinary, saveText, saveTextWithResult, isTauri, decodeBytesWithFallback, type DialogFilter, type OpenedText } from './fileService';
+import { readBinaryFileNative, readTextFileNative, statFileMtimeNative } from './native';
+import { requestConfirm } from '../ui/confirmDialog';
 import { serializeNexml } from './nexml';
 import {
   applyMatrixImport,
@@ -38,7 +39,8 @@ import {
 } from './tableIO';
 import { readClipboardText, clipboardUnavailableMessage } from './clipboardIO';
 import { pushRecent, type RecentEntry } from './recent';
-import { notify } from '../ui/toast';
+import { notify, useToasts } from '../ui/toast';
+import { useImportReport } from '../ui/importReport';
 import { withBusy } from '../ui/busy';
 import { S, importedFirstOf, repairedCount, tr, withReason } from '../ui/strings';
 import type { Project } from '../model/types';
@@ -79,19 +81,30 @@ export function actionExportWithSettings(format: 'svg' | 'png' | 'pdf'): void {
   else void actionExportPDF();
 }
 
-/** Surface "data we could not represent" notes from a parser. */
-function reportParseIssues(issues: string[]): void {
+/**
+ * Surface "data we could not represent" notes from a parser.
+ *
+ * The full list is ALSO recorded in the import-report store, and a truncation
+ * toast carries a "view all" action: toasts alone evaporate in seconds and
+ * truncate at three, while these are exactly the notes that change how a
+ * dataset may be interpreted (A-03 / M4 / C#15). The shown toasts linger 12 s
+ * so a reader has a fighting chance of finishing a long note.
+ */
+function reportParseIssues(issues: string[], sourceName = ''): void {
   const MAX_TOASTS = 3;
-  for (const msg of issues.slice(0, MAX_TOASTS)) notify.info(msg);
+  if (issues.length === 0) return;
+  useImportReport.getState().record(sourceName, issues);
+  for (const msg of issues.slice(0, MAX_TOASTS)) {
+    useToasts.getState().push('info', msg, undefined, 12_000);
+  }
   if (issues.length > MAX_TOASTS) {
-    // The hidden notes are NOT persisted anywhere (they live only in this
-    // call), so pointing at "the exported project file" was a dead end — say
-    // re-import instead, which replays every note.
-    notify.info(
+    notify.action(
       tr(
-        `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示（重新导入该文件可完整回放）`,
-        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown (re-import the file to see them all)`,
+        `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示`,
+        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown`,
       ),
+      S.review.importReportViewAll,
+      () => useImportReport.getState().setOpen(true),
     );
   }
 }
@@ -112,14 +125,14 @@ function openTreeProjects(
   if (projects.length > 1 && multiTreeHandler) {
     multiTreeHandler(projects, name, path);
     pushRecent({ name, path, kind: 'tree' });
-    reportParseIssues(issues);
+    reportParseIssues(issues, name);
     return;
   }
   // No chooser registered: keep only the first tree, but say so out loud.
   const shown = projects.length > 1 ? projects.slice(0, 1) : projects;
   if (projects.length > 1) notify.info(importedFirstOf(projects.length));
   openProjects(shown, name, path);
-  reportParseIssues(issues);
+  reportParseIssues(issues, name);
 }
 
 const PROJECT_FILTERS: DialogFilter[] = [{ name: 'CladeForge Project', extensions: ['json'] }];
@@ -146,9 +159,67 @@ function outName(name: string, ext: string): string {
   return `${sanitizeFileName(baseName(name))}.${ext}`;
 }
 
+/**
+ * The ONE success toast for every export: file name + size, so "did it export?
+ * how big?" never depends on which format was chosen (A-08 / C#9 / M20 — PDF,
+ * Newick, hypothesis JSON, narrative and the recon report used to get a bare
+ * "已导出").
+ */
+function notifyExported(name: string, content: string | Blob): void {
+  const bytes = typeof content === 'string' ? new TextEncoder().encode(content).length : content.size;
+  notify.success(
+    tr(
+      `已导出 ${name}（${(bytes / 1024).toFixed(0)} KB）`,
+      `Exported ${name} (${(bytes / 1024).toFixed(0)} KB)`,
+    ),
+  );
+}
+
+/**
+ * Disk-side mtime of each opened source file, recorded at open and refreshed
+ * at every save. Before an in-place ⌘S the current mtime is compared against
+ * the record: a mismatch means SOMETHING ELSE wrote the file since we opened
+ * it, and the overwrite becomes a question instead of a silent clobber (M12).
+ */
+const sourceMtimes = new Map<string, number>();
+
+async function recordSourceMtime(path: string | undefined): Promise<void> {
+  if (!path || !isTauri()) return;
+  const mtime = await statFileMtimeNative(path);
+  if (mtime !== null) sourceMtimes.set(path, mtime);
+}
+
 function reportError(prefix: string, e: unknown): void {
   const message = e instanceof Error ? e.message : String(e);
   notify.error(withReason(prefix, message));
+}
+
+/**
+ * Surface the non-fatal notes an open produced (an encoding fallback above
+ * all): the user must learn their file was transcoded, not find out from
+ * mojibake labels downstream.
+ */
+function surfaceOpenNotes(result: { notes?: string[] }): void {
+  for (const note of result.notes ?? []) notify.info(note);
+}
+
+/**
+ * Native text read with the GB18030 fallback for non-UTF-8 files (shared by
+ * ⌘O, recents and the shell-open path — one definition of the behaviour).
+ */
+async function readNativeTextWithFallback(
+  path: string,
+  maxBytes: number,
+  name: string,
+): Promise<OpenedText> {
+  try {
+    return { name, text: await readTextFileNative(path, maxBytes), path };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (!/utf-?8/i.test(message)) throw e;
+    const bytes = await readBinaryFileNative(path, maxBytes);
+    return { ...decodeBytesWithFallback(bytes, name), path };
+  }
 }
 
 /**
@@ -202,7 +273,8 @@ function exportOptions(): ExportOptions {
     includeLegend: settings.includeLegend,
     includeScaleBar: settings.includeScaleBar,
     grayscale: settings.grayscale,
-    background: settings.whiteBackground ? '#ffffff' : undefined,
+    background: settings.transparentBackground ? undefined : settings.whiteBackground ? '#ffffff' : undefined,
+    transparentBackground: settings.transparentBackground,
     metadata: {
       version: APP_VERSION,
       generatedAt: new Date().toISOString(),
@@ -247,7 +319,18 @@ export async function actionOpenProject(): Promise<void> {
   try {
     const result = await openText(PROJECT_FILTERS);
     if (!result) return;
-    const existing = result.path ? tabHoldingPath(result.path) : null;
+    surfaceOpenNotes(result);
+    openProjectFromText(result.text, result.name, result.path);
+  } catch (e) {
+    reportError(S.notify.openProjectFail, e);
+  }
+}
+
+/** Shared body of ⌘O and the OS file association: parse, open, report. */
+function openProjectFromText(text: string, name: string, path?: string): void {
+  void recordSourceMtime(path);
+  try {
+    const existing = path ? tabHoldingPath(path) : null;
     if (existing) {
       focusTab(existing);
       notify.info(
@@ -258,13 +341,40 @@ export async function actionOpenProject(): Promise<void> {
       );
       return;
     }
-    const { project, issues } = readProjectFile(result.text);
-    project.name = baseName(result.name);
-    project.sourcePath = result.path;
+    const { project, issues } = readProjectFile(text);
+    project.name = baseName(name);
+    project.sourcePath = path;
     useStore.getState().openInNewTab(project);
-    pushRecent({ name: result.name, path: result.path, kind: 'project' });
+    pushRecent({ name, path, kind: 'project' });
     if (issues.length > 0) notify.info(repairedCount(issues.length));
     else notify.success(S.notify.projectOpened);
+  } catch (e) {
+    reportError(S.notify.openProjectFail, e);
+  }
+}
+
+/**
+ * Open a file the OPERATING SYSTEM handed us: a double-clicked `.cladeforge.json`
+ * project, a tree file from the file association, or a path forwarded by the
+ * single-instance plugin when a second launch was folded into this one.
+ *
+ * The project-vs-tree decision sniffs content first (a JSON document is a
+ * project; anything else goes through the same Newick/NEXUS pipeline as the
+ * canvas dropzone) so a tree file saved with the wrong extension still opens.
+ * Reading goes through the same native scoped-IO command as every other open,
+ * so the path allow-list applies here too.
+ */
+export async function openPathFromShell(path: string): Promise<void> {
+  try {
+    const name = path.split(/[\\/]/).pop() ?? 'file';
+    const text = await readTextFileNative(path, MAX_PROJECT_CHARS);
+    const trimmed = text.trimStart();
+    const looksLikeProject = trimmed.startsWith('{') || /\.json$/i.test(name);
+    if (looksLikeProject) {
+      openProjectFromText(text, name, path);
+    } else {
+      importTreeText(text, name, path);
+    }
   } catch (e) {
     reportError(S.notify.openProjectFail, e);
   }
@@ -282,10 +392,36 @@ export async function actionSaveProject(): Promise<void> {
   try {
     const target = project.sourcePath;
     if (target && isTauri()) {
+      // M12: an external edit since the file was opened must not be silently
+      // overwritten — the write becomes a question. Files opened before this
+      // feature (no recorded mtime) save straight through, so there are no
+      // false positives.
+      const known = sourceMtimes.get(target);
+      if (known !== undefined) {
+        const current = await statFileMtimeNative(target);
+        if (current !== null && current !== known) {
+          const proceed = await new Promise<boolean>((resolve) => {
+            requestConfirm({
+              key: 'save-overwrite-external-change',
+              title: tr('文件已在磁盘上被修改', 'The file changed on disk'),
+              message: tr(
+                `「${target}」在本应用之外被修改过（例如同事或脚本改写了它）。仍然保存会覆盖那份修改（可先用「文件 › 打开工程」查看）。`,
+                `"${target}" was modified outside this app (e.g. by a colleague or a script). Saving now overwrites that version (use File › Open project to inspect it first).`,
+              ),
+              confirmLabel: tr('仍然保存', 'Save anyway'),
+              danger: true,
+              onConfirm: () => resolve(true),
+              onCancel: () => resolve(false),
+            });
+          });
+          if (!proceed) return;
+        }
+      }
       // In-place write via the native writer; the store pins the revision so
       // the dirty flag clears exactly here.
       const { writeTextFileNative } = await import('./native');
       await writeTextFileNative(target, serializeProject(project));
+      await recordSourceMtime(target);
       st.apply((d) => {
         d.savedAt = new Date().toISOString();
         d.modifiedAt = new Date().toISOString();
@@ -311,7 +447,17 @@ export async function actionSaveProject(): Promise<void> {
         d.modifiedAt = new Date().toISOString();
       });
       useStore.getState().markSaved();
-      notify.success(S.notify.projectSaved);
+      await recordSourceMtime(saved.path);
+      // C#19: in a browser "saved" means downloaded — say so instead of
+      // implying a path-bound file the app can reopen.
+      notify.success(
+        isTauri()
+          ? S.notify.projectSaved
+          : tr(
+              `已下载 ${outName(project.name, 'cladeforge.json')}（浏览器下载目录）`,
+              `Downloaded ${outName(project.name, 'cladeforge.json')} (browser download folder)`,
+            ),
+      );
     }
   } catch (e) {
     reportError(S.notify.saveProjectFail, e);
@@ -427,11 +573,11 @@ function importMatrixOnly(matrix: NexusMatrixResult, name: string, issues: strin
   if (matched > 0) {
     notify.info(
       tr(
-        `已从「${name}」导入 ${added} 个性状，${matched} 个末端匹配成功${unmatched > 0 ? `；${unmatched} 行未匹配到末端` : ''}${issues.length > 0 ? '；解析备注见控制台' : ''}`,
-        `Imported ${added} character${added === 1 ? '' : 's'} from "${name}"; ${matched} tip${matched === 1 ? '' : 's'} matched${unmatched > 0 ? `; ${unmatched} row${unmatched === 1 ? '' : 's'} matched no tip` : ''}`,
+        `已从「${name}」导入 ${added} 个性状，${matched} 个末端匹配成功${unmatched > 0 ? `；${unmatched} 行未匹配到末端` : ''}${issues.length > 0 ? `；另有 ${issues.length} 条解析备注（可用提示上的「${'查看全部导入提示'}」查看）` : ''}`,
+        `Imported ${added} character${added === 1 ? '' : 's'} from "${name}"; ${matched} tip${matched === 1 ? '' : 's'} matched${unmatched > 0 ? `; ${unmatched} row${unmatched === 1 ? '' : 's'} matched no tip` : ''}${issues.length > 0 ? `; ${issues.length} parse note${issues.length === 1 ? '' : 's'} recorded (see "View all import notes" on the toast)` : ''}`,
       ),
     );
-    for (const msg of issues) notify.info(msg);
+    reportParseIssues(issues, name);
   } else {
     reportError(
       S.notify.importFail,
@@ -449,6 +595,7 @@ export async function actionImportTree(): Promise<void> {
   try {
     const result = await openText(TREE_FILTERS);
     if (!result) return;
+    surfaceOpenNotes(result);
     importTreeText(result.text, result.name, result.path);
   } catch (e) {
     reportError(S.notify.importFail, e);
@@ -466,6 +613,7 @@ export async function actionImportGeneTree(): Promise<void> {
   try {
     const result = await openText(TREE_FILTERS);
     if (!result) return;
+    surfaceOpenNotes(result);
     const { projects: docs, issues } = parseTreeDocument(result.text, result.name);
     const st = useStore.getState();
     let firstId: string | null = null;
@@ -480,7 +628,7 @@ export async function actionImportGeneTree(): Promise<void> {
     notify.success(
       docs.length === 1 ? tr('已导入 1 个基因树', 'Imported 1 gene tree') : tr(`已导入 ${docs.length} 个基因树`, `Imported ${docs.length} gene trees`),
     );
-    reportParseIssues(issues);
+    reportParseIssues(issues, result.name);
   } catch (e) {
     reportError(S.notify.importFail, e);
   }
@@ -493,13 +641,16 @@ export async function actionOpenRecent(entry: RecentEntry): Promise<void> {
     return actionOpenProject();
   }
   try {
-    const text = await readTextFileNative(
+    // The kind is recorded in the recents list, so the exact ceiling applies
+    // here — a mistyped 200 MB tree is refused by Rust, not read into the
+    // webview and rejected afterwards. Non-UTF-8 files fall back to GB18030.
+    const opened = await readNativeTextWithFallback(
       entry.path,
-      // The kind is recorded in the recents list, so the exact ceiling applies
-      // here — a mistyped 200 MB tree is refused by Rust, not read into the
-      // webview and rejected afterwards.
       entry.kind === 'tree' ? MAX_TREE_CHARS : MAX_PROJECT_CHARS,
+      entry.name,
     );
+    surfaceOpenNotes(opened);
+    const text = opened.text;
     if (entry.kind === 'tree') {
       // Same code path as the picker / dropzone, so recents get the same format
       // sniffing, tree chooser and lossy-import notes.
@@ -528,7 +679,7 @@ export async function actionExportNewick(): Promise<void> {
       serializeNewick(project, { rootedMarker: true }),
       [{ name: 'Newick', extensions: ['nwk', 'newick', 'tree'] }],
     );
-    if (saved) notify.success(S.notify.exported);
+    if (saved) notifyExported(outName(project.name, 'nwk'), serializeNewick(project, { rootedMarker: true }));
   } catch (e) {
     reportError(S.notify.exportNewickFail, e);
   }
@@ -571,7 +722,7 @@ export async function actionExportNexus(options?: NexusExportOptions): Promise<v
     if (!saved) return;
     notifyTipRenames(project);
     if (explicit) {
-      notify.success(S.notify.exported);
+      notifyExported(outName(project.name, 'nex'), serializeNexus(project, opts));
       return;
     }
     const included = [
@@ -630,7 +781,10 @@ export async function actionExportSVG(): Promise<void> {
 
 export async function actionExportPNG(): Promise<void> {
   const project = useStore.getState().project;
-  const dpi = useStore.getState().exportSettings.followView ? 96 : useStore.getState().exportSettings.dpi;
+  // Density is NOT content: followView reproduces what the screen SHOWS, but
+  // the user's DPI setting still decides the raster density — silently falling
+  // back to 96 dpi ignored a journal-mandated 300 dpi (M8).
+  const dpi = useStore.getState().exportSettings.dpi;
   const scale = pngScaleFromDpi(dpi);
   try {
     // Rasterising a large tree at high scale can take a second or more; show a
@@ -671,7 +825,7 @@ export async function actionExportPDF(): Promise<void> {
     const saved = await saveBinary(outName(project.name, 'pdf'), blob, [
       { name: 'PDF', extensions: ['pdf'] },
     ]);
-    if (saved) notify.success(S.notify.exported);
+    if (saved) notifyExported(outName(project.name, 'pdf'), blob);
   } catch (e) {
     reportError(S.notify.exportPdfFail, e);
   }
@@ -683,7 +837,7 @@ export async function actionExportNarrative(): Promise<void> {
     const saved = await saveText(outName(project.name, 'md'), buildNarrative(project), [
       { name: 'Markdown', extensions: ['md', 'txt'] },
     ]);
-    if (saved) notify.success(S.notify.exported);
+    if (saved) notifyExported(outName(project.name, 'md'), buildNarrative(project));
   } catch (e) {
     reportError(S.notify.exportNarrativeFail, e);
   }
@@ -697,7 +851,7 @@ export async function actionExportHypothesisJSON(): Promise<void> {
       buildHypothesisJSON(project),
       [{ name: 'Hypothesis JSON', extensions: ['json'] }],
     );
-    if (saved) notify.success(S.notify.exported);
+    if (saved) notifyExported(outName(project.name, 'hypothesis.json'), buildHypothesisJSON(project));
   } catch (e) {
     reportError(S.notify.exportHypothesisFail, e);
   }
@@ -712,21 +866,36 @@ export async function actionExportReconciliationReport(): Promise<void> {
       buildReconciliationReport(project),
       [{ name: 'Markdown', extensions: ['md', 'txt'] }],
     );
-    if (saved) notify.success(S.notify.exported);
+    if (saved) notifyExported(outName(project.name, 'recon.md'), buildReconciliationReport(project));
   } catch (e) {
     reportError(tr('导出协同报告失败', 'Failed to export the reconciliation report'), e);
   }
 }
 
-/** Standalone R script reproducing figure + inference outputs (MEE GUI rule). */
+/**
+ * Standalone R script reproducing figure + inference outputs (MEE GUI rule).
+ * Building the script runs inference synchronously (parsimony/ASR snapshots),
+ * so it is wrapped in the busy veil; the success toast says what RUNNING the
+ * file needs (local R + ape) and where its outputs land — without that, a
+ * 300-line .R file is a dead file for a non-programmer (M13).
+ */
 export async function actionExportRScript(): Promise<void> {
   const project = useStore.getState().project;
   try {
-    const saved = await saveText(outName(project.name, 'R'), buildRScript(project), [
+    const script = await withBusy(S.busy.exportRScript ?? S.busy.exportPdf, () => Promise.resolve(buildRScript(project)));
+    const saved = await saveText(outName(project.name, 'R'), script, [
       { name: 'R script', extensions: ['R'] },
     ]);
-    if (saved) notify.success(S.notify.exported);
-    if (saved) notifyTipRenames(project);
+    if (saved) {
+      notifyExported(outName(project.name, 'R'), script);
+      notify.info(
+        tr(
+          '运行该脚本需要本机安装 R（≥ 4.0）与 ape 包：install.packages("ape")。在 R 中 source() 本文件后，图与表会写入当前工作目录（主图为 cladeforge_reconstruction.pdf）。',
+          'Running the script needs a local R (≥ 4.0) with the ape package: install.packages("ape"). After source()-ing the file in R, the figure and tables are written to the working directory (main figure: cladeforge_reconstruction.pdf).',
+        ),
+      );
+      notifyTipRenames(project);
+    }
   } catch (e) {
     reportError(tr('导出 R 脚本失败', 'Failed to export the R script'), e);
   }
@@ -752,6 +921,7 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
   try {
     const result = await openText(TABLE_FILTERS);
     if (!result) return;
+    surfaceOpenNotes(result);
     const st = useStore.getState();
     if (mode === 'matrix') {
       const parsed = importMatrixTable(result.text, st.project.name);
@@ -790,10 +960,12 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
     if (mode === 'annotations') {
       let applied = 0;
       let report!: import('./tableIO').LabelJoinReport;
+      const shapeIssues: string[] = [];
       st.apply((d) => {
         const r = importAnnotationsTable(d, result.text);
         applied = r.applied;
         report = r.report;
+        shapeIssues.push(...r.issues);
       });
       notify.success(
         tr(
@@ -801,6 +973,9 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
           `Annotated ${applied} tip${applied === 1 ? '' : 's'} (${report.unmatched.length} unmatched row${report.unmatched.length === 1 ? '' : 's'})`,
         ),
       );
+      // Structural notes (ragged rows, skipped key-empty rows) surface here so
+      // a partial join is explainable, not just observable.
+      for (const msg of shapeIssues) notify.info(msg);
       if (report.unmatched.length > 0) {
         notify.error(
           tr(
@@ -892,10 +1067,17 @@ export async function actionExportAnnotationsCsv(): Promise<void> {
 export async function actionExportNexml(): Promise<void> {
   const project = useStore.getState().project;
   try {
-    const saved = await saveText(outName(project.name, 'xml'), serializeNexml(project), [
+    const nexmlNotes: string[] = [];
+    const xml = serializeNexml(project, nexmlNotes);
+    const saved = await saveText(outName(project.name, 'xml'), xml, [
       { name: 'NeXML', extensions: ['xml', 'nexml'] },
     ]);
-    if (saved) notify.success(S.notify.exported);
+    if (saved) {
+      notifyExported(outName(project.name, 'xml'), xml);
+      // Polymorphic cells that could not be represented are announced (C#10):
+      // a silent drop read as "the export contains everything".
+      for (const msg of nexmlNotes) notify.info(msg);
+    }
   } catch (e) {
     reportError(tr('导出 NeXML 失败', 'Failed to export NeXML'), e);
   }

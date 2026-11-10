@@ -388,17 +388,25 @@ export function RangeField({
   const [v, setV] = useState(value);
   useEffect(() => setV(value), [value]);
   return (
-    <input
-      type="range"
-      aria-label={ariaLabel}
-      min={min}
-      max={max}
-      step={step}
-      value={v}
-      onChange={(e) => setV(parseFloat(e.target.value))}
-      onPointerUp={() => onCommit(v)}
-      onBlur={() => onCommit(v)}
-    />
+    // A numeric readout next to the slider (M15): the ASR threshold's current
+    // value used to be findable only by scanning a sentence of hint text.
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}>
+      <input
+        type="range"
+        aria-label={ariaLabel}
+        min={min}
+        max={max}
+        step={step}
+        value={v}
+        onChange={(e) => setV(parseFloat(e.target.value))}
+        onPointerUp={() => onCommit(v)}
+        onBlur={() => onCommit(v)}
+        style={{ flex: 1 }}
+      />
+      <span className="field-value" style={{ minWidth: 44, textAlign: 'right', fontSize: 11 }}>
+        {Number.isInteger(step) ? v : v.toFixed(2)}
+      </span>
+    </span>
   );
 }
 

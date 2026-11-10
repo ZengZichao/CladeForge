@@ -15,7 +15,9 @@
 //     character with a Sankoff `costMatrix` returns no signal at all.
 //   * Only declared states count as observations. '?' / '-' and stale ids of
 //     deleted states are missing data and are excluded from #tips, #states and
-//     the state frequencies behind m, g and s.
+//     the state frequencies behind m, g and s. A polymorphic tip (a set of
+//     declared states) is one tip observing several states: its evidence is
+//     split evenly across its members, never counted as a state of its own.
 //
 // This module also carries the multiplicity control (Holm–Bonferroni / BH) that
 // every family of p-values shown side by side must go through.
@@ -36,6 +38,8 @@ export interface DiscreteSignal {
   unassignedTips: number;
   /** Tips whose value is a '?' / '-' missing-data code (excluded from `tips`). */
   missingCodes: number;
+  /** Tips carrying a polymorphic (multi-state) assignment, counted inside `tips`. */
+  polymorphicTips: number;
   observedStates: number;
   steps: number;
   minSteps: number;
@@ -69,6 +73,7 @@ export function discreteSignal(project: Project, character: Character): Discrete
 
   let tipTotal = 0;
   let missingCodes = 0;
+  let polymorphicTips = 0;
   const counts = new Map<string, number>();
   for (const id in project.nodes) {
     const n = project.nodes[id];
@@ -77,7 +82,22 @@ export function discreteSignal(project: Project, character: Character): Discrete
     const sid = n.charStates?.[character.id];
     // Only declared states count as observations: '?' / '-' and stale ids from
     // deleted states are missing data and must not inflate m, g or s.
-    if (isObservedState(character, sid)) {
+    if (Array.isArray(sid)) {
+      // A polymorphic tip is ONE tip observing SEVERAL states, never a state of
+      // its own: the tip's evidence is split evenly across its member states
+      // (a 1/k share each, k = set size). Counting the array object itself as a
+      // key used to invent a fresh "state" per polymorphic tip — inflating
+      // observedStates (hence m, hence CI) and deflating the largest class
+      // (hence g, hence RI) — a systematic, silent optimism. Fractional shares
+      // keep the tip total honest and stay consistent with the set semantics
+      // parsimony itself scores the same tips with.
+      if (sid.length > 0 && sid.every((m) => character.states.some((s) => s.id === m))) {
+        polymorphicTips += 1;
+        const share = 1 / sid.length;
+        for (const member of sid) counts.set(member, (counts.get(member) ?? 0) + share);
+      }
+      // A set referencing deleted states only carries no usable observation.
+    } else if (typeof sid === 'string' && isObservedState(character, sid)) {
       counts.set(sid, (counts.get(sid) ?? 0) + 1);
     } else if (typeof sid === 'string') {
       missingCodes += 1;
@@ -98,6 +118,7 @@ export function discreteSignal(project: Project, character: Character): Discrete
     tips,
     unassignedTips: tipTotal - tips - missingCodes,
     missingCodes,
+    polymorphicTips,
     observedStates,
     steps,
     minSteps,
@@ -858,6 +879,11 @@ export function yuleBalanceZScores(project: Project, replicates = 200, seed = 20
   };
   const sStats = stats(sackins);
   const cStats = stats(collesses);
+  // A degenerate null (sd = 0 — every simulated tree identical) makes the
+  // z-score 0/0 = NaN, which used to travel into the result object and then
+  // into the UI (M18). With no variance there is no standardisation: report
+  // the null as unusable instead of printing NaN.
+  if (!(sStats.sd > 0) || !(cStats.sd > 0)) return null;
   return {
     tips: nTips,
     sackin: {

@@ -25,6 +25,7 @@ import { Field, TextField, CheckboxField, ColorField, DismissibleHint } from './
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { notify } from './toast';
+import { requestConfirm } from './confirmDialog';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
@@ -39,7 +40,18 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
   const matrix = character.costMatrix ?? uniformCostMatrix(k);
   const setCell = (i: number, j: number, v: number | undefined) => {
     const next = (character.costMatrix ?? uniformCostMatrix(k)).map((row) => row.slice());
-    const clamped = v === undefined || v < 0 ? 0 : v;
+    let clamped = v ?? 0;
+    if (clamped < 0) {
+      // A negative cost was silently clamped before; now it says so — a silent
+      // rewrite of the user's numbers is exactly what this app refuses to do.
+      clamped = 0;
+      notify.info(
+        tr(
+          '代价不能为负：已将 0 写入该格。若想禁止该转变，请输入 ∞。',
+          'Costs cannot be negative: 0 was written instead. To FORBID this transition, enter ∞.',
+        ),
+      );
+    }
     next[i][j] = clamped;
     // Symmetric mode: mirror the edit to the opposite cell (i≠j only).
     if (symmetric && i !== j) next[j][i] = clamped;
@@ -54,6 +66,14 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
       {open && (
         <div className="step-matrix" key={character.costMatrix ? 'custom' : 'uniform'}>
           <div className="hint">{S.character.stepMatrixHint}</div>
+          {matrix.some((row, i) => row.some((c, j) => i !== j && c === 0)) && (
+            <div className="hint">
+              {tr(
+                '存在代价为 0 的转变（免费转变）：所有路径同价时最优解不可识别，简约建议可能在这些路径间任意摆动。确定这是本意再使用。',
+                'Some transitions cost 0 (free): with equal-cost paths the optimum is unidentifiable and parsimony suggestions may swing between them arbitrarily. Use this only if it is intended.',
+              )}
+            </div>
+          )}
           <CheckboxField
             label={S.characterExtra.symmetric}
             checked={symmetric}
@@ -81,13 +101,23 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
                         <span className="diag">0</span>
                       ) : (
                         <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          defaultValue={matrix[i]?.[j] ?? 1}
-                          onBlur={(e) =>
-                            setCell(i, j, e.target.value === '' ? undefined : parseFloat(e.target.value))
-                          }
+                          // A text field, not type=number: "forbidden transition"
+                          // (∞) is a legitimate entry and number inputs reject it.
+                          type="text"
+                          inputMode="decimal"
+                          defaultValue={Number.isFinite(matrix[i]?.[j] ?? 1) ? String(matrix[i]?.[j] ?? 1) : '∞'}
+                          onBlur={(e) => {
+                            const raw = e.target.value.trim();
+                            if (raw === '') {
+                              setCell(i, j, undefined);
+                              return;
+                            }
+                            if (/^(∞|inf(inity)?)$/i.test(raw)) {
+                              setCell(i, j, Number.POSITIVE_INFINITY);
+                              return;
+                            }
+                            setCell(i, j, parseFloat(raw));
+                          }}
                         />
                       )}
                     </td>
@@ -259,6 +289,15 @@ function CharacterEditor({
 
       {character.type === 'discrete' && <StepMatrixEditor character={character} apply={apply} />}
 
+      {/* M2: the forward "what next" prompt the review asked for — the
+          reverse-direction guidance existed (analysis says "go define traits")
+          but nothing here pointed onward. */}
+      <div className="hint">
+        {tr(
+          '下一步：为末端赋值（选中节点后在右侧面板或矩阵中填写状态），然后到「分析」模块查看简约建议与祖先状态重建。',
+          'Next: score tips (select a node and fill its state in the inspector or the matrix), then open the Analysis module for parsimony suggestions and ancestral-state reconstruction.',
+        )}
+      </div>
       <div className="field row-actions-spread">
         <div className="actions-group">
           <button className="btn" onClick={onClose}>
@@ -268,8 +307,24 @@ function CharacterEditor({
         <button
           className="btn danger"
           onClick={() => {
-            apply((d) => removeCharacter(d, id));
-            onClose();
+            // Deleting a character clears every tip assignment, hypothesis-layer
+            // copies and the cost matrix (M7): a one-click irreversible-feeling
+            // wipe needs the same confirm + undo story as node deletion. The
+            // action itself is one undoable store step.
+            requestConfirm({
+              key: 'delete-character',
+              title: S.character.deleteCharacter,
+              message: tr(
+                `将删除性状「${character.name}」及其全部末端赋值、假设层副本与步矩阵。该操作可通过 ⌘Z 撤销。`,
+                `This deletes the character "${character.name}" with every tip assignment, hypothesis-layer copy and its step matrix. Undoable via ⌘Z.`,
+              ),
+              confirmLabel: S.character.deleteCharacter,
+              danger: true,
+              onConfirm: () => {
+                apply((d) => removeCharacter(d, id));
+                onClose();
+              },
+            });
           }}
         >
           {S.character.deleteCharacter}

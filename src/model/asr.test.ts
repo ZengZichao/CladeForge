@@ -75,6 +75,63 @@ describe('asr (Mk marginal reconstruction)', () => {
     expect(moment.rate.method).toBe('moment');
     expect(moment.rate.logLikelihood).toBeUndefined();
   });
+
+  it('refuses to run on a character with fewer than two scored tips instead of printing a fake rate', () => {
+    // Regression for review finding A-14: with one (or zero) scored tips the
+    // rate profile is flat, the ML grid kept its first point and the dialog
+    // printed r = 1e-12 with a 95% CI of [1e-24, 1e+14] — a complete
+    // fabrication that looked like a finished analysis.
+    const p = createEmptyProject();
+    const [x, y] = addChildren(p, p.rootId, 2);
+    const c = twoState();
+    p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
+    p.nodes[x].charStates = { c1: 'a' }; // only ONE scored tip
+    const res = reconstructMk(p, c)!;
+    expect(res.probs.size).toBe(0);
+    expect(res.warnings.some((w) => w.kind === 'no-usable-observations')).toBe(true);
+    expect(Number.isFinite(res.rate.rate)).toBe(false);
+    // A fully unassigned character is the same refusal, with a counted message.
+    p.nodes[x].charStates = undefined;
+    const res2 = reconstructMk(p, c)!;
+    expect(res2.probs.size).toBe(0);
+    expect(res2.warnings.some((w) => w.kind === 'no-usable-observations')).toBe(true);
+  });
+
+  it('refuses to run when every observation is uninformative (flat rate profile)', () => {
+    const p = createEmptyProject();
+    const [x, y] = addChildren(p, p.rootId, 2);
+    const c = twoState();
+    p.characters.push(c);
+    p.nodes[x].branchLength = 1;
+    p.nodes[y].branchLength = 1;
+    // Both tips carry the same two-state polymorphic set: every member state is
+    // possible at every tip, so every rate explains the data equally well — the
+    // profile is exactly flat and no rate can be fitted.
+    p.nodes[x].charStates = { c1: ['a', 'b'] };
+    p.nodes[y].charStates = { c1: ['a', 'b'] };
+    const res = reconstructMk(p, c)!;
+    expect(res.probs.size).toBe(0);
+    expect(res.warnings.some((w) => w.kind === 'flat-rate-profile')).toBe(true);
+  });
+
+  it('reports an undetermined profile-interval bound instead of a bracket artefact', () => {
+    const p = createEmptyProject();
+    const [x, y] = addChildren(p, p.rootId, 2);
+    const c = twoState();
+    p.characters.push(c);
+    p.nodes[x].branchLength = 0.1;
+    p.nodes[y].branchLength = 0.1;
+    p.nodes[x].charStates = { c1: 'a' };
+    p.nodes[y].charStates = { c1: 'a' };
+    const res = reconstructMk(p, c)!;
+    // Unanimous data on short branches: the likelihood keeps RISING toward
+    // r → 0, so the interval's lower end leaves the scan bracket. The bound
+    // must be non-finite ("undetermined" in the UI), never a fabricated 1e-24.
+    expect(res.rate.logLikelihoodCi).toBeDefined();
+    expect(Number.isFinite(res.rate.logLikelihoodCi![0])).toBe(false);
+  });
 });
 
 describe('discreteSignal (CI / RI)', () => {

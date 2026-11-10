@@ -21,6 +21,7 @@ import { addChildren, addSibling, deleteNode } from '../model/treeOps';
 import { mapTipsByLabel } from '../model/reconciliation';
 import type { NodeId, Project, TreeNode } from '../model/types';
 import { useDialogFocus } from './useDialogFocus';
+import { requestConfirm } from './confirmDialog';
 import { S, tr } from './strings';
 import { notify } from './toast';
 
@@ -92,6 +93,22 @@ export function GeneTreeBuilderDialog({
   const mappedTips = Object.values(mapping.mappings).filter(Boolean).length;
 
   if (!open || !selected) return null;
+
+  // M11: the whole gene tree under construction lives in component state, so
+  // a stray backdrop click used to delete minutes of building with no prompt.
+  const requestClose = () => {
+    requestConfirm({
+      key: 'gene-builder-discard',
+      title: S.analysis.close,
+      message: tr(
+        '关闭会丢弃正在构建、尚未保存的基因树草稿。确定关闭？',
+        'Closing discards the gene-tree draft that has not been saved yet. Close anyway?',
+      ),
+      confirmLabel: S.analysis.close,
+      danger: true,
+      onConfirm: onClose,
+    });
+  };
 
   const updateDraft = (fn: (doc: Project) => void) => {
     const next = cloneDoc(draft);
@@ -190,7 +207,7 @@ export function GeneTreeBuilderDialog({
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" onMouseDown={requestClose}>
       <div
         ref={ref}
         className="dialog gene-builder-dialog"
