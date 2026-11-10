@@ -150,6 +150,10 @@ the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
   (C#22).
 
 #### Added
+- **Desktop backend compiled and unit-tested**: `cargo check` and `cargo test` now run in the
+  development environment — the close guard, the `read_binary_file` / `stat_file_mtime` commands,
+  the single-instance wiring and the widened write signatures compile clean, and the 11 `lib.rs`
+  path-policy / atomic-write tests pass against the changed code.
 - **Component-level tests (H6)**: `reviewComponentTests.test.ts` renders the
   Toaster, ConfirmDialog (onCancel contract), AnalysisDialog (jump-nav, no-data
   guard, busy disable), ImportReportDialog and the close-guard dirty test —
