@@ -53,7 +53,7 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 某个版本实际附带了哪些产物，逐个版本说明，不做笼统承诺。请查看
 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases)确认某个 tag 实际带有什么。
 
-- **v0.3.0** —— 已打标签的发布线。预构建产物由 `.github/workflows/release.yml` 以 draft 形式构建；请查看 Releases 页面确认实际附加的资产。
+- **v0.3.0** —— 已发布版本；预构建产物由 `.github/workflows/release.yml` 构建（见 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.0)）。
 - **v0.2.0** —— 发布页产物：macOS 的 Apple Silicon 与 Intel 双架构 `.dmg`、Windows x64 的 `.msi`、
   Linux x86_64 的 `.deb` 与 AppImage（macOS 应用包 12.8 MiB；安装镜像 4.8 MiB；Windows/Linux 体积未测量）。
   本版本修复了顶栏窗口拖拽，全部示例重建为 `Taxon_*` 命名的严格二叉虚拟类群，
@@ -133,10 +133,10 @@ CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0
 - **Concept DOI（全部版本）：** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
 - **v0.1.0：** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
 - **v0.2.0：** 版本 DOI 由 Zenodo 在归档本 Release 后分配。
-- **v0.3.0：** 版本 DOI 由 Zenodo 在归档本 Release 后分配。
+- **v0.3.0：** [10.5281/zenodo.24108672](https://doi.org/10.5281/zenodo.24108672)（2026-11-10 归档）。
 
 > 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.3.0) [计算机软件]. Zenodo.
-> https://doi.org/10.5281/zenodo.23053393
+> https://doi.org/10.5281/zenodo.24108672
 
 目前尚无可引用的论文条目。机器可读的引用信息见 [`CITATION.cff`](./CITATION.cff)。
 
