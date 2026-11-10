@@ -98,6 +98,8 @@ file), but the child still needs it to echo Chinese labels in its own output.
 | `ER-marginals(ape::ace)` | `ape::ace(model = "ER", method = "ML")$lik.anc`, joined to `asr_posteriors.tsv` on the clade key | CladeForge's posteriors | **measured only — `compared` stays 0** |
 | `exported-R-script-Sankoff` | the app's own `cladeforge_analysis.R`, re-run with `Rscript` in a throwaway directory | `manifest.tsv` minimum cost, per project | **gated** — exact match |
 
+`ape-agreement.tsv` carries some non-gated `ape::ace` marginal details (e.g. argmax tie counts) that can differ between R/ape versions; the CI fixture diff therefore excludes that one generated table, while the comparable/gated rows are checked by the manifest↔agreement consistency step. All other fixture files are diff-gated.
+
 The ER leg cannot be an agreement test, and that is a fact about ape rather than
 a hedge: `ace(model = "ER")` **estimates** the transition rate by maximum
 likelihood — its documented return values include `rates` and `se` — while

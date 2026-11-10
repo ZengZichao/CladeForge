@@ -64,6 +64,8 @@ RSCRIPT_BIN=/opt/R/4.4.2/bin/Rscript node scripts/cross-check/run-cross-check.mj
 | `ER-marginals(ape::ace)` | `ape::ace(model = "ER", method = "ML")$lik.anc`，按分支丛 key 连接 | `asr_posteriors.tsv` | **仅度量**：`compared` 恒为 0 |
 | `exported-R-script-Sankoff` | 应用自己的 `cladeforge_analysis.R`，在临时目录里用 `Rscript` 重跑 | `manifest.tsv` 的最小代价，逐项目 | **判据**：要求精确相等 |
 
+`ape-agreement.tsv` 的部分 `ape::ace` 边际细节（例如 argmax 并列计数）不在门禁内，且可能随 R/ape 版本变化；因此 CI 的 fixture diff 排除这一张生成表，而可比/受门禁的行由 manifest↔agreement 一致性步骤检查。其余 fixture 文件均参与 diff 门禁。
+
 ER 这条支线做不了一致性判据，原因出在 ape 而不是措辞：`ace(model = "ER")` 只有一个自由速率参数，并且**按最大似然拟合它**（文档里的返回值含 `rates` 与 `se`），而 CladeForge 把速率固定为 `1/mean(枝长)`。后验依赖速率，所以这里的差值把"实现差异"和"模型选择差异"混在一起，无论打分都是打错了对象。因此该行只报告 ape 拟合出的速率、最差与平均后验偏差、最大似然状态重合的次数——并把 `compared` 记为 0，使其不进入任何一致率。真正不依赖速率、因而可判据化的第三方对照是 phangorn 的 Fitch 简约法，即支线 1。
 
 ER 支线按分支丛 key 连接，而不是按行位置，并且宁可不给数字也不猜：`ape::ace` 可能在工作树的二分重排副本上运算，所以它的每一行都要用"该节点之下的末端集合 + 该子树的节点数"重新认定一次。只要出现 key 无法一一对应、矩阵的行和不等于 1、或某个状态在末端上从未出现（ape 因此少一列）这些情况，比较就带着原因终止，而不是给出一个数值。`lik.anc` 是 ape 文档里对离散型 ML 祖先似然的称呼；`states` 与 `probs` 作为其他 ape 构建版本的备选被接受，实际用的是哪个分量会写进输出，覆盖的是仅内部节点还是全部节点同样会写明。
