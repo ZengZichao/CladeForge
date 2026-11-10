@@ -58,7 +58,7 @@ x86_64 的 macOS 构建；v0.3.0 是当前源码线，尚未打包。通用 `.dm
 
 **预构建二进制包** — 从 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases) 下载：
 - v0.2.0：macOS `.dmg`（arm64 与 x86_64）、Windows `.msi`（x64）、Linux `.deb` 或 AppImage（x86_64）。
-- v0.3.0：预构建产物由 `.github/workflows/release.yml` 以 draft 形式构建；若发布页尚无产物，请按下方从源码构建。
+- v0.3.0：预构建产物由 `.github/workflows/release.yml` 构建并发布；若你的平台没有产物，请按下方从源码构建。
 
 **从源码构建** — 克隆仓库：
 

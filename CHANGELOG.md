@@ -7,8 +7,8 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [0.3.0] — 2026-11-10
 
-Tagged release line. Pre-built artifacts are produced by `.github/workflows/release.yml`
-as a draft (unsigned); the entries below are the changes since v0.2.0.
+Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`
+(unsigned); the entries below are the changes since v0.2.0.
 
 ### Review round A/B/C (`CladeForge-评审报告-A/B/C`; author’s archive, not checked in) — 2026-11-10. Every finding of
 the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the

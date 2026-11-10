@@ -59,8 +59,8 @@ What is actually attached to a release varies by version, so this is stated per 
 than promised for all of them. Check the [Releases page](https://github.com/ZengZichao/CladeForge/releases)
 for what a given tag carries.
 
-- **v0.3.0** — tagged release line. Pre-built artifacts are produced by
-  `.github/workflows/release.yml` as a draft; check the Releases page for the assets actually attached.
+- **v0.3.0** — tagged release line, published with artifacts from
+  `.github/workflows/release.yml` (see the [Releases page](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.0)).
 - **v0.2.0** — release page assets: `.dmg` for macOS on both Apple Silicon and Intel, `.msi`
   for Windows x64, and `.deb` plus an AppImage for Linux x86_64 (macOS bundle 12.8 MiB;
   installer 4.8 MiB; Windows/Linux sizes not measured). This version repairs the
@@ -144,10 +144,10 @@ concept DOI always resolves to the newest archived version.
 - **Concept DOI (all versions):** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
 - **v0.1.0:** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
 - **v0.2.0:** the version DOI is assigned by Zenodo when the release is archived.
-- **v0.3.0:** the version DOI is assigned by Zenodo when the release is archived.
+- **v0.3.0:** [10.5281/zenodo.24108672](https://doi.org/10.5281/zenodo.24108672) (archived 2026-11-10).
 
 > Zeng, Z. (2026). *CladeForge* (Version v0.3.0) [Computer software]. Zenodo.
-> https://doi.org/10.5281/zenodo.23053393
+> https://doi.org/10.5281/zenodo.24108672
 
 No journal citation is available yet. The machine-readable form is in [`CITATION.cff`](./CITATION.cff).
 

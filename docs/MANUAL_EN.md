@@ -60,7 +60,7 @@ The application ships no browser engine of its own, but it renders into the oper
 
 **Pre-built binaries** — Download from the [Releases page](https://github.com/ZengZichao/CladeForge/releases):
 - v0.2.0: macOS `.dmg` (arm64 and x86_64), Windows `.msi` (x64), Linux `.deb` or AppImage (x86_64).
-- v0.3.0: pre-built artifacts are produced by `.github/workflows/release.yml` as a draft; build from source below if none are attached yet.
+- v0.3.0: pre-built artifacts are published from `.github/workflows/release.yml`; build from source below if your platform is not attached.
 
 **Build from source** — clone the repository:
 

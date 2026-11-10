@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 type: software
-message: "If you use CladeForge, please cite it as below. The DOI below is the concept DOI, which always resolves to the latest release; the version DOI for v0.3.0 is assigned by Zenodo when this release is archived."
+message: "If you use CladeForge, please cite this version (v0.3.0) by its version DOI; the concept DOI always resolves to the latest release."
 title: "CladeForge"
 authors:
   - given-names: Zichao
@@ -10,11 +10,14 @@ authors:
     affiliation: "Shanghai Jiao Tong University"
 version: "0.3.0"
 date-released: "2026-11-10"
-doi: "10.5281/zenodo.23053393"
+doi: "10.5281/zenodo.24108672"
 license: MIT
 repository-code: "https://github.com/ZengZichao/CladeForge"
-url: "https://doi.org/10.5281/zenodo.23053393"
+url: "https://doi.org/10.5281/zenodo.24108672"
 identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24108672"
+    description: "Version DOI for v0.3.0 (archived 2026-11-10)."
   - type: doi
     value: "10.5281/zenodo.23053393"
     description: "Concept DOI; always resolves to the latest archived release."
