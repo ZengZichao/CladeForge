@@ -180,8 +180,6 @@ export function fitTransformFor(
 /** Keep the tree at least partly on screen after a manual pan/zoom. */
 export function clampTransform(t: PaneTransform, bounds: Box, w: number, h: number): PaneTransform {
   const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, t.scale));
-  const bw = Math.max(1, (bounds.maxX - bounds.minX) * scale);
-  const bh = Math.max(1, (bounds.maxY - bounds.minY) * scale);
   // The tree centre must stay inside a viewport expanded by one viewport each
   // side — the tree can leave the view, but never vanish without a trace.
   const cx = (bounds.minX + bounds.maxX) / 2 * scale + t.tx;

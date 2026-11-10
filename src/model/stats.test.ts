@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { hierarchy } from 'd3-hierarchy';
 import {
@@ -521,9 +522,9 @@ describe('blombergK — diagnostics', () => {
     };
     const n1 = mk('n1', p.rootId);
     const n2 = mk('n2', p.rootId);
-    const l1 = mk('l1', n1);
-    const l2 = mk('l2', n1);
-    const r1 = mk('r1', n2);
+    mk('l1', n1);
+    mk('l2', n1);
+    mk('r1', n2);
     mk('r2', n2);
     return p;
   };

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Fixture dumper for the third-party (ape / phangorn) cross-check leg.
 //
 // Writes, for every built-in CladeForge sample project, everything an external
@@ -76,8 +77,8 @@ function flatten(project: Project): Flat {
 /**
  * Stable, label-free identity of a node: the sorted tip set beneath it plus the
  * number of nodes in that sub-tree. The extra term is what makes the key unique
- * for the one-child chains the sample projects contain (in the cetacean project
- * Basilosauridae and Neoceti cover exactly the same tips), and an R reader can
+ * for the one-child chains the sample projects contain (two internal nodes can
+ * cover exactly the same tips), and an R reader can
  * recompute both parts from the Newick alone — so results can be joined without
  * trusting node labels.
  */
@@ -221,13 +222,13 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
       tsv([
         ['node_key', 'label', 'parent_key', 'branch_length', 'rescaled_length', 'is_tip', 'tips_below'],
         ...flat.ids.map((id) => [
-          sig.get(id),
+          sig.get(id) ?? '',
           project.nodes[id].label || '',
           flat.parent.get(id) ? (sig.get(flat.parent.get(id) as NodeId) as string) : '',
-          id === project.rootId ? 0 : flat.len.get(id),
-          id === project.rootId ? 0 : (flat.len.get(id) as number) / mean,
+          id === project.rootId ? 0 : (flat.len.get(id) ?? 0),
+          id === project.rootId ? 0 : (flat.len.get(id) ?? 0) / mean,
           flat.isTip.has(id) ? 1 : 0,
-          tipsBelow.get(id),
+          tipsBelow.get(id) ?? 0,
         ]),
       ]),
     ),
@@ -259,7 +260,7 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
       for (const id of flat.ids) {
         const probs = asr.probs.get(id);
         if (!probs) continue;
-        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id), i, char.states[i].label, p.toPrecision(10)]));
+        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id) ?? '', i, char.states[i]?.label ?? '', p.toPrecision(10)]));
       }
     }
     const par = parsimony(project, char);
@@ -273,7 +274,7 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
       // reconstruction — the set phangorn::MPR returns, and the one the
       // ambiguity warning is allowed to talk about.
       const mpSet = (par.mpStates.get(id) ?? []).map((id2) => char.states.findIndex((s) => s.id === id2)).join(',');
-      parRows.push([char.id, sig.get(id), ci, ties, mpSet, par.changeBranches.has(id) ? 1 : 0]);
+      parRows.push([char.id, sig.get(id) ?? '', ci, ties, mpSet, par.changeBranches.has(id) ? 1 : 0]);
     }
     summaryRows.push([char.id, mean.toPrecision(10), rate.toPrecision(10), par.cost, char.costMatrix ? 1 : 0]);
     manifest.push([descriptor.id, char.id, char.states.length, tipCount, flat.ids.length - tipCount, mean.toPrecision(10), rate.toPrecision(10), par.cost, char.costMatrix ? 'Sankoff' : 'uniform']);
@@ -286,8 +287,10 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
   written.push(write(`${descriptor.id}/parsimony.tsv`, tsv(parRows)));
   written.push(write(`${descriptor.id}/summary.tsv`, tsv(summaryRows)));
 
-  // --- the app's own exported analysis script (verbatim, as the GUI writes it) --
-  written.push(write(`${descriptor.id}/cladeforge_analysis.R`, buildRScript(project)));
+  // --- the app's own exported analysis script (verbatim except the volatile
+  // generation timestamp, which would make the committed fixtures non-deterministic)
+  const rScript = buildRScript(project).replace(/^# Generated: .*$/m, '# Generated: (timestamp omitted in fixture)');
+  written.push(write(`${descriptor.id}/cladeforge_analysis.R`, rScript));
 }
 
 written.push(write('manifest.tsv', tsv(manifest)));

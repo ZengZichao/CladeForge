@@ -86,7 +86,7 @@ export function PreferencesMenu() {
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Track OS changes so the "system" row's active state stays honest even
-  // without reopening the menu (same rule as the old ThemeToggle).
+  // without reopening the menu (same rule as the former toggle components).
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => setPref(storedTheme());

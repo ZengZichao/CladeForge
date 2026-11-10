@@ -29,12 +29,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
       - run: npm ci
+      # The browser deployment is a public artifact of the same source tree as
+      # the desktop app, so it carries the same test gate as CI before publish.
+      - run: npm test
       # `npm run build` = tsc --noEmit (type gate) + vite build. TypeScript is
       # part of the deploy gate so a type regression cannot ship to the site.
       - run: npm run build

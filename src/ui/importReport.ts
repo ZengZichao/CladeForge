@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Import report: a persistent, reviewable record of the notes an import
 // produced (review finding A-03 / M4 / C#15).
 //

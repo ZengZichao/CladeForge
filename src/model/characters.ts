@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Pure logic for the character / state system (evolutionary semantic layer).
 //
 // Characters are user-defined traits mapped onto the tree. Tips carry observed
@@ -112,7 +113,6 @@ type Lab = readonly [number, number, number];
 type Appearance = readonly [Lab, Lab, Lab];
 
 const LINEARIZE = (v: number): number => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const DELINEARIZE = (v: number): number => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
 
 /** Machado (2009) severe dichromat approximations, applied to linear RGB. */
 const DICHROMAT_MATRICES: readonly (readonly (readonly number[])[])[] = [

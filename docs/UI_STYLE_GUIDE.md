@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge UI 文案风格指南 / UI Style Guide
 
 > 适用于 `src/ui/strings.ts`、组件内联 `tr()` 文案、通知、导出图与 NEXUS 注释。目标：准确、克制、可核查。
@@ -61,7 +63,7 @@
 2. 避免第二人称说教；用“These values…”而不是“You must…”。
 3. 避免拟人化与俚语；用“the model requires”而不是“the solver needs”。
 4. 科学限制用“条件/范围/不可比”描述，不用“不要/必须”命令句。
-5. 长方法论说明移入 `docs/METHODS_AND_LIMITS.md`（或帮助面板），界面保留短摘要。
+5. 长方法论说明放入用户手册或帮助面板，界面保留短摘要。
 
 ## 8. 本地化工程规则
 

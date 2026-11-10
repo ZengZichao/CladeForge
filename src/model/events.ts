@@ -244,11 +244,10 @@ const EVENT_TYPE_MAP = new Map(EVENT_TYPES.map((t) => [t.id, t]));
 
 /**
  * Merge a project's USER-DEFINED event types (project.customEventTypes) over
- * the built-in catalogue. The 15 built-ins are a macroevolution selection; a
- * microbial / deep-time figure needs first-class "genome reduction",
- * "plasmid gain", "HGT from an unsampled donor" types, and locking the
- * ontology to the author's list made every custom event share one grey CU
- * badge. Types are exportable/importable with the project file (an ontology
+ * the built-in catalogue. The built-ins cover macroevolution, microbial and
+ * deep-time events; user-defined types (for example a project-specific
+ * "genome reduction" or "HGT from an unsampled donor") remain first-class and
+ * are exportable with the project. Types are exportable/importable with the project file (an ontology
  * file, JSON), and a custom id NEVER silently collides with a built-in.
  */
 export function customEventTypesOf(project: Project): EventTypeDef[] {

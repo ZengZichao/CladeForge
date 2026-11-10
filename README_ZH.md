@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge
 
 **面向演化场景构建与假说生成的交互式系统发育树编辑器**
@@ -20,7 +22,7 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 - **交互式树编辑** — 有根树，支持二叉/三叉/多叉分支、节点和分支样式、折叠/展开、重新定根、梯形化。
 - **多种布局** — 矩形支序图、矩形系统发育图、时间校准布局（带地质年代条带）和圆形布局；四种方向（LR/RL/TB/BT）；自动和手动布局模式。
 - **性状/状态系统** — 离散和连续性状，支持色盲友好调色板；桑科夫步矩阵支持不对称演化代价。
-- **演化事件** — 六个分组共 15 种内置事件类型（物种形成、灭绝、关键演化、基因流、生物地理，以及仅包含用户自定义类型的"通用"组），每种都有独立的二字代号与配色，支持因果链链接。
+- **演化事件** — 九个分组共 27 种内置事件类型（26 种预定义 + 1 种自定义）：物种形成（4）、灭绝（2）、演化创新（3）、基因流（2）、生物地理（3）、微生物（9）、基因家族演化（2）、深时（1）、通用（1）。每种类型都有唯一的二字代号；调色板可能复用颜色。事件支持因果链链接。
 - **假说层** — 在共享拓扑上管理多个竞争性假说；终端状态共享，内部节点假说分异。
 - **推理辅助（建议性）** — 桑科夫简约法建议、Mk 模型概率性 ASR（对数空间数值稳定）、一致性检查、性状相关性提示（Jaccard 共变化）。
 - **DTL 协同重建** — 基因树/物种树分析，含动态规划求解器、手动细化、验证和并排协同视图。
@@ -36,9 +38,9 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 
 | 平台 | 最低系统 | 架构 | 磁盘空间 | 内存 |
 |------|---------|------|---------|------|
-| macOS | 11.0 (Big Sur) | arm64、x86_64 | 实测 12.8 MiB（v0.2.0，arm64 应用包；安装镜像 4.8 MiB） | 512 MB |
-| Windows | 10 (64位) | x86_64 | 尚未实测——本版本未产出 Windows 构建 | 512 MB |
-| Linux | glibc ≥ 2.28 | x86_64 | 尚未实测——本版本未产出 Linux 构建 | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64、x86_64 | 实测 12.8 MiB（v0.2.0 arm64 应用包；安装镜像 4.8 MiB）；v0.3.0 未重新测量 | 512 MB |
+| Windows | 10 (64位) | x86_64 | v0.2.0 发布包含 `.msi`；体积未测量 | 512 MB |
+| Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 发布包含 `.deb`/AppImage；体积未测量 | 512 MB |
 
 应用自身不捆绑浏览器引擎，但它会渲染进操作系统自带的 web 视图（macOS 上为 WKWebView、
 Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提供对应的 web 视图；
@@ -51,12 +53,13 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 某个版本实际附带了哪些产物，逐个版本说明，不做笼统承诺。请查看
 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases)确认某个 tag 实际带有什么。
 
-- **v0.1.0** —— 只有一个产物：`CladeForge_0.1.0_aarch64.dmg`（macOS，Apple Silicon）。
-  该版本没有产出 Intel、Windows 或 Linux 构建，且由手工打包而非下述发布流水线产出。
-- **v0.2.0** —— 由 `.github/workflows/release.yml` 产出：macOS 的 Apple Silicon 与
-  Intel 双架构 `.dmg`、Windows x64 的 `.msi`、Linux x86_64 的 `.deb` 与 AppImage。
+- **v0.3.0** —— 已打标签的发布线。预构建产物由 `.github/workflows/release.yml` 以 draft 形式构建；请查看 Releases 页面确认实际附加的资产。
+- **v0.2.0** —— 发布页产物：macOS 的 Apple Silicon 与 Intel 双架构 `.dmg`、Windows x64 的 `.msi`、
+  Linux x86_64 的 `.deb` 与 AppImage（macOS 应用包 12.8 MiB；安装镜像 4.8 MiB；Windows/Linux 体积未测量）。
   本版本修复了顶栏窗口拖拽，全部示例重建为 `Taxon_*` 命名的严格二叉虚拟类群，
   并新增事件标记自定义（形状 / 大小 / 颜色 / 文字）。
+- **v0.1.0** —— 只有一个产物：`CladeForge_0.1.0_aarch64.dmg`（macOS，Apple Silicon）。
+  该版本没有产出 Intel、Windows 或 Linux 构建，且由手工打包而非 `.github/workflows/release.yml` 产出。
 
 这些产物**未签名**。macOS 首次打开时会被 Gatekeeper 拦截，办法见下方。
 
@@ -88,7 +91,7 @@ npm test               # 运行 Vitest 测试套件
 npm run tauri build    # 构建打包的 .app / 安装包
 ```
 
-**源码构建前置条件：** Node.js ≥ 20.19，Rust 工具链，npm。该下限在 `package.json` 中写为
+**源码构建前置条件：** Node.js ≥ 20.19，Rust 工具链 ≥ 1.90，npm。该下限在 `package.json` 中写为
 `>=20.19`，与 CI 实际构建所用的版本一致——为何是 20 而非更新的主版本，见 `ci.yml` 中的说明。
 
 ## 快速开始
@@ -97,11 +100,11 @@ npm run tauri build    # 构建打包的 .app / 安装包
 2. 在主画布中编辑树——右键节点进行拓扑操作（添加分支、插入父节点、重新定根、删除、折叠）。
 3. 使用侧面板定义性状、分配状态、放置事件、管理假说层和设置校准点。
 4. 运行推理辅助（简约法、Mk ASR、一致性检查）获取建议性提示。
-5. 通过导出面板导出：SVG/PNG/PDF 用于图表，Newick/Nexus 用于树，JSON 用于假说存档。
+5. 通过导出面板导出：SVG/PNG/PDF 用于图表，Newick/NEXUS 用于树，JSON 用于假说存档。
 
 ## 项目文件格式
 
-CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0.1.0`。
+CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0.2.0`。
 
 ## 文档
 
@@ -129,14 +132,14 @@ CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0
 
 - **Concept DOI（全部版本）：** [10.5281/zenodo.23053393](https://doi.org/10.5281/zenodo.23053393)
 - **v0.1.0：** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
-- **v0.2.0（本次发布）：** 版本 DOI 由 Zenodo 在归档本 Release 后分配；在该 DOI 出现之前，
-  请通过上方概念 DOI 引用。
+- **v0.2.0：** 版本 DOI 由 Zenodo 在归档本 Release 后分配。
+- **v0.3.0：** 版本 DOI 由 Zenodo 在归档本 Release 后分配。
 
-> 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.2.0) [计算机软件]. Zenodo.
+> 曾子超 (Zeng, Z.). (2026). *CladeForge* (Version v0.3.0) [计算机软件]. Zenodo.
 > https://doi.org/10.5281/zenodo.23053393
 
 目前尚无可引用的论文条目。机器可读的引用信息见 [`CITATION.cff`](./CITATION.cff)。
 
 ## 资助
 
-本项目受国家级科研项目资助。资助编号将在可以披露后列入本节。
+本项目受国家自然科学基金（资助号 42422209、42272354）和国家重点研发计划（资助号 2023YFC3108600）资助。

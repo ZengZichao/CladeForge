@@ -6,7 +6,7 @@ import { addChildren } from '../model/treeOps';
 import { serializeProject, parseProject } from './projectIO';
 import { parseNewick } from './newick';
 import { computeLayout } from '../layout/autoLayout';
-import { EVENT_BADGE_RADIUS , findEventType } from '../model/events';
+import { findEventType } from '../model/events';
 import { curvedBranchPath } from '../canvas/paths';
 import {
   planEventAnchors,

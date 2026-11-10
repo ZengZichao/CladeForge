@@ -40,11 +40,9 @@ jobs:
           # to keep it here: the scaling measurements this repository carries
           # (scripts/bench_tips.mjs) were taken on Node.js v20.20.2, so the gate
           # and those numbers belong to one runtime; and vite 8 requires
-          # `^20.19.0 || >=22.12.0` while vitest 5 requires Node >=22.12, so 20
-          # is the newest runtime that still admits the current test runner.
-          # `engines.node` is `>=20.19` to match, so the declared floor is a
-          # floor CI actually exercises. Moving to 22+ is a deliberate change
-          # that should re-baseline the benchmark numbers with it.
+          # `^20.19.0 || >=22.12.0`, so 20.19 is the floor this job must
+          # exercise. `engines.node` is `>=20.19` to match. Moving to 22+ is a
+          # deliberate change that should re-baseline the benchmark numbers.
           node-version: 20
           cache: npm
       - run: npm ci
@@ -169,6 +167,8 @@ jobs:
       - run: npm ci
       - name: Run the third-party cross-check
         run: node scripts/cross-check/run-cross-check.mjs
+      - name: Fail when regenerated fixtures differ from the committed ones
+        run: git diff --exit-code -- scripts/cross-check/fixtures
       - name: Fail on stale fixtures (manifest ↔ agreement consistency)
         run: |
           node -e "

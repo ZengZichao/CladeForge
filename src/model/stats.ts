@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Discrete-character phylogenetic-signal metrics.
 //
 // For a discrete character we report the classic homoplasy indices derived from
@@ -842,7 +843,7 @@ export function yuleBalanceZScores(project: Project, replicates = 200, seed = 20
     const kidsOf = new Map<number, number[]>([]);
     while (sizes.size < 2 * nTips - 1) {
       const leaves: number[] = [];
-      for (const [id, size] of sizes) if (!kidsOf.has(id)) leaves.push(id);
+      for (const id of sizes.keys()) if (!kidsOf.has(id)) leaves.push(id);
       const pick = leaves[Math.floor(uniform() * leaves.length)];
       const kids = [nid, nid + 1];
       nid += 2;

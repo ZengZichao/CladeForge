@@ -70,7 +70,6 @@ export function ReconciliationView({
   const options = useStore((s) => s.reconViewOptions);
   const hoveredGeneId = useStore((s) => s.reconHoverGeneId);
   const focusTarget = useStore((s) => s.reconFocusTarget);
-  const setActiveGeneTree = useStore((s) => s.setActiveGeneTree);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
   const setReconMode = useStore((s) => s.setReconMode);
 
@@ -221,7 +220,6 @@ export function ReconciliationView({
   useEffect(() => {
     const t = requestAnimationFrame(() => fitBoth());
     return () => cancelAnimationFrame(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, entry?.id]);
 
   // Zoom readouts for the workspace status bar (only on real scale changes).
@@ -241,7 +239,6 @@ export function ReconciliationView({
     if (entry && geneLayout) {
       setGeneTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(entry.doc, geneLayout, options, 'gene'), geneBox.w, geneBox.h));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostSize.w, hostSize.h, speciesBox.w, speciesBox.h, geneBox.w, geneBox.h]);
 
   // ⌘⇧F (global) reaches the recon canvas through this event.
@@ -289,7 +286,6 @@ export function ReconciliationView({
         });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSeq]);
 
   // --- derived display metadata ----------------------------------------------

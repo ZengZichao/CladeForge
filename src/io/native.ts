@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // The single place the frontend crosses into native (Rust) code.
 //
 // Every `#[tauri::command]` is wrapped here with a typed signature, so future

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Native project (.cladeforge.json) serialisation. Full fidelity: topology,
 // manual positions, styles and custom edges.
 //

@@ -1187,7 +1187,6 @@ export function PropertiesPanel() {
       map.set(c.id, parsimony(project, c));
     }
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charData]);
 
   const content = useMemo(() => {

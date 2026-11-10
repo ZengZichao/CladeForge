@@ -30,7 +30,7 @@
 
 ### CI 实际执行什么，以及如何复现
 
-CI 跑两个互不依赖的 job：Web 侧失败不会再导致 Rust 侧被跳过。推送前请两边都本地复现：
+CI 跑四个 job：`web`、`desktop`、`cross-check` 与 `audit`。前三个在每次 push 和 PR 时运行；`audit` 在每周计划或手动触发时运行。CodeQL 是独立工作流。推送前请复现相关 job：
 
 ```bash
 # web job
@@ -42,6 +42,9 @@ npm run build
 # desktop job —— 只要改动了 src-tauri/ 下的任何内容就必须跑
 cargo test  --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+# cross-check job —— 样例数据或 fixtures 改动时需要（R + ape/phangorn）
+node scripts/cross-check/run-cross-check.mjs
 ```
 
 `cargo clippy` 这一行不是可选项。CI 用 `-D warnings` 运行 clippy，因此 lint 在那里是硬失败，
@@ -101,4 +104,4 @@ DTL 协同演化重建、共识树、布局与导出——都是 `src/model`、`
 
 ## 用户文档
 
-完整的功能详解见[用户手册（中文）](./docs/MANUAL_ZH.md)和 [User Manual (English)](./docs/MANUAL_EN.md)。
+完整的功能详解见[用户手册（中文）](./docs/MANUAL_ZH.md)和 [User Manual (English)](./docs/MANUAL_EN.md)。每次发布的 AI 辅助文件记录见 [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md)。

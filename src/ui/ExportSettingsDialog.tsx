@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Export-settings dialog: the publication controls the exporter never had.
 //
 // Clicking "export SVG" used to snapshot whatever the screen happened to show —

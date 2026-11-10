@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Keyboard-shortcut reference dialog (⌘?, ⌘/, Help → 快捷键). Lists every shortcut
 // grouped by scope with a live filter, matching the professional-tool
 // convention of an always-available cheat sheet.

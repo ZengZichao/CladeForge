@@ -387,7 +387,7 @@ export function validateScenario(
   species: Project,
   gene: Project,
   assumptions: Record<NodeId, GeneNodeAssumption>,
-  costs: ReconCosts,
+  _costs: ReconCosts,
 ): ReconIssue[] {
   const issues: ReconIssue[] = [];
   const { mappings } = mapTipsByLabel(species, gene);

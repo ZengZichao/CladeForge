@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Inference-assist dialog: parsimony ancestral-state suggestions, hypothesis
 // consistency checks and character-correlation hints for one character.
 //

@@ -10,6 +10,7 @@ What changed and why.
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
 - [ ] `npm run build` passes (this is what `tauri build` runs)
+- [ ] Sample/fixture changes: `node scripts/cross-check/run-cross-check.mjs` passes
 - [ ] Docs updated if needed — user-facing text provided in both English and 中文
 - [ ] Rust side compiled and tested if touched: `cargo test --manifest-path src-tauri/Cargo.toml`
 - [ ] Rust side lint-clean if touched: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
@@ -34,6 +35,7 @@ State whether a generative-AI tool produced any part of this change, and for wha
 - [ ] `npm run typecheck` 通过
 - [ ] `npm test` 通过
 - [ ] `npm run build` 通过（`tauri build` 走的正是它）
+- [ ] 样例/fixtures 改动：`node scripts/cross-check/run-cross-check.mjs` 通过
 - [ ] 如需要，已同步更新文档——面向用户的文案须同时提供英文与中文
 - [ ] 若改动了 Rust 侧，已通过 `cargo test --manifest-path src-tauri/Cargo.toml`
 - [ ] 若改动了 Rust 侧，已通过 `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`

@@ -68,7 +68,6 @@ describe('cullPaneNodes', () => {
   });
 
   it('drops off-screen nodes when zoomed in, and keeps the buffered edge band', () => {
-    const b = layout.bounds;
     const scale = 8;
     // Anchor the viewport on the first node: only its neighbourhood survives.
     const p = layout.positions.get(all[0])!;

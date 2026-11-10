@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Derived per-gene-tree view model for the reconciliation panel.
 //
 // Extracted from `ReconPanel.tsx` so the counting rules are testable without

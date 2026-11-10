@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Clipboard access, in one place.
 //
 // The app had NO clipboard path at all: no Newick paste, no table paste, no

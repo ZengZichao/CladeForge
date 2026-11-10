@@ -14,14 +14,13 @@ import {
   planEraOverlay,
   type EraLevel,
 } from '../layout/timescale';
-import { branchMidpointOn, branchPath, curveMidpoint, curvedPath, straightPath } from '../canvas/paths';
+import { branchMidpointOn, branchPath, curveMidpoint, curvedPath } from '../canvas/paths';
 import { unmeasuredNodeIds } from '../canvas/branchFlags';
 import {
   HYPOTHESIS_NOTE_PAD,
   hypothesisNoteFontSize,
   hypothesisNotePlacement,
   hypothesisNoteText,
-  labelAngleOf,
   labelPlacement,
 } from '../canvas/labels';
 import { labelAngleFor, labelBoxForNode, estimateLabelWidth, type Box } from '../canvas/labelBounds';
@@ -45,7 +44,6 @@ import {
   type NodeStyle,
   type Point,
   type Project,
-  type TreeNode,
 } from '../model/types';
 import {
   characterValueColor,
@@ -54,7 +52,7 @@ import {
   findCharacter,
   nodeCharacterColor,
 } from '../model/characters';
-import { normalizeSupport as normalizeSupportTyped, supportPercent } from '../model/treeOps';
+import { supportPercent } from '../model/treeOps';
 import {
   eventBadgeFontSize,
   eventBadgeText,
@@ -162,22 +160,6 @@ function num(v: unknown, fallback = 0): string {
   return typeof v === 'number' && Number.isFinite(v) ? String(v) : String(fallback);
 }
 
-/**
- * Put a support value on the 0–100 scale, honouring the node's DECLARED scale
- * when it has one and falling back to the shared model-level heuristic
- * otherwise. This used to be a second, diverging copy of the heuristic in
- * treeOps.ts (it even differed on negative/invalid values), so the same tree
- * could dim differently on screen and in the exported figure; both consumers
- * now go through one implementation.
- */
-export function normalizeSupport(
-  v: number,
-  scale?: 'fraction' | 'percent',
-): number {
-  if (!Number.isFinite(v)) return 0;
-  const converted = scale ? normalizeSupportTyped(v, scale) : supportPercent({ support: v });
-  return converted ?? 0;
-}
 
 
 function markerSVG(pos: Point, style: NodeStyle, fill: string, stroke: string, dashed: boolean): string {
@@ -504,8 +486,6 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       Number.isFinite(node.support) &&
       node.childrenIds.length > 0
     ) {
-      const mx = (from.x + to.x) / 2;
-      const my = (from.y + to.y) / 2;
       // The dimming threshold is the explicit option, else the project's own
       // `supportThreshold` (documented 0–100) — the same rule the canvas
       // applies, so the figure and the screen finally agree.

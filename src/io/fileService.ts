@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // File-system abstraction. Inside the desktop shell it pairs Tauri's native
 // dialog (open/save picker) with our own scoped IO commands (see io/native.ts);
 // in a plain browser it falls back to download / <input type=file>. This lets

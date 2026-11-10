@@ -1,3 +1,5 @@
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+
 # CladeForge 与 ape / phangorn 的交叉验证
 
 > English version: [README.md](./README.md)
@@ -13,7 +15,7 @@
 | --- | --- | --- |
 | 代码 | `src/model/independentReference.test.ts` | `dump-fixtures.ts` + `dump-fixtures.mjs` + `ape_agreement.R` + `run-cross-check.mjs` |
 | 命令 | `npx vitest run src/model/independentReference.test.ts` | `node scripts/cross-check/run-cross-check.mjs` |
-| 依赖要求 | Node 加上仓库自带的开发依赖 | 装有 `ape` 与 `phangorn` 包的 R；下文各支线数字是以 R 4.5.3、ape 5.8.1、phangorn 2.12.1 核对的 |
+| 依赖要求 | Node 加上仓库自带的开发依赖 | 装有 `ape` 与 `phangorn` 包的 R；下文各支线数字是以 R 4.5.3 / 4.4.1、ape 5.8.1、phangorn 2.12.1 核对的 |
 
 ## 1. 导出算例数据（仅需 Node，不引入新依赖）
 
@@ -23,9 +25,9 @@ node scripts/cross-check/dump-fixtures.mjs                  # → scripts/cross-
 node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit directory
 ```
 
-`dump-fixtures.mjs` 是一个纯 Node 包装器：它用仓库自带的 `vite-node`（本就随 `vitest` 依赖安装）执行 `dump-fixtures.ts`，因此这些算例数据是由应用*所用的同一批模块*（`sampleTree`、`parsimony`、`asr`、`scriptExport`、`io/newick`）产出的，而不是一份重新实现的替身。若 `vite-node` 不存在，它会直接说明原因并以 2 退出，且不写出任何文件。
+`dump-fixtures.mjs` 是一个纯 Node 包装器：它用仓库自带的 `vite-node`（显式 devDependency；Vitest 4 不再内置）执行 `dump-fixtures.ts`，因此这些算例数据是由应用*所用的同一批模块*（`sampleTree`、`parsimony`、`asr`、`scriptExport`、`io/newick`）产出的，而不是一份重新实现的替身。若 `vite-node` 不存在，它会直接说明原因并以 2 退出，且不写出任何文件。
 
-对每个项目——六个内置样例（`archaea`、`bacteria`、`virus`、`cetacean`、`plant`、`animal`），再加下文"`er-control` 对照文档"一节说明的 `er-control`——各写出十个文件，另外在顶层写出 `manifest.tsv` 与 `names.tsv`：
+对每个项目——七个内置样例（`archaea`、`bacteria`、`virus`、`cetacean`、`plant`、`animal`、`recon-family`），再加下文"`er-control` 对照文档"一节说明的 `er-control`——各写出十个文件，另外在顶层写出 `manifest.tsv` 与 `names.tsv`：
 
 | 文件 | 内容 | R 支线如何使用它 |
 | --- | --- | --- |
@@ -38,9 +40,9 @@ node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit dir
 | `asr_posteriors.tsv` | CladeForge 的 ER-Mk 边际后验，按节点 × 状态 | 边际状态比较 |
 | `parsimony.tsv` | 所选状态、**两种**并列集合——`tie_state_indexes`（在已定当的祖先路径下仍等价的状态）与 `mp_state_indexes`（出现在任一最优重建中的状态，即 `phangorn::MPR` 给出的那个集合）——以及逐节点变化枝标记；最小代价见 `summary.tsv` | 简约法比较 |
 | `summary.tsv` | 平均枝长、`r = 1/mean`、最小简约代价 | 代价比较 |
-| `cladeforge_analysis.R` | **应用自己导出的可复现脚本**（`buildRScript`），原样保留 | 可在 `Rscript` 下独立运行；作为"第二实现"的证据留存 |
+| `cladeforge_analysis.R` | **应用自己导出的可复现脚本**（`buildRScript`），除易变的生成时间戳外原样保留（时间戳已归一化，使 fixtures 可复现） | 可在 `Rscript` 下独立运行；作为"第二实现"的证据留存 |
 
-结果的连接依据是拓扑 key，而不是标签：末端用 `T:<tip label>`，内部节点用 `N:<排序后的末端集合>|<该子树内的节点数>`。子树规模这一项不是冗余装饰：在鲸类项目中 *Basilosauridae* 与 *Neoceti* 恰好覆盖同样两个末端，只靠末端集合作 key 会悄无声息地拿错配的一对节点去比较。由于 `nodes.tsv` 已经带上这些 key，树是从节点表重建的，而不是解析 Newick 得到的——这也顺带绕开了下文提到的 ape 那两个读取缺陷。
+结果的连接依据是拓扑 key，而不是标签：末端用 `T:<tip label>`，内部节点用 `N:<排序后的末端集合>|<该子树内的节点数>`。子树规模这一项不是冗余装饰：两个内部节点有可能覆盖同样的末端（例如一个是单子节点的干枝），只靠末端集合作 key 会悄无声息地拿错配的一对节点去比较。由于 `nodes.tsv` 已经带上这些 key，树是从节点表重建的，而不是解析 Newick 得到的——这也顺带绕开了下文提到的 ape 那两个读取缺陷。
 
 ## 2. 运行第三方对照（需要 R + ape + phangorn）
 
@@ -88,7 +90,7 @@ CladeForge 把 ER 速率固定在 `r = 1/mean(branch length)`，这让它的后�
 ## 从干净检出复现
 
 ```sh
-npm install                                              # vite-node comes with vitest
+npm install                                              # vite-node is an explicit devDependency
 node scripts/cross-check/dump-fixtures.mjs               # regenerate fixtures
 npx vitest run src/model/independentReference.test.ts    # oracle legs
 Rscript scripts/cross-check/ape_agreement.R              # third-party leg (needs R)
@@ -98,7 +100,7 @@ Rscript scripts/cross-check/ape_agreement.R              # third-party leg (need
 
 ## 如何读输出
 
-随版的 `manifest.tsv` 在七份算例文档下共有 14 行"项目 × 性状"。各支线的合计是：
+随版的 `manifest.tsv` 在六个含性状样例加 `er-control` 文档下共有 14 行"项目 × 性状"；fixtures 还包含没有性状行的 `recon-family`。各支线的合计是：
 
 ```
 step-count(phangorn::parsimony)   compared 10  agreed 10
@@ -110,7 +112,7 @@ ER-marginals(ape::ace)            compared 0   agreed 0   （4 行度量）
 
 * **简约步数 — 与 `phangorn::parsimony()` 10/10 精确一致**，范围为那些完全已赋值、且以均匀代价计价的性状。这条支线会考察 12 个性状，其中 10 个符合条件：`archaea` 的两个性状含 `?` 编码，而 phangorn 的 `phyDat` 会丢弃这类位点并返回 0，所以它们被记为 `EXCLUDED`，而不是被报成不一致；鲸类的两个性状声明了显式的桑科夫步矩阵，本就不属于均匀代价这一类。工具链会核对这种排除是真的：状态标签查表命中的末端数少于算例自身声明的缺失数时，那是一次 `join` 故障，不是缺失数据。
 * **边际状态 — 度量了 4 行，有意不计入任何一致率。** `ape::ace()` 拒绝任何不是**既**有根**又**完全二分的树，而 bacteria、virus、cetacean、animal 按设计带有干枝（stem lineage），这八行因此记为 NOT-COMPARABLE；`archaea` 的两行同理（含缺失编码）。收缩干节点确实能让 `ace()` 跑起来，但那会改变被比较的*是哪一个*节点，所以工具链不这样做。`plant`（三个性状）与 `er-control` 是完全二分的，于是拿到四行度量：CladeForge 固定的速率在 plant 上是 `1/mean = 0.004806`、在 er-control 上是 `2.642`，而 ape 拟合出的速率在 plant 的三个性状上都是 `0.1000`（那是优化器的下界——对与树一致的性状它希望完全不要变化）、在 er-control 上是 `15.1913`（饱和）。随后最大似然状态只在 6/13、5/13、10/13、6/7 个内部节点上重合。这个差距正是重点：它是模型之差，不是实现之差，拿它作判据就是在给错误的对象打分。
-* **应用自己导出的脚本 — 14/14。** 在 `Rscript` 下重跑 `cladeforge_analysis.R`，打印出的 Sankoff 最小代价与 `manifest.tsv` 为七份算例记录的逐个相同，包括鲸类那两个非对称矩阵——那里导出脚本付的是 3 而不是 Fitch 的 5，说明步矩阵确实被使用。也就是说，这项导出所承诺的可复现性是被执行过的，而不是推断出来的。
+* **应用自己导出的脚本 — 14/14。** 在 `Rscript` 下重跑 `cladeforge_analysis.R`，打印出的 Sankoff 最小代价与 `manifest.tsv` 为八个 fixture 目录记录的逐个相同，包括鲸类那两个非对称矩阵——那里导出脚本付的是 3 而不是 Fitch 的 5，说明步矩阵确实被使用。也就是说，这项导出所承诺的可复现性是被执行过的，而不是推断出来的。
 
 ## `er-control` 对照文档
 

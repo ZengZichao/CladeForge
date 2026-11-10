@@ -31,7 +31,6 @@ import {
 import type { Project } from '../model/types';
 import type { EstimateAgesResult } from '../model/treeOps';
 import { estimateAgesText } from './treeEditNotices';
-import { deriveBranchLengthsFromAges, estimateAgesWithCalibrations } from '../model/treeOps';
 
 /** Dropdown options = recognised geological units, in formal case. */
 const TIME_UNIT_OPTIONS = ['ma', 'myr', 'ka', 'kyr', 'ga', 'gyr', 'yr'];

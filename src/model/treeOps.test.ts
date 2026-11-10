@@ -351,7 +351,7 @@ describe('constrainedMoveNode', () => {
   });
 
   it('no runaway when a child sits closer than minGap (node stays under the pointer)', () => {
-    const { p, a, b, c, layout, positions } = chainProject();
+    const { p, b, c, layout, positions } = chainProject();
     // Pre-existing tight spacing: c only 20px right of b (< minGap).
     p.nodes[b].position = { x: 300, y: 0 };
     p.nodes[c].position = { x: 320, y: 0 };

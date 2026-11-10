@@ -21,7 +21,7 @@ import { getCanvasCollisionPlan, getLastCanvasCollisionPlan } from './eventBadge
 import { isImeComposing } from '../ui/imeGuard';
 import { markerPath } from './markerGeometry';
 import { S, tr } from '../ui/strings';
-import { C_SELECT, C_DROP, C_CONNECT, C_UNKNOWN } from './colors';
+import { C_SELECT, C_CONNECT, C_UNKNOWN } from './colors';
 
 interface NodeViewProps {
   node: TreeNode;
@@ -118,14 +118,12 @@ export const NodeView = memo(function NodeView({
       // Focus after the input mounts.
       requestAnimationFrame(() => inputRef.current?.select());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
   // F2 (requestRename) opens this node's editor — the keyboard path to the
   // double-click-only rename.
   const renameRequest = useStore((s) => s.renameRequest);
   useEffect(() => {
     if (renameRequest?.id === node.id) setEditing(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renameRequest?.seq]);
 
   const commitRename = () => {

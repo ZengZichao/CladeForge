@@ -216,7 +216,7 @@ export interface NexusParseResult {
  */
 export function parseNexusTrees(input: string, name = 'Imported tree'): NexusParseResult {
   assertTreeInput(input);
-  const { masked: maskedAll, unterminatedComment } = maskNexus(input);
+  const { unterminatedComment } = maskNexus(input);
   if (unterminatedComment) {
     throw new Error(
       tr(

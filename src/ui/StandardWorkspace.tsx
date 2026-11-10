@@ -14,7 +14,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { Cross1Icon, PlusIcon, PinLeftIcon, PinRightIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, PinLeftIcon, PinRightIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import * as file from '../io/fileActions';
 import { getLastAutosave, subscribeAutosave, type AutosaveState } from '../io/autosave';
@@ -299,9 +299,6 @@ function LeftPanelContent({
   onOpenMatrix,
   onOpenAnalysis,
   onNexusExport,
-  onBuildGeneTree,
-  onCopySpeciesTree,
-  onEditGeneTree,
 }: {
   module: NavModule;
   onOpenMatrix: () => void;

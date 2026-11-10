@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Per-node evolutionary-event editor shown in the inspector.
 //
 // Lists the events attached to the selected node (on the node itself and on its
@@ -17,7 +18,6 @@ import {
   EVENT_MARKER_SHAPES,
   EVENT_MARKER_SIZE_MAX,
   EVENT_MARKER_SIZE_MIN,
-  EVENT_TYPES,
   clampEventMarkerSize,
   eventBadgeExtent,
   eventBadgeFontSize,

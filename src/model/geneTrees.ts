@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Gene-tree management for species-tree (DTL) reconciliation.
 //
 // A GeneTreeEntry embeds a full standalone mini-Project so Newick/NEXUS
@@ -14,7 +15,6 @@ import type {
   NodeId,
   Project,
   ReconCosts,
-  ReconEventType,
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
 import { newId, rerootAtNode } from './treeOps';
