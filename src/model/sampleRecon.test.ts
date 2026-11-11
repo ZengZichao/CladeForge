@@ -3,7 +3,7 @@
 // two gene trees shipped with the demo, tree α validating with ZERO errors and
 // carrying one duplication, one transfer and one loss, tree β showing exactly
 // one resolvable warning, and the descriptor opening into the reconciliation
-// workspace. The six standard samples stay gene-free so their behaviour (and
+// workspace. The two standard samples stay gene-free so their behaviour (and
 // the fixture cross-checks) cannot drift.
 
 import { describe, it, expect } from 'vitest';
@@ -26,16 +26,16 @@ function isBinary(doc: { nodes: Record<string, { childrenIds: string[] }> }): bo
 }
 
 describe('the reconciliation sample descriptor', () => {
-  it('is registered with entryView=recon alongside the six standard samples', () => {
+  it('is registered with entryView=recon alongside the two standard samples', () => {
     expect(reconDescriptor()).toBeTruthy();
     expect(reconDescriptor()?.entryView).toBe('recon');
-    // The 6 pre-existing samples keep their ids and stay standard-entry.
-    for (const id of ['archaea', 'bacteria', 'virus', 'cetacean', 'plant', 'animal']) {
+    // The two standard samples keep their ids and stay standard-entry.
+    for (const id of ['feature-tour', 'large-tree']) {
       const d = SAMPLE_PROJECTS.find((s) => s.id === id);
       expect(d, id).toBeTruthy();
       expect(d?.entryView ?? 'standard').toBe('standard');
     }
-    expect(SAMPLE_PROJECTS).toHaveLength(7);
+    expect(SAMPLE_PROJECTS).toHaveLength(3);
   });
 });
 
@@ -171,9 +171,9 @@ describe('the reconciliation sample document', () => {
 });
 
 describe('the standard samples stay untouched', () => {
-  it('the default sample and all six standard entries still have no gene trees', () => {
+  it('the default sample and both standard entries still have no gene trees', () => {
     expect(createSampleProject().geneTrees).toEqual([]);
-    for (const id of ['archaea', 'bacteria', 'virus', 'cetacean', 'plant', 'animal']) {
+    for (const id of ['feature-tour', 'large-tree']) {
       const d = SAMPLE_PROJECTS.find((s) => s.id === id)!;
       expect(d.build().geneTrees).toEqual([]);
     }

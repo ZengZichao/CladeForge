@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Hypothesis output: a human-readable narrative report (Markdown) and a curated
 // hypothesis JSON, both derived from the ACTIVE layer's live data. These are
 // distinct from the full project save (projectIO): they surface the semantic
@@ -83,7 +84,7 @@ export function buildNarrative(project: Project): string {
         // Only genuine state-to-state changes are counted. An endpoint that is
         // unassigned, or that carries a missing-data symbol the character never
         // declares ('?' / '-' as written by the matrix editor), is NOT an
-        // evolutionary transition: listing "陆生 → ?" among the transitions and
+        // evolutionary transition: listing "状态 A → ?" among the transitions and
         // counting it would inflate the total of a citable artefact. Such branches
         // are reported separately, uncounted.
         const declared = new Set(c.states.map((s) => s.id));

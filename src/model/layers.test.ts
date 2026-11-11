@@ -1,5 +1,6 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
-import { createEmptyProject, createAquaticSample } from './sampleTree';
+import { createEmptyProject, createFeatureTourSample } from './sampleTree';
 import { addCharacter, addChildren, removeCharacter, rerootAtNode, setNodeState } from './treeOps';
 import { newCharacter } from './characters';
 import { addBlankLayer, duplicateActiveLayer, layerDiff, layerRecordCounts, pruneLayerStore, switchLayer } from './layers';
@@ -76,28 +77,28 @@ describe('layer switching after a character deletion', () => {
     // non-active layers alike: a stale copy would reappear on the next
     // `switchLayer` — then go out through `hypothesisExport` as evidence for a
     // trait the document does not have.
-    const p = createAquaticSample();
+    const p = createFeatureTourSample();
     expect(p.layers).toHaveLength(2);
-    const habitat = p.characters.find((c) => c.costMatrix)!;
-    expect(p.nodes[p.rootId].charStates?.[habitat.id]).toBeDefined();
+    const matrixChar = p.characters.find((c) => c.costMatrix)!;
+    expect(p.nodes[p.rootId].charStates?.[matrixChar.id]).toBeDefined();
 
-    removeCharacter(p, habitat.id);
+    removeCharacter(p, matrixChar.id);
     switchLayer(p, p.layers[1].id);
     for (const n of Object.values(p.nodes)) {
-      expect(n.charStates?.[habitat.id]).toBeUndefined();
-      expect(n.charMeta?.[habitat.id]).toBeUndefined();
+      expect(n.charStates?.[matrixChar.id]).toBeUndefined();
+      expect(n.charMeta?.[matrixChar.id]).toBeUndefined();
     }
     switchLayer(p, p.layers[0].id);
     for (const n of Object.values(p.nodes)) {
-      expect(n.charStates?.[habitat.id]).toBeUndefined();
-      expect(n.charMeta?.[habitat.id]).toBeUndefined();
+      expect(n.charStates?.[matrixChar.id]).toBeUndefined();
+      expect(n.charMeta?.[matrixChar.id]).toBeUndefined();
     }
     // The surviving character's tip observations are shared across layers and
     // must be untouched by either the deletion or the switches.
-    const locomotion = p.characters[0];
-    expect(locomotion.id).not.toBe(habitat.id);
+    const plainChar = p.characters[0];
+    expect(plainChar.id).not.toBe(matrixChar.id);
     const scoredTips = Object.values(p.nodes).filter(
-      (n) => n.childrenIds.length === 0 && n.charStates?.[locomotion.id],
+      (n) => n.childrenIds.length === 0 && n.charStates?.[plainChar.id],
     );
     expect(scoredTips.length).toBe(4);
     expect(pruneLayerStore(p).changed).toBe(false); // nothing left to prune

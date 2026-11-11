@@ -5,7 +5,7 @@
 // coordinates, which is what the solver reasons about — a uniform pan/zoom
 // transform cannot change whether two boxes intersect.
 //
-// The aquatic demo sample (catalogue id "cetacean", all taxa named Taxon_*) is
+// The feature-tour demo sample (catalogue id "feature-tour", all taxa named Taxon_*) is
 // one driver of this module: the original bug report had a parent label landing
 // inside its children's labels, and the KI / AR badges landing on a label in
 // every rectangular layout. The samples are strictly binary and balanced now,
@@ -84,9 +84,9 @@ function squeezedTree(type: LayoutType): Project {
   }
 }
 
-/** The aquatic demo sample, switched to one layout (fresh objects per call). */
-function cetacean(type: LayoutType): Project {
-  const project = SAMPLE_PROJECTS.find((s) => s.id === 'cetacean')!.build();
+/** The feature-tour demo sample, switched to one layout (fresh objects per call). */
+function featureTour(type: LayoutType): Project {
+  const project = SAMPLE_PROJECTS.find((s) => s.id === 'feature-tour')!.build();
   project.layout.type = type;
   return project;
 }
@@ -167,7 +167,7 @@ describe('badgeCandidateOffsets — nearest-first, along the branch before acros
 describe('label stagger — no two rendered labels overlap', () => {
   for (const type of LAYOUTS) {
     it(`${type}: labels are pairwise disjoint`, () => {
-      const project = cetacean(type);
+      const project = featureTour(type);
       const layout = computeLayout(project);
       const plan = getCanvasCollisionPlan(project, AXIS)!;
       const boxes = staggeredLabelBoxes(project, layout, plan.nudges);
@@ -216,7 +216,7 @@ describe('label stagger — no two rendered labels overlap', () => {
     // "radial labels never collide" stopped being a guarantee. The contract
     // that still holds: whatever the planner decides, the RENDERED labels do
     // not overlap (and when no squeeze exists, nothing is nudged).
-    const project = cetacean('circular');
+    const project = featureTour('circular');
     const layout = computeLayout(project);
     const plan = getCanvasCollisionPlan(project, AXIS)!;
     const boxes = staggeredLabelBoxes(project, layout, plan.nudges);
@@ -231,7 +231,7 @@ describe('label stagger — no two rendered labels overlap', () => {
   });
 
   it('is deterministic', () => {
-    const project = cetacean('rectangular-phylogram');
+    const project = featureTour('rectangular-phylogram');
     const layout = computeLayout(project);
     const a = planLabelNudges(project, layout.positions, layout.visible, []);
     const b = planLabelNudges(project, layout.positions, layout.visible, []);
@@ -239,7 +239,7 @@ describe('label stagger — no two rendered labels overlap', () => {
   });
 
   it('never pushes a label into time-axis text', () => {
-    const project = cetacean('time-calibrated');
+    const project = featureTour('time-calibrated');
     project.environmentalEvents = [];
     const layout = computeLayout(project);
     const axis = timeAxisTextBoxes(project, layout, { showEras: true, eraLevel: 'both' });
@@ -252,7 +252,7 @@ describe('label stagger — no two rendered labels overlap', () => {
 
 describe('time-axis text boxes', () => {
   it('mirrors the tick row drawn by TimeAxis', () => {
-    const project = cetacean('time-calibrated');
+    const project = featureTour('time-calibrated');
     const layout = computeLayout(project);
     const info = layout.timeAxis!;
     const boxes = timeAxisTextBoxes(project, layout, AXIS);
@@ -267,7 +267,7 @@ describe('time-axis text boxes', () => {
   });
 
   it('adds era-label rows when the geological bands are shown', () => {
-    const project = cetacean('time-calibrated');
+    const project = featureTour('time-calibrated');
     const layout = computeLayout(project);
     const hidden = timeAxisTextBoxes(project, layout, { showEras: false, eraLevel: 'both' });
     const shown = timeAxisTextBoxes(project, layout, { showEras: true, eraLevel: 'both' });
@@ -275,7 +275,7 @@ describe('time-axis text boxes', () => {
   });
 
   it('returns nothing for layouts without a time axis', () => {
-    const project = cetacean('rectangular-cladogram');
+    const project = featureTour('rectangular-cladogram');
     const layout = computeLayout(project);
     expect(timeAxisTextBoxes(project, layout, AXIS)).toEqual([]);
   });
@@ -284,7 +284,7 @@ describe('time-axis text boxes', () => {
 describe('event badge placement — clears labels, markers, axis text and other badges', () => {
   for (const type of LAYOUTS) {
     it(`${type}: every badge clears the drawing`, () => {
-      const project = cetacean(type);
+      const project = featureTour(type);
       const layout = computeLayout(project);
       const plan = getCanvasCollisionPlan(project, AXIS)!;
       const anchors = planEventAnchors(anchorInput(project, layout)).anchors;
@@ -312,7 +312,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
 
   it('keeps a node’s events together as one stack (KI + AR of Taxon_D)', () => {
     for (const type of LAYOUTS) {
-      const project = cetacean(type);
+      const project = featureTour(type);
       const layout = computeLayout(project);
       getCanvasCollisionPlan(project, AXIS);
       const planAnchors = planEventAnchors(anchorInput(project, layout));
@@ -386,7 +386,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
     // The circular layout places anchors radially clear of the labels, so the
     // same stack needs no displacement and no leader.
     const circular = (() => {
-      const project = cetacean('circular');
+      const project = featureTour('circular');
       const layout = computeLayout(project);
       return planEventAnchors(anchorInput(project, layout));
     })();
@@ -394,7 +394,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
   });
 
   it('does not let the two badges of one stack be confused with another node’s badge', () => {
-    const project = cetacean('rectangular-cladogram');
+    const project = featureTour('rectangular-cladogram');
     // Add a second cluster on a different node to exercise badge-vs-badge spacing.
     const terra = nodeByLabel(project, 'Taxon_G');
     project.events.push({
@@ -425,7 +425,7 @@ describe('event badge placement — clears labels, markers, axis text and other 
 
 describe('label geometry helpers', () => {
   it('labelBoxForNode mirrors the union box of labelBoxes()', () => {
-    const project = cetacean('rectangular-cladogram');
+    const project = featureTour('rectangular-cladogram');
     const layout = computeLayout(project);
     const boxes = [...layout.visible]
       .map((id) => labelBoxForNode(project, layout.positions, project.nodes[id]))
@@ -438,7 +438,7 @@ describe('label geometry helpers', () => {
   });
 
   it('measures CJK labels at full em width, not the Latin advance', () => {
-    const project = cetacean('rectangular-cladogram');
+    const project = featureTour('rectangular-cladogram');
     const layout = computeLayout(project);
     const id = nodeByLabel(project, 'Taxon_A');
     const node = project.nodes[id];
@@ -455,7 +455,7 @@ describe('label geometry helpers', () => {
 
 describe('cached canvas plan', () => {
   it('returns the same plan object for the same project revision', () => {
-    const project = cetacean('rectangular-phylogram');
+    const project = featureTour('rectangular-phylogram');
     const a = getCanvasCollisionPlan(project, AXIS);
     const b = getCanvasCollisionPlan(project, AXIS);
     expect(a).not.toBeNull();
@@ -464,7 +464,7 @@ describe('cached canvas plan', () => {
   });
 
   it('separates plans by time-axis options', () => {
-    const project = cetacean('time-calibrated');
+    const project = featureTour('time-calibrated');
     const withoutEras = getCanvasCollisionPlan(project, { showEras: false, eraLevel: 'both' })!;
     const withEras = getCanvasCollisionPlan(project, { showEras: true, eraLevel: 'both' })!;
     expect(withoutEras).not.toBe(withEras);
@@ -472,7 +472,7 @@ describe('cached canvas plan', () => {
   });
 
   it('skips the fix for documents above the size gate', () => {
-    const project = cetacean('rectangular-cladogram');
+    const project = featureTour('rectangular-cladogram');
     const template = project.nodes[project.rootId];
     for (let i = 0; i <= MAX_COLLISION_PLAN_NODES; i++) {
       project.nodes[`filler-${i}`] = { ...template, id: `filler-${i}`, parentId: null, childrenIds: [] };

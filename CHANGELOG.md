@@ -41,6 +41,38 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
   New tests: `src/model/reconPlacements.test.ts`, `src/layout/embeddedRecon.test.ts`,
   `src/io/embeddedReconExport.test.ts`.
 
+### Changed — built-in samples reduced to three feature-oriented demos
+- **Seven samples → three.** The catalogue now ships `feature-tour` (the default
+  first-run project, rebuilt from the former `cetacean` structure), `large-tree`
+  (from the former `archaea` structure) and `recon-family` (unchanged, opens straight
+  into the reconciliation view). The `bacteria`, `virus`, `plant` and `animal`
+  builders were removed. The empty-state grid, sample picker and manuals describe
+  three feature-oriented demos rather than seven scientific cases.
+- **No real biological background.** Samples demonstrate software features, not
+  scientific cases: characters are now 性状 1 / 性状 2 (Character 1 / 2) with neutral
+  状态 A / B / C states, and events, calibrations, environmental markers and hypothesis
+  evidence carry neutral code names (事件 A、环境标记 A、示例证据 A …). Taxa stay the
+  fictional `Taxon_*` codes. No real taxon, trait, geological event or story remains in
+  any sample name, description, state, event, calibration or evidence string.
+- **Relabel, not rebuild.** Every numeric structure is preserved: tree topology, node
+  ages, branch lengths, character/state counts, state assignments, Sankoff cost
+  matrices, hypothesis-layer assignments and confidences, event types and triggers,
+  calibration ranges, and environmental-event positions and colours are unchanged.
+- **Cross-check fixtures regenerated.** The six old fixture directories were removed
+  and `feature-tour/` + `large-tree/` regenerated; `recon-family/` and `er-control/`
+  are byte-identical. `ape-agreement.tsv` was relabelled to the new sample/character
+  ids with every numeric column preserved (the R leg re-runs in CI). The
+  manifest↔agreement consistency gate passes and deterministic regeneration is
+  byte-stable.
+- **Legacy `sampleId` archives are preserved, never migrated.** A document carrying an
+  old `sampleId` (`cetacean`, `archaea`, `bacteria`, `virus`, `plant`, `animal`) is no
+  longer rebuilt on a locale switch: the catalogue lookup fails and the document stays
+  as an ordinary user project. No schema migration and no user-data cleaning.
+- Test contracts synced to the three-sample catalogue; the brute-force reference
+  coverage guards now reflect it (Sankoff enumerated characters 6→2, exact Mk
+  marginals 4→2, rate-sensitivity characters 11→4), with `er-control` and the
+  synthetic trees unchanged.
+
 ## [0.3.0] — 2026-11-10
 
 Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`

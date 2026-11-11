@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { createSampleProject } from '../model/sampleTree';
 import { buildHypothesisJSON, buildNarrative } from './hypothesisExport';
@@ -38,7 +39,7 @@ describe('hypothesisExport', () => {
   it('narrative includes the title, characters and events sections', () => {
     const md = buildNarrative(createSampleProject());
     expect(md.startsWith('# ')).toBe(true);
-    expect(md).toContain('栖息地'); // demo character
+    expect(md).toContain('性状 1'); // demo character
     expect(md).toContain('演化事件'); // demo events section
     // Badge text is ON by default now (eventMarkerTextVisible): with 15+ event
     // types and four near-identical greens, the two-letter code is the
@@ -68,15 +69,15 @@ describe('hypothesisExport', () => {
     // States are keyed by CHARACTER ID and every tip is listed, so the rows
     // match the NEXUS export's NTAX and evidence can be lined up with a column.
     expect(json.version).toBe('0.1.0');
-    const habitat = json.characters.find((c) => c.name === '栖息地');
-    expect(habitat?.id).toBeTruthy();
+    const matrixChar = json.characters.find((c) => c.name === '性状 1');
+    expect(matrixChar?.id).toBeTruthy();
     const tips = Object.values(p.nodes).filter((n) => n.childrenIds.length === 0);
     expect(json.taxonMatrix).toHaveLength(tips.length);
     expect(json.tipCount).toBe(tips.length);
     const terra = json.taxonMatrix.find((r) => r.taxon === 'Taxon_G');
-    const raw = terra?.states[habitat!.id];
-    const state = habitat!.states.find((s) => s.id === raw);
-    expect(state?.label).toBe('陆生');
+    const raw = terra?.states[matrixChar!.id];
+    const state = matrixChar!.states.find((s) => s.id === raw);
+    expect(state?.label).toBe('状态 A');
   });
 
   it('counts a missing-symbol branch as data, never as a transition', () => {

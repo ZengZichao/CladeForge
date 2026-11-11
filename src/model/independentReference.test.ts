@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Independent-reference tests for the reconstruction algorithms: correctness
 // evidence, not just speed.
 //
@@ -1316,11 +1317,13 @@ describe('Sankoff / fixed parsimony vs exhaustive enumeration', () => {
         );
       }
     }
-    // 6 of the 15 sample characters stay inside ENUM_BUDGET after the samples
-    // became strictly binary (binary resolution adds internal nodes, and the
-    // enumeration space is k^(#free nodes)). Every over-budget character is not
-    // skipped: the branch above re-checks its MP-state union by pinning.
-    expect(enumerated, 'sample characters exhaustively re-checked').toBeGreaterThanOrEqual(6);
+    // 2 of the 4 sample characters stay inside ENUM_BUDGET: the two feature-tour
+    // characters (4 tips, space 3^3 = 27). The two large-tree characters exceed
+    // it (11 tips, 3 unobserved, space 3^13). The enumeration space is
+    // k^(#free nodes), free nodes including unobserved tips. Every over-budget
+    // character is not skipped: the branch above re-checks its MP-state union by
+    // pinning.
+    expect(enumerated, 'sample characters exhaustively re-checked').toBeGreaterThanOrEqual(2);
     record('sankoff', 'samples', 'enumerated-characters', enumerated, `over-budget (not enumerated): ${overBudget}`);
   });
 });
@@ -1475,7 +1478,10 @@ describe('Mk / ER marginals vs exhaustive marginalisation', () => {
         );
       }
     }
-    expect(done, 'sample characters exactly marginalised').toBeGreaterThanOrEqual(4);
+    // The two feature-tour characters are exactly marginalised; the two
+    // large-tree characters exceed ENUM_BUDGET and are skipped here (their
+    // Sankoff MP-state union is still checked by pinning in the leg above).
+    expect(done, 'sample characters exactly marginalised').toBeGreaterThanOrEqual(2);
     record('mk', 'samples', 'enumerated-characters', done);
   });
 
@@ -2245,7 +2251,9 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
         );
       }
     }
-    expect(characters).toBeGreaterThanOrEqual(11);
+    // All 4 discrete sample characters (feature-tour ×2, large-tree ×2) are
+    // recomputed at both rates; recon-family carries no discrete character.
+    expect(characters).toBeGreaterThanOrEqual(4);
     expect(sensitive, 'at least one sample character must be sensitive to the rate choice').toBeGreaterThan(0);
     record('r-sensitivity', 'summary', 'characters-analysed', characters);
     record('r-sensitivity', 'summary', 'characters-with-max-shift-above-0.05', sensitive);
@@ -2253,8 +2261,8 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
     record('r-sensitivity', 'summary', 'total-nodes-changing-marginal-state', totalShiftingNodes);
   });
 
-  it('cross-checks the ML-rate posteriors of the cetacean sample against exact marginalisation', () => {
-    const descriptor = SAMPLE_PROJECTS.find((s) => s.id === 'cetacean') as (typeof SAMPLE_PROJECTS)[number];
+  it('cross-checks the ML-rate posteriors of the feature-tour sample against exact marginalisation', () => {
+    const descriptor = SAMPLE_PROJECTS.find((s) => s.id === 'feature-tour') as (typeof SAMPLE_PROJECTS)[number];
     const sample = descriptor.build();
     const flat = flatten(sample);
     const char = sample.characters[0];
@@ -2292,8 +2300,8 @@ describe('Mk posteriors at r = 1/mean(branch length) vs an ML-estimated r', () =
     });
     expect(appWorst, 'app posteriors at its own ML rate vs exact ML marginals').toBeLessThan(1e-6);
     expect(app.rate.logLikelihood, 'app lnL vs oracle lnL').toBeCloseTo(ml.logLik, 6);
-    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'ml-pruner-vs-exact', worst < 1e-9 ? 'exact' : 'OFF', `r_ML = ${ml.rate.toPrecision(4)}, assignments = ${bf.explored}`);
-    record('r-sensitivity', 'cetacean/habitat-at-ML-rate', 'app-ML-vs-exact', `max |Δp| = ${appWorst.toExponential(2)}`, `r_ML(app) = ${app.rate.rate.toPrecision(6)}, lnL(app) = ${app.rate.logLikelihood?.toPrecision(9)}`);
+    record('r-sensitivity', 'feature-tour/character-1-at-ML-rate', 'ml-pruner-vs-exact', worst < 1e-9 ? 'exact' : 'OFF', `r_ML = ${ml.rate.toPrecision(4)}, assignments = ${bf.explored}`);
+    record('r-sensitivity', 'feature-tour/character-1-at-ML-rate', 'app-ML-vs-exact', `max |Δp| = ${appWorst.toExponential(2)}`, `r_ML(app) = ${app.rate.rate.toPrecision(6)}, lnL(app) = ${app.rate.logLikelihood?.toPrecision(9)}`);
   });
 });
 
@@ -2338,9 +2346,10 @@ describe('guard: no oracle may be skipped silently', () => {
     // stop enumerating the sample projects and still call itself green
     expect(evidence.filter((e) => e.metric === 'enumerated-characters').length).toBe(2);
     for (const row of evidence.filter((e) => e.metric === 'enumerated-characters')) {
-      // The Sankoff leg enumerates 6 characters (see its own guard above); the
-      // Mk leg still enumerates 8. Both legs must keep reporting coverage.
-      expect(Number(row.value)).toBeGreaterThanOrEqual(6);
+      // Both legs enumerate the 2 feature-tour characters (see their own guards
+      // above); the large-tree characters are over budget. Both legs must keep
+      // reporting coverage.
+      expect(Number(row.value)).toBeGreaterThanOrEqual(2);
     }
   });
 });

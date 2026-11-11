@@ -1,5 +1,6 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
-import { createEmptyProject, createAquaticSample, createSampleProject } from './sampleTree';
+import { createEmptyProject, createFeatureTourSample, createSampleProject } from './sampleTree';
 import { addCharacter, addChildren, setNodeState } from './treeOps';
 import { switchLayer } from './layers';
 import { newCharacter } from './characters';
@@ -488,7 +489,7 @@ describe('Holm correction — one family definition for model and UI', () => {
     // The demo documents a reader actually opens. The family is whatever
     // carries a statistic, m is that family, and the ≥0.5 flag only filters the
     // rows afterwards — never the correction.
-    for (const make of [createAquaticSample, createSampleProject]) {
+    for (const make of [createFeatureTourSample, createSampleProject]) {
       const p = make();
       const family = testableCharacterPairs(p);
       expect(family.length, p.name).toBeGreaterThan(0);
@@ -549,12 +550,12 @@ describe('consistency categories — all five exist and can fire', () => {
 
   it('C2 excess-changes fires on the shipped project under its own step matrix', () => {
     // C2 must not be gated on "character has no cost matrix": the demo project's
-    // fully assigned character Habitat carries a Sankoff matrix, so the check could
+    // fully assigned character 1 carries a Sankoff matrix, so the check could
     // never fire there. Both sides of the comparison use that same matrix.
-    const p = createAquaticSample();
-    const habitat = p.characters.find((c) => c.costMatrix)!;
-    expect(habitat).toBeDefined();
-    const issues = checkConsistency(p, habitat);
+    const p = createFeatureTourSample();
+    const matrixChar = p.characters.find((c) => c.costMatrix)!;
+    expect(matrixChar).toBeDefined();
+    const issues = checkConsistency(p, matrixChar);
     expect(issues.some((i) => i.kind === 'excess-changes')).toBe(true);
     expect(issues.find((i) => i.kind === 'excess-changes')?.tag).toBe('过多变化');
     // The competing layer's hypothesis is parsimony-consistent → no C2 there.

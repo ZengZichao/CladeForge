@@ -1053,7 +1053,7 @@ hint: '拖入 .nwk / .nex / .tree 文件，或按 ⌘O / Ctrl+O 导入；也可�
 loadSample: '打开示例树',
 loadSampleTitle: '打开一棵带性状与演化事件的示例树，快速体验各项功能',
 samplePickerTitle: '选择一个示例项目',
-samplePickerHint: '涵盖基因家族协调（DTL）、古菌、细菌、病毒及动植物的演化案例；点击「协调」卡片将直接进入协调视图',
+samplePickerHint: '三个功能导向示例：标准工作区综合功能、大树与深时布局、基因家族协调（DTL）；点击「协调」卡片直接进入协调视图',
 },
   notify: {
     openProjectFail: '打开项目失败',
@@ -2267,7 +2267,7 @@ hint: 'Drop a .nwk / .nex / .tree file, press ⌘O / Ctrl+O to import, or select
 loadSample: 'Open sample tree',
 loadSampleTitle: 'Open a sample tree with characters and events to explore the app',
 samplePickerTitle: 'Choose a sample project',
-samplePickerHint: 'Examples covering gene-family reconciliation (DTL), archaea, bacteria, viruses, and animal/plant evolution — the Reconciliation card opens straight into the reconciliation view',
+samplePickerHint: 'Three feature-oriented samples: a full standard-workspace tour, a large deep-time tree, and gene-family reconciliation (DTL) — the Reconciliation card opens straight into the reconciliation view',
 },
   notify: {
     openProjectFail: 'Failed to open project',

@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+# AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 # Third-party correctness comparison: CladeForge vs ape / phangorn.
 #
 # Does an established implementation produce the same numbers as CladeForge?
@@ -13,18 +14,17 @@
 #          would look like a disagreement when it is a representational gap.
 #
 #   leg 2  ER-Mk MARGINAL POSTERIORS — MEASURED, NEVER GATED. ape::ace refuses
-#          any tree that is not rooted AND fully dichotomous, and most shipped
-#          sample projects contain stem lineages (single-child nodes): on this
-#          fixture set bacteria, virus, cetacean and animal are refused on that
-#          ground, archaea is refused for missing codings, and only plant (three
-#          characters) gets through. That is a property of the third-party tool,
-#          not of the data, so those projects are reported as NOT-COMPARABLE with
-#          the reason instead of being quietly dropped or forced through a
-#          contraction that would change which nodes are being compared. The
-#          `er-control` fixture exists to make the leg reachable on a
-#          purpose-built tree: rooted, fully dichotomous, 8 tips, all scored
-#          (dump-fixtures.ts asserts those properties and throws if an edit ever
-#          breaks them).
+#          any tree that is not rooted AND fully dichotomous and skips characters
+#          carrying missing codings: on this fixture set the two feature-tour
+#          characters are fully scored and dichotomous so they are measured,
+#          while the two large-tree characters carry `?` codings and are reported
+#          as NOT-COMPARABLE. That is a property of the third-party tool, not of
+#          the data, so those characters are reported with the reason instead of
+#          being quietly dropped or forced through a contraction that would
+#          change which nodes are being compared. The `er-control` fixture exists
+#          to make the leg reachable on a purpose-built tree: rooted, fully
+#          dichotomous, 8 tips, all scored (dump-fixtures.ts asserts those
+#          properties and throws if an edit ever breaks them).
 #
 #          Why no agreement can be claimed here. ape::ace(model = "ER") ESTIMATES
 #          the transition rate by maximum likelihood — its documented values
@@ -69,13 +69,13 @@
 # Requires: ape, phangorn.  Exit 0 = every attempted comparison agreed.
 #
 # What the shipped fixtures produce (R 4.5.3, ape 5.8.1, phangorn 2.12.1):
-# step-count 10/10 compared and agreed;  exported-R-script-Sankoff 14/14;
-# ER-marginals 0/0 by design — the summary line reads "MEASURED, NOT GATED ...
-# measured on 4 project(s)". A run that reports `1/1` on leg 1, or `0 cost
-# line(s)` on leg 3, is a broken lookup rather than a data limitation: leg 1 can
-# only reach ten characters when the CJK state labels actually join (see
-# read_tsv), and every fixture project ships an analysis script that prints at
-# least one cost.
+# step-count 1/1 compared and agreed (only er-control is uniform-cost and fully
+# scored);  exported-R-script-Sankoff 5/5;  ER-marginals 0/0 by design — three
+# measurement rows (feature-tour ×2, er-control). A run that reports `0 cost
+# line(s)` on leg 3, or fewer than three ER measurement rows, is a broken lookup
+# rather than a data limitation: the CJK state labels must actually join (see
+# read_tsv), and every character-bearing fixture project ships an analysis script
+# that prints at least one cost.
 
 suppressPackageStartupMessages({
   library(ape)
@@ -94,8 +94,8 @@ read_tsv <- function(p) {
   # The fixtures are UTF-8 BYTES. Declaring `fileEncoding = "UTF-8"` asks
   # read.table to TRANSLATE them into the session's native encoding, and under
   # LC_CTYPE=C that silently mangles every CJK field and drops the rows it cannot
-  # convert — the state labels here are Chinese (产甲烷 / 嗜盐光能 / 硫氧化), so a
-  # leg can quietly collapse from ten comparable characters down to one. Take the
+  # convert — the state labels here are Chinese (状态 A / 状态 B / 状态 C), so a
+  # leg can quietly collapse to a fraction of its characters. Take the
   # bytes as read and tag them instead: the comparison is then correct in either
   # locale, because both sides of every join get the same treatment.
   df[] <- lapply(df, function(x) if (is.character(x)) enc2utf8(x) else x)
@@ -114,8 +114,8 @@ add <- function(project, character, leg, n, agree, detail) {
 #'
 #' This deliberately does NOT parse tree.nwk. ape 5.8.1's own Newick reader cannot
 #' handle a quoted label containing spaces or parentheses: it returns
-#' "Tobaccomosaicvirus" (quotes kept, spaces deleted) and turns
-#' "Gracilicutes (GN)" into GN, and its writer then emits output it cannot re-read.
+#' "Sampletaxon" (quotes kept, spaces deleted) and turns
+#' "Sample taxon (GN)" into GN, and its writer then emits output it cannot re-read.
 #' That is a limitation of the third-party reader, not of the exported file, so the
 #' comparison rebuilds the same topology from nodes.tsv and keeps the real labels.
 #'

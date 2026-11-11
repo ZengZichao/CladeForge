@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 病毒演化
+# Project : 大树与深时
 # Format  : CladeForge project v0.2.0
 # Software: CladeForge 0.3.0 (this header is the provenance stamp a
 #           reproducibility checklist asks for: software version, generation
@@ -46,11 +46,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(22, 23, 22, 24, 23, 25, 23, 26, 24, 27, 24, 28, 25, 29, 25, 30, 26, 31, 26, 32, 27, 1, 27, 33, 28, 34, 28, 2, 29, 35, 29, 3, 30, 36, 30, 4, 31, 5, 31, 6, 32, 7, 32, 8, 33, 37, 33, 38, 34, 9, 34, 10, 35, 39, 35, 40, 36, 41, 36, 11, 37, 12, 37, 13, 38, 14, 38, 15, 39, 16, 39, 17, 40, 18, 40, 19, 41, 20, 41, 21), ncol = 2, byrow = TRUE),
-    edge.length = c(200, 400, 950, 1150, 1300, 1350, 50, 150, 50, 150, 2500, 1250, 50, 2450, 1450, 3000, 1600, 2900, 2800, 2800, 2700, 2700, 50, 150, 2400, 2400, 50, 150, 50, 1300, 1200, 1200, 1100, 1100, 1500, 1500, 1400, 1400, 1250, 1250),
-    Nnode = 20L,
-    tip.label = c("Taxon_AD", "Taxon_AO", "Taxon_K", "Taxon_R", "Taxon_X", "Taxon_Y", "Taxon_Z", "Taxon_AA", "Taxon_AM", "Taxon_AN", "Taxon_S", "Taxon_AH", "Taxon_AI", "Taxon_AJ", "Taxon_AK", "Taxon_L", "Taxon_M", "Taxon_N", "Taxon_O", "Taxon_T", "Taxon_U"),
-    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_D", "Taxon_E", "Taxon_AB", "Taxon_AC", "Taxon_F", "Taxon_G", "Taxon_V", "Taxon_W", "Taxon_AE", "Taxon_AL", "Taxon_H", "Taxon_P", "Taxon_AF", "Taxon_AG", "Taxon_I", "Taxon_J", "Taxon_Q")
+    edge = matrix(c(12, 13, 12, 14, 13, 15, 13, 16, 14, 17, 14, 18, 15, 1, 15, 2, 16, 3, 16, 4, 17, 19, 17, 5, 18, 6, 18, 7, 19, 20, 19, 21, 20, 8, 20, 9, 21, 10, 21, 11), ncol = 2, byrow = TRUE),
+    edge.length = c(500, 600, 700, 800, 150, 350, 2800, 2800, 2700, 2700, 50, 150, 50, 150, 600, 700, 2600, 2600, 2500, 2500),
+    Nnode = 10L,
+    tip.label = c("Taxon_N", "Taxon_O", "Taxon_P", "Taxon_Q", "Taxon_F", "Taxon_H", "Taxon_I", "Taxon_R", "Taxon_S", "Taxon_T", "Taxon_U"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_J", "Taxon_K", "Taxon_D", "Taxon_G", "Taxon_E", "Taxon_L", "Taxon_M")
   ),
   class = "phylo"
 )
@@ -83,22 +83,22 @@ rate <- 1 / mean(bl)
 
 characters <- list(
   list(
-    name = "基因组类型",
+    name = "性状 1",
     type = "discrete",
-    states = c("RNA", "DNA"),
-    colors = c("#3b82f6", "#dc2626"),
+    states = c("状态 A", "状态 B", "状态 C"),
+    colors = c("#7c3aed", "#0ea5e9", "#f59e0b"),
     cost = NULL,
-    rate = 0.0000250272979175439,
-    tips = c("Taxon_K" = "RNA", "Taxon_L" = "RNA", "Taxon_M" = "RNA", "Taxon_N" = "RNA", "Taxon_O" = "RNA", "Taxon_R" = "RNA", "Taxon_S" = "RNA", "Taxon_T" = "RNA", "Taxon_U" = "RNA", "Taxon_X" = "RNA", "Taxon_Y" = "RNA", "Taxon_Z" = "RNA", "Taxon_AA" = "RNA", "Taxon_AH" = "DNA", "Taxon_AI" = "DNA", "Taxon_AJ" = "DNA", "Taxon_AK" = "DNA", "Taxon_AM" = "DNA", "Taxon_AN" = "DNA", "Taxon_AO" = "DNA")
+    rate = 0.00006778334067067193,
+    tips = c("Taxon_N" = "状态 A", "Taxon_O" = "状态 A", "Taxon_P" = "状态 B", "Taxon_Q" = "状态 B", "Taxon_R" = "状态 C", "Taxon_S" = "状态 C", "Taxon_T" = "状态 C", "Taxon_U" = "状态 C")
   ),
   list(
-    name = "宿主类型",
+    name = "性状 2",
     type = "discrete",
-    states = c("动物", "细菌", "植物", "原生生物（阿米巴）"),
-    colors = c("#8b5cf6", "#f59e0b", "#22c55e", "#14b8a6"),
+    states = c("状态 A", "状态 B", "状态 C"),
+    colors = c("#dc2626", "#f97316", "#22c55e"),
     cost = NULL,
-    rate = 0.000024057016433407586,
-    tips = c("Taxon_K" = "植物", "Taxon_L" = "动物", "Taxon_M" = "动物", "Taxon_N" = "动物", "Taxon_O" = "动物", "Taxon_R" = "动物", "Taxon_S" = "动物", "Taxon_T" = "动物", "Taxon_U" = "动物", "Taxon_X" = "动物", "Taxon_Y" = "动物", "Taxon_Z" = "动物", "Taxon_AA" = "动物", "Taxon_AH" = "动物", "Taxon_AI" = "动物", "Taxon_AJ" = "细菌", "Taxon_AK" = "细菌", "Taxon_AM" = "动物", "Taxon_AN" = "动物", "Taxon_AO" = "原生生物（阿米巴）")
+    rate = 0.00006856783131526523,
+    tips = c("Taxon_N" = "状态 C", "Taxon_O" = "状态 C", "Taxon_P" = "状态 C", "Taxon_Q" = "状态 C", "Taxon_R" = "状态 A", "Taxon_S" = "状态 A", "Taxon_T" = "状态 B", "Taxon_U" = "状态 B")
   )
 )
 
@@ -267,7 +267,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "病毒演化", cex.main = 1.0)
+title(main = "大树与深时", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

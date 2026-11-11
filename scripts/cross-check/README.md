@@ -37,8 +37,8 @@ the fixtures are produced by the *same* modules the application uses
 re-implementation. If `vite-node` is absent it says so and exits 2 without
 writing anything.
 
-Per project — the seven built-in samples (`archaea`, `bacteria`, `virus`,
-`cetacean`, `plant`, `animal`, `recon-family`) plus the `er-control` control
+Per project — the three built-in samples (`feature-tour`, `large-tree`,
+`recon-family`) plus the `er-control` control
 document described under "The `er-control` control document" — it writes ten files, plus
 `manifest.tsv` and `names.tsv` at the top:
 
@@ -182,56 +182,56 @@ stay random, because no fixture column carries them.
 
 ## Reading the output
 
-The shipped `manifest.tsv` holds 14 project × character rows over the six
+The shipped `manifest.tsv` holds 5 project × character rows over the two
 character-bearing samples plus the `er-control` document; the fixture set also
 contains `recon-family`, which has no character rows. The per-leg totals are:
 
 ```
-step-count(phangorn::parsimony)   compared 10  agreed 10
-exported-R-script-Sankoff         compared 14  agreed 14
-ER-marginals(ape::ace)            compared 0   agreed 0   (4 measurement rows)
+step-count(phangorn::parsimony)   compared 1   agreed 1
+exported-R-script-Sankoff         compared 5   agreed 5
+ER-marginals(ape::ace)            compared 0   agreed 0   (3 measurement rows)
 ```
 
 Exit status **0**: every comparison the harness attempted agreed.
 
-* **Step counts — 10/10 exact agreement** with `phangorn::parsimony()` over the
-  characters that are fully scored and priced with uniform costs. Twelve characters
-  reach this leg; ten qualify, because the two `archaea` characters carry `?`
-  codings — phangorn's `phyDat` drops such sites and would return 0, so they are
-  recorded as `EXCLUDED` rather than reported as a disagreement. The two `cetacean`
-  characters declare an explicit Sankoff step matrix and so are not uniform-cost
-  material at all. The harness checks that an exclusion is real: a state-label
-  lookup that resolves fewer tips than the fixture declares missing is a `join`
-  failure, not missing data.
-* **Marginal states — measured on 4 rows, deliberately not counted anywhere.**
-  `ape::ace()` refuses any tree that is not rooted **and** fully dichotomous, and
-  bacteria, virus, cetacean and animal carry stem lineages by design: those eight
-  rows read NOT-COMPARABLE, as do the two `archaea` rows (missing codings).
-  Contracting a stem node would make `ace()` run, but it changes *which* node is
-  being compared, so the harness does not do it. `plant` (three characters) and
-  `er-control` are dichotomous, so four measurement rows come back. CladeForge's
-  fixed rate is `1/mean = 0.004806` on plant and `2.642` on er-control; ape's
-  ML-fitted rate is `0.1000` for all three plant characters (the optimiser's lower
-  bound — on a tree-consistent character it wants no change at all) and `15.1913`
-  on er-control (saturation). The most likely state then coincides on 6/13, 5/13,
-  10/13 and 6/7 internal nodes. That spread is the point — it is a model
-  difference, not an implementation one, and gating on it would score the wrong
-  thing.
-* **The app's own exported script — 14/14.** Re-running `cladeforge_analysis.R`
-  under `Rscript` prints exactly the Sankoff minima `manifest.tsv` records for all
-  eight fixture directories, including the two asymmetric `cetacean` matrices — there
-  the exported script pays 3 rather than Fitch's 5, so the step matrix really is
-  honoured. The reproducibility claim the export makes is therefore executed, not
-  inferred.
+* **Step counts — 1/1 exact agreement** with `phangorn::parsimony()` over the
+  characters that are fully scored and priced with uniform costs. Three characters
+  are uniform-cost; one qualifies (`er-control`), because the two `large-tree`
+  characters carry `?` codings — phangorn's `phyDat` drops such sites and would
+  return 0, so they are recorded as `EXCLUDED` rather than reported as a
+  disagreement. The two `feature-tour` characters declare an explicit Sankoff step
+  matrix and so are not uniform-cost material at all. The harness checks that an
+  exclusion is real: a state-label lookup that resolves fewer tips than the fixture
+  declares missing is a `join` failure, not missing data.
+* **Marginal states — measured on 3 rows, deliberately not counted anywhere.**
+  `ape::ace()` refuses any tree that is not rooted **and** fully dichotomous and
+  skips characters with missing codings. The two `large-tree` characters carry `?`
+  codings, so those two rows read NOT-COMPARABLE; imputing or contracting would
+  change *which* node is being compared, so the harness does not do it.
+  `feature-tour` (two characters) and `er-control` are dichotomous and fully
+  scored, so three measurement rows come back. CladeForge's fixed rate is
+  `1/mean = 0.0566` on feature-tour and `2.642` on er-control; ape's ML-fitted rate
+  is `1.1000` for both feature-tour characters and `15.1913` on er-control
+  (saturation). The most likely state then coincides on 2/3, 2/3 and 4/7 internal
+  nodes. That spread is the point — it is a model difference, not an implementation
+  one, and gating on it would score the wrong thing.
+* **The app's own exported script — 5/5.** Re-running `cladeforge_analysis.R`
+  under `Rscript` prints exactly the Sankoff minima `manifest.tsv` records for the
+  three character-bearing fixture directories, including the two `feature-tour`
+  matrices (one ordered/additive, one direction-asymmetric) — there the exported
+  script pays the Sankoff minimum 3 where unit-cost Fitch pays 2, so the step
+  matrix really is honoured. The reproducibility claim the export makes is
+  therefore executed, not inferred.
 
 ## The `er-control` control document
 
-`ape::ace` rejects any tree that is not rooted and fully dichotomous, and most
-built-in samples carry stem lineages. `dump-fixtures.ts` therefore also emits
+`ape::ace` rejects any tree that is not rooted and fully dichotomous and skips
+characters with missing codings (the `large-tree` sample carries `?` codings).
+`dump-fixtures.ts` therefore also emits
 **`er-control/`**: a rooted, fully dichotomous, 8-tip document with all tips
 scored for a two-state character and no `?` codings. It is deliberately NOT in
-the app's `SAMPLE_PROJECTS` gallery; it exists only so
-`ace(model = "ER", method = "ML")` has something to run on.
+the app's `SAMPLE_PROJECTS` gallery; it exists so
+`ace(model = "ER", method = "ML")` always has a clean document to run on.
 
 `buildErControlProject()` asserts those properties (tip count, no unscored tips,
 no non-binary nodes, no single-child nodes) and throws if an edit breaks them, so
@@ -245,8 +245,8 @@ These are the reasons the harness is written the way it is:
   know the discrete model name `"ER"`: it returns a list whose only component is
   `call`, with no error and no warning, so every marginal lookup fails silently.
 * **`read.delim(fileEncoding = "UTF-8")` under `LC_CTYPE=C`** mangles and drops
-  the rows carrying Chinese state labels, which turns a ten-character comparison
-  into a silent one-character one. `read_tsv` in `ape_agreement.R` reads the bytes
+  the rows carrying Chinese state labels, which turns a multi-character comparison
+  into a silent single-character one. `read_tsv` in `ape_agreement.R` reads the bytes
   and tags them, so the script is correct in either locale.
 * **`system2()` cannot build a command line containing a path the native encoding
   cannot represent**, so a repository under a non-ASCII directory makes the
@@ -254,7 +254,7 @@ These are the reasons the harness is written the way it is:
   from the session's temporary directory and echoes the child's output whenever the
   counts disagree.
 * **Two reader bugs** (in ape, not in the exported files): quoted labels
-  containing spaces come back mangled, and `"Gracilicutes (GN)"` comes back as
+  containing spaces come back mangled, and `"Sample taxon (GN)"` comes back as
   `GN`, so ape cannot round-trip its own writer's output for such names. Every leg
   of this comparison therefore builds its trees from `nodes.tsv`. The app's own
   exported script does not use `read.tree()` either, for the same reason: it

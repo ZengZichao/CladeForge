@@ -1,0 +1,7 @@
+character	character_name	type	state_index	state_label	color
+sample-char:feature-tour-c1	性状 1	discrete	0	状态 A	#9ca3af
+sample-char:feature-tour-c1	性状 1	discrete	1	状态 B	#3b82f6
+sample-char:feature-tour-c1	性状 1	discrete	2	状态 C	#1e3a5f
+sample-char:feature-tour-c2	性状 2	discrete	0	状态 A	#b45309
+sample-char:feature-tour-c2	性状 2	discrete	1	状态 B	#0ea5e9
+sample-char:feature-tour-c2	性状 2	discrete	2	状态 C	#1e3a8a

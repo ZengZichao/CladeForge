@@ -131,8 +131,11 @@ function write(rel: string, text: string): string {
  * leg comparable at all.
  *
  * `ape::ace(model = "ER")` refuses any tree that is not rooted AND fully
- * dichotomous, and every shipped sample carries stem lineages by design, so none
- * of the six projects lets marginal ASR be compared against a third party.
+ * dichotomous and skips characters carrying missing (`?`) codings, and its ER
+ * leg is only ever measured (never gated) because ape fits its own rate. Of the
+ * three shipped samples, `large-tree` carries `?` codings, so this control
+ * document guarantees a clean, fully scored case where the measurement always
+ * runs, independent of how the samples are edited.
  *
  * This tree is deliberately built to meet those conditions instead: rooted, every
  * internal node has exactly two children, no single-child nodes, and all tips

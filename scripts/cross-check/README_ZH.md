@@ -27,7 +27,7 @@ node scripts/cross-check/dump-fixtures.mjs /tmp/cf-fixtures # or an explicit dir
 
 `dump-fixtures.mjs` 是一个纯 Node 包装器：它用仓库自带的 `vite-node`（显式 devDependency；Vitest 4 不再内置）执行 `dump-fixtures.ts`，因此这些算例数据是由应用*所用的同一批模块*（`sampleTree`、`parsimony`、`asr`、`scriptExport`、`io/newick`）产出的，而不是一份重新实现的替身。若 `vite-node` 不存在，它会直接说明原因并以 2 退出，且不写出任何文件。
 
-对每个项目——七个内置样例（`archaea`、`bacteria`、`virus`、`cetacean`、`plant`、`animal`、`recon-family`），再加下文"`er-control` 对照文档"一节说明的 `er-control`——各写出十个文件，另外在顶层写出 `manifest.tsv` 与 `names.tsv`：
+对每个项目——三个内置样例（`feature-tour`、`large-tree`、`recon-family`），再加下文"`er-control` 对照文档"一节说明的 `er-control`——各写出十个文件，另外在顶层写出 `manifest.tsv` 与 `names.tsv`：
 
 | 文件 | 内容 | R 支线如何使用它 |
 | --- | --- | --- |
@@ -102,23 +102,23 @@ Rscript scripts/cross-check/ape_agreement.R              # third-party leg (need
 
 ## 如何读输出
 
-随版的 `manifest.tsv` 在六个含性状样例加 `er-control` 文档下共有 14 行"项目 × 性状"；fixtures 还包含没有性状行的 `recon-family`。各支线的合计是：
+随版的 `manifest.tsv` 在两个含性状样例加 `er-control` 文档下共有 5 行"项目 × 性状"；fixtures 还包含没有性状行的 `recon-family`。各支线的合计是：
 
 ```
-step-count(phangorn::parsimony)   compared 10  agreed 10
-exported-R-script-Sankoff         compared 14  agreed 14
-ER-marginals(ape::ace)            compared 0   agreed 0   （4 行度量）
+step-count(phangorn::parsimony)   compared 1   agreed 1
+exported-R-script-Sankoff         compared 5   agreed 5
+ER-marginals(ape::ace)            compared 0   agreed 0   （3 行度量）
 ```
 
 退出码 **0**：工具链尝试过的每一项比较都一致。
 
-* **简约步数 — 与 `phangorn::parsimony()` 10/10 精确一致**，范围为那些完全已赋值、且以均匀代价计价的性状。这条支线会考察 12 个性状，其中 10 个符合条件：`archaea` 的两个性状含 `?` 编码，而 phangorn 的 `phyDat` 会丢弃这类位点并返回 0，所以它们被记为 `EXCLUDED`，而不是被报成不一致；鲸类的两个性状声明了显式的桑科夫步矩阵，本就不属于均匀代价这一类。工具链会核对这种排除是真的：状态标签查表命中的末端数少于算例自身声明的缺失数时，那是一次 `join` 故障，不是缺失数据。
-* **边际状态 — 度量了 4 行，有意不计入任何一致率。** `ape::ace()` 拒绝任何不是**既**有根**又**完全二分的树，而 bacteria、virus、cetacean、animal 按设计带有干枝（stem lineage），这八行因此记为 NOT-COMPARABLE；`archaea` 的两行同理（含缺失编码）。收缩干节点确实能让 `ace()` 跑起来，但那会改变被比较的*是哪一个*节点，所以工具链不这样做。`plant`（三个性状）与 `er-control` 是完全二分的，于是拿到四行度量：CladeForge 固定的速率在 plant 上是 `1/mean = 0.004806`、在 er-control 上是 `2.642`，而 ape 拟合出的速率在 plant 的三个性状上都是 `0.1000`（那是优化器的下界——对与树一致的性状它希望完全不要变化）、在 er-control 上是 `15.1913`（饱和）。随后最大似然状态只在 6/13、5/13、10/13、6/7 个内部节点上重合。这个差距正是重点：它是模型之差，不是实现之差，拿它作判据就是在给错误的对象打分。
-* **应用自己导出的脚本 — 14/14。** 在 `Rscript` 下重跑 `cladeforge_analysis.R`，打印出的 Sankoff 最小代价与 `manifest.tsv` 为八个 fixture 目录记录的逐个相同，包括鲸类那两个非对称矩阵——那里导出脚本付的是 3 而不是 Fitch 的 5，说明步矩阵确实被使用。也就是说，这项导出所承诺的可复现性是被执行过的，而不是推断出来的。
+* **简约步数 — 与 `phangorn::parsimony()` 1/1 精确一致**，范围为那些完全已赋值、且以均匀代价计价的性状。共有三个均匀代价性状，其中一个符合条件（`er-control`）：`large-tree` 的两个性状含 `?` 编码，而 phangorn 的 `phyDat` 会丢弃这类位点并返回 0，所以它们被记为 `EXCLUDED`，而不是被报成不一致；`feature-tour` 的两个性状声明了显式的桑科夫步矩阵，本就不属于均匀代价这一类。工具链会核对这种排除是真的：状态标签查表命中的末端数少于算例自身声明的缺失数时，那是一次 `join` 故障，不是缺失数据。
+* **边际状态 — 度量了 3 行，有意不计入任何一致率。** `ape::ace()` 拒绝任何不是**既**有根**又**完全二分的树，并跳过含缺失编码的性状。`large-tree` 的两个性状含 `?` 编码，这两行因此记为 NOT-COMPARABLE；插补或收缩会改变被比较的*是哪一个*节点，所以工具链不这样做。`feature-tour`（两个性状）与 `er-control` 完全二分且全部赋值，于是拿到三行度量：CladeForge 固定的速率在 feature-tour 上是 `1/mean = 0.0566`、在 er-control 上是 `2.642`，而 ape 拟合出的速率在 feature-tour 的两个性状上都是 `1.1000`、在 er-control 上是 `15.1913`（饱和）。随后最大似然状态只在 2/3、2/3、4/7 个内部节点上重合。这个差距正是重点：它是模型之差，不是实现之差，拿它作判据就是在给错误的对象打分。
+* **应用自己导出的脚本 — 5/5。** 在 `Rscript` 下重跑 `cladeforge_analysis.R`，打印出的 Sankoff 最小代价与 `manifest.tsv` 为三个含性状 fixture 目录记录的逐个相同，包括 `feature-tour` 那两个矩阵（一个有序可加、一个方向不对称）——那里导出脚本付的是桑科夫最小代价 3，而单位代价 Fitch 付 2，说明步矩阵确实被使用。也就是说，这项导出所承诺的可复现性是被执行过的，而不是推断出来的。
 
 ## `er-control` 对照文档
 
-`ape::ace` 拒绝任何非完全二分的有根树，而多数内置样例都带干枝。因此 `dump-fixtures.ts` 额外产出 **`er-control/`**：一棵有根、完全二分、8 末端，且所有末端对一个二态性状全部赋值、不含 `?` 的文档。它有意不进应用的 `SAMPLE_PROJECTS` 画廊，存在的唯一理由是让 `ace(model = "ER", method = "ML")` 有东西可跑。
+`ape::ace` 拒绝任何非完全二分的有根树，并跳过含缺失编码的性状（`large-tree` 样例含 `?` 编码）。因此 `dump-fixtures.ts` 额外产出 **`er-control/`**：一棵有根、完全二分、8 末端，且所有末端对一个二态性状全部赋值、不含 `?` 的文档。它有意不进应用的 `SAMPLE_PROJECTS` 画廊，存在的理由是让 `ace(model = "ER", method = "ML")` 始终有一份干净的文档可跑。
 
 `buildErControlProject()` 会断言这些性质（末端数、无未赋值末端、无非二分节点、无单孩子节点），一旦改动破坏它们就抛错，因此这条支线不可能悄悄退回 0 次比较。
 
@@ -127,7 +127,7 @@ ER-marginals(ape::ace)            compared 0   agreed 0   （4 行度量）
 工具链之所以写成现在这样，理由是这几条：
 
 * **`ace()` 的默认 `type` 是 `"continuous"`**，而 `ace.continuous` 不认识离散模型名 `"ER"`：它返回一个只有 `call` 分量的列表，不报错也不告警，于是每一次边际查表都悄悄失败。
-* **在 `LC_CTYPE=C` 下 `read.delim(fileEncoding = "UTF-8")`** 会把带中文状态标签的行改坏并丢弃，于是一次覆盖十个性状的比较会悄悄退化成只剩一个。`ape_agreement.R` 里的 `read_tsv` 按字节读入再打标签，两种 locale 下都正确。
+* **在 `LC_CTYPE=C` 下 `read.delim(fileEncoding = "UTF-8")`** 会把带中文状态标签的行改坏并丢弃，于是一次覆盖多个性状的比较会悄悄退化成只剩一个。`ape_agreement.R` 里的 `read_tsv` 按字节读入再打标签，两种 locale 下都正确。
 * **`system2()` 无法构造含"当前原生编码无法表示的路径"的命令行**，所以仓库放在非 ASCII 目录下时，导出脚本支线会报"0 行代价"。这条支线现在从会话临时目录里的副本运行，且计数不符时把子进程的输出一并写进报告。
-* **两个读取缺陷**（在 ape 一侧，不在导出文件一侧）：带空格的引号标签会被读得面目全非，`"Gracilicutes (GN)"` 会被读成 `GN`，也就是说 ape 无法往返自己写出器的这类名字。因此本对照的每一条支线都从 `nodes.tsv` 构树。应用自己导出的脚本同样不走 `read.tree()`，理由一致：它是用标签向量重建树的——因为被读坏的末端标签会在那段脚本自己的分析里悄悄变成缺失数据。
+* **两个读取缺陷**（在 ape 一侧，不在导出文件一侧）：带空格的引号标签会被读得面目全非，`"Sample taxon (GN)"` 会被读成 `GN`，也就是说 ape 无法往返自己写出器的这类名字。因此本对照的每一条支线都从 `nodes.tsv` 构树。应用自己导出的脚本同样不走 `read.tree()`，理由一致：它是用标签向量重建树的——因为被读坏的末端标签会在那段脚本自己的分析里悄悄变成缺失数据。
 * **被截断的管道不等于图画坏了。** 把 `cladeforge_analysis.R` 的运行输出接进 `head` 这类管道会让 R 收到 `SIGPIPE` 而死，写了一半的 `cairo_pdf` 看上去就是一片空白（约 1 kB、不含字体资源）；同样的命令不加管道会写出约 42 kB。把空白图当成缺陷之前，先确认是不是管道截断。
