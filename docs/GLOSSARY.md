@@ -34,6 +34,12 @@ vs "二叉分支" for the SAME operation; this table is the fix and the rule.
 | branch length | **枝长** | branch length | 分支长度 |
 | event | **演化事件** | evolutionary event | — |
 | assumption (gene node) | **（基因节点的）映射假设** | mapping assumption | — |
+| embedded reconciliation layout | **嵌入式协调布局（嵌套视图）** | embedded reconciliation layout | 嵌入式协调（缩略） |
+| species branch tube | **物种枝管道** | species branch tube | 管道（单独使用） |
+| branch position | **枝内位置**（宿主枝内 0–1 的相对落点） | branch position | 枝上位置 |
+| transfer donor | **转移供体** | transfer donor | 供体枝（指节点时） |
+| display inference | **显示推断**（不写入假设的布局占位） | display inference | 自动推断 |
+| loss stub | **丢失残枝** | loss stub | 损失残枝 |
 | change branch | **变化枝** | change branch | — |
 
 ## 规则

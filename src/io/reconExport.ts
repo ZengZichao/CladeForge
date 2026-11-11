@@ -113,20 +113,31 @@ export function geneTreeNhk(project: Project, gene: Project, assumptions: Record
     const a = assumptions[id];
     const tagParts: string[] = [];
     if (mapTo) tagParts.push(`S=${nhxValue(speciesLabel(project, mapTo))}`);
+    // CladeForge embedded-view extensions: the within-branch position (BF=)
+    // and the explicit transfer donor (TD=, node label) travel with the tree
+    // so a hand-built hypothesis survives the round trip (plan §4.2).
+    if (a?.branchFraction !== undefined && Number.isFinite(a.branchFraction)) {
+      tagParts.push(`BF=${a.branchFraction}`);
+    }
     if (n.childrenIds.length > 0) {
       if (a?.event === 'speciation') tagParts.push('E=speciation');
       if (a?.event === 'duplication') tagParts.push('D=true');
       if (a?.event === 'transfer') {
         tagParts.push('T=true');
-        // Donor = the child placed outside the recipient's species subtree,
-        // the same feasibility criterion validateScenario applies.
+        // Donor: an explicit `transferDonor` wins; otherwise the child placed
+        // outside the recipient's species subtree (the same criterion
+        // validateScenario applies).
         if (mapTo) {
           const inside = speciesSubtree(project, mapTo);
-          const donor = n.childrenIds
-            .map((c) => gene.nodes[c])
-            .filter(Boolean)
-            .map((c) => effectiveMapping(project, gene, c, assumptions, tipMap))
-            .find((m): m is NodeId => !!m && !inside.has(m));
+          const explicit = a?.transferDonor;
+          const donor =
+            explicit && project.nodes[explicit] && !inside.has(explicit)
+              ? explicit
+              : n.childrenIds
+                  .map((c) => gene.nodes[c])
+                  .filter(Boolean)
+                  .map((c) => effectiveMapping(project, gene, c, assumptions, tipMap))
+                  .find((m): m is NodeId => !!m && !inside.has(m));
           if (donor) tagParts.push(`TD=${nhxValue(speciesLabel(project, donor))}`);
         }
       }
@@ -166,7 +177,7 @@ export function buildReconciliationReport(project: Project): string {
     let mappedInternal = 0;
     let totalInternal = 0;
 
-    type Row = [string, string, string, string];
+    type Row = [string, string, string, string, string, string];
     const rows: Row[] = [];
     for (const n of Object.values(g.doc.nodes)) {
       const internal = n.childrenIds.length > 0;
@@ -179,6 +190,26 @@ export function buildReconciliationReport(project: Project): string {
       else if (a?.event === 'duplication') counts.delta += 1;
       else if (a?.event === 'transfer') counts.tau += 1;
       counts.loss += Math.max(0, a?.losses ?? 0);
+      // Embedded-view columns: the within-branch position and the transfer
+      // donor (explicit value first, then the outside-subtree derivation —
+      // the same rule the NHX TD= tag uses).
+      let donorLabel = '';
+      if (a?.event === 'transfer' && mapTo) {
+        const inside = speciesSubtree(project, mapTo);
+        const explicit = a.transferDonor;
+        const donor =
+          explicit && project.nodes[explicit] && !inside.has(explicit)
+            ? explicit
+            : n.childrenIds
+                .map((c) => g.doc.nodes[c])
+                .filter(Boolean)
+                .map((c) => effectiveMapping(project, g.doc, c, g.assumptions, tipMap))
+                .find((m): m is NodeId => !!m && !inside.has(m));
+        if (donor) {
+          donorLabel = speciesLabel(project, donor);
+          if (explicit && donor === explicit) donorLabel += tr('（显式）', ' (explicit)');
+        }
+      }
       rows.push([
         esc(n.label || n.id.slice(0, 6)),
         internal ? tr('内部', 'internal') : tr('末端', 'tip'),
@@ -189,6 +220,8 @@ export function buildReconciliationReport(project: Project): string {
           a?.event === 'transfer' ? 'τ' : '',
           (a?.losses ?? 0) > 0 ? `λ${a!.losses}` : '',
         ].join(' ') || '—',
+        a?.branchFraction !== undefined ? `${Math.round(a.branchFraction * 100)}%` : '—',
+        donorLabel ? esc(donorLabel) : '—',
       ]);
     }
 
@@ -228,10 +261,10 @@ export function buildReconciliationReport(project: Project): string {
     L.push(`### ${tr('映射与事件', 'Placements & events')}`);
     L.push('');
     L.push(
-      `| ${tr('基因节点', 'gene node')} | ${tr('类型', 'type')} | ${tr('物种靶点', 'species target')} | ${tr('事件/丢失', 'events/losses')} |`,
+      `| ${tr('基因节点', 'gene node')} | ${tr('类型', 'type')} | ${tr('物种靶点', 'species target')} | ${tr('事件/丢失', 'events/losses')} | ${tr('枝内位置', 'branch position')} | ${tr('转移供体', 'transfer donor')} |`,
     );
-    L.push('| --- | --- | --- | --- |');
-    for (const r of rows) L.push(`| ${r[0]} | ${r[1]} | ${r[2]} | ${r[3]} |`);
+    L.push('| --- | --- | --- | --- | --- | --- |');
+    for (const r of rows) L.push(`| ${r[0]} | ${r[1]} | ${r[2]} | ${r[3]} | ${r[4]} | ${r[5]} |`);
     L.push('');
 
     // Annotated topology

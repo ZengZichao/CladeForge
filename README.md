@@ -27,7 +27,7 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 - **Evolutionary events** — 27 built-in event types across nine groups (26 predefined + 1 custom): Speciation (4), Extinction (2), Evolutionary innovations (3), Gene flow (2), Biogeography (3), Microbial (9), Gene family evolution (2), Deep time (1), General (1). Each type has a unique two-letter code; the palette may reuse colours. Events link into causal chains.
 - **Hypothesis layers** — Manage multiple competing hypotheses on a shared topology; tip states shared, internal-node hypotheses diverge.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
-- **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and side-by-side reconciliation view.
+- **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and two canvas layouts: the side-by-side view and the embedded view (thick species tubes with the gene lineages nested inside, Alt+click path building, and embedded-figure SVG export).
 - **Time calibration** — Fossil calibration points, geological era bands, and environmental event overlays.
 - **Import/Export** — Newick and NEXUS import (NEXUS reads `TREES` **and** `DATA`/`CHARACTERS`/`ASSUMPTIONS` blocks; Newick keeps bracket comments verbatim and interprets `&support`, `&R/&U`, BEAST `height`/`height_95%_HPD`/`posterior` and NHX tags — other comment text is preserved as text, not interpreted); CSV/TSV character-matrix and annotation tables in, matrix/annotation/template CSVs out; NeXML export; project files in `.cladeforge.json` (schema documented in `docs/FORMAT.md`); image export to SVG/PNG/PDF with an export-settings dialog (DPI control, opt-in support values, scale bar, legend toggle) and auto-generated legends; hypothesis JSON + Markdown narrative + a self-contained R analysis script.
 
@@ -127,7 +127,7 @@ CladeForge projects are stored as JSON (`.cladeforge.json`), schema version `0.2
 
 - [x] Gene-tree/species-tree reconciliation (DTL-style)
 - [ ] Reconciliation polish: drag-to-map in the side-by-side view, multi-gene aggregate overlays
-- [ ] Embedded reconciliation layout (project gene trees onto the species tree canvas)
+- [x] Embedded reconciliation layout (project gene trees onto the species tree canvas): thick species tubes with nested gene lineages, Alt+click path building and SVG export
 - [ ] Forward simulation engine for hypothesis testing
 - [ ] Plugin architecture for third-party inference tools
 - [ ] Collaborative workspaces

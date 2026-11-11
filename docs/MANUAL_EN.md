@@ -410,6 +410,16 @@ For each discrete character, CladeForge computes:
 
 Requires ≥3 scored tips and ≥2 states.
 
+### Embedded View (Nested Reconciliation Layout)
+
+The **Side-by-side / Embedded** segmented control in the toolbar switches the canvas layout. The **embedded view** draws both trees in one coordinate system: the species tree is the only skeleton — every species branch is a THICK tube (default 18 world px, adjustable 10–32 in the View section) with equally thick vertical hubs at the internal nodes — and the gene tree's THIN event-coloured lineages are nested INSIDE those tubes, clipped by an SVG mask to "tubes ∪ hubs" so they never leak when zooming.
+
+- **Reading the figure**: σ speciation = children enter different sub-tubes; δ duplication = parallel lanes within one tube; τ transfer = a cross-tube arc from the donor tube to the recipient tube (dashed = time-infeasible; without ages the legend says "topological transfer"); λ loss = a stub at the fork where lineages die (hollow/dashed = inferred structural loss; `λ!` = the asserted count is below the structural minimum). Tube width adapts to how many gene lanes coexist on that branch (capped; an overflow badge appears) — it reflects gene copy number, not support or time.
+- **Honest display**: internal gene nodes without an assumption are DISPLAY-INFERRED to their children's MRCA (dashed) and never written into the project file; truly unmapped nodes land in a labelled orphan gutter connected by a dashed line to their nearest placed ancestor. Trees without ages/lengths are labelled "topological sketch" in the header.
+- **Building an evolutionary path**: select a gene node, then **Alt+click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
+- **Export the figure**: in the embedded mode the toolbar gains "Export figure", writing the nested reconciliation drawing as a standalone vector SVG (with legend and version metadata) for hypothesis documents.
+- Switching layout modes never touches selections, mappings or undo history; "Reset view settings" no longer kicks you out of the embedded mode. The status bar shows a single zoom readout there, and the sync-zoom toggle hides.
+
 ### Consistency Checks
 
 The consistency checker flags potential issues:
@@ -489,7 +499,7 @@ The module holds **several gene trees at once**. Each entry shows its name, how 
 
 After creating or importing, you can manually refine the reconciliation:
 - Select a gene node in the reconciliation view.
-- In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch.
+- In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch; in the embedded view you can also set the **branch position** (where the lineage sits along its host branch) and the **transfer donor** (τ only; auto-derived from "the child outside the recipient subtree" by default).
 - Use **Suggest via LCA** to automatically map unresolved internal gene nodes to their lowest common ancestor in the species tree.
 - The consistency checker reports mapping conflicts and event inconsistencies.
 
@@ -518,8 +528,8 @@ The module keeps running tallies for the active gene tree as you edit: speciatio
 
 Click **Reconciliation view** in the header  to enter the reconciliation **workspace** — a second, complete workspace with its own rail, left panel, inspector, toolbar and status bar rather than a swapped-in canvas:
 
-- **Left:** the reconciliation rail (Trees / Scenario / Validation / View). The *Scenario* section carries a searchable, filterable **assumption list** (all / unresolved / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom.
-- **Centre:** a toolbar row (active gene tree, Fit both, sync zoom, mapping scope), two titled panes (species tree · analysis cladogram; gene tree · read-only, each with node count, zoom readout and per-pane Fit / 1:1), the **mapping bridge** (the trees face each other — species rightwards, gene leftwards — with event-coloured straight mapping lines precisely aligned to the branches on both sides instead of painting over nodes and labels), and a legend row.
+- **Left:** the reconciliation rail (Trees / Scenario / Validation / View). The *Scenario* section carries a searchable, filterable **assumption list** (all / unresolved / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom; in the **embedded layout** these become the embedded-specific options (species branch thickness, gene lane spacing, transfer-arc and loss-stub toggles), and the sync-zoom toggle hides.
+- **Centre:** a toolbar row (active gene tree, the **Side-by-side / Embedded** layout switch, Fit ("Fit view" in the embedded mode), sync zoom (hidden when embedded), mapping scope, plus "Export figure" when embedded), and in the side-by-side mode two titled panes (species tree · analysis cladogram; gene tree · read-only, each with node count, zoom readout and per-pane Fit / 1:1), the **mapping bridge** (the trees face each other — species rightwards, gene leftwards — with event-coloured straight mapping lines precisely aligned to the branches on both sides instead of painting over nodes and labels), and a legend row.
 - **Right:** the inspector shows one of four states — nothing selected → scenario overview (completeness, event tallies, data quality, legend, quick actions); one gene node → the DTL assumption editor (with previous/next unresolved navigation and "centre the target node in the species pane"); one species node → the species-node details plus the gene lineages mapped here; several gene nodes → a batch summary with batch clearing.
 - **Bottom status bar:** tip mappings n/N, internal resolved n/N, unresolved, errors/notes, σ/δ/τ/λ and both zoom readouts; the segments jump to the matching panel.
 

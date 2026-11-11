@@ -6,15 +6,21 @@
 
 import { useMemo } from 'react';
 import { useStore } from '../model/store';
+import type { ReconLayoutMode } from '../model/types';
 import { geneTreeRows } from './reconStats';
 import { S } from './strings';
 
 export function ReconStatusBar({
   speciesZoom,
   geneZoom,
+  mode = 'side-by-side',
+  embeddedZoom,
 }: {
   speciesZoom: number;
   geneZoom: number;
+  /** Which canvas layout the readouts describe (single zoom when embedded). */
+  mode?: ReconLayoutMode;
+  embeddedZoom?: number;
 }) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
@@ -28,6 +34,7 @@ export function ReconStatusBar({
 
   if (!row) return null;
   const unresolved = row.summary.totalInternal - row.summary.mappedInternal;
+  const embedded = mode === 'embedded';
 
   return (
     <div className="status recon-status" role="status">
@@ -64,8 +71,10 @@ export function ReconStatusBar({
       <span className="recon-chip chip-loss">λ {row.summary.losses}</span>
       <span className="spacer" />
       <span>
-        {S.recon.sbZoom(Math.round(speciesZoom * 100), Math.round(geneZoom * 100))}
-        {options.syncZoom ? ' · ⇔' : ''}
+        {embedded
+          ? S.recon.sbZoomEmbedded(Math.round((embeddedZoom ?? 1) * 100))
+          : S.recon.sbZoom(Math.round(speciesZoom * 100), Math.round(geneZoom * 100))}
+        {!embedded && options.syncZoom ? ' · ⇔' : ''}
       </span>
     </div>
   );

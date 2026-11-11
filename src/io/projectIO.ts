@@ -276,11 +276,34 @@ function finalizeProject(
     calibrationPoints: Array.isArray(raw.calibrationPoints) ? raw.calibrationPoints : [],
     // DTL reconciliation: backfill the keys a partial file omits. A nested gene
     // doc never carries its own geneTrees — strip the key defensively so the
-    // embedded-project shape stays one level deep.
+    // embedded-project shape stays one level deep. Optional visual path fields
+    // (branchFraction / transferDonor, embedded view §4.2) are repaired here:
+    // an out-of-range fraction clamps into [0, 1]; a donor naming a species
+    // node that no longer exists is dropped (auto-derivation takes over).
     geneTrees: Array.isArray(raw.geneTrees)
       ? raw.geneTrees.map((g) => {
           const { geneTrees: _nested, ...doc } = (g?.doc ?? {}) as Partial<Project>;
-          return { ...g, doc } as GeneTreeEntry;
+          const entry = { ...g, doc } as GeneTreeEntry;
+          if (entry.assumptions && typeof entry.assumptions === 'object') {
+            for (const a of Object.values(entry.assumptions)) {
+              if (!a || typeof a !== 'object') continue;
+              const rec = a as unknown as Record<string, unknown>;
+              if (rec.branchFraction !== undefined) {
+                const n = typeof rec.branchFraction === 'number' ? rec.branchFraction : Number(rec.branchFraction);
+                if (Number.isFinite(n)) rec.branchFraction = Math.max(0, Math.min(1, n));
+                else delete rec.branchFraction;
+              }
+              if (rec.transferDonor !== undefined) {
+                // A donor names a node of the OUTER species tree, not of the
+                // embedded gene doc.
+                const speciesNodes = raw.nodes as Record<string, unknown> | undefined;
+                if (!speciesNodes || !speciesNodes[String(rec.transferDonor)]) {
+                  delete rec.transferDonor;
+                }
+              }
+            }
+          }
+          return entry;
         })
       : [],
     reconCosts: backfillCosts(raw.reconCosts, notes),

@@ -896,6 +896,7 @@ export function dtlScenarioToAssumptions(
   species: Project,
   gene: Project,
   scenario: DtlScenario,
+  previousAssumptions?: Record<NodeId, GeneNodeAssumption>,
 ): Record<NodeId, GeneNodeAssumption> {
   const out: Record<NodeId, GeneNodeAssumption> = {};
   /** Explicit DP losses per gene node: how many, and where the lineage ended. */
@@ -915,6 +916,14 @@ export function dtlScenarioToAssumptions(
       // writing `event: undefined` explicitly would make the row indistinguishable
       // from "never set" after a JSON round-trip.
       if (ev && n.childrenIds.length > 0) a.event = ev;
+      // Visual path fields survive an applied scenario ONLY while the mapping
+      // target is unchanged: a `branchFraction` measured on the old branch
+      // would point into the wrong wood on a new one (plan §4.2).
+      const prev = previousAssumptions?.[n.id];
+      if (prev && prev.speciesNode === place) {
+        if (prev.branchFraction !== undefined) a.branchFraction = prev.branchFraction;
+        if (prev.transferDonor !== undefined) a.transferDonor = prev.transferDonor;
+      }
       out[n.id] = a;
       continue;
     }

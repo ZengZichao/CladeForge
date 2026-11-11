@@ -23,6 +23,7 @@ import { exportSVGString, toPdfBlob, toPngBlob, type ExportOptions } from './exp
 import { buildHypothesisJSON, buildNarrative } from './hypothesisExport';
 import { buildRScript } from './scriptExport';
 import { buildReconciliationReport } from './reconExport';
+import { buildEmbeddedReconSVG } from './embeddedReconExport';
 import { openText, saveBinary, saveText, saveTextWithResult, isTauri, decodeBytesWithFallback, type DialogFilter, type OpenedText } from './fileService';
 import { readBinaryFileNative, readTextFileNative, statFileMtimeNative } from './native';
 import { requestConfirm } from '../ui/confirmDialog';
@@ -774,6 +775,26 @@ export async function actionExportSVG(): Promise<void> {
         ),
       );
     }
+  } catch (e) {
+    reportError(S.notify.exportSvgFail, e);
+  }
+}
+
+/**
+ * Export the EMBEDDED reconciliation figure (species tubes + nested gene
+ * lineages) of the active gene tree as a standalone SVG (plan §8.4). Only
+ * reachable from the embedded layout mode's toolbar.
+ */
+export async function actionExportEmbeddedSvg(): Promise<void> {
+  const st = useStore.getState();
+  const project = st.project;
+  const entry = project.geneTrees?.find((g) => g.id === st.activeGeneTreeId);
+  if (!entry) return;
+  try {
+    const { svg } = buildEmbeddedReconSVG(project, entry, st.reconViewOptions, {});
+    const name = outName(`${project.name || 'cladeforge'}-embedded-${entry.name}`, 'svg');
+    const saved = await saveText(name, svg, [{ name: 'SVG', extensions: ['svg'] }]);
+    if (saved) notifyExported(name, svg);
   } catch (e) {
     reportError(S.notify.exportSvgFail, e);
   }

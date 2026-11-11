@@ -81,7 +81,13 @@ export function GeneAssumptionInspector({
   type EventClass = 'speciation' | 'duplication' | 'transfer';
 
   const update = (
-    recipe: { speciesNode?: NodeId; event?: EventClass | undefined; losses?: number },
+    recipe: {
+      speciesNode?: NodeId;
+      event?: EventClass | undefined;
+      losses?: number;
+      branchFraction?: number | undefined;
+      transferDonor?: NodeId | undefined;
+    },
     remove = false,
   ) => {
     apply((d) => {
@@ -91,6 +97,7 @@ export function GeneAssumptionInspector({
       }
       // Species change without a valid target leaves the row untouched.
       if (recipe.speciesNode !== undefined && !d.nodes[recipe.speciesNode]) return;
+      if (recipe.transferDonor !== undefined && recipe.transferDonor !== null && !d.nodes[recipe.transferDonor]) return;
       setAssumption(d, geneTreeId, geneNodeId, recipe, recipe.speciesNode);
     });
   };
@@ -174,6 +181,66 @@ export function GeneAssumptionInspector({
                 onCommit={(v) => update({ losses: v })}
               />
             </Field>
+            {/* Embedded-view path fields (plan §7.5): where along the host
+                branch the lineage sits, and — for transfers — who donated. */}
+            {assumption?.speciesNode && (
+              <Field label={S.reconInspector.branchFraction}>
+                <div className="field row-actions" style={{ gap: 6 }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    disabled={!assumption}
+                    value={
+                      assumption?.branchFraction !== undefined
+                        ? Math.round(assumption.branchFraction * 100)
+                        : 100
+                    }
+                    onChange={(e) => {
+                      const v = Number(e.target.value) / 100;
+                      update({ branchFraction: v });
+                    }}
+                    aria-label={S.reconInspector.branchFraction}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <button
+                    className="btn icon tiny"
+                    title={S.reconInspector.branchFractionAuto}
+                    aria-label={S.reconInspector.branchFractionAuto}
+                    disabled={assumption?.branchFraction === undefined}
+                    onClick={() => update({ branchFraction: undefined })}
+                  >
+                    {assumption?.branchFraction !== undefined
+                      ? `${Math.round(assumption.branchFraction * 100)}%`
+                      : tr('自动', 'Auto')}
+                  </button>
+                </div>
+              </Field>
+            )}
+            {assumption?.event === 'transfer' && (
+              <>
+                <Field label={S.reconInspector.transferDonor}>
+                  <select
+                    value={assumption?.transferDonor ?? ''}
+                    onChange={(e) =>
+                      e.target.value
+                        ? update({ transferDonor: e.target.value })
+                        : update({ transferDonor: undefined })
+                    }
+                  >
+                    <option value="">{S.reconInspector.transferDonorAuto}</option>
+                    {speciesOptions.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {'\u00A0'.repeat(o.depth * 2)}
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="hint">{S.reconInspector.transferDonorHint}</div>
+              </>
+            )}
           </>
         )}
       </Section>

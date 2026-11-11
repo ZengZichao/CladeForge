@@ -72,6 +72,12 @@
   --recon-map-unresolved: #71717a;
   --recon-pane-bg: var(--surface);
   --recon-pane-header-bg: var(--surface-2);
+  /* Embedded (nested) layout: the species-branch "wood" the gene lineages
+     nest into. The tube must read clearly thicker than the 1.25 px gene
+     lines in BOTH themes. */
+  --recon-tube: #e4e4e7;
+  --recon-tube-border: #a1a1aa;
+  --recon-gene-unmapped: #71717a;
 
   /* --- Design System: Shadow Tokens ---
      Layered neutral shadows on floating elements for
@@ -2462,6 +2468,9 @@ body.panel-resizing {
   --recon-map-unresolved: #a1a1aa;
   --recon-pane-bg: var(--surface);
   --recon-pane-header-bg: var(--surface-2);
+  --recon-tube: #3f3f46;
+  --recon-tube-border: #71717a;
+  --recon-gene-unmapped: #a1a1aa;
     --overlay-bg: rgba(28, 28, 31, 0.88);
   --overlay-bg-strong: rgba(28, 28, 31, 0.95);
   --minimap-view-fill: rgba(228, 228, 231, 0.14);
@@ -2531,6 +2540,9 @@ body.panel-resizing {
     --recon-map-unresolved: #a1a1aa;
     --recon-pane-bg: var(--surface);
     --recon-pane-header-bg: var(--surface-2);
+    --recon-tube: #3f3f46;
+    --recon-tube-border: #71717a;
+    --recon-gene-unmapped: #a1a1aa;
         --overlay-bg: rgba(28, 28, 31, 0.88);
     --overlay-bg-strong: rgba(28, 28, 31, 0.95);
     --minimap-view-fill: rgba(228, 228, 231, 0.14);
@@ -3948,6 +3960,49 @@ input.has-error {
 .sw-tip { background: var(--recon-tip); }
 .sw-internal { background: var(--recon-branch); }
 .sw-loss { background: var(--recon-loss); }
+/* Embedded legend: thick tube vs thin gene line vs display-inferred dash. */
+.sw-tube {
+  background: var(--recon-tube);
+  border: 1px solid var(--recon-tube-border);
+  height: 8px;
+}
+.sw-gene {
+  background: var(--recon-tip);
+  height: 1.5px;
+  margin-top: 3px;
+  margin-bottom: 3.5px;
+}
+.sw-inferred {
+  background: repeating-linear-gradient(90deg, var(--recon-map-unresolved) 0 3px, transparent 3px 5px);
+}
+
+/* Embedded (nested) reconciliation canvas: single viewport, occupies the
+   panes row. The header is layout, never an overlay; the svg fills the rest. */
+.recon-embedded {
+  grid-area: panes;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--recon-pane-bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.recon-embedded-header {
+  border-bottom: 1px solid var(--border);
+}
+.recon-embedded-svg {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.recon-embedded-svg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
 
 /* Recon status bar */
 .recon-status {

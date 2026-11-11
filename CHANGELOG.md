@@ -5,6 +5,42 @@
 All notable changes to CladeForge are documented here. Format: Keep a
 Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
+## [Unreleased]
+
+### Added — embedded (nested) reconciliation layout
+- **A second reconciliation canvas mode (并排对照 / 嵌套视图)**: the new 嵌套视图 draws the
+  species tree as THICK branch tubes (default 18 world px, adaptive up to 32 with an overflow
+  badge) plus vertical hub bars, and nests the gene tree's THIN (≈1.25 px) event-coloured
+  lineages INSIDE those tubes through an SVG mask — speciation σ sends children into different
+  sub-tubes, duplication δ runs parallel lanes within one tube, horizontal transfer τ draws a
+  donor→recipient cross-tube arc (dashed when time-infeasible, annotated when time-unchecked),
+  and gene loss λ leaves a stub at each path fork. The mode is switchable from the reconciliation
+  toolbar; the side-by-side view is unchanged and remains the default.
+- **Honest display rules**: internal gene nodes without an assumption are DISPLAY-INFERRED to
+  their children's MRCA (dashed, never written into `assumptions`, no change to validation or
+  counts — the `recon-family` sample's β4 stays connected); truly unmapped nodes land in a
+  labelled orphan gutter instead of vanishing; structural losses distinguish inferred /
+  asserted-covered / asserted-below-minimum states (λ, λ, λ!).
+- **Path building in the nested view**: Alt+click a species tube maps the selected gene node onto
+  that branch AND records the clicked within-branch position (`branchFraction`, persisted);
+  the DTL assumption inspector gains a branch-position slider (with an Auto reset) and a
+  transfer-donor select (`transferDonor`, persisted). Applying a DTL scenario keeps these visual
+  fields only where the mapping target is unchanged; project files clamp `branchFraction` into
+  [0, 1] and drop dangling `transferDonor`s on load.
+- **Embedded figure export**: `导出嵌套图` (embedded mode toolbar) writes a standalone SVG of the
+  nested figure — same geometry as the canvas, with legend and version metadata — for hypothesis
+  documents. The reconciliation Markdown report and NHX output now carry a 枝内位置 column and
+  `BF=` / `TD=` tags so hand-built paths survive the round trip.
+- View options for the nested mode (tube width, lane gap, transfer arcs, loss stubs) live in the
+  reconciliation panel's 视图 section; "重置视图设置" no longer kicks the user out of the nested
+  mode.
+- Documentation updated for the embedded view: README feature bullet + roadmap, the user manuals
+  (中文/English — new 嵌套视图 sections plus toolbar/inspector descriptions), UI_GLOSSARY/GLOSSARY
+  terms (物种枝管道、纵向枢纽、车道、枝内位置、转移供体、丢失残枝、显示推断、孤立区),
+  docs/FORMAT.md optional path fields, and the layout plan marked as implemented.
+  New tests: `src/model/reconPlacements.test.ts`, `src/layout/embeddedRecon.test.ts`,
+  `src/io/embeddedReconExport.test.ts`.
+
 ## [0.3.0] — 2026-11-10
 
 Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`

@@ -50,7 +50,7 @@ describe('buildReconciliationReport — Markdown safety', () => {
     const rows = tableLines(md);
     expect(rows.length).toBeGreaterThanOrEqual(3); // header + separator + ≥ 2 rows
     const widths = new Set(rows.map(cells));
-    expect([...widths], `every table line must have the same cell count, got ${[...widths]}`).toEqual([5]);
+    expect([...widths], `every table line must have the same cell count, got ${[...widths]}`).toEqual([7]);
     expect(md).toContain('T4\\|phage');
   });
 
@@ -81,7 +81,7 @@ describe('buildReconciliationReport — Markdown safety', () => {
     expect(outside).toContain('&lt;a href'); // the project name in the heading
     expect(outside).toContain('&lt;script&gt;'); // the gene-tree section title
     // Table integrity survives the escaping: every row keeps its five cells.
-    expect(new Set(tableLines(md).map(cells))).toEqual(new Set([5]));
+    expect(new Set(tableLines(md).map(cells))).toEqual(new Set([7]));
     // And the Newick really is fenced, which is what makes the exception safe.
     expect(md).toMatch(/```newick\n[\s\S]*?<img[\s\S]*?\n```/);
   });
@@ -107,7 +107,7 @@ describe('buildReconciliationReport — Markdown safety', () => {
     sp!.label = 'Species|A';
     const md2 = buildReconciliationReport(project);
     const widths = new Set(tableLines(md2).map(cells));
-    expect([...widths]).toEqual([5]);
+    expect([...widths]).toEqual([7]);
   });
 
   it('doubles a literal backslash before any later escape uses one', () => {
@@ -120,7 +120,7 @@ describe('buildReconciliationReport — Markdown safety', () => {
     // `T4\|phage` in, `T4\\\|phage` out (escaped backslash, then escaped pipe).
     expect(md).toContain('T4\\\\\\|phage');
     expect(md).toContain('## a\\\\b');
-    expect(new Set(tableLines(md).map(cells))).toEqual(new Set([5]));
+    expect(new Set(tableLines(md).map(cells))).toEqual(new Set([7]));
   });
 
   it('does not put Newick quoting into a Markdown title', () => {

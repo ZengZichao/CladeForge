@@ -36,6 +36,7 @@ import {
 } from './ReconPane';
 import { collectMappingAnchors, projectMappingAnchors, type PaneView } from './reconMapping';
 import { ReconMappingLayer } from './ReconMappingLayer';
+import { EmbeddedReconCanvas } from './EmbeddedReconCanvas';
 import { Cross1Icon } from '@radix-ui/react-icons';
 
 /** Visual language for DTL event classes — colours are THEME variables. */
@@ -57,11 +58,14 @@ export function ReconciliationView({
   onBuildGeneTree,
   onCopySpeciesTree,
   onZoomChange,
+  onEmbeddedZoomChange,
 }: {
   onBuildGeneTree: () => void;
   onCopySpeciesTree: () => void;
   /** Reported when a pane's zoom scale changes (status-bar readouts). */
   onZoomChange?: (species: number, gene: number) => void;
+  /** Embedded mode: the single viewport's zoom readout. */
+  onEmbeddedZoomChange?: (zoom: number) => void;
 }) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
@@ -74,13 +78,19 @@ export function ReconciliationView({
   const setReconMode = useStore((s) => s.setReconMode);
 
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
+  const embedded = options.layoutMode === 'embedded';
 
   // Layouts are computed ONCE here and shared by both panes + the mapping
-  // layer (the old code computed each layout twice: pane + overlay).
-  const speciesLayout = useMemo(() => computeLayout(horizontalCladogram(project, 'LR')), [project]);
+  // layer (the old code computed each layout twice: pane + overlay). In
+  // embedded mode the two-pane layouts are skipped entirely (hooks cannot be
+  // conditional, so the memos short-circuit inside).
+  const speciesLayout = useMemo(
+    () => (embedded ? null : computeLayout(horizontalCladogram(project, 'LR'))),
+    [project, embedded],
+  );
   const geneLayout = useMemo(
-    () => (entry ? computeLayout(horizontalCladogram(entry.doc, 'RL')) : null),
-    [entry],
+    () => (embedded || !entry ? null : computeLayout(horizontalCladogram(entry.doc, 'RL'))),
+    [entry, embedded],
   );
 
   // --- panes-row measurement (one ResizeObserver drives bridge + fit) --------
@@ -171,6 +181,7 @@ export function ReconciliationView({
 
   const resetBoth = useCallback(() => {
     fitMode.current = false;
+    if (!speciesLayout) return;
     const reset = (bounds: ReturnType<typeof reconPaneBounds> | null, box: { w: number; h: number }): PaneTransform => {
       if (!bounds) return { ...IDENTITY };
       const cx = (bounds.minX + bounds.maxX) / 2;
@@ -216,20 +227,24 @@ export function ReconciliationView({
     [options.syncZoom, geneT.scale, speciesT, speciesBox.w, speciesBox.h, setGeneT],
   );
 
-  // Fit once per document / gene-tree switch, after first paint.
+  // Fit once per document / gene-tree switch, after first paint (side-by-side
+  // only; the embedded canvas fits itself).
   useEffect(() => {
+    if (embedded) return;
     const t = requestAnimationFrame(() => fitBoth());
     return () => cancelAnimationFrame(t);
-  }, [project.id, entry?.id]);
+  }, [project.id, entry?.id, embedded]);
 
   // Zoom readouts for the workspace status bar (only on real scale changes).
   useEffect(() => {
+    if (embedded) return;
     onZoomChange?.(speciesT.scale, geneT.scale);
-  }, [speciesT.scale, geneT.scale, onZoomChange]);
+  }, [speciesT.scale, geneT.scale, onZoomChange, embedded]);
 
   // Resize (window drag, panel drag): re-fit while in fit mode, otherwise only
   // clamp so the tree can never be lost entirely (§5.6.4).
   useEffect(() => {
+    if (embedded || !speciesLayout) return;
     if (hostSize.w <= 0 || hostSize.h <= 0) return;
     if (fitMode.current) {
       const t = requestAnimationFrame(() => fitBoth());
@@ -239,14 +254,16 @@ export function ReconciliationView({
     if (entry && geneLayout) {
       setGeneTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(entry.doc, geneLayout, options, 'gene'), geneBox.w, geneBox.h));
     }
-  }, [hostSize.w, hostSize.h, speciesBox.w, speciesBox.h, geneBox.w, geneBox.h]);
+  }, [hostSize.w, hostSize.h, speciesBox.w, speciesBox.h, geneBox.w, geneBox.h, embedded]);
 
-  // ⌘⇧F (global) reaches the recon canvas through this event.
+  // ⌘⇧F (global) reaches the recon canvas through this event. Exactly one
+  // listener per mode: the embedded canvas adds its own while mounted.
   useEffect(() => {
+    if (embedded) return;
     const onFitEvt = () => fitBoth();
     window.addEventListener('cladeforge:recon-fit', onFitEvt);
     return () => window.removeEventListener('cladeforge:recon-fit', onFitEvt);
-  }, [fitBoth]);
+  }, [fitBoth, embedded]);
 
   // Escape leaves the reconciliation workspace.
   useEffect(() => {
@@ -259,10 +276,12 @@ export function ReconciliationView({
   }, [setReconMode]);
 
   // Left-panel "locate": centre the gene pane on the requested node (and the
-  // species pane on its mapping target when one exists).
+  // species pane on its mapping target when one exists). Embedded mode handles
+  // its own focus inside its canvas.
   const focusSeq = focusTarget?.seq ?? 0;
   const lastFocusSeq = useRef(0);
   useEffect(() => {
+    if (embedded) return;
     if (!focusTarget || focusSeq === lastFocusSeq.current || !entry || !geneLayout) return;
     lastFocusSeq.current = focusSeq;
     const p = geneLayout.positions.get(focusTarget.id);
@@ -300,7 +319,7 @@ export function ReconciliationView({
 
   const geneMeta = useMemo(() => {
     const map = new Map<NodeId, PaneNodeMeta>();
-    if (!entry) return map;
+    if (!entry || embedded) return map;
     const tipAssumed = new Set(
       Object.values(entry.doc.nodes)
         .filter((n) => n.childrenIds.length === 0 && entry.assumptions[n.id])
@@ -321,7 +340,7 @@ export function ReconciliationView({
       });
     }
     return map;
-  }, [entry, geneSelectionSet, hoveredGeneId]);
+  }, [entry, geneSelectionSet, hoveredGeneId, embedded]);
 
   // Mapping lines (pure) + per-pane stubs + species-side highlights.
   // Tip mappings come from LABEL matching even where no explicit assumption
@@ -339,7 +358,7 @@ export function ReconciliationView({
   // The rules (filter / emphasis / bundling) run once per document/view-option
   // or hover change; pan/zoom only re-runs the pure projection below.
   const mappingAnchors = useMemo(() => {
-    if (!entry || !geneLayout) return [];
+    if (embedded || !entry || !geneLayout || !speciesLayout) return [];
     return collectMappingAnchors({
       speciesDoc: project,
       geneDoc: entry.doc,
@@ -393,32 +412,55 @@ export function ReconciliationView({
       if (!g || !d.nodes[speciesNodeId]) return;
       const n = g.doc.nodes[gid];
       if (!n) return;
+      const prevTarget = g.assumptions[gid]?.speciesNode;
       const next: GeneNodeAssumption = {
         ...(g.assumptions[gid] ?? {}),
         speciesNode: speciesNodeId,
       };
+      if (prevTarget !== speciesNodeId) {
+        // A stale `branchFraction` pointed INTO the old branch — it must not
+        // survive a change of mapping target (§7.5).
+        delete next.branchFraction;
+      }
       if (n.childrenIds.length > 0) {
-        // Auto-classify: any child sharing the mapping ⇒ duplication; two
-        // children in distinct direct branches ⇒ speciation; else unresolved.
-        const kidPlacements = n.childrenIds.map((cid) =>
-          cid === gid ? speciesNodeId : g.assumptions[cid]?.speciesNode,
-        );
-        const placed = kidPlacements.filter((x): x is NodeId => Boolean(x));
-        if (placed.length === n.childrenIds.length && placed.length >= 2) {
-          if (new Set(placed).size === 1) next.event = 'duplication';
-          else if (placed.includes(speciesNodeId)) next.event = 'duplication';
-          else {
-            const branches = placed.map((p) => childBranchOf(d, speciesNodeId, p));
-            if (
-              branches.every(Boolean) &&
-              new Set(branches as string[]).size === branches.length
-            ) {
-              next.event = 'speciation';
-            } else {
-              delete next.event;
-            }
-          }
-        }
+        classifyGeneNodeEvent(d, g, gid, speciesNodeId, next);
+      }
+      g.assumptions[gid] = next;
+    });
+  }, []);
+
+  /**
+   * Embedded-mode path building: Alt+click a species TUBE maps the selected
+   * gene node onto that branch's node AND records the clicked within-branch
+   * position (`branchFraction = t`) — the user is literally drawing the gene
+   * lineage's route through the species wood.
+   */
+  const assignSelectedToTube = useCallback((branchId: NodeId, t: number) => {
+    const st = useStore.getState();
+    const entryId = st.activeGeneTreeId;
+    const gid = st.geneSelection[0];
+    if (!entryId) return;
+    if (st.geneSelection.length !== 1) {
+      notify.info(S.recon.mapSelectedHereNeedGene);
+      return;
+    }
+    st.apply((d) => {
+      const g = d.geneTrees?.find((x) => x.id === entryId);
+      if (!g || !d.nodes[branchId]) return;
+      const n = g.doc.nodes[gid];
+      if (!n) return;
+      const prevTarget = g.assumptions[gid]?.speciesNode;
+      const next: GeneNodeAssumption = {
+        ...(g.assumptions[gid] ?? {}),
+        speciesNode: branchId,
+        // 0 = parent end, 1 = the mapped node's end (plan §4.2).
+        branchFraction: Math.max(0, Math.min(1, t)),
+      };
+      if (prevTarget !== branchId) {
+        delete next.transferDonor;
+      }
+      if (n.childrenIds.length > 0) {
+        classifyGeneNodeEvent(d, g, gid, branchId, next);
       }
       g.assumptions[gid] = next;
     });
@@ -471,7 +513,7 @@ export function ReconciliationView({
   }, [geneSelection, entry, project]);
 
   // --- empty state (no gene tree) ---------------------------------------------
-  if (!entry || !geneLayout) {
+  if (!entry || (!embedded && !geneLayout)) {
     return (
       <div className="recon-empty-stage">
         <div className="recon-empty-card">
@@ -516,77 +558,146 @@ export function ReconciliationView({
           </button>
         </div>
       )}
-      <div className="recon-panes" ref={panesRef} style={{ ['--recon-bridge-w' as string]: `${bridge}px` }}>
-        <ReconPane
-          doc={project}
-          layout={speciesLayout}
-          transform={speciesT}
-          onTransform={speciesTransform}
-          onSizeChange={onSpeciesSize}
-          onFit={fitBoth}
-          onResetZoom={resetBoth}
-          title={S.recon.paneSpecies}
-          subtitle={S.recon.analysisCladogram}
-          nodeCount={speciesNodeCount}
-          zoomPercent={Math.round(speciesT.scale * 100)}
-          nodeMeta={speciesMeta}
-          stubs={speciesStubs}
-          side="species"
-          ariaLabel={S.recon.ariaSpeciesPane}
-          options={options}
-          onNodeClick={onSpeciesNodeClick}
-        />
-        <div className="recon-bridge" aria-hidden="true">
-          <span className="recon-bridge-count">
-            {S.recon.mapCount(mappingLines.reduce((n, l) => n + l.bundleCount, 0))}
-          </span>
-        </div>
-        <ReconPane
-          doc={entry.doc}
-          layout={geneLayout}
-          transform={geneT}
-          onTransform={geneTransform}
-          onSizeChange={onGeneSize}
-          onFit={fitBoth}
-          onResetZoom={resetBoth}
-          title={S.recon.paneGene}
-          subtitle={`${entry.name} · ${summary ? `${summary.mappedInternal}/${summary.totalInternal}` : ''}`}
-          badge={S.recon.readonlyPane}
-          badgeTone="readonly"
-          nodeCount={geneNodeCount}
-          zoomPercent={Math.round(geneT.scale * 100)}
-          nodeMeta={geneMeta}
-          stubs={geneStubs}
-          side="gene"
-          ariaLabel={S.recon.ariaGenePane}
-          options={options}
-          onNodeClick={onGeneNodeClick}
-          onNodeHover={setReconHoverGene}
-        />
-        <ReconMappingLayer
-          lines={mappingLines}
-          width={hostSize.w}
-          height={hostSize.h}
-          showSelectedLabels
-        />
-      </div>
-      {/* Legend: a layout row, never an overlay — the colour language of the
-          mapping lines must be readable without guessing (§5.6.2). */}
-      <div className="recon-legend" aria-label={S.recon.legendTitle}>
-        <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
-        <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
-        <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
-        <span className="legend-item"><span className="legend-swatch sw-unresolved" />{S.recon.legendUnresolved}</span>
-        <span className="legend-item"><span className="legend-swatch sw-tip" />{S.recon.legendTipLine}</span>
-        <span className="legend-item"><span className="legend-swatch sw-internal" />{S.recon.legendInternalLine}</span>
-        <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
-      </div>
+      {embedded ? (
+        <>
+          <EmbeddedReconCanvas
+            speciesDoc={project}
+            geneEntry={entry}
+            options={options}
+            geneSelection={geneSelection}
+            speciesSelection={speciesSelection}
+            hoveredGeneId={hoveredGeneId}
+            focusTarget={focusTarget}
+            onGeneNodeClick={onGeneNodeClick}
+            onSpeciesNodeClick={onSpeciesNodeClick}
+            onTubeClick={assignSelectedToTube}
+            onGeneHover={setReconHoverGene}
+            onZoomChange={onEmbeddedZoomChange}
+          />
+          {/* Legend: a layout row, never an overlay — the nested figure's colour
+              language (thick tubes vs thin gene lines) must be readable without
+              guessing (§6.5). */}
+          <div className="recon-legend" aria-label={S.recon.legendTitle}>
+            <span className="legend-item"><span className="legend-swatch sw-tube" />{S.recon.legendTube}</span>
+            <span className="legend-item"><span className="legend-swatch sw-gene" />{S.recon.legendGene}</span>
+            <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
+            <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
+            <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
+            <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
+            <span className="legend-item"><span className="legend-swatch sw-inferred" />{S.recon.legendInferred}</span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="recon-panes" ref={panesRef} style={{ ['--recon-bridge-w' as string]: `${bridge}px` }}>
+            <ReconPane
+              doc={project}
+              // The side-by-side branch only mounts when !embedded, where the
+              // memo guarantees a real layout.
+              layout={speciesLayout!}
+              transform={speciesT}
+              onTransform={speciesTransform}
+              onSizeChange={onSpeciesSize}
+              onFit={fitBoth}
+              onResetZoom={resetBoth}
+              title={S.recon.paneSpecies}
+              subtitle={S.recon.analysisCladogram}
+              nodeCount={speciesNodeCount}
+              zoomPercent={Math.round(speciesT.scale * 100)}
+              nodeMeta={speciesMeta}
+              stubs={speciesStubs}
+              side="species"
+              ariaLabel={S.recon.ariaSpeciesPane}
+              options={options}
+              onNodeClick={onSpeciesNodeClick}
+            />
+            <div className="recon-bridge" aria-hidden="true">
+              <span className="recon-bridge-count">
+                {S.recon.mapCount(mappingLines.reduce((n, l) => n + l.bundleCount, 0))}
+              </span>
+            </div>
+            <ReconPane
+              doc={entry.doc}
+              layout={geneLayout!}
+              transform={geneT}
+              onTransform={geneTransform}
+              onSizeChange={onGeneSize}
+              onFit={fitBoth}
+              onResetZoom={resetBoth}
+              title={S.recon.paneGene}
+              subtitle={`${entry.name} · ${summary ? `${summary.mappedInternal}/${summary.totalInternal}` : ''}`}
+              badge={S.recon.readonlyPane}
+              badgeTone="readonly"
+              nodeCount={geneNodeCount}
+              zoomPercent={Math.round(geneT.scale * 100)}
+              nodeMeta={geneMeta}
+              stubs={geneStubs}
+              side="gene"
+              ariaLabel={S.recon.ariaGenePane}
+              options={options}
+              onNodeClick={onGeneNodeClick}
+              onNodeHover={setReconHoverGene}
+            />
+            <ReconMappingLayer
+              lines={mappingLines}
+              width={hostSize.w}
+              height={hostSize.h}
+              showSelectedLabels
+            />
+          </div>
+          {/* Legend: a layout row, never an overlay — the colour language of the
+              mapping lines must be readable without guessing (§5.6.2). */}
+          <div className="recon-legend" aria-label={S.recon.legendTitle}>
+            <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
+            <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
+            <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
+            <span className="legend-item"><span className="legend-swatch sw-unresolved" />{S.recon.legendUnresolved}</span>
+            <span className="legend-item"><span className="legend-swatch sw-tip" />{S.recon.legendTipLine}</span>
+            <span className="legend-item"><span className="legend-swatch sw-internal" />{S.recon.legendInternalLine}</span>
+            <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
+          </div>
+        </>
+      )}
       <div className="visually-hidden" aria-live="polite">{announcement}</div>
     </div>
   );
 }
 
 // --- helpers -------------------------------------------------------------------
+
+/**
+ * Auto-classify the event for a (re)mapped internal gene node: any child
+ * sharing the mapping ⇒ duplication; two children in distinct direct species
+ * branches ⇒ speciation; else leave unresolved.
+ */
+function classifyGeneNodeEvent(
+  d: Project,
+  g: NonNullable<Project['geneTrees']>[number],
+  gid: NodeId,
+  speciesNodeId: NodeId,
+  next: GeneNodeAssumption,
+): void {
+  const n = g.doc.nodes[gid];
+  if (!n || n.childrenIds.length === 0) return;
+  const kidPlacements = n.childrenIds.map((cid) =>
+    cid === gid ? speciesNodeId : g.assumptions[cid]?.speciesNode,
+  );
+  const placed = kidPlacements.filter((x): x is NodeId => Boolean(x));
+  if (placed.length === n.childrenIds.length && placed.length >= 2) {
+    if (new Set(placed).size === 1) {
+      next.event = 'duplication';
+    } else if (placed.includes(speciesNodeId)) {
+      next.event = 'duplication';
+    } else {
+      const branches = placed.map((p) => childBranchOf(d, speciesNodeId, p));
+      if (branches.every(Boolean) && new Set(branches as string[]).size === branches.length) {
+        next.event = 'speciation';
+      } else {
+        delete next.event;
+      }
+    }
+  }
+}
 
 /** Direct species-child branch of `s` containing `v`, or null when outside/equal. */
 function childBranchOf(project: Project, s: NodeId, v: NodeId): NodeId | null {

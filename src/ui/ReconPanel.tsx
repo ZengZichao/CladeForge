@@ -510,7 +510,9 @@ export function ReconPanel({
                       apply((d) => {
                         const g = d.geneTrees?.find((x) => x.id === activeEntry.id);
                         if (!g) return;
-                        g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario);
+                        // Keep the visual path fields (branchFraction /
+                        // transferDonor) of nodes whose target is unchanged.
+                        g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario, g.assumptions);
                       });
                       notify.success(S.recon.dpApply);
                     }}
@@ -686,21 +688,60 @@ export function ReconPanel({
             checked={options.showLosses}
             onChange={(v) => setReconViewOptions({ showLosses: v })}
           />
-          <CheckboxField
-            label={S.recon.syncZoom}
-            checked={options.syncZoom}
-            onChange={(v) => setReconViewOptions({ syncZoom: v })}
-          />
+          {options.layoutMode === 'embedded' ? (
+            <>
+              <Field label={S.recon.tubeWidth}>
+                <input
+                  type="range"
+                  min={10}
+                  max={32}
+                  step={1}
+                  value={options.embeddedTubeWidth}
+                  onChange={(e) => setReconViewOptions({ embeddedTubeWidth: Number(e.target.value) })}
+                  aria-label={S.recon.tubeWidth}
+                />
+              </Field>
+              <Field label={S.recon.laneGap}>
+                <input
+                  type="range"
+                  min={1.5}
+                  max={6}
+                  step={0.5}
+                  value={options.embeddedLaneGap}
+                  onChange={(e) => setReconViewOptions({ embeddedLaneGap: Number(e.target.value) })}
+                  aria-label={S.recon.laneGap}
+                />
+              </Field>
+              <CheckboxField
+                label={S.recon.showTransfers}
+                checked={options.embeddedShowTransfers}
+                onChange={(v) => setReconViewOptions({ embeddedShowTransfers: v })}
+              />
+              <CheckboxField
+                label={S.recon.showLossStubs}
+                checked={options.embeddedShowLossStubs}
+                onChange={(v) => setReconViewOptions({ embeddedShowLossStubs: v })}
+              />
+            </>
+          ) : (
+            <CheckboxField
+              label={S.recon.syncZoom}
+              checked={options.syncZoom}
+              onChange={(v) => setReconViewOptions({ syncZoom: v })}
+            />
+          )}
           <div className="field row-actions">
             <button
               className="btn"
               onClick={() => window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'))}
             >
-              {S.recon.fitBoth}
+              {options.layoutMode === 'embedded' ? S.recon.fitEmbedded : S.recon.fitBoth}
             </button>
             <button
               className="btn"
               onClick={() => {
+                // Reset every view option — but KEEP the current layout mode:
+                // a reset must not kick the user out of the nested view.
                 setReconViewOptions({
                   mappingScope: 'tips',
                   eventFilter: 'all',
@@ -709,6 +750,10 @@ export function ReconPanel({
                   showLosses: true,
                   showMappings: true,
                   syncZoom: true,
+                  embeddedTubeWidth: 18,
+                  embeddedLaneGap: 3,
+                  embeddedShowTransfers: true,
+                  embeddedShowLossStubs: true,
                 });
                 window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
               }}

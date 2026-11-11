@@ -48,7 +48,7 @@ every saved file as `project.appVersion`.
 | `layers` / `activeLayerId` / `layerStore` | — | hypothesis layers; each layer may carry `statement`, `prediction`, `status`, `evidence[]`, `author`, `createdAt/updatedAt`; the non-active snapshots live in `layerStore` |
 | `environmentalEvents` | array | dated context bands on the time axis |
 | `calibrationPoints` | array | fossil constraint notes `{nodeId, minAge, maxAge, source?}` — annotation + validation, NOT a dating computation |
-| `geneTrees` | array | embedded gene trees for DTL; `assumptions` keyed by gene node id |
+| `geneTrees` | array | embedded gene trees for DTL; `assumptions` keyed by gene node id. Each assumption may additionally carry the OPTIONAL embedded-view path fields `branchFraction` (0–1 position within the host species branch; clamped on load) and `transferDonor` (species node id of an explicit HGT donor outside the recipient subtree; dropped on load when the node no longer exists) — see the embedded reconciliation view |
 | `reconCosts` | object | DTL cost vector `{dup, transfer, loss}` |
 | `reconOptions` | object | `{freeRoot? (default false), rootTransferCost?, tiePriority?, }` |
 | `customEventTypes` | array | user-defined event ontology (`CustomEventType`) |

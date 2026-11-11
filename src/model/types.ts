@@ -410,6 +410,22 @@ export interface GeneNodeAssumption {
   losses?: number;
   /** Confidence + supporting/counter evidence for this placement hypothesis. */
   meta?: HypothesisMeta;
+  /**
+   * Position WITHIN the host species branch: 0 = the parent-species-node end,
+   * 1 = the mapped species node's end. Optional; absent means the embedded
+   * layout picks a deterministic default. Clamped to [0, 1] on load.
+   */
+  branchFraction?: number;
+  /**
+   * Horizontal-transfer DONOR as a species NODE id (not a branch id) — the node
+   * whose incoming branch hosts the donating child lineage. The established
+   * model convention (`validateScenario` / `geneTreeNhk`) treats the child
+   * placed OUTSIDE the recipient subtree as the donor; absent means that rule
+   * derives it automatically. An explicit value covers multi-donor / ambiguous
+   * scenarios and must point at an existing species node outside the recipient
+   * subtree (else it is ignored and auto-derivation applies).
+   */
+  transferDonor?: NodeId;
 }
 
 /**
@@ -502,6 +518,17 @@ export interface ReconOptions {
 export type MappingScope = 'tips' | 'internal' | 'all';
 
 /**
+ * Reconciliation canvas layout mode.
+ *
+ * `side-by-side` (the default) is the two-pane species-left / gene-right view
+ * joined by the mapping bridge. `embedded` is the single-viewport nested view:
+ * the species tree drawn as THICK branch tubes with the gene tree's THIN
+ * lineages nested inside them, so the user can read (and hand-build) a gene
+ * lineage's path through the species tree.
+ */
+export type ReconLayoutMode = 'side-by-side' | 'embedded';
+
+/**
  * Transient reconciliation-canvas display options. Pure UI state: never written
  * into the Project, never part of undo/redo or autosave.
  */
@@ -515,6 +542,17 @@ export interface ReconViewOptions {
   syncZoom: boolean;
   /** Restrict drawn mapping lines to one event class, unresolved only, or all. */
   eventFilter: ReconEventType | 'unresolved' | 'all';
+
+  /** Canvas layout mode: side-by-side comparison / nested embedding. */
+  layoutMode: ReconLayoutMode;
+  /** Embedded mode: base species-branch tube width (world px). */
+  embeddedTubeWidth: number;
+  /** Embedded mode: gene lane spacing (world px). */
+  embeddedLaneGap: number;
+  /** Embedded mode: draw horizontal-transfer arcs. */
+  embeddedShowTransfers: boolean;
+  /** Embedded mode: draw gene-loss stubs inside the tubes. */
+  embeddedShowLossStubs: boolean;
 }
 
 export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
@@ -525,6 +563,12 @@ export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
   showMappings: true,
   syncZoom: true,
   eventFilter: 'all',
+
+  layoutMode: 'side-by-side',
+  embeddedTubeWidth: 18,
+  embeddedLaneGap: 3,
+  embeddedShowTransfers: true,
+  embeddedShowLossStubs: true,
 };
 
 /** Which section of the reconciliation left panel the rail currently shows. */

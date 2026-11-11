@@ -37,6 +37,18 @@
 | mapping | mapping | 映射 | 定位（混用） |
 | unmapped | unmapped | 未映射 | 未解析（留给拓扑多歧） |
 | polytomy | polytomy | 多歧分支 | 多叉、多分叉 |
+| embedded view | embedded view (embedded layout) | 嵌套视图 | 嵌入式视图、内嵌视图 |
+| side-by-side view | side-by-side view | 并排对照（视图） | 双窗格视图（描述性文字可用） |
+| species branch tube | species branch tube | 物种枝管道 | 管道（单独使用）、粗枝 |
+| hub bar | hub bar | 纵向枢纽 | 枢纽条、竖条 |
+| lane | lane | 车道 | 泳道、轨道 |
+| branch position | branch position (branchFraction) | 枝内位置 | 枝上位置、分支内位置 |
+| transfer donor | transfer donor | 转移供体 | 供体（单独使用） |
+| transfer arc | transfer arc | 转移弧 | 弧线（单独使用） |
+| loss stub | loss stub | 丢失残枝 | 残枝（单独使用）、损失残枝 |
+| display inference | display-inferred | 显示推断 | 自动推断（会与 LCA 建议混淆） |
+| orphan gutter | orphan gutter (unmapped gene nodes) | 未映射基因节点（孤立区） | 孤儿区、隔离区（文字可用"隔离区"作解释） |
+| topological sketch | topological sketch | 拓扑示意 | 示意图（过泛） |
 | hard / soft polytomy | hard / soft polytomy | 硬 / 软多歧 | 硬 / 软多分叉 |
 | reroot | reroot | 重新定根 | 定根、重根、移根、生根 |
 | midpoint rooting | midpoint rooting | 中点定根 | 中点生根 |

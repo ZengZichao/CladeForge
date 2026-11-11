@@ -265,8 +265,13 @@ function ReconWorkspacePanel({
   onCopySpeciesTree: () => void;
 }) {
   const [zoom, setZoom] = useState({ species: 1, gene: 1 });
+  const [embeddedZoom, setEmbeddedZoom] = useState(1);
+  const layoutMode = useStore((s) => s.reconViewOptions.layoutMode);
   const onZoomChange = useCallback((species: number, gene: number) => {
     setZoom((z) => (z.species === species && z.gene === gene ? z : { species, gene }));
+  }, []);
+  const onEmbeddedZoomChange = useCallback((zoomValue: number) => {
+    setEmbeddedZoom((z) => (z === zoomValue ? z : zoomValue));
   }, []);
 
   return (
@@ -275,8 +280,14 @@ function ReconWorkspacePanel({
         onBuildGeneTree={onBuildGeneTree}
         onCopySpeciesTree={onCopySpeciesTree}
         onZoomChange={onZoomChange}
+        onEmbeddedZoomChange={onEmbeddedZoomChange}
       />
-      <ReconStatusBar speciesZoom={zoom.species} geneZoom={zoom.gene} />
+      <ReconStatusBar
+        speciesZoom={zoom.species}
+        geneZoom={zoom.gene}
+        mode={layoutMode}
+        embeddedZoom={embeddedZoom}
+      />
     </div>
   );
 }
