@@ -199,13 +199,13 @@ describe('newick', () => {
     const again = parseNewick(out);
     expect(Object.values(again.nodes).some((n) => n.label === '0.95')).toBe(true);
     // A name containing spaces must survive with no quote characters attached,
-    // or every downstream tool sees a taxon literally named "'Tobacco mosaic virus'".
-    const spaced = parseNewick("((A,B),(C,D))'Tobacco mosaic virus';");
+    // or every downstream tool sees a taxon literally named "'Taxon name with spaces'".
+    const spaced = parseNewick("((A,B),(C,D))'Taxon name with spaces';");
     const spacedOut = serializeNewick(spaced);
-    expect(spacedOut).toContain('"Tobacco mosaic virus"');
-    expect(spacedOut).not.toMatch(/'[^']*virus[^']*'/);
+    expect(spacedOut).toContain('"Taxon name with spaces"');
+    expect(spacedOut).not.toMatch(/'[^']*spaces[^']*'/);
     const reparsed = parseNewick(spacedOut);
-    expect(Object.values(reparsed.nodes).some((n) => n.label === 'Tobacco mosaic virus')).toBe(true);
+    expect(Object.values(reparsed.nodes).some((n) => n.label === 'Taxon name with spaces')).toBe(true);
     expect(Object.values(reparsed.nodes).some((n) => n.label?.startsWith("'"))).toBe(false);
   });
 

@@ -106,21 +106,21 @@ describe('buildRScript', () => {
   });
 
   it('keeps a spaced tip label byte-exact in the emitted tree', () => {
-    // ape 5.8.1's own Newick reader returns "Tobaccomosaicvirus" for a quoted
+    // ape 5.8.1's own Newick reader returns "Taxonnamewithspaces" for a quoted
     // label containing spaces. The script keys its character `tips` on the
     // ORIGINAL labels, so an affected tip would vanish into "missing data"
-    // without a word: on the shipped virus sample that is 6 of 21 tips, with the
-    // host character's Sankoff cost printing 1 where the application reports 3.
-    // Building the tree from vectors removes the reader from the path entirely,
-    // so the label the script carries must be the label the project has.
+    // without a word, and a character's Sankoff cost would then print lower than
+    // the application reports. Building the tree from vectors removes the reader
+    // from the path entirely, so the label the script carries must be the label
+    // the project has.
     const p = createEmptyProject('Label fidelity');
     const [a, b] = addChildren(p, p.rootId, 2);
-    p.nodes[a].label = 'Tobacco mosaic virus';
-    p.nodes[b].label = 'Gracilicutes (GN)';
+    p.nodes[a].label = 'Taxon name with spaces';
+    p.nodes[b].label = 'Genus (species) quoted';
     const script = buildRScript(p);
-    expect(script).toContain('"Tobacco mosaic virus"');
-    expect(script).toContain('"Gracilicutes (GN)"');
-    expect(script).not.toContain('Tobaccomosaicvirus');
+    expect(script).toContain('"Taxon name with spaces"');
+    expect(script).toContain('"Genus (species) quoted"');
+    expect(script).not.toContain('Taxonnamewithspaces');
     expect(script).not.toContain('read.tree');
   });
 

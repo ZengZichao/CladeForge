@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Reproducible-script export: a GUI tool is only reviewable if it can export
 // executable scripts that reproduce its graphical and analytical outputs.
 //
@@ -61,13 +62,13 @@ function apePlotOptions(type: LayoutType): { type: string; useEdgeLength: boolea
  *
  * ape 5.8.1's own Newick reader cannot round-trip the labels this app writes: a
  * quoted label containing spaces comes back with the spaces deleted
- * (`"Tobacco mosaic virus"` → `Tobaccomosaicvirus`), and `"Gracilicutes (GN)"`
- * comes back as `GN`. The second only costs an internal label. The first is
- * fatal in this script, because the character `tips` vectors below are keyed on
- * the ORIGINAL labels — a tip that reads back mangled is silently treated as
- * missing data. Measured on the shipped virus sample: 6 of 21 tips are lost and
- * the script's Sankoff cost for the host character prints 1 where the
- * application reports 3.
+ * (`"Taxon name with spaces"` → `Taxonnamewithspaces`), and a quoted label of the
+ * form `"Genus (species)"` comes back as just `species`. The second only costs an
+ * internal label. The first is fatal in this script, because the character `tips`
+ * vectors below are keyed on the ORIGINAL labels — a tip that reads back mangled
+ * is silently treated as missing data. On a tree whose tip names contain spaces,
+ * several tips can be lost this way, and the script's Sankoff cost for a character
+ * then prints a lower number than the application reports.
  *
  * Building the same tree from vectors keeps every label byte-exact; this is what
  * `scripts/cross-check/ape_agreement.R` already does, for the same reason. The
