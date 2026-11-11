@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import {
   niceTicks,
@@ -174,7 +175,7 @@ describe('timescale', () => {
     const plan = planEraOverlay(
       info,
       { showEras: true, eraLevel: 'both' },
-      [{ id: 'e1', label: '大氧化事件', from: 2400, to: 2300 }],
+      [{ id: 'e1', label: '环境标记 A', from: 2400, to: 2300 }],
     );
     // Eon labels never share a row with period labels.
     const eonLanes = plan.labels.filter((l) => l.key.startsWith('eon:')).map((l) => l.lane);

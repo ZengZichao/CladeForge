@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // The matrix cell editor must not offer `?` / `-` as values.
 //
 // A recorded missing code is DATA (the model goes out of its way to exclude it
@@ -9,8 +10,8 @@ import { describe, it, expect } from 'vitest';
 import { matrixCellOptions, matrixCellSwatch, matrixCellWrite, UNASSIGNED } from './matrixCell';
 
 const states = [
-  { id: 's0', label: 'terrestrial', color: '#111' },
-  { id: 's1', label: 'aquatic', color: '#222' },
+  { id: 's0', label: 'State A', color: '#111' },
+  { id: 's1', label: 'State B', color: '#222' },
 ];
 
 const text = {

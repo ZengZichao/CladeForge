@@ -8,8 +8,8 @@ describe('hypothesis annotations', () => {
   it('trims a note, stores it on the live node, and clears it when emptied', () => {
     const p = createEmptyProject('notes');
     const [a] = addChildren(p, p.rootId, 2);
-    setHypothesisNote(p, a, '  this clade dispersed in the Miocene  ');
-    expect(p.nodes[a].hypothesisNote).toBe('this clade dispersed in the Miocene');
+    setHypothesisNote(p, a, '  this clade dispersed in the illustrated interval  ');
+    expect(p.nodes[a].hypothesisNote).toBe('this clade dispersed in the illustrated interval');
     setHypothesisNote(p, a, '   ');
     expect(p.nodes[a].hypothesisNote).toBeUndefined();
   });

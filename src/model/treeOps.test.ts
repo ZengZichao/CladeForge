@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect, afterEach } from 'vitest';
 import { createEmptyProject } from './sampleTree';
 import { parseNewick } from '../io/newick';
@@ -860,11 +861,11 @@ describe('extractSubtree', () => {
     add(p, 'b', 'B', 'x');
     const ch: Character = {
       id: 'ch',
-      name: 'Habitat',
+      name: 'Character 1',
       type: 'discrete',
       states: [
-        { id: 's1', label: 'Aquatic', color: '#000000' },
-        { id: 's2', label: 'Land', color: '#ffffff' },
+        { id: 's1', label: 'State A', color: '#000000' },
+        { id: 's2', label: 'State B', color: '#ffffff' },
       ],
       costMatrix: [
         [0, 2],
@@ -913,7 +914,7 @@ describe('extractSubtree', () => {
     sub.characters[0].states[0].label = 'Renamed';
     sub.characters[0].costMatrix![0][1] = 99;
     sub.nodes.x.childrenIds.push('ghost');
-    expect(p.characters[0].states[0].label).toBe('Aquatic');
+    expect(p.characters[0].states[0].label).toBe('State A');
     expect(p.characters[0].costMatrix![0][1]).toBe(2);
     expect(p.nodes.x.childrenIds).toEqual(['a', 'b']);
     expect(p.customEdges[0].style).not.toBe(sub.customEdges[0].style);
@@ -927,11 +928,11 @@ describe('character cleanup', () => {
     add(p, 't', 'T', p.rootId);
     const ch: Character = {
       id: 'ch',
-      name: 'Habitat',
+      name: 'Character 1',
       type: 'discrete',
       states: [
-        { id: 's1', label: 'Aquatic', color: '#000' },
-        { id: 's2', label: 'Land', color: '#fff' },
+        { id: 's1', label: 'State A', color: '#000' },
+        { id: 's2', label: 'State B', color: '#fff' },
       ],
       costMatrix: [
         [0, 1],

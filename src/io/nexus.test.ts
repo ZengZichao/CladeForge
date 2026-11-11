@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { parseNexus, parseNexusTrees, serializeNexus, DEFAULT_NEXUS_OPTIONS } from './nexus';
 import { addChildren, renameNode } from '../model/treeOps';
@@ -225,21 +226,21 @@ END;`;
       const [a, b] = addChildren(p, p.rootId, 2);
       renameNode(p, a, 'Taxon A');
       renameNode(p, b, 'Taxon A'); // deliberate duplicate
-      const habitat: Character = {
+      const character1: Character = {
         id: 'c1',
-        name: 'habitat',
+        name: 'character1',
         type: 'discrete',
         states: [
-          { id: 's1', label: '陆生', color: '#111111' },
-          { id: 's2', label: '水生', color: '#222222' },
+          { id: 's1', label: '状态 A', color: '#111111' },
+          { id: 's2', label: '状态 B', color: '#222222' },
         ],
         costMatrix: [
           [0, 2],
           [3, 0],
         ],
       };
-      const size: Character = { id: 'c2', name: 'body size', type: 'continuous', states: [] };
-      p.characters = [habitat, size];
+      const character2: Character = { id: 'c2', name: 'character2', type: 'continuous', states: [] };
+      p.characters = [character1, character2];
       p.nodes[a].charStates = { c1: 's1', c2: 12.5 };
       p.nodes[b].charStates = { c1: 'not-a-declared-state' };
       return p;
@@ -258,8 +259,8 @@ END;`;
       expect(out).toContain('SYMBOLS="12"');
       // STATELABELS carries the (block-local) character number — without it
       // the statement is not valid NEXUS.
-      expect(out).toContain("STATELABELS 1 '陆生' '水生';");
-      expect(out).toContain("CHARLABELS habitat;");
+      expect(out).toContain("STATELABELS 1 '状态 A' '状态 B';");
+      expect(out).toContain("CHARLABELS character1;");
       // State 1 → '1' (never the 0-based '0'), and an undeclared value → MISSING.
       expect(out).toMatch(/'Taxon A'\s+1\s*\n/);
       expect(out).toMatch(/'Taxon A_2'\s+\?/);
@@ -270,7 +271,7 @@ END;`;
       const out = serializeNexus(withChars(), opts);
       expect(out).toContain('FORMAT DATATYPE=CONTINUOUS MISSING=?;');
       expect(out).toContain('NCHAR=1 NEXTRA=1;');
-      expect(out).toMatch(/body size/);
+      expect(out).toMatch(/character2/);
       // The continuous matrix holds the value and a '?' for the uncoded tip.
       expect(out).toMatch(/12\.5/);
       // NCHAR only ever counts what the block can actually hold.
@@ -292,12 +293,12 @@ END;`;
       const out = serializeNexus(withChars(), opts);
       expect(out).toContain('BEGIN ASSUMPTIONS;');
       expect(out).not.toContain('DEFTYPE = UNORD');
-      // habitat declares [[0,2],[3,0]] → asymmetric custom matrix, row-major.
+      // character1 declares [[0,2],[3,0]] → asymmetric custom matrix, row-major.
       expect(out).toContain('OPTIONS DEFTYPE=CUSTOM APPLYTO=(1);');
       expect(out).toContain('OPTIONS COSTMATRIX=(0 2 3 0) APPLYTO=(1) STATES=(1 2);');
       // Valid character-set syntax: a set of character numbers, not state names.
-      expect(out).toContain('CHARSET habitat = 1;');
-      expect(out).not.toContain('CHARSET habitat = 陆生');
+      expect(out).toContain('CHARSET character1 = 1;');
+      expect(out).not.toContain('CHARSET character1 = 状态 A');
     });
 
     it('reports a uniform matrix as NONADDITIVE 0/1 costs', () => {

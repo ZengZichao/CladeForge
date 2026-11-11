@@ -248,10 +248,10 @@ export function escapeName(label: string): string {
   const clean = label.replace(/[\u0000-\u001f]/g, ' ');
   // Double quotes are the Newick convention for a label containing spaces, and
   // this reader accepts both styles on input. Note the limit of that choice:
-  // ape 5.8.1 does not read either style correctly — `"Tobacco mosaic virus"`
-  // comes back as `"Tobaccomosaicvirus"` and `"Gracilicutes (GN)"` as `GN` — so
-  // tools that must recover such names should read the exported node table
-  // (or a NEXUS TRANSLATE block) rather than the Newick. See
+  // ape 5.8.1 does not read either style correctly — a quoted `"Taxon name with
+  // spaces"` comes back with the spaces deleted, and `"Genus (species)"` as just
+  // `species` — so tools that must recover such names should read the exported
+  // node table (or a NEXUS TRANSLATE block) rather than the Newick. See
   // scripts/cross-check/ape_agreement.R, which builds trees from nodes.tsv.
   return `"${clean.replace(/"/g, '""')}"`;
 }

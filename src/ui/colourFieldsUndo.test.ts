@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // @vitest-environment jsdom
 /**
  * One colour interaction, one undo step, in every panel.
@@ -124,7 +125,7 @@ function datedProjectWithEvent(id: string): { project: Project; eventId: string 
   const eventId = 'env-1';
   p.environmentalEvents.push({
     id: eventId,
-    label: 'K-Pg 界线',
+    label: '示例界线',
     from: 66,
     to: 66,
     color: '#f59e0b',
