@@ -136,8 +136,8 @@ export function labelBoxForNode(
  * advance ≈ 1 em, Latin ≈ 0.62 em. It lives here because both the canvas bounds
  * and the time-axis label planner need it and must agree — charging every UTF-16
  * unit 0.62 em measures a CJK label short, and the crop then shows up in SVG, PNG
- * and PDF alike. The shipped sample projects label their states 陆生 / 半水生 /
- * 水生, so this is not a hypothetical.
+ * and PDF alike. The shipped sample projects label their states 状态 A / 状态 B /
+ * 状态 C in the Chinese UI, so this is not a hypothetical.
  */
 const FULL_WIDTH_ABOVE = 0x2e7f;
 export function estimateLabelWidth(label: string, fontSize: number): number {

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { buildRScript } from './scriptExport';
 import { createSampleProject, createEmptyProject } from '../model/sampleTree';
@@ -15,23 +16,23 @@ describe('buildRScript', () => {
     expect(script).not.toContain('read.tree');
     expect(script).toContain('Taxon_G');
     // Character + state labels present (app language defaults to Chinese)
-    expect(script).toContain('栖息地');
-    expect(script).toContain('陆生');
+    expect(script).toContain('性状 1');
+    expect(script).toContain('状态 A');
     // The step matrix travels into the script as one row-major literal
     // read with `byrow = TRUE`. Pin the whole emitted line against the project's
     // OWN matrix — hard-coded numbers would be a snapshot of one sample and break
     // the moment that sample matrix changes. Row-major
     // plus `byrow = TRUE` is what keeps an asymmetric matrix from being silently
     // transposed (which would invert every step cost in the re-run).
-    const habitat = p.characters.find((c) => c.name === '栖息地')!;
-    expect(habitat.costMatrix).toBeTruthy();
-    const flat = habitat.costMatrix!.map((row) => row.join(', ')).join(', ');
+    const matrixChar = p.characters.find((c) => c.name === '性状 1')!;
+    expect(matrixChar.costMatrix).toBeTruthy();
+    const flat = matrixChar.costMatrix!.map((row) => row.join(', ')).join(', ');
     expect(script).toContain(
-      `matrix(c(${flat}), nrow = ${habitat.states.length}, byrow = TRUE)`,
+      `matrix(c(${flat}), nrow = ${matrixChar.states.length}, byrow = TRUE)`,
     );
     expect(script).not.toContain('cost = NULL'); // the character does declare one
     // Named tip assignment (R syntax)
-    expect(script).toMatch(/"Taxon_G" = "陆生"/);
+    expect(script).toMatch(/"Taxon_G" = "状态 A"/);
   });
 
   it('only depends on ape and defines the parsimony + Mk ASR functions', () => {

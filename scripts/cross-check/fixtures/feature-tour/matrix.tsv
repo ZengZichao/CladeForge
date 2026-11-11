@@ -1,0 +1,9 @@
+character	tip	state_label
+sample-char:feature-tour-c1	Taxon_G	状态 A
+sample-char:feature-tour-c1	Taxon_C	状态 B
+sample-char:feature-tour-c1	Taxon_E	状态 C
+sample-char:feature-tour-c1	Taxon_F	状态 C
+sample-char:feature-tour-c2	Taxon_G	状态 A
+sample-char:feature-tour-c2	Taxon_C	状态 B
+sample-char:feature-tour-c2	Taxon_E	状态 C
+sample-char:feature-tour-c2	Taxon_F	状态 C

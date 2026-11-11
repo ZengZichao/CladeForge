@@ -1,6 +1,0 @@
-character	character_name	type	state_index	state_label	color
-sample-char:bacteria-wall	细胞壁类型	discrete	0	革兰阳性	#7c3aed
-sample-char:bacteria-wall	细胞壁类型	discrete	1	革兰阴性	#0ea5e9
-sample-char:bacteria-oxygen	氧需求	discrete	0	好氧	#22c55e
-sample-char:bacteria-oxygen	氧需求	discrete	1	厌氧	#71717a
-sample-char:bacteria-oxygen	氧需求	discrete	2	兼性厌氧	#f59e0b

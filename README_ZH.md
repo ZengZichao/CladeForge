@@ -53,6 +53,9 @@ Windows 上为 WebView2、Linux 上为 WebKitGTK），因此宿主机必须提�
 某个版本实际附带了哪些产物，逐个版本说明，不做笼统承诺。请查看
 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases)确认某个 tag 实际带有什么。
 
+- **未发布（工作区）** —— 内置示例由七组精简为三组**功能导向**演示（`feature-tour`、`large-tree`、
+  `recon-family`），去除全部真实生物学背景；数值结构保持不变，交叉校验夹具已重新生成。
+  详见 CHANGELOG 的 [Unreleased] 小节。
 - **v0.3.0** —— 已发布版本；预构建产物由 `.github/workflows/release.yml` 构建（见 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.0)）。
 - **v0.2.0** —— 发布页产物：macOS 的 Apple Silicon 与 Intel 双架构 `.dmg`、Windows x64 的 `.msi`、
   Linux x86_64 的 `.deb` 与 AppImage（macOS 应用包 12.8 MiB；安装镜像 4.8 MiB；Windows/Linux 体积未测量）。

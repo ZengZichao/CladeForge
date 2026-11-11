@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // One-command driver for the third-party (R) leg of the correctness cross-check.
 //
 //   node scripts/cross-check/run-cross-check.mjs            # dump fixtures, then run R
@@ -181,7 +182,7 @@ if (!found) {
 
 say(`[3/3] running ape_agreement.R with ${found}`);
 // The fixtures carry the sample projects' own state labels, which are Chinese in
-// three of the six projects. Under an LC_CTYPE of "C", read.table aborts with
+// two of the three sample projects (feature-tour, large-tree). Under an LC_CTYPE of "C", read.table aborts with
 // "invalid input found on input connection" before it ever reaches the comparison,
 // so the child is given a UTF-8 locale explicitly.
 const env = { ...process.env };

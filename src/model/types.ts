@@ -136,7 +136,7 @@ export type CharacterModel = 'unordered' | 'wagner' | 'dollo' | 'custom';
 /** Where a character's colours are painted: node markers or branches. */
 export type CharacterColorTarget = 'node' | 'branch';
 
-/** One possible value of a discrete character (e.g. "aquatic"), with a colour. */
+/** One possible value of a discrete character (e.g. "State A"), with a colour. */
 export interface CharacterState {
   id: string;
   label: string;
@@ -732,10 +732,13 @@ export interface Project {
   appVersion?: string;
   /**
    * Stable id into the built-in sample catalogue (`sampleTree.ts`), set when the
-   * document was created from a sample card. It lets the app rebuild a still
-   * untouched sample in the other language on a locale switch, so sample content
-   * follows the UI language instead of staying frozen in the language that was
-   * active when the card was clicked.
+   * document was created from a sample card. The catalogue is feature-oriented
+   * (`feature-tour`, `large-tree`, `recon-family`). The id lets the app rebuild a
+   * still untouched sample in the other language on a locale switch, so sample
+   * content follows the UI language instead of staying frozen in the language
+   * that was active when the card was clicked. An id that is no longer in the
+   * catalogue (e.g. from an older version) is left untouched: the document stays
+   * an ordinary user project and is never rebuilt or cleaned.
    */
   sampleId?: string;
 }

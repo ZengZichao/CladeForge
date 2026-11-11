@@ -1,9 +1,5 @@
 project	id	name
+feature-tour	feature-tour	功能导览
+large-tree	large-tree	大树与深时
 recon-family	recon-family	基因家族协调
-archaea	archaea	深域辐射
-bacteria	bacteria	壁型与氧需求
-virus	virus	病毒演化
-cetacean	cetacean	水生适应
-plant	plant	陆地植物化
-animal	animal	四足登陆
 er-control	er-control	ER control (no stem lineages)

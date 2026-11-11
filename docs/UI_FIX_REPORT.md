@@ -7,7 +7,7 @@
 > 对象：《CladeForge_UI交互修复任务书.md》（2026-10-19，11 项缺陷）
 > 修复基线：仓库 `main` @ `2536b1b`（线上 <https://zengzichao.github.io/CladeForge/> 的构建产物即此提交，已在干净环境中复现：`npm ci && npm run build` 产出的主包哈希与线上 `assets/index-BcK_9XRS.js` 完全一致）
 > 状态：全部工作已落在工作区但**未提交**；仓库在此前已有其他人未提交的改动（`CITATION.cff`、`CONTRIBUTING*`、`docs/MANUAL*`、`src/io/{newick,nexus}.ts` 等），本次修复未回退、未改动这些内容。
-> 验证环境：macOS + Chromium 155（headless，CDP 驱动）；视口 1440×900 / 768×1024 / 375×812；中/英双语；浅/暗主题；默认 Cetacean 示例项目。
+> 验证环境：macOS + Chromium 155（headless，CDP 驱动）；视口 1440×900 / 768×1024 / 375×812；中/英双语；浅/暗主题；默认 Cetacean 示例项目（历史快照——示例已精简为三组功能导向演示，当前默认示例为 `feature-tour`，见 `CHANGELOG.md`）。
 
 ## 1. 结论摘要
 

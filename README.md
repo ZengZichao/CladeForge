@@ -59,6 +59,10 @@ What is actually attached to a release varies by version, so this is stated per 
 than promised for all of them. Check the [Releases page](https://github.com/ZengZichao/CladeForge/releases)
 for what a given tag carries.
 
+- **Unreleased (working tree)** — the built-in samples are reduced from seven to three
+  feature-oriented demos (`feature-tour`, `large-tree`, `recon-family`) with all real biological
+  background removed; numeric structure is unchanged and the cross-check fixtures were regenerated.
+  See the [Unreleased] section of the CHANGELOG for details.
 - **v0.3.0** — tagged release line, published with artifacts from
   `.github/workflows/release.yml` (see the [Releases page](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.0)).
 - **v0.2.0** — release page assets: `.dmg` for macOS on both Apple Silicon and Intel, `.msi`

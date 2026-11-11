@@ -1,30 +1,31 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { useStore, isReconActive, hasActiveGeneTree } from './store';
 import { makeGeneTreeEntry } from './geneTrees';
 import { IDENTITY_VIEW } from './types';
-import { createEmptyProject, createDeepDomainSample } from './sampleTree';
+import { createEmptyProject, createLargeTreeSample } from './sampleTree';
 import { addChildren, deleteNode, moveNode } from './treeOps';
 
 const s = () => useStore.getState();
 
 describe('relocalizeSamples (locale switch)', () => {
   it('rebuilds a PRISTINE sample document, keeping its sample identity', () => {
-    useStore.getState().openInNewTab(createDeepDomainSample());
-    expect(s().project.sampleId).toBe('archaea');
+    useStore.getState().openInNewTab(createLargeTreeSample());
+    expect(s().project.sampleId).toBe('large-tree');
     const before = s().project;
 
     s().relocalizeSamples();
     // A fresh document object (rebuilt from the catalogue), same sample id,
     // and still pristine — so a later switch re-localises it again.
     expect(s().project).not.toBe(before);
-    expect(s().project.sampleId).toBe('archaea');
+    expect(s().project.sampleId).toBe('large-tree');
     expect(s().past).toHaveLength(0);
   });
 
   it('leaves an EDITED sample document alone (user data is not thrown away)', () => {
-    useStore.getState().openInNewTab(createDeepDomainSample());
+    useStore.getState().openInNewTab(createLargeTreeSample());
     s().apply((d) => {
       addChildren(d, d.rootId, 1);
     });

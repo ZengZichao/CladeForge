@@ -1,0 +1,23 @@
+character	tip	state_label
+sample-char:large-tree-c1	Taxon_N	状态 A
+sample-char:large-tree-c1	Taxon_O	状态 A
+sample-char:large-tree-c1	Taxon_P	状态 B
+sample-char:large-tree-c1	Taxon_Q	状态 B
+sample-char:large-tree-c1	Taxon_F	?
+sample-char:large-tree-c1	Taxon_H	?
+sample-char:large-tree-c1	Taxon_I	?
+sample-char:large-tree-c1	Taxon_R	状态 C
+sample-char:large-tree-c1	Taxon_S	状态 C
+sample-char:large-tree-c1	Taxon_T	状态 C
+sample-char:large-tree-c1	Taxon_U	状态 C
+sample-char:large-tree-c2	Taxon_N	状态 C
+sample-char:large-tree-c2	Taxon_O	状态 C
+sample-char:large-tree-c2	Taxon_P	状态 C
+sample-char:large-tree-c2	Taxon_Q	状态 C
+sample-char:large-tree-c2	Taxon_F	?
+sample-char:large-tree-c2	Taxon_H	?
+sample-char:large-tree-c2	Taxon_I	?
+sample-char:large-tree-c2	Taxon_R	状态 A
+sample-char:large-tree-c2	Taxon_S	状态 A
+sample-char:large-tree-c2	Taxon_T	状态 B
+sample-char:large-tree-c2	Taxon_U	状态 B

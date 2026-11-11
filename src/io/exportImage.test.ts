@@ -39,8 +39,8 @@ describe('exportImage', () => {
       showEvents: true,
       showTransitions: true,
     });
-    expect(svg).toContain('性状：栖息地'); // legend title
-    expect(svg).toContain('#9ca3af'); // 陆生 state colour used as a node fill
+    expect(svg).toContain('性状：性状 1'); // legend title
+    expect(svg).toContain('#9ca3af'); // State A colour used as a node fill
     expect(svg).toContain('关键创新'); // event type appears in the legend
   });
 
@@ -149,7 +149,7 @@ describe('exportImage — user-authored colours cannot escape their attribute', 
 // carries an auto-generated legend.
 
 describe('exportImage — the auto-generated legend is inside the viewBox', () => {
-  const LONG_STATE = 'Semi-aquatic-intermediate-locomotion-hypothesis-state';
+  const LONG_STATE = 'Very-long-intermediate-state-label-for-legend-bounds-test';
 
   function legendRightEdges(svg: string) {
     const m = svg.match(/viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/);

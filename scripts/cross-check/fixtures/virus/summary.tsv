@@ -1,3 +1,0 @@
-character	mean_branch_length	rate_1_over_mean	sankoff_min_cost	has_step_matrix
-sample-char:virus-genome	1285.000000	0.0007782101167	1	0
-sample-char:virus-host	1285.000000	0.0007782101167	3	0

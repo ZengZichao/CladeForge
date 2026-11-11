@@ -7,7 +7,7 @@
 //   1. Node labels (NodeView). Layouts that shorten the depth axis (phylogram,
 //      time-calibrated) can put a parent node so close to its child that the
 //      parent's label runs straight through the child's label — e.g. the
-//      aquatic demo sample's parent label once overlapped its children's labels in both
+//      feature-tour demo sample's parent label once overlapped its children's labels in both
 //      layouts. Labels are placed by `labelPlacement()` alone today, which has
 //      no knowledge of the other labels.
 //   2. Evolutionary-event badges (EventLayer). They are anchored on the branch
@@ -386,7 +386,7 @@ function preferredDirections(
   } else if (horizontal) {
     along = orientation === 'LR' ? { x: 1, y: 0 } : { x: -1, y: 0 };
     // Prefer ABOVE the branch: the row below a label is usually where the next
-    // subtree's horizontal segment runs (for the aquatic sample that is the
+    // subtree's horizontal segment runs (for the feature-tour sample that is the
     // deepest internal branch), so a badge dropped there would sit on a line.
     perp = { x: 0, y: -1 };
   } else {

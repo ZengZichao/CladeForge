@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 壁型与氧需求
+# Project : 功能导览
 # Format  : CladeForge project v0.2.0
 # Software: CladeForge 0.3.0 (this header is the provenance stamp a
 #           reproducibility checklist asks for: software version, generation
@@ -46,11 +46,11 @@ library(ape)
 # label survives byte-exact even where ape's own reader would mangle it.
 tree <- structure(
   list(
-    edge = matrix(c(13, 14, 13, 15, 14, 16, 14, 17, 15, 18, 15, 19, 16, 20, 16, 21, 17, 1, 17, 2, 18, 3, 18, 4, 19, 5, 19, 6, 20, 22, 20, 23, 21, 7, 21, 8, 22, 9, 22, 10, 23, 11, 23, 12), ncol = 2, byrow = TRUE),
-    edge.length = c(50, 250, 50, 150, 50, 150, 700, 750, 3100, 3100, 3000, 3000, 2900, 2900, 500, 600, 50, 150, 2000, 2000, 1900, 1900),
-    Nnode = 11L,
-    tip.label = c("Taxon_P", "Taxon_Q", "Taxon_T", "Taxon_U", "Taxon_V", "Taxon_W", "Taxon_H", "Taxon_I", "Taxon_L", "Taxon_M", "Taxon_N", "Taxon_O"),
-    node.label = c("Taxon_A", "Taxon_B", "Taxon_C", "Taxon_D", "Taxon_E", "Taxon_R", "Taxon_S", "Taxon_F", "Taxon_G", "Taxon_J", "Taxon_K")
+    edge = matrix(c(5, 6, 5, 1, 6, 2, 6, 7, 7, 3, 7, 4), ncol = 2, byrow = TRUE),
+    edge.length = c(1, 5, 7, 11, 41, 41),
+    Nnode = 3L,
+    tip.label = c("Taxon_G", "Taxon_C", "Taxon_E", "Taxon_F"),
+    node.label = c("Taxon_A", "Taxon_B", "Taxon_D")
   ),
   class = "phylo"
 )
@@ -83,22 +83,22 @@ rate <- 1 / mean(bl)
 
 characters <- list(
   list(
-    name = "细胞壁类型",
+    name = "性状 1",
     type = "discrete",
-    states = c("革兰阳性", "革兰阴性"),
-    colors = c("#7c3aed", "#0ea5e9"),
-    cost = NULL,
-    rate = 0.0000737149563394173,
-    tips = c("Taxon_H" = "革兰阴性", "Taxon_I" = "革兰阴性", "Taxon_L" = "革兰阴性", "Taxon_M" = "革兰阴性", "Taxon_N" = "革兰阴性", "Taxon_O" = "革兰阴性", "Taxon_P" = "革兰阳性", "Taxon_Q" = "革兰阳性", "Taxon_T" = "革兰阴性", "Taxon_U" = "革兰阴性", "Taxon_V" = "革兰阴性", "Taxon_W" = "革兰阴性")
+    states = c("状态 A", "状态 B", "状态 C"),
+    colors = c("#9ca3af", "#3b82f6", "#1e3a5f"),
+    cost = matrix(c(0, 2, 3, 2, 0, 1, 3, 1, 0), nrow = 3, byrow = TRUE),
+    rate = 2.1398980273528574,
+    tips = c("Taxon_C" = "状态 B", "Taxon_E" = "状态 C", "Taxon_F" = "状态 C", "Taxon_G" = "状态 A")
   ),
   list(
-    name = "氧需求",
+    name = "性状 2",
     type = "discrete",
-    states = c("好氧", "厌氧", "兼性厌氧"),
-    colors = c("#22c55e", "#71717a", "#f59e0b"),
-    cost = NULL,
-    rate = 0.00024732446837023327,
-    tips = c("Taxon_H" = "厌氧", "Taxon_I" = "厌氧", "Taxon_L" = "好氧", "Taxon_M" = "好氧", "Taxon_N" = "厌氧", "Taxon_O" = "厌氧", "Taxon_P" = "厌氧", "Taxon_Q" = "兼性厌氧", "Taxon_T" = "兼性厌氧", "Taxon_U" = "好氧", "Taxon_V" = "好氧", "Taxon_W" = "好氧")
+    states = c("状态 A", "状态 B", "状态 C"),
+    colors = c("#b45309", "#0ea5e9", "#1e3a8a"),
+    cost = matrix(c(0, 2, 3, 5, 0, 1, 5, 5, 0), nrow = 3, byrow = TRUE),
+    rate = 2.1398980273528574,
+    tips = c("Taxon_C" = "状态 B", "Taxon_E" = "状态 C", "Taxon_F" = "状态 C", "Taxon_G" = "状态 A")
   )
 )
 
@@ -267,7 +267,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "壁型与氧需求", cex.main = 1.0)
+title(main = "功能导览", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]
