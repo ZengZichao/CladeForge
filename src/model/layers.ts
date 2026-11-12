@@ -70,7 +70,11 @@ export function applyLayer(project: Project, stored: StoredLayer): void {
     const n = project.nodes[nid];
     if (n && note.trim()) n.hypothesisNote = note;
   }
-  project.events = copyEvents(stored.events);
+  // Orphan guard: a stored snapshot can carry events for nodes deleted while
+  // another layer was active. Writing them back unfiltered resurrected events
+  // attached to nodes that no longer exist (states/meta/notes above are
+  // already existence-guarded; events were the one unguarded channel).
+  project.events = copyEvents(stored.events).filter((e) => Boolean(project.nodes[e.nodeId]));
 }
 
 /** Switch the active layer, saving the current one and loading the target. */
@@ -317,7 +321,12 @@ export function layerDiff(project: Project, aId: string, bId: string): LayerDiff
   }
   stateDiffs.sort((x, y) => x.nodeId.localeCompare(y.nodeId) || x.characterId.localeCompare(y.characterId));
 
-  const keyOf = (e: EvolutionaryEvent): string => `${e.typeId}|${e.nodeId}|${e.target}|${e.label ?? ''}`;
+  // The identity key carries the EVIDENCE fields too: two events that differ
+  // only in note / confidence / support / against are different hypotheses to
+  // the reader, but the old key ignored them, so an evidence-only edit showed
+  // no diff between the layers at all.
+  const keyOf = (e: EvolutionaryEvent): string =>
+    `${e.typeId}|${e.nodeId}|${e.target}|${e.label ?? ''}|${e.note ?? ''}|${e.confidence ?? ''}|${e.support ?? ''}|${e.against ?? ''}`;
   const aKeys = new Set(readEvents(aId).map(keyOf));
   const bKeys = new Set(readEvents(bId).map(keyOf));
   const eventsOnlyA = readEvents(aId).filter((e) => !bKeys.has(keyOf(e)));

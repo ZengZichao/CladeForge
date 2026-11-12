@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './model/store';
 import type { Project } from './model/types';
-import { requestConfirm } from './ui/confirmDialog';
+import { confirmCloseTab } from './ui/tabs';
 import * as file from './io/fileActions';
 import { registerMultiTreeHandler, registerExportSettingsHandler } from './io/fileActions';
 import { getAppInfo, isTauri } from './io/native';
@@ -67,7 +67,6 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
   const activeName = useStore((s) => s.project.name);
   const tabStore = useStore((s) => s.tabStore);
   const switchTab = useStore((s) => s.switchTab);
-  const closeTab = useStore((s) => s.closeTab);
   const newTab = useStore((s) => s.newTab);
   // Real dirty flag: revision vs last-saved revision. The undo-stack DEPTH was
   // the old test, which lied in both directions — an undo back to a clean
@@ -85,19 +84,10 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
     return snap ? snap.revision !== snap.lastSavedRevision : false;
   };
 
+  // The × button and the ⌘W chord MUST share one close path — the guard lives
+  // in ui/tabs.ts so both ask before dropping a dirty tab.
   const handleClose = (id: string) => {
-    if (dirtyOf(id)) {
-      requestConfirm({
-        key: 'close-tab',
-        title: S.tabs.closeConfirmTitle,
-        message: S.tabs.closeConfirmMessage(titleOf(id)),
-        confirmLabel: S.tabs.close,
-        danger: true,
-        onConfirm: () => closeTab(id),
-      });
-    } else {
-      closeTab(id);
-    }
+    confirmCloseTab(id);
   };
 
   return (
@@ -278,7 +268,7 @@ export function App() {
         // through the same dirty-check guard, and a browser says why the chord
         // cannot act (C#13 — both used to be silent no-ops).
         e.preventDefault();
-        if (s.tabs.length > 1) s.closeTab(s.activeTabId);
+        if (s.tabs.length > 1) confirmCloseTab(s.activeTabId);
         else requestWindowClose();
       } else if (k === '0') {
         e.preventDefault();

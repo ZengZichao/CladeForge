@@ -20,7 +20,7 @@ of evidence:
 | --- | --- | --- |
 | code | `src/model/independentReference.test.ts` | `dump-fixtures.ts` + `dump-fixtures.mjs` + `ape_agreement.R` + `run-cross-check.mjs` |
 | command | `npx vitest run src/model/independentReference.test.ts` | `node scripts/cross-check/run-cross-check.mjs` |
-| dependencies | Node plus the repository's own dev dependencies | R with the `ape` and `phangorn` packages; the per-leg totals below were checked against R 4.5.3 and 4.4.1, ape 5.8.1, phangorn 2.12.1 |
+| dependencies | Node plus the repository's own dev dependencies | R with the `ape` and `phangorn` packages; the per-leg totals below were checked against R 4.5.3, ape 5.8.1, phangorn 2.12.1 (R 4.4.1 is a historical validation environment, not a supported version; CI runs the R `release` build) |
 
 ## 1. Dump the fixtures (Node only, no new dependencies)
 
@@ -74,16 +74,18 @@ RSCRIPT_BIN=/opt/R/4.4.2/bin/Rscript node scripts/cross-check/run-cross-check.mj
 ```
 
 `run-cross-check.mjs` never fakes the second half: it re-dumps the fixtures,
-checks that all ten files exist for every project directory and that each Newick
-parses to ≥ 2 tips, then looks for an `Rscript` — in `$RSCRIPT_BIN`, then `PATH`,
+checks that all ten files exist for every project directory and that each
+project's `tree.nwk` parses to ≥ 2 tips, then looks for an `Rscript` — in
+`$RSCRIPT_BIN`, then `PATH`,
 then the framework/homebrew locations, then the env-manager prefixes under the
 home directory (mamba / miniconda / anaconda / miniforge / mambaforge / pixi
 `envs` directories), where R usually hides when it was not installed from CRAN.
 An installation that cannot `library(ape)` and `library(phangorn)` is reported as
 unusable rather than chosen, because "an R exists" is not the precondition for
-this leg. If nothing usable is found it writes an explicit "R LEG NOT RUN" message
+this leg. If nothing usable is found it writes an explicit `R LEG NOT RUN` message
 with what it searched, what it rejected and why, and exits **3**;
-`--fixtures-only` stops after step 1 on purpose. An explicit `$RSCRIPT_BIN` is a
+`--fixtures-only` still runs the step-2 integrity check on the dumped fixtures and
+skips only the R leg, on purpose, exiting 0. An explicit `$RSCRIPT_BIN` is a
 request, not a hint: when that binary cannot run the leg the driver stops instead
 of substituting a different R. It also gives the R child a UTF-8 `LC_ALL`;
 `ape_agreement.R` does not depend on that (see the `read_tsv` comment in that
@@ -121,7 +123,7 @@ documentation calls the discrete-ML ancestral likelihoods; `states` and `probs`
 are accepted for other builds, the component actually used is named in the
 output, and so is whether it covered the internal nodes only or all nodes.
 
-Exit codes: `0` every attempted comparison agreed; `1` a row FAILED or
+Exit codes: `0` every attempted comparison agreed; `1` a row `FAILED` or
 disagreed; `2` fixtures missing or nothing comparable. Rows that are excluded,
 not comparable, or not yet compared are recorded with their reason and are
 **never** counted as agreement.
@@ -159,7 +161,7 @@ leg of `src/model/independentReference.test.ts`.
 * The DTL leg is a *parsimony* reconciliation under a topology-only transfer
   constraint. It is compared against a brute-force enumeration of the same
   model, **not** against RIANA / Treerecon / CaSpec: those differ in root and
-  arrival fees, in per-junction loss counting, and in age-based temporal
+  arrival fees, in per-junction loss counting, and in node-age-based temporal
   feasibility (see the header of `src/model/dtl.ts`). Quote its totals as
   "events under this model".
 
@@ -175,9 +177,10 @@ Rscript scripts/cross-check/ape_agreement.R              # third-party leg (need
 `fixtures/` is generated output; it is kept so that a reader who only has R can
 run step 2 directly. Regenerating it is byte-identical: sample character ids are
 pinned as `sample-char:<project>-<name>` in `src/model/sampleTree.ts` (and
-guarded by a test), because the id is the `character` column of five fixture files
-plus `manifest.tsv` — leaving it random would rewrite ~1 500 committed lines on
-every regeneration without changing a single measurable value. Node and state ids
+guarded by a test), because the id is the `character` column of six fixture files
+plus `manifest.tsv` — leaving it random would rewrite, on every regeneration, the
+~360 committed lines that carry a character id, without changing a single
+measurable value. Node and state ids
 stay random, because no fixture column carries them.
 
 ## Reading the output
@@ -206,7 +209,7 @@ Exit status **0**: every comparison the harness attempted agreed.
 * **Marginal states — measured on 3 rows, deliberately not counted anywhere.**
   `ape::ace()` refuses any tree that is not rooted **and** fully dichotomous and
   skips characters with missing codings. The two `large-tree` characters carry `?`
-  codings, so those two rows read NOT-COMPARABLE; imputing or contracting would
+  codings, so those two rows read `NOT-COMPARABLE`; imputing or contracting would
   change *which* node is being compared, so the harness does not do it.
   `feature-tour` (two characters) and `er-control` are dichotomous and fully
   scored, so three measurement rows come back. CladeForge's fixed rate is
@@ -250,7 +253,7 @@ These are the reasons the harness is written the way it is:
   and tags them, so the script is correct in either locale.
 * **`system2()` cannot build a command line containing a path the native encoding
   cannot represent**, so a repository under a non-ASCII directory makes the
-  exported-script leg report "0 cost lines". That leg runs a copy of the script
+  exported-script leg report "0 cost line(s)". That leg runs a copy of the script
   from the session's temporary directory and echoes the child's output whenever the
   counts disagree.
 * **Two reader bugs** (in ape, not in the exported files): quoted labels

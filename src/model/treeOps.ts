@@ -1136,14 +1136,16 @@ export function inferSupportScale(values: number[]): SupportScale {
 }
 
 /**
- * Collapse (set `collapsed = true`) every internal node whose support is below
- * the given threshold. Supports and thresholds stored as 0–1 or 0–100 are both
- * handled — they are converted to the same scale first (`normalizeSupport`).
- * Nodes with no support recorded are left alone: absence of data is not weak
- * support.
+ * Collapse every internal node whose support value falls below the given
+ * threshold. The THRESHOLD is a 0–100 percent by definition — pushing it
+ * through `normalizeSupport`'s legacy heuristic ("<= 1 means fraction") made a
+ * user who typed 0.5 (meaning 0.5 %) read as 50 % and collapse half the tree.
+ * NODE supports still go through `supportPercent`, which honours each node's
+ * declared scale. Nodes with no support recorded are left alone: absence of
+ * data is not weak support.
  */
 export function collapseBelowSupport(project: Project, threshold: number): number {
-  const limit = normalizeSupport(threshold) ?? threshold;
+  const limit = threshold;
   let count = 0;
   for (const n of Object.values(project.nodes)) {
     if (n.childrenIds.length === 0) continue;
@@ -2568,11 +2570,38 @@ function pruneEventsForNodes(project: Project, removedNodeIds: Set<NodeId>): voi
   }
 }
 
-/** Drop hypothesis annotations for deleted nodes from every stored layer. */
+/**
+ * Drop hypothesis annotations AND the stored layer bodies (states / meta /
+ * events) of deleted nodes from every non-active layer snapshot. Notes alone
+ * used to be cleaned: the other layers kept events attached to the removed
+ * nodes, and switching back to such a layer resurrected the orphans into the
+ * live document (until the next reload's pruneLayerStore quietly dropped
+ * them).
+ */
 function pruneHypothesisNotesForNodes(project: Project, removedNodeIds: Set<NodeId>): void {
   for (const stored of Object.values(project.layerStore)) {
-    if (!stored.notes) continue;
-    for (const id of removedNodeIds) delete stored.notes[id];
+    if (stored.notes) {
+      for (const id of removedNodeIds) delete stored.notes[id];
+    }
+    if (stored.events.length > 0) {
+      const removedEventIds = new Set(
+        stored.events.filter((e) => removedNodeIds.has(e.nodeId)).map((e) => e.id),
+      );
+      if (removedEventIds.size > 0) {
+        stored.events = stored.events.filter((e) => !removedEventIds.has(e.id));
+        for (const e of stored.events) {
+          if (e.triggers.some((t) => removedEventIds.has(t))) {
+            e.triggers = e.triggers.filter((t) => !removedEventIds.has(t));
+          }
+        }
+      }
+    }
+    if (stored.states) {
+      for (const id of removedNodeIds) delete stored.states[id];
+    }
+    if (stored.meta) {
+      for (const id of removedNodeIds) delete stored.meta[id];
+    }
   }
 }
 

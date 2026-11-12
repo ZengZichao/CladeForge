@@ -739,7 +739,7 @@ export interface NewickParseOptions {
  * comments) so the user is told, in no uncertain terms, that the file is a
  * network and what their options are — silent degradation is data corruption.
  */
-const NET_SYNTAX = /[#@<>@]/;
+const NET_SYNTAX = /[#@<>]/;
 
 function scanForNetSyntax(input: string): string | null {
   let inQuote: string | null = null;

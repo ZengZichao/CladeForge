@@ -129,6 +129,28 @@ describe('exportImage — user-authored colours cannot escape their attribute', 
     expect(svg).not.toContain('fetch(1)');
   });
 
+  it('neutralises a payload in a custom-edge arrow marker fill (M2)', () => {
+    // The arrowhead lives in a <marker><path fill=…> in <defs> — that fill was
+    // the one colour attribute that skipped safeColour, so a project file
+    // could still close the attribute and carry script into a shared SVG.
+    const p = createSampleProject();
+    const ids = Object.keys(p.nodes);
+    p.customEdges = [
+      {
+        id: 'edge-x',
+        sourceId: ids[0],
+        targetId: ids[1],
+        style: { color: '#d1495b" onload="alert(1)', width: 1.5, dash: 'solid', arrow: true, curvature: 0.3 },
+        kind: 'hgt',
+      },
+    ];
+    const svg = exportSVGString(p);
+    expect(svg).not.toContain('onload');
+    expect(svg).not.toContain('alert(1)');
+    // The marker still paints — with the fallback, not the payload.
+    expect(svg).toContain('fill="#d1495b"');
+  });
+
   it('never emits NaN or Infinity into a numeric attribute', () => {
     const p = createSampleProject();
     for (const id of Object.keys(p.nodes)) {

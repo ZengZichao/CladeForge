@@ -320,13 +320,13 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     const seen = new Set<string>();
     const rows: LegendRow[] = [];
     for (const e of project.events) {
-      const color = eventMarkerColor(e);
+      const color = eventMarkerColor(e, project);
       const shape = eventMarkerShape(e);
-      const code = eventBadgeText(e);
+      const code = eventBadgeText(e, project);
       const id = `${e.typeId}|${color}|${shape}|${code}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      const t = findEventType(e.typeId);
+      const t = findEventType(e.typeId, project);
       rows.push({
         kind: 'event',
         label: t ? tr(t.label, t.labelEn) : tr('事件', 'Event'),
@@ -514,7 +514,10 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
     if (st.arrow) {
       const mid = `ex-arrow-${edge.id}`;
       defs.push(
-        `<marker id="${mid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 0 0 L 10 5 L 0 10 z" fill="${st.color}"/></marker>`,
+        // st.color comes from the project JSON — the marker fill must pass
+        // safeColour like every other colour attribute (it used to be the one
+        // injection hole that survived the attribute-escaping pass).
+        `<marker id="${mid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 0 0 L 10 5 L 0 10 z" fill="${safeColour(st.color, '#d1495b')}"/></marker>`,
       );
       markerAttr = `marker-end="url(#${mid})"`;
     }
@@ -720,8 +723,8 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       // colour / inner text with catalogue defaults), so exported figures cannot
       // disagree with the screen about how a badge is drawn.
       const r = eventMarkerSize(e);
-      const color = eventMarkerColor(e);
       const sw = e.confidence === 'high' ? 2.5 : 2;
+      const color = eventMarkerColor(e, project);
       const cdash = e.confidence === 'low' ? ' stroke-dasharray="2 2"' : '';
       const join = ' stroke-linejoin="round"';
       parts.push(
@@ -730,7 +733,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
       // Text is optional: markers draw shape + colour only unless the event
       // explicitly shows text. When shown, centre it with the same ~0.34 em
       // baseline shift the canvas uses.
-      const badgeText = eventBadgeText(e);
+      const badgeText = eventBadgeText(e, project);
       if (badgeText) {
         const fs = eventBadgeFontSize(e);
         parts.push(

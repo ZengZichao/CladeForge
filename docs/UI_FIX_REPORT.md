@@ -1,10 +1,10 @@
 <!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
 
-# CladeForge UI / 交互修复报告（2026-10-19）
+# CladeForge UI / 交互修复报告（2026-10-19）/ UI Fix Report
 
 > **Historical report — not current status.** 本文记录 2026-10-19 的修复会话；相关改动后来已提交（51bc980），下文“未提交”、911 tests、旧类群名等均为当时快照。当前状态见 `CHANGELOG.md` 与 `docs/AI_PROVENANCE.md`。
 
-> 对象：《CladeForge_UI交互修复任务书.md》（2026-10-19，11 项缺陷）
+> 对象：《CladeForge_UI交互修复任务书.md》（2026-10-19，11 项缺陷）——**已遗失的历史档案**：该文件从未入库，仓库内与上层档案目录（`CladeForge-审阅文档/`、`CladeForge-审查报告-2026-11-12.md` 等）均不存在，故不给出路径。下文所有“任务书”均指这份遗失的原始任务说明；本报告是其唯一存留的完整记录。
 > 修复基线：仓库 `main` @ `2536b1b`（线上 <https://zengzichao.github.io/CladeForge/> 的构建产物即此提交，已在干净环境中复现：`npm ci && npm run build` 产出的主包哈希与线上 `assets/index-BcK_9XRS.js` 完全一致）
 > 状态：全部工作已落在工作区但**未提交**；仓库在此前已有其他人未提交的改动（`CITATION.cff`、`CONTRIBUTING*`、`docs/MANUAL*`、`src/io/{newick,nexus}.ts` 等），本次修复未回退、未改动这些内容。
 > 验证环境：macOS + Chromium 155（headless，CDP 驱动）；视口 1440×900 / 768×1024 / 375×812；中/英双语；浅/暗主题；默认 Cetacean 示例项目（历史快照——示例已精简为三组功能导向演示，当前默认示例为 `feature-tour`，见 `CHANGELOG.md`）。
@@ -24,7 +24,7 @@
 | 编号 | 优先级 | 复验结论 | 根因 / 处理 | 主要改动 |
 |---|---|---|---|---|
 | BUG-1 | P0 | **复现并修复** | 不是“忘了 close()”。Enter 提交后对话框确实关闭，但 `useDialogFocus` 在同一 keydown 内把焦点还给打开它的工具栏按钮，浏览器随后把同一个 Enter 的默认动作发给该按钮，对话框被重新打开（DOM 里表现为“没关”）。修复：Enter 处理器 `preventDefault()+stopPropagation()` 后走与 Add 按钮完全相同的 confirm；提交前重新校验目标节点。 | `src/ui/AddChildrenDialog.tsx` |
-| BUG-2 | P0 | **未复现（现行为符合要求）** | 所有模态（Add a polytomy / Keyboard Shortcuts / About / Beginner Tour / Character matrix / Analysis / Nexus export / 删除确认 / ⌘K palette）均走 `useDialogFocus`（capture 阶段 Esc → preventDefault+stopPropagation），逐一实测 Esc 均可关闭且无副作用；无模态时 Esc 仍清除画布选区。任务书观察到的“polytomy Esc 无效”很可能与 BUG-1 的“对话框被 Enter 重新打开”混淆。 | 验证为主；`useDialogFocus` 契约不变，新增浏览器回归覆盖 |
+| BUG-2 | P0 | **未复现（现行为符合要求）** | 所有模态（Add a polytomy / Keyboard Shortcuts / About / Beginner Tour / Character matrix / Analysis / NEXUS export / 删除确认 / ⌘K palette）均走 `useDialogFocus`（capture 阶段 Esc → preventDefault+stopPropagation），逐一实测 Esc 均可关闭且无副作用；无模态时 Esc 仍清除画布选区。任务书观察到的“polytomy Esc 无效”很可能与 BUG-1 的“对话框被 Enter 重新打开”混淆。 | 验证为主；`useDialogFocus` 契约不变，新增浏览器回归覆盖 |
 | BUG-3 | P0 | **复现并修复** | 对话框从未渲染目标节点。新增目标行：选中节点时显示 `Add children to [节点名]`；未选中时显示 `No node selected — children will be added to the root (Cetacea)`；目标被删除时显示警告并禁用 Add。中英文已补。 | `src/ui/AddChildrenDialog.tsx`、`src/ui/strings.ts` |
 | BUG-4 | P0 | **复现并修复** | 徽标用固定偏移锚定（node 事件沿分支偏移 18px），不做碰撞检测；另实测 phylogram / time-calibrated 下还存在真实 `Basilosauridae × Neoceti` 标签互叠。新增世界坐标碰撞规划模块：标签 bbox（CJK 全角/旋转规则）→ 贪心垂直 stagger；徽标以节点为簇、按“离自然锚点由近到远”的环形候选避让所有标签/marker/时间轴文字/已放置徽标，偏移≥13 画细引导线+锚点。导出层（SVG/PNG/PDF）复用同一规划器。 | 新增 `src/canvas/eventBadgeLayout.ts`；`EventLayer.tsx`、`NodeView.tsx`、`labelBounds.ts`、`src/io/exportImage.ts` |
 | BUG-5 | P0（待复验） | **未复现；已加根因级防御** | 四布局下 Time 模块提示名均非空且正确，time-calibrated 时不显示“请切换”提示。唯一真实空串风险是**加载的手改/旧版文档 `layout.type` 为空串/未知**（`projectIO` 会原样保留）：旧的两份重复 `layoutTypeName()` 的 `default: return type` 会显示 `“”`。抽出共享 `layoutTypeName()`：未知非空 id 原样回显，空/缺失→`未知布局 / Unknown layout`，永不空串。 | 新增 `src/ui/layoutTypeName.ts`；`TimePanel.tsx`、`TreeCanvas.tsx` |

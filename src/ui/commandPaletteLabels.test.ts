@@ -10,7 +10,7 @@
  *
  * `st()` is `useStore.getState`, so the value is whatever `reconMode` happens to
  * be the first time the memo runs. Entering or leaving the reconciliation view
- * then never re-labels the item, so the palette keeps offering "进入协同视图" while
+ * then never re-labels the item, so the palette keeps offering "进入协调视图" while
  * the user is already in it — and the same for every other label in the list
  * after a language switch, which the app only papers over by remounting its tree.
  *

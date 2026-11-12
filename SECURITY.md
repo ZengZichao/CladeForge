@@ -18,9 +18,12 @@ whatever release is current at the time; there is no long-term-support branch.
 cannot be retracted.
 
 Report it privately through GitHub's vulnerability reporting on this repository
-(<https://github.com/ZengZichao/CladeForge/security/advisories/new>). If that form is
-unavailable, email the maintainer directly at the address in
-[`CITATION.cff`](./CITATION.cff).
+(<https://github.com/ZengZichao/CladeForge/security/advisories/new>) — the same link the issue
+picker offers as its security contact (`.github/ISSUE_TEMPLATE/config.yml`), so the two cannot
+drift apart. If that form is unavailable, email the maintainer at the address recorded in
+[`CITATION.cff`](./CITATION.cff) (the same address ships in `package.json` and
+`src-tauri/Cargo.toml`). A private report stays private while it is open; it is not mirrored into
+the public issue tracker, which is why the public form must not be used.
 
 Please include:
 
@@ -51,7 +54,8 @@ Out of scope:
 
 ## Known limitations
 
-Pre-built release artifacts are **unsigned**. There is no notarization, no code signing on
-Windows, and no published checksum. A macOS user has to clear Gatekeeper on first launch. This
+Pre-built release artifacts are **unsigned**. There is no notarisation, no code signing on
+Windows, and no published checksum — `.github/workflows/release.yml` attaches the installers and
+nothing else. A macOS user has to clear Gatekeeper on first launch. This
 is a real gap; treat a downloaded binary as unverified and prefer building from source if that
 matters to you.

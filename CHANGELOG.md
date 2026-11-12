@@ -8,7 +8,8 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 ## [Unreleased]
 
 ### Added — embedded (nested) reconciliation layout
-- **A second reconciliation canvas mode (并排对照 / 嵌套视图)**: the new 嵌套视图 draws the
+- **A second reconciliation canvas mode, side-by-side vs nested view** (toolbar labels
+  `并排对照`/`嵌套视图` in zh, `Side-by-side`/`Embedded` in EN): the nested view draws the
   species tree as THICK branch tubes (default 18 world px, adaptive up to 32 with an overflow
   badge) plus vertical hub bars, and nests the gene tree's THIN (≈1.25 px) event-coloured
   lineages INSIDE those tubes through an SVG mask — speciation σ sends children into different
@@ -21,22 +22,25 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
   counts — the `recon-family` sample's β4 stays connected); truly unmapped nodes land in a
   labelled orphan gutter instead of vanishing; structural losses distinguish inferred /
   asserted-covered / asserted-below-minimum states (λ, λ, λ!).
-- **Path building in the nested view**: Alt+click a species tube maps the selected gene node onto
+- **Path building in the nested view**: Alt + click a species tube maps the selected gene node onto
   that branch AND records the clicked within-branch position (`branchFraction`, persisted);
   the DTL assumption inspector gains a branch-position slider (with an Auto reset) and a
   transfer-donor select (`transferDonor`, persisted). Applying a DTL scenario keeps these visual
   fields only where the mapping target is unchanged; project files clamp `branchFraction` into
   [0, 1] and drop dangling `transferDonor`s on load.
-- **Embedded figure export**: `导出嵌套图` (embedded mode toolbar) writes a standalone SVG of the
-  nested figure — same geometry as the canvas, with legend and version metadata — for hypothesis
-  documents. The reconciliation Markdown report and NHX output now carry a 枝内位置 column and
-  `BF=` / `TD=` tags so hand-built paths survive the round trip.
+- **Embedded figure export**: the embedded-mode toolbar's **Export figure** button (`导出嵌套图`
+  in zh) writes a standalone SVG of the nested figure — same geometry as the canvas, with legend
+  and version metadata — for hypothesis documents. The reconciliation Markdown report and NHX
+  output now carry a branch-position column (`枝内位置` in zh) and `BF=` / `TD=` tags so
+  hand-built paths survive the round trip.
 - View options for the nested mode (tube width, lane gap, transfer arcs, loss stubs) live in the
-  reconciliation panel's 视图 section; "重置视图设置" no longer kicks the user out of the nested
-  mode.
+  reconciliation panel's View section (`视图` in zh); "Reset view settings" (`重置视图设置`) no
+  longer kicks the user out of the nested mode.
 - Documentation updated for the embedded view: README feature bullet + roadmap, the user manuals
-  (中文/English — new 嵌套视图 sections plus toolbar/inspector descriptions), UI_GLOSSARY/GLOSSARY
-  terms (物种枝管道、纵向枢纽、车道、枝内位置、转移供体、丢失残枝、显示推断、孤立区),
+  (Chinese and English — new nested-view (`嵌套视图`) sections plus toolbar/inspector
+  descriptions), the UI_GLOSSARY/GLOSSARY terms species branch tube, hub bar, lane, branch
+  position, transfer donor, loss stub, display-inferred and orphan gutter (their zh forms are the
+  glossary rows themselves),
   docs/FORMAT.md optional path fields, and the layout plan marked as implemented.
   New tests: `src/model/reconPlacements.test.ts`, `src/layout/embeddedRecon.test.ts`,
   `src/io/embeddedReconExport.test.ts`.
@@ -49,11 +53,13 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
   builders were removed. The empty-state grid, sample picker and manuals describe
   three feature-oriented demos rather than seven scientific cases.
 - **No real biological background.** Samples demonstrate software features, not
-  scientific cases: characters are now 性状 1 / 性状 2 (Character 1 / 2) with neutral
-  状态 A / B / C states, and events, calibrations, environmental markers and hypothesis
-  evidence carry neutral code names (事件 A、环境标记 A、示例证据 A …). Taxa stay the
-  fictional `Taxon_*` codes. No real taxon, trait, geological event or story remains in
-  any sample name, description, state, event, calibration or evidence string.
+  scientific cases: characters are now Character 1 / Character 2 (`性状 1`/`性状 2` in the zh
+  locale) with neutral State A / B / C labels (`状态 A`/`状态 B`/`状态 C`), and events,
+  calibrations, environmental markers and hypothesis
+  evidence carry neutral code names (Event A, Environmental marker A, Illustrative evidence A …;
+  `事件 A`、`环境标记 A`、`示例证据 A` in zh). Taxa stay the
+  fictional `Taxon_*` codes. No real taxon, character, geological event or story
+  remains in any sample name, description, state, event, calibration or evidence string.
 - **Relabel, not rebuild.** Every numeric structure is preserved: tree topology, node
   ages, branch lengths, character/state counts, state assignments, Sankoff cost
   matrices, hypothesis-layer assignments and confidences, event types and triggers,
@@ -78,7 +84,7 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`
 (unsigned); the entries below are the changes since v0.2.0.
 
-### Review round A/B/C (`CladeForge-评审报告-A/B/C`; author’s archive, not checked in) — 2026-11-10. Every finding of
+### Review round A/B/C (the three review reports `CladeForge-评审报告-A/B/C`, zh for "review report A/B/C"; author’s archive, not checked in) — 2026-11-10. Every finding of
 the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
 28 C-item list, plus the component-level test gap the reviews flagged (H6).
 
@@ -151,7 +157,7 @@ the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
   longer points at a dialog that does not exist (C#11).
 - **Export feedback is uniform (A-08/C#9/M20)**: every export toast names the
   file and its size (PDF/Newick/NEXUS/hypothesis/narrative/recon report
-  previously got a bare "已导出"); the correlation CSV goes through the same
+  previously got a bare "Exported" (`已导出` in zh); the correlation CSV goes through the same
   native save pipeline as every other export (A-06); the R-script export runs
   under the busy veil and its toast says what RUNNING the script needs
   (local R + ape, outputs land in the working directory) (M13).
@@ -186,7 +192,8 @@ the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
   (A-11); the undo limit is configurable in preferences (100/300/1000) and the
   tooltip says so (A-12); tabs switch on click, not mousedown (M24); the
   single-tab ⌘W chord routes through the close guard on the desktop and explains
-  itself in a browser (C#13); the File menu carries 树操作 entries for reroot and
+  itself in a browser (C#13); the File menu carries the tree-operations entries (`树操作`/`Tree`
+  category) for reroot and
   ladderize, breaking the right-click-only entry point (C#27); the character
   editor ends with a forward "what next" prompt (M2); binary-export toasts name
   the chosen path and the browser save toast says "downloaded" instead of
@@ -201,14 +208,18 @@ the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
 #### Fixed — copy and docs
 - DTL scope/ambiguity strings that existed but never rendered are now rendered
   next to the DP numbers they qualify (A-17); the four (1,2,1) cost fallbacks
-  now reference `DEFAULT_RECON_COSTS` (A-09); the palette categories say 协调
-  (H3); the pseudo-plural `branch length(s)`, the 兄弟/同级 split and the
+  now reference `DEFAULT_RECON_COSTS` (A-09); the palette categories say the glossary term
+  `协调` ("reconciliation", H3); the pseudo-plural `branch length(s)`, the `兄弟`/`同级`
+  ("sibling" vs "peer") split and the
   zh/en sentence asymmetry are repaired (C#28).
-- MANUAL_ZH: 协同→协调 throughout (UI_GLOSSARY compliance), 支持率→支持度,
-  最近共祖→最近共同祖先, 多分叉→多歧枝; the support-threshold section now
+- MANUAL_ZH terminology, quoted as the Chinese strings that were changed: `协同`→`协调`
+  (reconciliation) throughout (UI_GLOSSARY compliance), `支持率`→`支持度` (support),
+  `最近共祖`→`最近共同祖先` (most recent common ancestor), `多分叉`→`多歧枝` (polytomy);
+  the support-threshold section now
   describes the control that actually exists in the style panel and its
   canvas+export effect (H2); version header 0.1.0→0.2.0; seven samples, not
-  six; the TOC anchor and the「场景 › 映射与事件」pointer repaired (M14/C#17).
+  six; the TOC anchor and the `「场景 › 映射与事件」` ("Scenario › Mapping and events") pointer
+  repaired (M14/C#17).
   MANUAL_EN: version header, sample count, and the residual Chinese in the
   shortcut table.
 - CITATION.cff carries a bare version; a new `versionConsistency.test.ts`
@@ -233,8 +244,9 @@ the three independent reviews repaired: 19 A-items, 8 H + 24 M B-items and the
 - Model-layer regression tests for the A-13 polymorphic counting, the A-14
   guards and the undetermined CI bound.
 
-### Reconciliation-view lag (`性能分析-协调视图卡顿`) — 2026-11-09. Every finding
-of the coordination-view performance analysis (§3.1–§3.5) repaired.
+### Reconciliation-view lag (performance analysis `性能分析-协调视图卡顿`, zh for "reconciliation-view
+performance analysis"; author’s archive, not checked in) — 2026-11-09. Every finding
+of that analysis (§3.1–§3.5) repaired.
 
 #### Fixed
 - **Hover cascade**: the reconciliation panes now render nodes, edges and guide
@@ -273,7 +285,7 @@ of the coordination-view performance analysis (§3.1–§3.5) repaired.
   plus 2 extended ones (17 cases).
 
 ### Scientific-correctness and functional-test review round — 2026-11-07/08. Every
-finding of the 科学正确性与功能测试 review (13 S-items, 28 M-items and the minor
+finding of that review (13 S-items, 28 M-items and the minor
 §4 list) repaired, with 12 new regression-test files (66 cases) pinning the
 review's independent reference values.
 
@@ -384,7 +396,7 @@ finding repaired.
   age-0 tip onto one shared centre point (overlapping markers/labels); the
   on-canvas notice and the Layout panel hint (now conditional on `hasAges`)
   describe the actual geometry. Stale comments corrected.
-- Export options… (导出选项…) is reachable again: the export-settings dialog
+- **"Export options…"** (`导出选项…` in zh) is reachable again: the export-settings dialog
   (preset mode, DPI, support values, legend, scale bar, grayscale,
   background) was registered but no UI called it, so every figure button
   exported directly. Added to the top of the Export panel and the File
@@ -396,7 +408,7 @@ finding repaired.
 
 ### Review round 2 — fixes for the four review reports (PM / domain expert /
 journal editor / postdoc), grouped by theme. Every entry closes one or more
-numbered findings from `CladeForge-审查文档/`.
+numbered findings from the four review reports (author’s archive, not checked in).
 
 #### Added
 - CSV/TSV in and out: character-matrix import with a four-state label-join

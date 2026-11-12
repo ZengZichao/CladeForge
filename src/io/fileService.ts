@@ -186,6 +186,16 @@ export async function saveTextWithResult(
   return { ok: true };
 }
 
+/**
+ * Above this size a binary write shows the busy overlay for the IPC hop.
+ * The JSON number-array bridge costs ≈ 3–4 characters per byte, so a 100 MB
+ * figure can take seconds on the WRITE alone — after the (already busy) render
+ * finished, the UI used to look frozen again with no hint anything was
+ * happening. The real fix is a raw-bytes IPC channel (Rust-side change, needs
+ * a desktop build to verify); until then this keeps the user informed.
+ */
+const LARGE_IPC_WRITE_BYTES = 16 * 1024 * 1024;
+
 export async function saveBinary(
   defaultName: string,
   blob: Blob,
@@ -195,7 +205,19 @@ export async function saveBinary(
     const { save } = await import('@tauri-apps/plugin-dialog');
     const path = await save({ defaultPath: defaultName, filters });
     if (!path) return { ok: false };
-    await writeBinaryFileNative(path, new Uint8Array(await blob.arrayBuffer()));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.length > LARGE_IPC_WRITE_BYTES) {
+      const { withBusy } = await import('../ui/busy');
+      await withBusy(
+        tr(
+          `正在写入 ${Math.ceil(bytes.length / (1024 * 1024))} MB 的文件…`,
+          `Writing the ${Math.ceil(bytes.length / (1024 * 1024))} MB file…`,
+        ),
+        () => writeBinaryFileNative(path, bytes),
+      );
+    } else {
+      await writeBinaryFileNative(path, bytes);
+    }
     // The path travels back (C#9): the success toast can say WHERE the figure
     // went, not just that it went somewhere.
     return { ok: true, path };

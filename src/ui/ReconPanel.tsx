@@ -1,7 +1,7 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left panel of the reconciliation workspace, presented ONE SECTION AT A TIME
 // (the rail picks: 树库 / 场景 / 校验 / 视图). In the STANDARD workspace's
-// 协同 module the same content renders stacked (`section` undefined) — the
+// 协调 module the same content renders stacked (`section` undefined) — the
 // pre-workspace behaviour, kept intact there.
 //
 // New capabilities per the 2026-10-31 reconciliation review:
@@ -10,7 +10,7 @@
 //    its mapping line — the text equivalent of the lines (§5.6.8);
 //  - the VIEW section exposes the transient canvas options (scope, event
 //    filter, label/glyph/loss/mapping toggles, sync zoom, fit/reset);
-//  - the TREES section offers "载入协同示例" so the demo is reachable from a
+//  - the TREES section offers "载入协调示例" so the demo is reachable from a
 //    non-empty document too (§7.4).
 
 import { useMemo, useState } from 'react';
@@ -61,7 +61,7 @@ function issueTagText(issue: ReconIssue): string {
     case 'timing':
       return tr('时序', 'Timing');
     case 'tip-on-internal':
-      // PM-44: "尖端居祖先" asserts that a sampled tip sits at an ancestral
+      // PM-44: "末端居祖先" asserts that a sampled tip sits at an ancestral
       // species node — express it as the claim it is, tooltip keeps the term.
       return tr('末端被映射到祖先节点', 'Tip mapped onto an ancestral node');
     case 'leaf-event':
@@ -154,7 +154,7 @@ export function ReconPanel({
       const tipMap = mapTipsByLabel(d, g.doc).mappings;
       g.assumptions = suggestLcaScenario(d, g.doc, tipMap, g.assumptions);
     });
-    notify.success(tr('已生成 LCA 建议场景', 'LCA suggestion applied'));
+    notify.success(tr('已生成 MRCA 建议场景', 'MRCA suggestion applied'));
   };
 
   /**
@@ -205,10 +205,10 @@ export function ReconPanel({
     if (!activeEntry) return;
     requestConfirm({
       key: 'recon-clear-assumptions',
-      title: tr('清空协同假设', 'Clear reconciliation assumptions'),
+      title: tr('清空协调假设', 'Clear reconciliation assumptions'),
       message: tr(
         `将移除「${activeEntry.name}」的全部映射与事件假设（可用撤销恢复）。`,
-        `This removes every mapping/event assumption of "${activeEntry.name}" (undoable).`,
+        `This removes every mapping/event assumption of “${activeEntry.name}” (undoable).`,
       ),
       confirmLabel: S.recon.clearAssumptions,
       onConfirm: () => apply((d) => clearAssumptionsOp(d, activeEntry.id)),

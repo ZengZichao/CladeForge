@@ -529,8 +529,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   {signal.unresolvedTree && (
                     <div className="hint">
                       {tr(
-                        '树含未解析多歧枝：CI/RI 会偏乐观（变化可在多歧枝间“免费”共享）',
-                        'The tree contains unresolved polytomies: CI/RI read optimistic (changes are shared "for free" across unresolved branches)',
+                        '树含多歧分支：CI/RI 会偏乐观（变化可在多歧分支间“免费”共享）',
+                        'The tree contains unresolved polytomies: CI/RI read optimistic (changes are shared “for free” across unresolved branches)',
                       )}
                     </div>
                   )}
@@ -823,7 +823,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               const c = character!;
               return c.states.map((st) => ({ state: st.label, pd: faithPd(live, c.id, st.id) }));
             })}>
-              {extraBusy === 'faith' ? S.analysis.asrRunningLabel : tr("Faith 系统发育多样性（按状态）", "Faith's PD (per state)")}
+              {extraBusy === 'faith' ? S.analysis.asrRunningLabel : tr("Faith 系统发育多样性（按状态）", "Faith’s PD (per state)")}
             </button>
             <button
               className="btn ghost"
@@ -838,8 +838,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       state: '*',
                       stats: {
                         blocked: tr(
-                          `全树 ${tips} 个末端：NRI/NTI 需要构建 O(n²) 距离矩阵（与 Blomberg's K 同一上限 300）。`,
-                          `The tree has ${tips} tips: NRI/NTI builds an O(n²) distance matrix (same 300-tip ceiling as Blomberg's K).`,
+                          `全树 ${tips} 个末端：NRI/NTI 需要构建 O(n²) 距离矩阵（与 Blomberg’s K 同一上限 300）。`,
+                          `The tree has ${tips} tips: NRI/NTI builds an O(n²) distance matrix (same 300-tip ceiling as Blomberg’s K).`,
                         ),
                       },
                     },
@@ -944,7 +944,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
             if (extra.faith) {
               rows.push(
                 <div className="field" key="faith">
-                  <label>{tr("Faith 系统发育多样性", "Faith's PD")}</label>
+                  <label>{tr("Faith 系统发育多样性", "Faith’s PD")}</label>
                   <span>
                     {extra.faith.map((f) => `${f.state}: ${f.pd === null ? tr('无末端', 'no tips') : f.pd.toFixed(3)}`).join(' · ')}
                     <span className="hint"> · {tr('被该状态覆盖的最小 spanning 枝长总和（不含根路径）。', 'total length of the minimum spanning branches covered by each state (root path excluded).')}</span>

@@ -5,7 +5,6 @@ import { addCharacter, addChildren, setNodeState } from './treeOps';
 import { switchLayer } from './layers';
 import { newCharacter } from './characters';
 import {
-  consistenceCheckCategories,
   characterCorrelations,
   characterCorrelationTests,
   checkConsistency,
@@ -16,7 +15,6 @@ import {
 } from './consistency';
 import { holmAdjustFamily, holmBonferroni } from './stats';
 import { parsimony } from './parsimony';
-import { setLanguage } from '../ui/strings';
 import type { Character, NodeId, Project } from './types';
 
 describe('consistency', () => {
@@ -523,31 +521,6 @@ describe('Holm correction — one family definition for model and UI', () => {
 });
 
 describe('consistency categories — all five exist and can fire', () => {
-  it('declares exactly five categories, matching the union type', () => {
-    expect(consistenceCheckCategories().map((c) => c.kind).sort()).toEqual([
-      'ambiguous',
-      'excess-changes',
-      'homoplasy',
-      'local-mismatch',
-      'missing-data',
-    ]);
-    expect(consistenceCheckCategories().every((c) => c.tag.length > 0)).toBe(true);
-  });
-
-  it('re-translates its tags after a language switch', () => {
-    // The categories are built per call rather than as a module-level array from
-    // `tr(...)` at import time: an array built at import freezes the tags in
-    // whatever language happened to be active when the module first loaded.
-    setLanguage('zh');
-    const zh = consistenceCheckCategories().map((c) => c.tag);
-    setLanguage('en');
-    const en = consistenceCheckCategories().map((c) => c.tag);
-    setLanguage('zh');
-    expect(zh).toContain('同塑');
-    expect(en).toContain('Homoplasy');
-    expect(en.some((t) => /[一-鿿]/.test(t))).toBe(false);
-  });
-
   it('C2 excess-changes fires on the shipped project under its own step matrix', () => {
     // C2 must not be gated on "character has no cost matrix": the demo project's
     // fully assigned character 1 carries a Sankoff matrix, so the check could

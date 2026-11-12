@@ -44,7 +44,7 @@ import { notify, useToasts } from '../ui/toast';
 import { useImportReport } from '../ui/importReport';
 import { withBusy } from '../ui/busy';
 import { S, importedFirstOf, repairedCount, tr, withReason } from '../ui/strings';
-import type { Project } from '../model/types';
+import type { Project, SupportScale } from '../model/types';
 import { addGeneTree } from '../model/geneTrees';
 import { MAX_PROJECT_CHARS, MAX_TREE_CHARS } from './limits';
 
@@ -529,7 +529,12 @@ export async function actionRevertProject(): Promise<void> {
  * the tree chooser instead of quietly keeping only the first tree.
  * Parsing errors are caught here so BOTH entry points (picker and dropzone)
  * surface a toast instead of an unhandled rejection. */
-export function importTreeText(text: string, name: string, path?: string): void {
+export function importTreeText(
+  text: string,
+  name: string,
+  path?: string,
+  options?: { supportConvention?: 'auto' | SupportScale },
+): void {
   try {
     if (looksLikeNexus(name, text)) {
       // A NEXUS file may carry trees, a character matrix, or both. Going
@@ -537,7 +542,7 @@ export function importTreeText(text: string, name: string, path?: string): void 
       // MrBayes / PAUP morphology input) land as characters on the active
       // document instead of dying with "No TREES block" while the project sat
       // untouched.
-      const parsed = parseNexusFile(text, baseName(name));
+      const parsed = parseNexusFile(text, baseName(name), options ?? {});
       if (parsed.projects.length > 0) {
         openTreeProjects(parsed.projects, name, path, parsed.issues);
         return;
@@ -551,7 +556,7 @@ export function importTreeText(text: string, name: string, path?: string): void 
           tr('NEXUS 文件中没有可解析的树或性状矩阵', 'No parsable trees or character matrix in the NEXUS file'),
       );
     }
-    const { projects, issues } = parseNewickTrees(text, baseName(name));
+    const { projects, issues } = parseNewickTrees(text, baseName(name), undefined, options ?? {});
     openTreeProjects(projects, name, path, issues);
   } catch (e) {
     reportError(S.notify.importFail, e);
@@ -619,11 +624,13 @@ export async function actionImportGeneTree(): Promise<void> {
     const st = useStore.getState();
     let firstId: string | null = null;
     st.apply((d) => {
-      for (const doc of docs) {
-        const name = docs.length > 1 ? `${baseName(result.name)} ${docs.indexOf(doc) + 1}` : baseName(result.name);
+      docs.forEach((doc, i) => {
+        // `docs.indexOf(doc)` inside the loop was O(n²) — and WRONG for
+        // duplicate documents, which would all report the first index.
+        const name = docs.length > 1 ? `${baseName(result.name)} ${i + 1}` : baseName(result.name);
         const id = addGeneTree(d, doc, name);
         if (!firstId) firstId = id;
-      }
+      });
     });
     if (firstId) st.setActiveGeneTree(firstId);
     notify.success(
@@ -675,12 +682,13 @@ export async function actionExportNewick(): Promise<void> {
     // `rootedMarker` keeps the rootedness round-trip lossless: a document parsed
     // from an `[&U]` / trifurcate Newick (or re-declared by the user) re-exports as
     // unrooted instead of being silently re-interpreted as rooted downstream.
-    const saved = await saveText(
-      outName(project.name, 'nwk'),
-      serializeNewick(project, { rootedMarker: true }),
-      [{ name: 'Newick', extensions: ['nwk', 'newick', 'tree'] }],
-    );
-    if (saved) notifyExported(outName(project.name, 'nwk'), serializeNewick(project, { rootedMarker: true }));
+    // Built ONCE: the toast's byte count reuses the same string (a second
+    // serializeNewick on a large document doubled the export work for nothing).
+    const content = serializeNewick(project, { rootedMarker: true });
+    const saved = await saveText(outName(project.name, 'nwk'), content, [
+      { name: 'Newick', extensions: ['nwk', 'newick', 'tree'] },
+    ]);
+    if (saved) notifyExported(outName(project.name, 'nwk'), content);
   } catch (e) {
     reportError(S.notify.exportNewickFail, e);
   }
@@ -717,13 +725,16 @@ export async function actionExportNexus(options?: NexusExportOptions): Promise<v
   const explicit = isNexusOptions(options);
   const opts = explicit ? (options as NexusExportOptions) : DEFAULT_NEXUS_OPTIONS;
   try {
-    const saved = await saveText(outName(project.name, 'nex'), serializeNexus(project, opts), [
+    // Built once — the success toast reuses the same string instead of
+    // re-running serializeNexus on the whole document.
+    const content = serializeNexus(project, opts);
+    const saved = await saveText(outName(project.name, 'nex'), content, [
       { name: 'Nexus', extensions: ['nex', 'nexus'] },
     ]);
     if (!saved) return;
     notifyTipRenames(project);
     if (explicit) {
-      notifyExported(outName(project.name, 'nex'), serializeNexus(project, opts));
+      notifyExported(outName(project.name, 'nex'), content);
       return;
     }
     const included = [
@@ -855,10 +866,11 @@ export async function actionExportPDF(): Promise<void> {
 export async function actionExportNarrative(): Promise<void> {
   const project = useStore.getState().project;
   try {
-    const saved = await saveText(outName(project.name, 'md'), buildNarrative(project), [
+    const content = buildNarrative(project); // built once, reused for the toast size
+    const saved = await saveText(outName(project.name, 'md'), content, [
       { name: 'Markdown', extensions: ['md', 'txt'] },
     ]);
-    if (saved) notifyExported(outName(project.name, 'md'), buildNarrative(project));
+    if (saved) notifyExported(outName(project.name, 'md'), content);
   } catch (e) {
     reportError(S.notify.exportNarrativeFail, e);
   }
@@ -867,12 +879,13 @@ export async function actionExportNarrative(): Promise<void> {
 export async function actionExportHypothesisJSON(): Promise<void> {
   const project = useStore.getState().project;
   try {
+    const content = buildHypothesisJSON(project); // built once, reused for the toast size
     const saved = await saveText(
       outName(project.name, 'hypothesis.json'),
-      buildHypothesisJSON(project),
+      content,
       [{ name: 'Hypothesis JSON', extensions: ['json'] }],
     );
-    if (saved) notifyExported(outName(project.name, 'hypothesis.json'), buildHypothesisJSON(project));
+    if (saved) notifyExported(outName(project.name, 'hypothesis.json'), content);
   } catch (e) {
     reportError(S.notify.exportHypothesisFail, e);
   }
@@ -882,14 +895,15 @@ export async function actionExportHypothesisJSON(): Promise<void> {
 export async function actionExportReconciliationReport(): Promise<void> {
   const project = useStore.getState().project;
   try {
+    const content = buildReconciliationReport(project); // built once, reused for the toast size
     const saved = await saveText(
       outName(project.name, 'recon.md'),
-      buildReconciliationReport(project),
+      content,
       [{ name: 'Markdown', extensions: ['md', 'txt'] }],
     );
-    if (saved) notifyExported(outName(project.name, 'recon.md'), buildReconciliationReport(project));
+    if (saved) notifyExported(outName(project.name, 'recon.md'), content);
   } catch (e) {
-    reportError(tr('导出协同报告失败', 'Failed to export the reconciliation report'), e);
+    reportError(tr('导出协调报告失败', 'Failed to export the reconciliation report'), e);
   }
 }
 
