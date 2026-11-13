@@ -1,6 +1,7 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Regression tests for the character/annotation table review findings (M11 + minors).
 import { describe, it, expect } from 'vitest';
-import { parseTable, importMatrixTable, importAnnotationsTable, exportMatrixCsv } from './tableIO';
+import { parseTable, importMatrixTable, importAnnotationsTable, exportMatrixCsv, exportMatrixTemplate } from './tableIO';
 import { parseNewick } from './newick';
 
 describe('review: quoted newlines survive parsing', () => {
@@ -67,5 +68,28 @@ describe('review: exported CSV escapes state labels', () => {
       const pieces = row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
       expect(pieces.length).toBe(2);
     }
+  });
+});
+
+describe('review: the blank template escapes names too (B6)', () => {
+  it('a character name / tip label containing a comma keeps the column alignment', () => {
+    const p = parseNewick('(Alpha,Beta);');
+    Object.values(p.nodes).find((n) => n.label === 'Alpha')!.label = 'Alpha, sp';
+    p.characters = [
+      {
+        id: 'c1',
+        name: 'body size, mm',
+        type: 'discrete',
+        states: [
+          { id: 's0', label: '0', color: '#000000' },
+          { id: 's1', label: '1', color: '#ffffff' },
+        ],
+      },
+    ];
+    const out = exportMatrixTemplate(p);
+    const rows = out.split('\n');
+    // The comma-bearing header cell and tip label arrive quoted; the clean
+    // row stays bare. (Template data rows carry the taxon only.)
+    expect(rows).toEqual(['taxon,"body size, mm"', '"Alpha, sp"', 'Beta']);
   });
 });

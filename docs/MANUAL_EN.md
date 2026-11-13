@@ -21,7 +21,7 @@ This manual covers every feature of the application, organised by workflow stage
 5. [Characters and States](#5-characters-and-states)
 6. [Evolutionary Events](#6-evolutionary-events)
 7. [Hypothesis Layers](#7-hypothesis-layers)
-8. [Trait Evolution Inference](#8-trait-evolution-inference)
+8. [Character Evolution Inference](#8-character-evolution-inference)
 9. [DTL Reconciliation](#9-dtl-reconciliation)
 10. [Time Calibration](#10-time-calibration)
 11. [Styling and Themes](#11-styling-and-themes)
@@ -60,7 +60,7 @@ The application ships no browser engine of its own, but it renders into the oper
 
 **Pre-built binaries** — Download from the [Releases page](https://github.com/ZengZichao/CladeForge/releases):
 - v0.2.0: macOS `.dmg` (arm64 and x86_64), Windows `.msi` (x64), Linux `.deb` or AppImage (x86_64).
-- v0.3.0: pre-built artifacts are published from `.github/workflows/release.yml`; build from source below if your platform is not attached.
+- v0.3.0: pre-built artifacts are published from `.github/workflows/release.yml`; build from source below if no artifact has been published for your platform.
 
 **Build from source** — clone the repository:
 
@@ -78,18 +78,18 @@ Prerequisites: Node.js ≥ 20.19, Rust toolchain ≥ 1.90, npm.
 
 ### First Launch
 
-On first launch, CladeForge opens an empty workspace and offers a four-step guided tour; the offer is opt-in, so dismissing it goes straight to the empty canvas. Replay it whenever you like with the **Beginner Tour** button in the header (beside the shortcut-reference button), by searching "tour" in the ⌘K command palette, or from the shortcut-reference dialog; it walks you through the canvas, the inspector panel, the module rail, and the command palette.
+On first launch, CladeForge opens an empty workspace and offers a four-step guided tour; the offer is opt-in, so dismissing it goes straight to the empty canvas. Replay it whenever you like with the **Getting Started Tour** button in the header (beside the shortcut-reference button), by searching "tour" in the ⌘K command palette, or from the shortcut-reference dialog; it walks you through the canvas, the inspector panel, the module rail, and the command palette.
 
 To start immediately, you can:
-- **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex` or `.nexus` file onto the window, or choose **Import tree** in the File menu. ⌘O / Ctrl+O is **Open project**, which reads a `.cladeforge.json` file.
+- **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex` or `.nexus` file onto the window, or choose **Import tree** in the File menu. ⌘O / Ctrl + O is **Open project**, which reads a `.cladeforge.json` file.
 - **Build from scratch** — Select the root and click the header's **+ Add children** button, which opens one dialog for binary, ternary and polytomy splits.
-- **Load a sample project** — Click "Load sample tree" on the empty-state screen, or pick from the sample grid. Three built-in **feature-oriented** samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), carry no real biological background, and every sample tree is strictly binary: a **feature tour** (a small time tree demonstrating characters and cost matrices, hypothesis layers, event triggers and time calibration), a **large tree & deep time** sample (a larger time tree with 11 tips and a root age of 4000, demonstrating layouts, the legend and the deep-time axis), plus a **gene-family reconciliation** sample (a species tree plus two gene trees demonstrating DTL reconciliation, with a pre-wired gene tree and assumptions that opens straight into the reconciliation view). Each sample comes pre-loaded with characters, events, and hypothesis layers, and demonstrates software features rather than real scientific cases.
+- **Load a sample project** — Click "Open sample tree" on the empty-state screen, or pick from the sample grid. Three built-in **feature-oriented** samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), carry no real biological background, and every sample tree is strictly binary: a **feature tour** (a small time tree demonstrating characters and cost matrices, hypothesis layers, event triggers and time calibration), a **large tree & deep time** sample (a larger time tree with 11 tips and a root age of 4000, demonstrating layouts, the legend and the deep-time axis), plus a **gene-family reconciliation** sample (a species tree plus two gene trees demonstrating DTL reconciliation, with a pre-wired gene tree and assumptions that opens straight into the reconciliation view). Each sample comes pre-loaded with characters, events, and hypothesis layers, and demonstrates software features rather than real scientific cases.
 
 ### Language and Theme
 
-- **Language** — Follows your operating system's language on the first run, then remembers your choice. Switch between English and 中文 at any time from the language toggle; the UI remounts immediately, including node labels that ship with the built-in samples.
+- **Language** — Follows your operating system's language on the first run, then remembers your choice. Switch between English and Chinese at any time from the language toggle; the UI remounts immediately, including node labels that ship with the built-in samples.
 - **Theme** — Defaults to System. Choose Light, Dark, or System from the theme toggle next to the language switch.
-- **Header controls** — The header carries the view-mode switch (Standard view / Reconciliation view), the **+ Add children** button, undo and redo, the project name, Save, the language and theme toggles, the shortcut reference (⌘?), and the **Beginner Tour** button. Structural editing lives in the node context menu and the command palette, not in the header.
+- **Header controls** — The header carries the view-mode switch (Standard view / Reconciliation view), the **+ Add children** button, undo and redo, the project name, Save, the language and theme toggles, the shortcut reference (⌘?), and the **Getting Started Tour** button. Structural editing lives in the node context menu and the command palette, not in the header.
 
 ---
 
@@ -141,17 +141,17 @@ Below about 1024 px of window width the shell switches to a compact arrangement:
 
 When you select a node or custom edge on the canvas, the inspector panel shows all editable properties for that object: name, branch length, support value, age, style overrides, character states, evolutionary events, and confidence/evidence metadata. Properties that inherit from global defaults are marked "Inherits global default"; those you have overridden are marked "Overrides global default."
 
-The inspector is searchable — type in its "Search properties…" field to cut straight to a property, and star a property you use often to pin it in a **Favorites** section at the top. Each section header counts how many of its properties this object overrides, and the introductory hints beside sections can be dismissed. Which sections are open, what you starred, and which hints you dismissed are stored per language, so the panel returns the way you left it.
+The inspector is searchable — type in its "Search properties…" field to cut straight to a property, and star a property you use often to pin it in a **Favourites** section at the top. Each section header counts how many of its properties this object overrides, and the introductory hints beside sections can be dismissed. Which sections are open, what you starred, and which hints you dismissed are stored per language, so the panel returns the way you left it.
 
 A node's label gets its own placement controls: nine anchor positions plus an automatic one that chooses the side facing away from the parent, and separate X/Y offsets for fine adjustment.
 
 ### Command Palette (⌘K)
 
-Press ⌘K (macOS) or Ctrl+K (Windows/Linux) at any time to open the command palette; press it again to close it. Roughly thirty-five actions are grouped into seven categories — File, Edit, Tree operations, View, Analysis, Reconciliation and Help — each entry carrying an icon and its keyboard hint.
+Press ⌘K (macOS) or Ctrl + K (Windows/Linux) at any time to open the command palette; press it again to close it. Roughly thirty-five actions are grouped into seven categories — File, Edit, Tree operations, View, Analysis, Reconciliation and Help — each entry carrying an icon and its keyboard hint.
 
 Type to filter. Every command matches its displayed name, its English alias, and the pinyin spelling of its Chinese name, so `dakai` finds Open project and `baocun` finds Save project. Use ↑/↓ to navigate and Enter to execute.
 
-A few actions exist nowhere else but here: extract the selected subtree into a new tab, import a gene tree, enter or exit the reconciliation view, export the reconciliation report, and re-open the beginner tour.
+A few actions exist nowhere else but here: extract the selected subtree into a new tab, import a gene tree, enter or exit the reconciliation view, export the reconciliation report, and re-open the Getting Started Tour.
 
 ### Tabs
 
@@ -174,13 +174,13 @@ CladeForge supports multiple tabs, each holding an independent project. Click a 
 ### Reparenting and Rerooting
 
 - **Reparent** — Hold Alt and drag a node onto another node. The dragged node moves to the target's children.
-- **Reroot at selected** — Right-click → "Reroot at this node", or run it from the command palette. Confirms because rerooting rearranges topology.
+- **Reroot at selected** — Right-click → "Reroot at this node", or run it from the command palette. Confirms because rerooting rearranges the whole topology and layout.
 - **Midpoint reroot** — Reroots at the midpoint of the longest path (requires branch-length data).
 - **Outgroup reroot** — Right-click → "Set as outgroup & reroot."
 
 ### Collapse and Ladderize
 
-- **Collapse/Expand** — Right-click a node → "Collapse/Expand subtree." Collapsed subtrees show a triangle marker.
+- **Collapse/Expand** — Right-click a node → "Collapse subtree" or "Expand subtree". Collapsed subtrees show a triangle marker.
 - **Ladderize ascending/descending** — Sorts children at every node by subtree size, producing a more compact and readable tree. Available from the context menu or the command palette.
 
 ### Custom Edges (Reticulation Links)
@@ -200,7 +200,7 @@ Beyond the tree topology, CladeForge supports custom edges for reticulation even
 
 ### Search
 
-Open the search field with the magnifier button in the canvas controls, or press ⌘F / Ctrl+F, to find nodes by label. Matches are highlighted on the canvas and counted. Prefix the query with `type:leaf` or `type:internal` to restrict hits to terminal or internal nodes, and press Enter to cycle through the matches.
+Open the search field with the magnifier button in the canvas controls, or press ⌘F / Ctrl + F, to find nodes by label. Matches are highlighted on the canvas and counted. Prefix the query with `type:leaf` or `type:internal` to restrict hits to terminal or internal nodes, and press Enter to cycle through the matches.
 
 ---
 
@@ -212,7 +212,7 @@ Open the search field with the magnifier button in the canvas controls, or press
 |--------|-------------|
 | **Rectangular cladogram** | Equal-depth steps; branch lengths ignored. Classic publication style. |
 | **Rectangular phylogram** | Branch lengths determine horizontal position; tips are not aligned. |
-| **Geological time chart** | Nodes positioned on a real time axis by their recorded ages; geological era bands and environmental events overlay it. The layout is internal id `time-calibrated`. |
+| **Time-calibrated tree (chronogram)** | Nodes positioned on a real time axis by their recorded ages; geological era bands and environmental events overlay it. The layout is internal id `time-calibrated`. |
 | **Circular** | Radial layout; equal-angle or branch-length-based. |
 
 ### Orientations
@@ -234,19 +234,24 @@ Adjust the **level gap** (horizontal spacing between depth levels) and **sibling
 
 ### Support Threshold
 
-A project stores a **support threshold** (0–100, default 70). Its one live effect is on the exported figure: in the exported SVG, a support label below the threshold is printed in the muted axis grey rather than full black, so weakly supported nodes read as weak in the publication image. Support held on a 0–1 scale (posterior probabilities) is converted to a percentage before the comparison, and trees carrying no support values are unaffected.
+A project stores a **support threshold** (0–100, default 70), and the **Style module panel does provide a control** for it (“Support threshold” → “Threshold (0–100)”). The threshold is live on both sides of the WYSIWYG promise, but it acts differently in each:
 
-The threshold is project data: it is read from the project file, and the **Style panel exposes no control for it**.
+- **On the canvas** — a branch whose support falls below the threshold is drawn dashed and lighter.
+- **In the exported figure** — the printed support label is drawn in the muted axis grey rather than full black, so weakly supported nodes read as weak in the publication image; the branch geometry itself is left untouched.
+
+Support held on a 0–1 scale (posterior probabilities) is converted to a percentage before the comparison, while bootstrap, SH-aLRT and consensus-frequency values are read on 0–100; trees carrying no support values are unaffected and the panel says so.
+
+The threshold is project data: it is read from the project file.
 
 ### Colour Gradient
 
-Enable a depth-based branch colour gradient: branches without per-node colour overrides are interpolated from a root colour to a tip colour.
+Enable a depth-based branch colour gradient in the Style module: branches without per-node colour overrides are interpolated from a root colour to a tip colour.
 
 ---
 
 ## 5. Characters and States
 
-The character system is the core of CladeForge's evolutionary semantic layer. It lets you map traits onto the tree and visualise their distribution, transitions, and ancestral states.
+The character system is the core of CladeForge's evolutionary semantic layer. It lets you map characters onto the tree and visualise their distribution, transitions, and ancestral states.
 
 ### Creating Characters
 
@@ -361,18 +366,18 @@ Open the **Hypotheses** module (left panel, Content group):
 
 ---
 
-## 8. Trait Evolution Inference
+## 8. Character Evolution Inference
 
-Trait evolution inference provides *advisory* suggestions — it does not overwrite your hypotheses. You choose which suggestions to accept.
+Character evolution inference provides *advisory* suggestions — it does not overwrite your hypotheses. You choose which suggestions to accept.
 
-Open the **Analysis** module (left panel, Inference group) and click **Trait evolution inference…**, or use the ⌘K command palette. The Analysis module now owns results and inference only: it summarises the active character's parsimony cost, CI/RI, consistency and correlations, then offers “Trait evolution inference” and Mk reconstruction. The tree-summary statistics are collapsed by default so they no longer push the tools below the fold. The **character matrix** belongs to character management and stays in the Characters module.
+Open the **Analysis** module (left panel, Inference group) and click **Character evolution inference…**, or use the ⌘K command palette. The Analysis module now owns results and inference only: it summarises the active character's parsimony cost, CI/RI, consistency and correlations, then offers “Character evolution inference” and Mk reconstruction. The tree-summary statistics are collapsed by default so they no longer push the tools below the fold. The **character matrix** belongs to character management and stays in the Characters module.
 
 The full dialog covers parsimony ancestral-state suggestions, consistency checks, character correlations and permutation tests; the Analysis module itself only summarises and links to it. Suggestions only enter a hypothesis when you accept them node by node in the inspector.
 
 ### Parsimony (Sankoff)
 
 - Computes the minimum-cost ancestral-state reconstruction using the Sankoff algorithm with your step matrix (or Fitch equal weights if none).
-- Suggestions are computed for the character currently selected in the **Analysis** module — there is no batch "generate" button to press first.
+- Suggestions are computed for the character currently selected under **Colour by** in the **Characters** module — the Analysis module has no character selector of its own, and there is no batch “generate” button to press first.
 - Select an internal node on the canvas and the inspector shows the suggested state beside the one you have asserted. Click **Accept** to adopt it, or leave it alone: nothing enters your hypothesis without that click.
 - Where several states are equally optimal at a node, the ambiguity is reported instead of one being picked silently.
 
@@ -385,7 +390,7 @@ Ancestral-state reconstruction under the Mk (Markov-k) model, configured in the 
 - All likelihood computations are performed in **log-space** (log-sum-exp) to prevent underflow on large trees.
 - The rate is normalised by the mean branch length, making the result invariant to the absolute scale of relative branch lengths.
 - Results are displayed as **pie charts** on internal nodes, showing the probability distribution over states.
-- **Display threshold** ("Only show states with p > threshold") is a rendering control only: wedges below the threshold are not drawn, and when one state reaches 1 − threshold the pie is filled solid with that state. The threshold never enters the likelihood calculation.
+- **Display threshold** (“Show only states with posterior probability ≥ the threshold”) is a rendering control only: wedges below the threshold are not drawn, and when one state reaches 1 − threshold the pie is filled solid with that state. The threshold never enters the likelihood calculation.
 
 Branch-length problems are **reported per class, not silently patched**, because the four cases mean different things — an unset length is not a recorded zero:
 
@@ -399,9 +404,9 @@ Branch-length problems are **reported per class, not silently patched**, because
 
 The summary lists how many nodes fall in each class, or states that there are no degradation warnings.
 
-Run ASR from the Analysis module or the command palette ("Mk likelihood reconstruction"). Clear the pie charts with "Clear reconstruction."
+Run ASR from the Analysis module or the command palette (“Mk ancestral-state reconstruction”). Clear the pie charts with “Clear ancestral-state reconstruction”.
 
-### Phylogenetic Signal (CI/RI)
+### Consistency & Retention Indices (CI/RI)
 
 For each discrete character, CladeForge computes:
 - **Consistency Index (CI)** = m/s, where m = minimum possible steps, s = observed steps.
@@ -409,16 +414,6 @@ For each discrete character, CladeForge computes:
 - Values closer to 1 indicate the character fits the topology; low values suggest homoplasy (convergence/parallelism) worth investigating.
 
 Requires ≥3 scored tips and ≥2 states.
-
-### Embedded View (Nested Reconciliation Layout)
-
-The **Side-by-side / Embedded** segmented control in the toolbar switches the canvas layout. The **embedded view** draws both trees in one coordinate system: the species tree is the only skeleton — every species branch is a THICK tube (default 18 world px, adjustable 10–32 in the View section) with equally thick vertical hubs at the internal nodes — and the gene tree's THIN event-coloured lineages are nested INSIDE those tubes, clipped by an SVG mask to "tubes ∪ hubs" so they never leak when zooming.
-
-- **Reading the figure**: σ speciation = children enter different sub-tubes; δ duplication = parallel lanes within one tube; τ transfer = a cross-tube arc from the donor tube to the recipient tube (dashed = time-infeasible; without ages the legend says "topological transfer"); λ loss = a stub at the fork where lineages die (hollow/dashed = inferred structural loss; `λ!` = the asserted count is below the structural minimum). Tube width adapts to how many gene lanes coexist on that branch (capped; an overflow badge appears) — it reflects gene copy number, not support or time.
-- **Honest display**: internal gene nodes without an assumption are DISPLAY-INFERRED to their children's MRCA (dashed) and never written into the project file; truly unmapped nodes land in a labelled orphan gutter connected by a dashed line to their nearest placed ancestor. Trees without ages/lengths are labelled "topological sketch" in the header.
-- **Building an evolutionary path**: select a gene node, then **Alt+click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
-- **Export the figure**: in the embedded mode the toolbar gains "Export figure", writing the nested reconciliation drawing as a standalone vector SVG (with legend and version metadata) for hypothesis documents.
-- Switching layout modes never touches selections, mappings or undo history; "Reset view settings" no longer kicks you out of the embedded mode. The status bar shows a single zoom readout there, and the sync-zoom toggle hides.
 
 ### Consistency Checks
 
@@ -442,7 +437,7 @@ Character correlation is reported in two clearly separated layers, because an ov
 
 A high overlap says the pair is worth investigating — not that it is significant, and not that it is causal.
 
-**Tree-constrained permutation test.** Click **Run tree-constrained permutation test** to get an actual p-value. The tip states of BOTH characters are re-drawn — each character's states are re-shuffled independently across the tips scored for it, preserving both marginal state frequencies and both missing-data patterns — and both most-parsimonious change-branch sets are recomputed on the same topology with the same step matrices. The statistic is the same Jaccard overlap. (A replicate is a draw from the JOINT null, not a shuffle around one frozen character; freezing character A would make the p-value depend on which character the caller passed first.) The wording "two-sided" in the method name refers to the two characters both being re-drawn, NOT to a two-sided test: the p-value is one-sided (upper tail):
+**Tree-constrained permutation test.** Click **Run tree-constrained permutation test** to get an actual p-value. The tip states of BOTH characters are re-drawn — each character's states are re-shuffled independently across the tips scored for it, preserving both marginal state frequencies and both missing-data patterns — and both most-parsimonious change-branch sets are recomputed on the same topology with the same step matrices. The statistic is the same Jaccard overlap. (A replicate is a draw from the JOINT null, not a shuffle around one frozen character; freezing character A would make the p-value depend on which character the caller passed first.) Re-drawing both characters is what makes the test symmetric in its inputs; it does **not** make it two-sided — the method line the dialog prints reads "Tree-constrained one-sided upper-tail tip-state permutation (MP change-branch overlap of both characters, Jaccard statistic)", and the p-value is one-sided (upper tail):
 
 ```
 p = (1 + number of replicates ≥ observed) / (permutations + 1)
@@ -450,9 +445,9 @@ p = (1 + number of replicates ≥ observed) / (permutations + 1)
 
 By default 999 permutations run, so the smallest reportable value is printed as `p < 0.0010` rather than `p = 0`. The generator is seeded, so re-running on an unchanged project returns the same numbers, and the mean of the permuted null distribution is reported so you can see how far the observation sits from the null centre.
 
-**Multiple testing.** The corrected family is every pair a statistic exists for (membership never depends on the observed score or a p-value); when a compute cap bites it cuts on a DETERMINISTIC pair key, and the dialog prints "tested X of Y pairs (deterministic subset)". All p-values in the family are corrected together with **Holm–Bonferroni** (m = the pairs actually tested). Only the corrected p supports a "significant (≤ 0.05)" verdict; the raw p is still shown, clearly labelled.
+**Multiple testing.** The corrected family is every pair a statistic exists for (membership never depends on the observed score or a p-value); when a compute cap bites it cuts on a DETERMINISTIC pair key, and the dialog prints "Tested X/Y character pairs (pre-specified test subset)". All p-values in the family are corrected together with **Holm–Bonferroni** (m = the pairs actually tested). Only the corrected p supports a "significant (≤ 0.05)" verdict; the raw p is still shown, clearly labelled.
 
-**Limits.** A pair cannot be tested when fewer than 3 tips are scored for it, or when the tree is large enough that the permutation work budget leaves too few replicates; such pairs stay descriptive. The corrected family is every pair a statistic exists for; when a compute cap bites, it cuts on a DETERMINISTIC pair key (never on the observed score), and the dialog prints "tested X of Y pairs". This test permutes observations, not evolutionary pathways, and it is **not** Pagel's (1994) likelihood-ratio test of correlated transition rates, which CladeForge does not implement.
+**Limits.** A pair cannot be tested when fewer than 3 tips are scored for it, or when the tree is large enough that the permutation work budget leaves too few replicates; such pairs stay descriptive. This test permutes observations, not evolutionary pathways, and it is **not** Pagel's (1994) likelihood-ratio test of correlated transition rates, which CladeForge does not implement.
 
 ### Tree Summary Statistics
 
@@ -462,7 +457,7 @@ By default 999 permutations run, so the smallest reportable value is printed as 
 
 ### Continuous Characters
 
-- **Blomberg's K** — a *point estimate* relative to Brownian motion, where BM equals 1: K > 1 means the trait is more clustered than BM predicts, K < 1 more dispersed. A seeded Brownian-motion simulation on the same tree (button "Simulate BM null") gives a two-sided p-value; without it, the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly. A real zero-length branch (synchronous divergence) is used AS zero and reported separately from imputed ones. Separately: a tree that is not fully binary inflates CI/RI, and the panel says so.
+- **Blomberg’s K** — a *point estimate* relative to Brownian motion, where BM equals 1: K > 1 means the character is more clustered than BM predicts, K < 1 more dispersed. A seeded Brownian-motion simulation on the same tree (button "Simulate BM null") gives a two-sided p-value; without it, the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly. A real zero-length branch (synchronous divergence) is used AS zero and reported separately from imputed ones. Separately: a tree that is not fully binary inflates CI/RI, and the panel says so.
 - **Branch-length coverage** travels with every K. A fully measured tree reports that all branches use the supplied lengths; a partially measured one warns that the remaining branches were imputed as 1, which makes the value a *topological* (cladogram-scale) K rather than a time-scaled one — a difference that matters when comparing K across trees.
 - A K is only produced when at least one continuous character is scored. When it cannot be computed, the panel names the reason instead of showing a number.
 
@@ -480,7 +475,7 @@ CladeForge implements gene-tree/species-tree reconciliation using a Duplication�
    - **Build gene tree…** — open the builder and start from a blank root, adding children/siblings, renaming nodes or deleting subtrees;
    - **Create from species tree** — copy the current species topology as the gene-tree starting point;
    - **Import gene tree from file** (Newick/NEXUS) and **Import from open tab** remain optional alternatives.
-4. The gene tree's tips are matched to the species tree's tips by label. Matching tips are mapped automatically and an LCA-based initial scenario is suggested; unmatched or normalisation-colliding labels are reported rather than dropped quietly.
+4. The gene tree's tips are matched to the species tree's tips by label. Matching tips are mapped automatically and an MRCA-based initial scenario is suggested; unmatched or normalisation-colliding labels are reported rather than dropped quietly.
 
 ### Building a Gene Tree Directly
 
@@ -489,7 +484,7 @@ The **Build gene tree…** dialog provides an editable topology outline:
 - Start **blank (root only)** or **copy the species topology**;
 - Select any node to **add a child**, **add a sibling**, rename it under “Node label”, or **delete its subtree** (the root cannot be deleted);
 - When tip names match species tips, the dialog reports “N/M tips match … will be auto-mapped” live;
-- **Create and open reconciliation** writes the tree once, auto-maps the tips, suggests a scenario and opens the side-by-side view.
+- **Create and open Reconciliation view** writes the tree once, auto-maps the tips, suggests a scenario and opens the reconciliation view.
 
 An existing gene tree can be reopened through **Edit gene-tree topology…** in the active-gene section. Saving rebuilds name-based mappings and the suggested scenario; existing manual mappings are replaced (the dialog says so).
 
@@ -500,7 +495,7 @@ The module holds **several gene trees at once**. Each entry shows its name, how 
 After creating or importing, you can manually refine the reconciliation:
 - Select a gene node in the reconciliation view.
 - In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch; in the embedded view you can also set the **branch position** (where the lineage sits along its host branch) and the **transfer donor** (τ only; auto-derived from "the child outside the recipient subtree" by default).
-- Use **Suggest via LCA** to automatically map unresolved internal gene nodes to their lowest common ancestor in the species tree.
+- Use **Suggest via MRCA** to automatically map unmapped internal gene nodes to their most recent common ancestor in the species tree.
 - The consistency checker reports mapping conflicts and event inconsistencies.
 
 ### DP Solver
@@ -508,19 +503,19 @@ After creating or importing, you can manually refine the reconciliation:
 1. Set the **costs** for duplication (δ), transfer (τ), and loss (λ) in the Reconciliation panel of the reconciliation workspace.
 2. Click **Compute optimum (DP)** to run the dynamic-programming solver.
 3. The solver returns the minimum-cost scenario and a back-traced event assignment.
-4. Click **Apply optimum as assumptions** to load the solver's result as the starting point for manual refinement.
+4. Click **Apply optimum as mappings and events** to load the solver's result as the starting point for manual refinement.
 5. Compare the current scenario cost with the DP optimal cost.
 
 The reported result states the solver's own scope rather than leaving you to infer it:
 
-- **Comparability.** This is a minimum-cost *parsimony* reconciliation, not a likelihood. Three deliberate modelling choices make its absolute event and loss totals **lower** than RAINIEFF, RaGTeP or Treerecon would report: the gene root may sit inside the species tree without paying a family-arrival fee, lineages that pass a species junction without entering a sibling branch are not charged per junction, and unconstrained species clades pay no speculative losses. Quote the output as "events under this model", never as counts interchangeable with another program. When the panel shows a free root it also states that the cost excludes the root-transfer fee.
+- **Comparability.** This is a minimum-cost *parsimony* reconciliation, not a likelihood. Three deliberate modelling choices make its absolute event and loss totals **lower** than RAINIEFF, RaGTeP or Treerecon would report: the gene root may sit inside the species tree without paying a family-arrival fee, lineages that pass a species junction without entering a sibling branch are not charged per junction, and unconstrained species branches pay no speculative losses. Quote the output as "events under this model", never as counts interchangeable with another program. When the panel shows a free root it also states that the cost excludes the root-position cost.
 - **Ambiguity.** Nodes that admit another event class at exactly the same cost are counted and reported — the classic duplication/speciation non-identifiability plus mirrored transfer directions. The event shown is the one the documented priority *duplication › speciation › transfer* selects, which is not the same claim as "this is the only optimum".
 - **Loss accounting.** Losses are reported as a split between internal branches and gene-tip branches, since tip-branch losses are counted here.
 - **Scenario vs optimum.** The current scenario cost and the DP optimal cost are the same scenario re-priced under the same costs, so equality is meaningful: it says your hypothesis is already optimal *for this cost vector*.
 
-**Clear assumptions** empties every mapping and event of the active gene tree in one action, and its confirmation states that the step is undoable. Costs are validated as you type: an illegal vector is refused and bounced back to legal defaults, with a toast naming what was wrong — so the solver can never run on costs you did not actually choose.
+**Clear mappings and events** empties every mapping and event of the active gene tree in one action, and its confirmation states that the step is undoable. Costs are validated as you type: an illegal vector is refused and bounced back to legal defaults, with a toast naming what was wrong — so the solver can never run on costs you did not actually choose.
 
-The module keeps running tallies for the active gene tree as you edit: speciations σ, duplications δ, transfers τ, losses λ, and how many internal nodes are resolved.
+The module keeps running tallies for the active gene tree as you edit: speciations σ, duplications δ, transfers τ, losses λ, and how many internal nodes are mapped.
 
 **Requirements:** The solver requires binary gene trees. Polytomies break the lineage bookkeeping — resolve them first. Species trees may have any arity.
 
@@ -528,14 +523,24 @@ The module keeps running tallies for the active gene tree as you edit: speciatio
 
 Click **Reconciliation view** in the header  to enter the reconciliation **workspace** — a second, complete workspace with its own rail, left panel, inspector, toolbar and status bar rather than a swapped-in canvas:
 
-- **Left:** the reconciliation rail (Trees / Scenario / Validation / View). The *Scenario* section carries a searchable, filterable **assumption list** (all / unresolved / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom; in the **embedded layout** these become the embedded-specific options (species branch thickness, gene lane spacing, transfer-arc and loss-stub toggles), and the sync-zoom toggle hides.
+- **Left:** the reconciliation rail (Gene trees / Scenario / Mapping validation / View). The *Scenario* section carries a searchable, filterable **Mappings & events list** (all / unmapped / with errors / internal only): clicking a row selects and centres the gene node, hovering temporarily highlights its mapping line. The *View* section exposes mapping scope (tips / internal / all), the event filter, label / event-glyph / loss / mapping-line toggles and synced zoom; in the **embedded layout** these become the embedded-specific options (species branch thickness, gene lane spacing, transfer-arc and loss-stub toggles), and the sync-zoom toggle hides.
 - **Centre:** a toolbar row (active gene tree, the **Side-by-side / Embedded** layout switch, Fit ("Fit view" in the embedded mode), sync zoom (hidden when embedded), mapping scope, plus "Export figure" when embedded), and in the side-by-side mode two titled panes (species tree · analysis cladogram; gene tree · read-only, each with node count, zoom readout and per-pane Fit / 1:1), the **mapping bridge** (the trees face each other — species rightwards, gene leftwards — with event-coloured straight mapping lines precisely aligned to the branches on both sides instead of painting over nodes and labels), and a legend row.
-- **Right:** the inspector shows one of four states — nothing selected → scenario overview (completeness, event tallies, data quality, legend, quick actions); one gene node → the DTL assumption editor (with previous/next unresolved navigation and "centre the target node in the species pane"); one species node → the species-node details plus the gene lineages mapped here; several gene nodes → a batch summary with batch clearing.
-- **Bottom status bar:** tip mappings n/N, internal resolved n/N, unresolved, errors/notes, σ/δ/τ/λ and both zoom readouts; the segments jump to the matching panel.
+- **Right:** the inspector shows one of four states — nothing selected → scenario overview (mapping and event tallies, the "Mapping validation" problem summary, "Quick actions", legend); one gene node → the DTL assumption editor (with previous/next unresolved navigation and "centre the target node in the species pane"); one species node → the species-node details plus the gene lineages mapped here; several gene nodes → a batch summary with batch clearing.
+- **Bottom status bar:** tip mappings n/N, internal mappings n/N, unmapped, errors/notes, σ/δ/τ/λ and both zoom readouts; the segments jump to the matching panel.
 
 Mapping lines default to **tip mappings only** (the label-matched anchors); internal mappings appear when the scope changes or when the relevant gene node is selected / hovered. The selected line is emphasised with end-point rings while the rest fade. Fit re-applies automatically on window or panel resize while fit mode is active; labels hide below a readability threshold (hover a node for its name). Responsive tiers: ≥1440 both panels inline; 1200–1439 the right panel is a drawer (open via the toolbar's "Scenario overview", auto-opened on your first selection); 1024–1199 both are drawers. The canvas never overflows horizontally.
 
 Ways in: the **Reconcile** sample card (gene-family reconciliation) lands here in one click; the reconciliation empty state offers build / create-from-species / import / **load the reconciliation sample**; the command palette (⌘K) has "Load reconciliation sample". Deleting the last gene tree keeps you in the (empty) reconciliation workspace — no more standard canvas under a reconciliation toolbar; undo restores the tree. **Esc** or the header mode switch leaves the workspace. The reconciliation workspace offers no "add children" action and no species-tree topology context menu — the gene tree is read-only, and structural edits belong to the standard workspace.
+
+### Nested view (embedded layout)
+
+The **Side-by-side / Embedded** segmented control in the toolbar switches the canvas layout. The **nested view** draws both trees in one coordinate system: the species tree is the only skeleton — every species branch is a THICK tube (default 18 world px, adjustable 10–32 in the View section) with equally thick vertical hub bars at the internal nodes — and the gene tree's THIN event-coloured lineages are nested INSIDE those tubes, clipped by an SVG mask to "tubes ∪ hubs" so they never leak when zooming.
+
+- **Reading the figure**: σ speciation = children enter different sub-tubes; δ duplication = parallel lanes within one tube; τ transfer = a cross-tube transfer arc from the donor tube to the recipient tube (dashed = time-infeasible; without node ages the legend says "topological transfer"); λ loss = a loss stub at the fork where lineages die (hollow/dashed = inferred structural loss; `λ!` = the asserted count is below the structural minimum). Tube width adapts to how many gene lanes coexist on that branch (capped; an overflow badge appears) — it reflects gene copy number, not support or time.
+- **Honest display**: an internal gene node with no usable assumption whose children are *all* placed is DISPLAY-INFERRED to its children's MRCA (dashed) and never written into the project file; truly unmapped nodes land in a labelled orphan gutter (unmapped gene nodes) connected by a dashed line to their nearest placed ancestor. Trees without node ages/lengths are labelled "topological sketch" in the header.
+- **Building an evolutionary path**: select a gene node, then **Alt + click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
+- **Export the figure**: in the embedded mode the toolbar gains "Export figure", writing the nested reconciliation drawing as a standalone vector SVG (with legend and version metadata) for hypothesis documents.
+- Switching layout modes never touches selections, mappings or undo history; "Reset view settings" no longer kicks you out of the embedded mode. The status bar shows a single zoom readout there, and the sync-zoom toggle hides.
 
 ### Validation
 
@@ -544,13 +549,13 @@ The consistency check re-runs after every edit and lists what it finds, each row
 | Tag | What it flags |
 |-----|---------------|
 | **Unmatched** | A gene tip that found no species tip of the same name |
-| **Unresolved** | An internal gene node with no mapping or event decision yet |
+| **Unmapped** | An internal gene node with no mapping or event decision yet |
 | **Dangling** | A mapping pointing at a species node that no longer exists |
-| **Conflict** | An event contradicting its mapping — speciation on a non-bifurcating species node, or a transfer with no destination lineage |
+| **Conflict** | An event contradicting its mapping — speciation on a non-binary species node, or a transfer with no destination lineage |
 | **Mislabelled** | A tip whose label collides with another once normalised (case, underscores); it is left unmapped and takes no part in the reconciliation |
-| **Loss shortfall** | Fewer losses recorded than the mapping implies |
-| **Timing** | Ages or ordering that contradict each other |
-| **Leaf event** | An event asserted on a gene tip, where only a mapping is meaningful |
+| **Fewer losses than the path requires** | Fewer losses recorded on the path than the mapping implies |
+| **Timing** | Node ages or ordering that contradict each other |
+| **Tip event** | An event asserted on a gene tip, where only a mapping is meaningful |
 
 Rows are graded **Error** or **Note**, and clicking one locates the node — opening the reconciliation view when one is available. A fully consistent tree reports "No inconsistencies" rather than leaving an empty box.
 
@@ -564,13 +569,13 @@ The Time module reports the tree's temporal condition before you change anything
 
 | Panel statement | What it means |
 |-----------------|---------------|
-| No time data — the tree is purely topological | No node carries an age, so the time axis and environmental events are unavailable. Set node ages, add calibration points, or estimate ages from topology first |
-| Time data detected — the time axis is available | Ages are present and the axis can be drawn |
-| Time data is present, but the current layout is "…", switch to the geological time chart | The data exists and the layout does not. Press the panel's **Switch to geological time chart** button |
+| This is a purely topological tree with no time data. Time axis and environmental events are unavailable | No node carries an age, so the time axis and environmental events are unavailable. Set node ages, add calibration points, or estimate ages from topology first |
+| Time data detected; time-axis features are available | Ages are present and the axis can be drawn |
+| Time data is ready, but the current layout is “…”. Switch to “Time-calibrated tree (chronogram)” to show the time axis and environmental events | The data exists and the layout does not. Press the panel's **Switch to the time-calibrated tree** button |
 
-### Geological Time Chart Layout
+### Time-Calibrated Tree (Chronogram) Layout
 
-Switch the layout type to **Geological time chart** in the Style module — or use the button above — to position nodes on a real time axis:
+Switch the layout type to **Time-calibrated tree (chronogram)** in the Style module — or use the button above — to position nodes on a real time axis:
 
 1. Set the **time unit** in the Time module. The field accepts free text; the recognised symbols `Ma`, `ka`, `Ga`, `Myr` and `yr` are understood. An unrecognised unit still labels the axis, but the geological era bands are then suppressed, since they cannot be placed on a scale the application does not understand.
 2. Enter each node's **age** (time before present) in the inspector panel.
@@ -631,8 +636,8 @@ Select any node or edge on the canvas to style it individually in the inspector:
 
 **Nodes:**
 - Shape: Circle, Square, Diamond, None
-- Size, fill colour, stroke colour, stroke width
-- Label: show/hide, colour, font size, font weight (300–900), italic, bold, rotation
+- Size, fill colour, stroke colour, stroke width (number or slider)
+- Label: show/hide, colour, font size, font weight (300–900), italic, bold, rotation, label X/Y offset; font size, rotation and the offsets all take a number or a slider
 
 **Branches (incoming edge to a node):**
 - Shape: Thin line, **Curved** (the smooth cubic/tube style from PhyloRecViewer), Thick bar (rectangular), Rounded bar
@@ -662,7 +667,7 @@ The Style module exposes the **canvas background** colour and the **default link
 | Format | Extensions | Notes |
 |--------|-----------|-------|
 | **Newick** | `.nwk`, `.newick`, `.tree`, `.tre` | Branch lengths and support values are parsed and NHX comments round-trip. Rootedness markers `[&R]` / `[&U]` and an explicit `[&support=…]` are read and written back, so a tree keeps what it arrived with. Files containing several trees are detected. |
-| **Nexus** | `.nex`, `.nexus` | Every `TREE` statement in every `TREES` block is read, honouring an optional `TRANSLATE` table — not just the first tree. A file carrying several trees is passed to the multi-tree dialog. |
+| **NEXUS** | `.nex`, `.nexus` | Every `TREE` statement in every `TREES` block is read, honouring an optional `TRANSLATE` table — not just the first tree. A file carrying several trees is passed to the multi-tree dialog. |
 | **Multi-tree files** | — | If a file contains multiple trees, a dialog lets you pick one, import all as separate tabs, or build a consensus tree (strict or 50% majority rule). |
 
 Drag-and-drop is supported: drop a file anywhere on the window to import it.
@@ -681,15 +686,15 @@ Open the **Export** module (left panel, Output group) or use the ⌘K command pa
 | **PDF** | Vector | Vector PDF for print/publication (jsPDF + svg2pdf.js). Derived from the SVG. |
 | **PNG** | Raster | Bitmap rasterised from the SVG at 2×. The factor is fixed — there is no control for it yet — and a canvas large enough to reach the browser's canvas ceiling has its effective scale reduced so the export still completes. |
 | **Newick** | Data files | Tree topology with branch lengths and support values. |
-| **Nexus** | Data files | Full Nexus file with optional CHARACTERS block, ASSUMPTIONS block (hypothesis layers), MrBayes block, and BEAST block. |
+| **NEXUS** | Data files | Full NEXUS file with optional CHARACTERS block, ASSUMPTIONS block (hypothesis layers), MrBayes block, and BEAST block. |
 | **Hypothesis JSON** | Data files | A versioned archive (`kind: "hypothesis-export"`, its own schema `0.1.0`) of the **active** layer: character states for every tip, scored or not, plus events, confidence and evidence, and layer metadata. Export each layer separately to compare them. |
 | **R script** | Data files | Self-contained executable R script (sole dependency: the `ape` package) that regenerates the figure and re-runs Sankoff parsimony and Mk-model ASR outside the GUI. |
 | **Reconciliation report** | Data files | Markdown summary of the DTL reconciliation scenario. |
 | **Narrative report** | Reports | Markdown summary of the tree, characters, events, and hypotheses. |
 
-### Nexus Export Options
+### NEXUS Export Options
 
-Reached from the **Export** module's Nexus button. The File menu's Nexus entry exports with the default options and opens no dialog, so use the module when you need the blocks below.
+Reached from the **Export** module's NEXUS button. The File menu's NEXUS entry exports with the default options and opens no dialog, so use the module when you need the blocks below.
 
 The dialog lets you include:
 - **Character matrix** (CHARACTERS block)
@@ -709,15 +714,15 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘Z / Ctrl+Z | Undo |
-| ⌘⇧Z / Ctrl+Y | Redo |
-| ⌘S / Ctrl+S | Save project (in place when a path is known) |
+| ⌘Z / Ctrl + Z | Undo |
+| ⌘⇧Z / Ctrl + Y | Redo |
+| ⌘S / Ctrl + S | Save project (in place when a path is known) |
 | ⌘⇧S | Save as… |
-| ⌘O / Ctrl+O | Open project (`.cladeforge.json`) — import a tree from the File menu, or by dropping a file |
+| ⌘O / Ctrl + O | Open project (`.cladeforge.json`) — import a tree from the File menu, or by dropping a file |
 | ⌘T / ⌘N | New tab |
 | ⌘W | Close tab |
 | ⌘A | Select all tips |
-| ⌘F / Ctrl+F | Search nodes · in the reconciliation view this only points at Scene › Mappings & events |
+| ⌘F / Ctrl + F | Search nodes · in the reconciliation view this only points at Scene › Mappings & events |
 | ⌘⇧F | Fit to window |
 | ⌘0 | Fit to window |
 | ⌘K | Command palette |
@@ -735,8 +740,8 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | Esc | Clear selection / abort gesture |
 | Esc | Leave the reconciliation view (reconciliation view only) |
 | Arrow keys | Nudge the selected nodes by 1px (Shift = 10px). In rectangular layouts movement is constrained to the tree's depth axis, so the arrows across that axis do nothing |
-| Alt + ← / ↑ · Alt + → / ↓ | Move the selection to the previous / next node in display order, wrapping at either end |
-| Wheel | Zoom (Ctrl/⌘+wheel = pinch zoom; two-finger scroll = pan) |
+| Alt + ← / ↑ · Alt + → / ↓ | Move focus between nodes through the topology — ↑ parent, ↓ first child, ← / → previous / next sibling. Where there is nowhere to go the selection stays put: it does **not** wrap around |
+| Wheel | Zoom (Ctrl/⌘ + wheel = pinch zoom; two-finger scroll = pan) |
 | Space / middle-drag | Pan canvas |
 | Shift/Alt + background drag | Marquee-select nodes |
 | Drag node | Move node |
@@ -758,7 +763,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 ### Notes
 
 - Wherever this table writes ⌘, **Ctrl is accepted too**, so the same chords work on Windows and Linux.
-- Shortcuts are ignored while a text field has focus **and while an input method is composing** — an otherwise-live ⌘ chord arriving mid-composition cannot fire an edit, which matters most for 中文 input.
+- Shortcuts are ignored while a text field has focus **and while an input method is composing** — an otherwise-live ⌘ chord arriving mid-composition cannot fire an edit, which matters most for Chinese input.
 
 ---
 

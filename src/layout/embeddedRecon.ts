@@ -663,6 +663,12 @@ interface Draft {
   dashed: boolean;
   event: ReconEventType | null;
   kind: 'tip' | 'internal';
+  /**
+   * Step ordinal within ONE gene edge's multi-branch route. A gene edge that
+   * crosses several species branches yields one draft per step — without this
+   * in the segment id every step of the edge shared the same React key.
+   */
+  stepIndex?: number;
 }
 
 interface Decomposed {
@@ -878,6 +884,7 @@ function decomposeGeneEdges(
         dashed: dashedBase,
         event: childEvent,
         kind: cp.kind,
+        stepIndex: i,
       });
     });
   }
@@ -934,7 +941,9 @@ function decomposeGeneEdges(
         }
       }
       out.push({
-        id: edgeId,
+        // A multi-step edge emits one segment per step: the step ordinal keeps
+        // the ids (and the React keys built from them) unique.
+        id: draft.stepIndex !== undefined ? `${edgeId}#${draft.stepIndex}` : edgeId,
         geneNodeId: draft.geneNodeId,
         parentGeneNodeId: draft.parentGeneNodeId,
         hostBranchId: draft.branchId ?? childP.hostBranchId ?? '',

@@ -18,6 +18,7 @@ import {
   DEFAULT_RECON_COSTS,
   PROJECT_VERSION,
   defaultStyleDefaults,
+  type Character,
   type GeneTreeEntry,
   type Project,
 } from '../model/types';
@@ -349,6 +350,43 @@ function finalizeProject(
     );
   }
 
+  // Depth defence for character cost matrices: a non-number / NaN cell (a bare
+  // `null` from an older workspace snapshot, or hand-edited JSON) is repaired
+  // to the same default `costOf` would apply at scoring time (0 on the
+  // diagonal, 1 elsewhere) AND reported — the lookup itself would have
+  // silently turned a forbidden transition into "cost 1" with no trace. A
+  // legal `Infinity` cell is a forbidden transition and must be left alone.
+  const backfilledChars = backfilled.characters as Array<Character & { costMatrix?: number[][] }>;
+  let repairedCells = 0;
+  let repairedChars = 0;
+  for (const ch of backfilledChars) {
+    const cm = ch?.costMatrix;
+    if (!Array.isArray(cm)) continue;
+    let touched = false;
+    for (let i = 0; i < cm.length; i += 1) {
+      const row = cm[i];
+      if (!Array.isArray(row)) continue;
+      for (let j = 0; j < row.length; j += 1) {
+        const v = row[j];
+        // Only non-numbers (a bare `null`) and NaN are damage; any number —
+        // `Infinity` included, a forbidden transition — is left as written.
+        if (typeof v === 'number' && !Number.isNaN(v)) continue;
+        row[j] = i === j ? 0 : 1;
+        repairedCells += 1;
+        touched = true;
+      }
+    }
+    if (touched) repairedChars += 1;
+  }
+  if (repairedCells > 0) {
+    notes.push(
+      tr(
+        `已修复 ${repairedChars} 个性状代价矩阵中的 ${repairedCells} 个非法单元（非数字/NaN）为默认代价（对角 0、其余 1）`,
+        `Repaired ${repairedCells} invalid cell${repairedCells === 1 ? '' : 's'} (non-numeric / NaN) in ${repairedChars} character cost matrix${repairedChars === 1 ? '' : 'es'} with the default cost (0 on the diagonal, 1 elsewhere)`,
+      ),
+    );
+  }
+
   // Every project needs at least one hypothesis layer; repair a file that lacks
   // one.
   if (backfilled.layers.length === 0) {
@@ -479,7 +517,11 @@ export function writeWorkspace(projects: Project[], activeIndex: number): WriteR
   };
   let text: string;
   try {
-    text = JSON.stringify(payload);
+    // The same tagged non-finite encoding as serializeProject: a bare
+    // stringify writes a legal `Infinity` (forbidden transition) in a Sankoff
+    // cost matrix as `null`, and nothing downstream could tell "forbidden"
+    // from "broken" — the cell silently degraded to the default cost.
+    text = JSON.stringify(payload, nonFiniteReplacer);
   } catch {
     return recordAutosave({ ok: false, failure: 'serialize', message: failureMessage('serialize') });
   }
@@ -525,7 +567,10 @@ export function readWorkspace(): WorkspaceRestore | null {
   if (!text) return null;
   let data: Partial<WorkspaceFile>;
   try {
-    data = JSON.parse(text) as Partial<WorkspaceFile>;
+    // Revive the tagged non-finite numbers the writer encoded. This path never
+    // went through readProjectFile's revive step, so a restored workspace used
+    // to hand `finalizeProject` raw `null`s where `Infinity` belonged.
+    data = reviveNonFinite(JSON.parse(text)) as Partial<WorkspaceFile>;
   } catch {
     quarantine(text);
     notify.error(

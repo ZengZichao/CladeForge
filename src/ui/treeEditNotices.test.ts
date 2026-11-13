@@ -37,7 +37,7 @@ describe('outgroupFailureText', () => {
     // This is the case that would otherwise read as a successful no-op.
     const text = outgroupFailureText('outgroup-is-root') as string;
     expect(text).toContain('根');
-    expect(text).toContain('没有可以移根的枝');
+    expect(text).toContain('没有可以重新定根的枝');
   });
 
   it('an unknown reason still produces a sentence, never undefined', () => {

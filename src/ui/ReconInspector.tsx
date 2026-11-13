@@ -190,7 +190,7 @@ function ReconOverview({ onBuildGeneTree }: { onBuildGeneTree: () => void }) {
                 const tipMap = mapTipsByLabel(d, g.doc).mappings;
                 g.assumptions = suggestLcaScenario(d, g.doc, tipMap, g.assumptions);
               });
-              notify.success(tr('已生成 LCA 建议场景', 'LCA suggestion applied'));
+              notify.success(tr('已生成 MRCA 建议场景', 'MRCA suggestion applied'));
             }}
           >
             {S.recon.suggestLca}

@@ -19,7 +19,7 @@ import { PreferencesMenu } from './PreferencesMenu';
 import * as file from '../io/fileActions';
 import { S } from './strings';
 
-/** View-mode segment: 标准 standard canvas ↔ 协同 side-by-side reconciliation.
+/** View-mode segment: 标准 standard canvas ↔ 协调 side-by-side reconciliation.
  *
  * The active state and the workspace switch BOTH read `reconMode`, so the
  * toolbar can never claim reconciliation while the app renders the standard

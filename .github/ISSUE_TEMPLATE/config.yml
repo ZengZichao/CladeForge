@@ -1,10 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Report a security vulnerability
+  - name: Report a security vulnerability / 报送安全漏洞
     url: https://github.com/ZengZichao/CladeForge/security/advisories/new
     about: >
-      Do not open a public issue for a security problem. Use GitHub's private
-      vulnerability reporting instead — see SECURITY.md in the repository root.
-  - name: Security policy and known limitations
+      Security problems: do not open a public issue. Use GitHub's private
+      vulnerability reporting — see SECURITY.md in the repository root. /
+      安全问题请勿开公开 issue，请改用 GitHub 漏洞私下报送——见仓库根目录的 SECURITY.md。
+  - name: Security policy and known limitations / 安全政策与已知限制
     url: https://github.com/ZengZichao/CladeForge/blob/main/SECURITY.md
-    about: Supported versions, reporting process, and which paths are in scope.
+    about: Supported versions, reporting process, known limitations, and which paths are in scope. / 受支持的版本、报送流程、已知限制与适用范围。

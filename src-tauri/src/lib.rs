@@ -173,10 +173,13 @@ fn persist_approved_roots(guard: &BTreeSet<PathBuf>) {
         body.push_str(&root.to_string_lossy());
         body.push('\n');
     }
-    // Atomic-enough for this file: temp + rename on the same volume.
+    // Atomic-enough for this file: temp + rename on the same volume. A failed
+    // write used to leave an empty / half-written `approved-roots.tmp` behind.
     let tmp = path.with_extension("tmp");
     if std::fs::write(&tmp, body).is_ok() {
         let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 
@@ -553,11 +556,26 @@ fn launch_paths_slot() -> &'static Mutex<Vec<String>> {
 /// The argv entries that look like a document handed to us by the OS: existing
 /// regular files, not options. Everything else (flags, missing files,
 /// directories) is dropped, so a shell wrapper's arguments cannot inject a
-/// read and a stale shortcut cannot produce a confusing error dialog.
+/// read and a stale shortcut cannot produce a confusing error dialog. Entries
+/// whose extension the bundle's `fileAssociations` never claims are dropped
+/// too — the webview would ultimately answer every such file with the same
+/// "import failed" dialog, so there is nothing to gain from handing it over.
 fn document_paths_from_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
     args.into_iter()
         .filter(|arg| !arg.starts_with('-'))
         .filter(|arg| std::fs::metadata(arg).map(|m| m.is_file()).unwrap_or(false))
+        .filter(|arg| {
+            // Match on the lowercased FILE NAME — `Path::extension` would read
+            // a project document's double extension `.cladeforge.json` as just
+            // "json" and let any companion .json file through.
+            let name = std::path::Path::new(arg)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            let ext = name.rsplit('.').next().unwrap_or("");
+            name.ends_with(".cladeforge.json")
+                || matches!(ext, "nwk" | "newick" | "tree" | "tre" | "nex" | "nexus")
+        })
         .collect()
 }
 
@@ -1006,6 +1024,39 @@ mod tests {
         assert!(validate_path("tree.nwk", false).is_err());
         assert!(validate_path("/etc/../etc/passwd", false).is_err());
         assert!(validate_path("/tmp/../../etc/shadow", true).is_err());
+    }
+
+    #[test]
+    fn launch_args_keep_only_associated_documents() {
+        // An existing regular file that is neither an option nor one of the
+        // bundle's associated documents used to be forwarded to the webview,
+        // which could only answer it with the same "import failed" dialog. The
+        // association table now pre-filters: project documents and tree files
+        // pass (case-insensitively), everything else — flags, a bare .json
+        // companion, an unknown extension, a missing file — is dropped.
+        let dir = std::env::temp_dir().join(format!("cladeforge-args-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let mk = |name: &str| {
+            let p = dir.join(name);
+            std::fs::write(&p, b"x").unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        let tree = mk("tree.NWK");
+        let project = mk("demo.cladeforge.json");
+        let tree2 = mk("trees.nexus");
+        let other = mk("notes.txt");
+        let bare_json = mk("data.json");
+        let paths = document_paths_from_args([
+            "--flag".to_string(),
+            tree.clone(),
+            other,
+            project.clone(),
+            tree2.clone(),
+            bare_json,
+            "/definitely/missing/tree.nwk".to_string(),
+        ]);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(paths, vec![tree, project, tree2]);
     }
 
     #[test]

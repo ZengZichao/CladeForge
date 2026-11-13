@@ -121,9 +121,10 @@ export function eventMarkerSize(event: EvolutionaryEvent): number {
   return event.markerSize === undefined ? EVENT_BADGE_RADIUS : clampEventMarkerSize(event.markerSize);
 }
 
-/** The badge outline colour: the per-event override, else the type colour. */
-export function eventMarkerColor(event: EvolutionaryEvent): string {
-  return event.markerColor || eventColor(event);
+/** The badge outline colour: the per-event override, else the type colour
+ *  (resolved against the project's custom types when one is given). */
+export function eventMarkerColor(event: EvolutionaryEvent, project?: Project): string {
+  return event.markerColor || eventColor(event, project);
 }
 
 /**
@@ -147,13 +148,15 @@ export function eventMarkerTextVisible(event: EvolutionaryEvent, project?: Proje
  * The text drawn inside the badge, or '' when text is hidden. Shown text is
  * the per-event override, else the type's catalogue code. Long text is
  * truncated — the badge is a marker, not a label, and collision planning
- * sizes boxes off the radius.
+ * sizes boxes off the radius. `project` widens the catalogue with the
+ * project's custom event types; without it a custom type's code degrades to
+ * '?'.
  */
-export function eventBadgeText(event: EvolutionaryEvent): string {
-  if (!eventMarkerTextVisible(event)) return '';
+export function eventBadgeText(event: EvolutionaryEvent, project?: Project): string {
+  if (!eventMarkerTextVisible(event, project)) return '';
   const text = event.markerText?.trim();
   if (text) return text.slice(0, EVENT_BADGE_TEXT_MAX);
-  return eventCode(event);
+  return eventCode(event, project);
 }
 
 /**
@@ -294,8 +297,14 @@ export function eventTypeGroup(t: EventTypeDef): string {
   return tr(t.group, t.groupEn);
 }
 
-export function eventDisplayLabel(event: EvolutionaryEvent): string {
-  const t = findEventType(event.typeId);
+/**
+ * The event's display name: the per-event label, else the type's localized
+ * catalogue name. `project` widens the catalogue with the project's custom
+ * event types — without it a custom-typed event (with no own label) degraded
+ * to the generic "事件/Event".
+ */
+export function eventDisplayLabel(event: EvolutionaryEvent, project?: Project): string {
+  const t = findEventType(event.typeId, project);
   return event.label || (t ? eventTypeLabel(t) : tr('事件', 'Event'));
 }
 

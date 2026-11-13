@@ -225,9 +225,10 @@ export interface EvolutionaryEvent {
   /** Badge outline colour override; default = the event type's catalogue colour. */
   markerColor?: string;
   /**
-   * Whether the badge draws inner text. Absent means no text, except that an
-   * explicit custom `markerText` (from an older document) still shows; resolve
-   * it through `eventMarkerTextVisible()` rather than reading this directly.
+   * Whether the badge draws inner text. Absent means ON (the type's catalogue
+   * code shows by default — colour-only badges were not reliably
+   * distinguishable); an explicit `false` hides it. Resolve it through
+   * `eventMarkerTextVisible()` rather than reading this directly.
    */
   markerShowText?: boolean;
   /**
@@ -893,9 +894,29 @@ export function fontWeightValue(weight: number | string | undefined): number {
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
-  if (!m) return null;
-  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+  const t = hex.trim();
+  // 6-digit hex, plus the forms a colour field can realistically carry: 3-digit
+  // shorthand (#abc), 4-digit with alpha (#abcd), 8-digit with alpha
+  // (#rrggbbaa) and functional rgb(). Without these, `lerpHexColor`,
+  // `relativeLuminance` and `colorDeltaE` silently degraded such a value to
+  // `from` / black.
+  const m6 = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(t);
+  if (m6) return { r: parseInt(m6[1], 16), g: parseInt(m6[2], 16), b: parseInt(m6[3], 16) };
+  const m3 = /^#?([\da-f])([\da-f])([\da-f])$/i.exec(t);
+  if (m3) {
+    const wide = (c: string) => parseInt(c + c, 16);
+    return { r: wide(m3[1]), g: wide(m3[2]), b: wide(m3[3]) };
+  }
+  const m4 = /^#?([\da-f])([\da-f])([\da-f])([\da-f])$/i.exec(t);
+  if (m4) {
+    const wide = (c: string) => parseInt(c + c, 16);
+    return { r: wide(m4[1]), g: wide(m4[2]), b: wide(m4[3]) };
+  }
+  const m8 = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(t);
+  if (m8) return { r: parseInt(m8[1], 16), g: parseInt(m8[2], 16), b: parseInt(m8[3], 16) };
+  const mfn = /^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/i.exec(t);
+  if (mfn) return { r: Number(mfn[1]), g: Number(mfn[2]), b: Number(mfn[3]) };
+  return null;
 }
 
 function channelHex(v: number): string {

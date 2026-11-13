@@ -312,16 +312,16 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
     const seen = new Set<string>();
     const out: Row[] = [];
     for (const e of projectEvents) {
-      const color = eventMarkerColor(e);
+      const color = eventMarkerColor(e, legendProject);
       const shape = eventMarkerShape(e);
-      const code = eventBadgeText(e);
+      const code = eventBadgeText(e, legendProject);
       const id = `${e.typeId}|${color}|${shape}|${code}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      out.push({ id, color, shape, code, label: eventDisplayLabel(e) });
+      out.push({ id, color, shape, code, label: eventDisplayLabel(e, legendProject) });
     }
     return out;
-  }, [showEvents, projectEvents]);
+  }, [showEvents, projectEvents, legendProject]);
 
   if (!open) {
     return (

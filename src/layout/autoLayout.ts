@@ -253,7 +253,7 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
         kind: 'circular-time-radii',
         count: dated,
         message: tr(
-          `圆形布局按年龄映射半径（时间轮）：根位于圆心，半径随节点年龄向外递减，现生类群位于外缘。角度仍按拓扑等分。`,
+          `圆形布局按年龄映射半径（时间轮）：根位于圆心，半径随节点年龄向外递减，现存分类单元位于外缘。角度仍按拓扑等分。`,
           `The circular layout maps radii by node age (time wheel): the root sits at the centre and radius decreases with node age, so extant taxa fall on the rim. Angles remain evenly spaced.`,
         ),
       });

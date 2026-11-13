@@ -181,7 +181,7 @@ export function ReconWorkspace({
         <button
           className="panel-toggle-btn left"
           onClick={openGenePanel}
-          title={tr('打开协同面板', 'Open reconciliation panel')}
+          title={tr('打开协调面板', 'Open reconciliation panel')}
         >
           <PinLeftIcon />
         </button>

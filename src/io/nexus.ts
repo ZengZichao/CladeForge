@@ -19,7 +19,7 @@ import { MISSING_STATE_CODES, newCharacterState, stateColorFor } from '../model/
 import { newId } from '../model/treeOps';
 import { tr } from '../ui/strings';
 import { assertTreeCount, assertTreeInput } from './limits';
-import type { Character, NodeId, Project, TreeNode } from '../model/types';
+import type { Character, NodeId, Project, SupportScale, TreeNode } from '../model/types';
 
 /** Options controlling NEXUS export output. */
 export interface NexusExportOptions {
@@ -208,13 +208,24 @@ export interface NexusParseResult {
   issues: string[];
 }
 
+/** Same option surface the Newick path takes (see NewickParseOptions). */
+export interface NexusParseOptions {
+  supportConvention?: 'auto' | SupportScale;
+}
+
 /**
  * Read every tree of a NEXUS file. Multi-tree files — posteriors, bootstrap
  * replicates, MCCTREE sets — yield the whole list plus the lossiness notes, never
  * just the first tree; callers are expected to route them through the same tree
- * chooser the Newick path uses.
+ * chooser the Newick path uses. `options.supportConvention` (when given) is
+ * forwarded to the Newick reader so a NEXUS file can declare 0–1 / 0–100 the
+ * same way a Newick file can.
  */
-export function parseNexusTrees(input: string, name = 'Imported tree'): NexusParseResult {
+export function parseNexusTrees(
+  input: string,
+  name = 'Imported tree',
+  options: NexusParseOptions = {},
+): NexusParseResult {
   assertTreeInput(input);
   const { unterminatedComment } = maskNexus(input);
   if (unterminatedComment) {
@@ -264,6 +275,7 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
       stmt.newick.endsWith(';') ? stmt.newick : `${stmt.newick};`,
       label,
       budget,
+      { supportConvention: options.supportConvention },
     );
     issues.push(...nwkIssues);
     const project = parsed[0];
@@ -339,11 +351,12 @@ export function parseNexusTrees(input: string, name = 'Imported tree'): NexusPar
 export function parseNexusFile(
   input: string,
   name = 'Imported tree',
+  options: NexusParseOptions = {},
 ): { projects: Project[]; matrix: NexusMatrixResult | null; issues: string[] } {
   const issues: string[] = [];
   let projects: Project[] = [];
   try {
-    const parsed = parseNexusTrees(input, name);
+    const parsed = parseNexusTrees(input, name, options);
     projects = parsed.projects;
     issues.push(...parsed.issues);
   } catch (e) {
@@ -911,7 +924,11 @@ function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
   // columns, and overwriting them silently dropped every earlier chunk.
   const rows = new Map<string, string[]>();
   {
-    const m = /(?:matrix|characters)\s+([\s\S]*?)(?:;|$)/i.exec(masked);
+    // Word boundaries are load-bearing: without the leading `\b` a
+    // `OPTIONS … COSTMATRIX = (…)` line matched at `matrix` INSIDE
+    // `costmatrix`, and the OPTIONS body was parsed as the MATRIX body — the
+    // real matrix below was silently dropped.
+    const m = /\b(?:matrix|characters)\b\s+([\s\S]*?)(?:;|$)/i.exec(masked);
     if (m) {
       const bodyMaskedLines = m[1].split(/\r?\n/);
       const startRaw = masked.indexOf(m[1]);
@@ -956,10 +973,7 @@ function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
     const re = /costmatrix\s*=\s*\(([^;]*?)\)/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(masked))) {
-      const matrix = m[1]
-        .split('/')
-        .map((r) => splitOutsideQuotes(r.trim(), ' ').map((v) => Number(v.trim())))
-        .filter((row) => row.length > 0 && row.every((v) => Number.isFinite(v)));
+      const matrix = parseCostMatrixBody(m[1]);
       if (matrix.length > 0) costMatrices.push({ applyTo: [], matrix });
     }
     const applyM = /applyto\s*=\s*([0-9(\s,]+)/i.exec(masked);
@@ -976,6 +990,32 @@ function parseMatrixBlock(raw: string, masked: string): MatrixBlock | null {
   return { datatype, symbols, declaredTaxa, rows, stateLabels, charNames, missingCodes: extraMissing, costMatrices, columns };
 }
 
+/**
+ * Read a COSTMATRIX=(…) body. Rows are `/`-separated when the file spells them
+ * out, but CladeForge (and much NEXUS software) writes the ROW-MAJOR FLAT form
+ * — `(0 2 3 0)` for a 2×2 matrix — and a k-state cost matrix must be k×k, so a
+ * single row whose length is a perfect square n² is reshaped into n rows.
+ * Without the reshape the app could not read back its own export: the flat
+ * body parsed as one 1×4 row and the `rows === states` check silently dropped
+ * it.
+ */
+function parseCostMatrixBody(body: string): number[][] {
+  const rows = body
+    .split('/')
+    .map((r) => splitOutsideQuotes(r.trim(), ' ').map((v) => Number(v.trim())))
+    .filter((row) => row.length > 0 && row.every((v) => Number.isFinite(v)));
+  if (rows.length === 1) {
+    const n = Math.sqrt(rows[0].length);
+    if (n > 1 && Number.isInteger(n)) {
+      const flat = rows[0];
+      const shaped: number[][] = [];
+      for (let r = 0; r < n; r += 1) shaped.push(flat.slice(r * n, (r + 1) * n));
+      return shaped;
+    }
+  }
+  return rows;
+}
+
 /** ASSUMPTIONS blocks: OPTIONS DEFTYPE=… COSTMATRIX=(…) APPLYTO=…. */
 function parseAssumptions(input: string): { applyTo: number[]; matrix: number[][] }[] {
   const out: { applyTo: number[]; matrix: number[][] }[] = [];
@@ -983,10 +1023,7 @@ function parseAssumptions(input: string): { applyTo: number[]; matrix: number[][
     const re = /costmatrix\s*=\s*\(([^;]*?)\)/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(b.masked))) {
-      const matrix = m[1]
-        .split('/')
-        .map((r) => splitOutsideQuotes(r.trim(), ' ').map((v) => Number(v.trim())))
-        .filter((row) => row.length > 0 && row.every((v) => Number.isFinite(v)));
+      const matrix = parseCostMatrixBody(m[1]);
       if (matrix.length === 0) continue;
       const applyM = /applyto\s*=\s*([0-9(\s,]+)/i.exec(b.masked.slice(m.index));
       const applyTo = applyM
@@ -1002,11 +1039,12 @@ function parseAssumptions(input: string): { applyTo: number[]; matrix: number[][
 }
 
 /**
- * Read the DATA / CHARACTERS / ASSUMPTIONS blocks of a NEXUS file into
- * CladeForge characters. STANDARD (morphology) matrices — the common
- * Mesquite / PAUP / MrBayes exchange — are fully supported, including
- * SYMBOLS, STATELABELS, polymorphic `(xy)` cells, `?`/`-` missing codes and
- * cost matrices; continuous matrices become continuous characters; sequence
+   * Read the DATA / CHARACTERS / ASSUMPTIONS blocks of a NEXUS file into
+   * CladeForge characters. STANDARD (morphology) matrices — the common
+   * Mesquite / PAUP / MrBayes exchange — are fully supported, including
+   * SYMBOLS, STATELABELS, polymorphic `(xy)` / uncertain `{xy}` cells,
+   * `?`/`-` missing codes and
+   * cost matrices; continuous matrices become continuous characters; sequence
  * datatypes (DNA/AA) are refused with a reason (there is no sequence layer).
  */
 export function parseNexusMatrix(input: string): NexusMatrixResult {
@@ -1032,6 +1070,21 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
     }
     const taxa = [...block.rows.keys()];
     if (tipLabels.length === 0) tipLabels.push(...taxa);
+    // A single parsed row whose first token is NOT one of the declared taxa
+    // usually means the MATRIX body was mis-scoped (a header keyword swallowed
+    // the real data) — flag it instead of failing silently.
+    if (
+      block.declaredTaxa.length > 0 &&
+      taxa.length === 1 &&
+      !block.declaredTaxa.some((t) => t.toLowerCase() === taxa[0].toLowerCase())
+    ) {
+      issues.push(
+        tr(
+          `MATRIX 体疑似未正确解析：仅识别到 1 行，且行首「${taxa[0]}」不在 TAXLABELS 声明中`,
+          `MATRIX body looks mis-parsed: only one row was found and its first token "${taxa[0]}" is not a declared TAXLABELS entry`,
+        ),
+      );
+    }
     const columnCount = Math.max(block.columns, ...taxa.map((t) => (block.rows.get(t) as string[]).length));
     if (columnCount === 0) continue;
 
@@ -1074,7 +1127,10 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
       const usedSymbols = new Set<string>();
       for (const taxon of taxa) {
         const tok = (block.rows.get(taxon) as string[])[col] ?? '?';
-        const poly = /^\((.*)\)$/.exec(tok);
+        // `{…}` (uncertainty) and `(…)` (polymorphism) both wrap a STATE SET —
+        // leaving the braces in place used to split `{01}` into the four
+        // pseudo-states `{`, `0`, `1`, `}`.
+        const poly = /^[({](.*)[)}]$/.exec(tok);
         for (const s of (poly ? poly[1] : tok).split('')) {
           if (isMissing(s)) continue;
           usedSymbols.add(s);
@@ -1116,7 +1172,8 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
       const assignments: Record<string, string | string[]> = {};
       for (const taxon of taxa) {
         const tok = (block.rows.get(taxon) as string[])[col] ?? '?';
-        const poly = /^\((.*)\)$/.exec(tok);
+        // Same `{…}` / `(…)` equivalence as the usedSymbols pass above.
+        const poly = /^[({](.*)[)}]$/.exec(tok);
         const cellSymbols = (poly ? poly[1] : tok).split('');
         const ids: string[] = [];
         for (const s of cellSymbols) {

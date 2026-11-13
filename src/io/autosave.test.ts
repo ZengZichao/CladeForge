@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readWorkspace, writeWorkspace } from './projectIO';
 import {
@@ -112,5 +113,77 @@ describe('workspace autosave status', () => {
     const restored = readWorkspace();
     expect(restored?.projects.map((p) => p.name)).toEqual(['good']);
     expect(restored?.skipped).toBe(1);
+  });
+
+  it('round-trips an Infinity cost-matrix cell through the workspace snapshot', () => {
+    // A bare stringify writes a legal `Infinity` (forbidden transition) as
+    // `null`, and the restore path skipped the revive step — the cell came
+    // back non-numeric and scoring silently fell back to the default cost.
+    const p = createEmptyProject('sankoff');
+    p.characters = [
+      {
+        id: 'c1',
+        name: 'binary',
+        type: 'discrete',
+        states: [
+          { id: 's0', label: '0', color: '#111111' },
+          { id: 's1', label: '1', color: '#222222' },
+        ],
+        costMatrix: [
+          [0, Infinity],
+          [1, 0],
+        ],
+      },
+    ];
+    expect(writeWorkspace([p], 0).ok).toBe(true);
+    const restored = readWorkspace();
+    expect(restored?.projects).toHaveLength(1);
+    const cm = restored!.projects[0].characters[0]?.costMatrix;
+    expect(cm?.[0]?.[1]).toBe(Infinity);
+    expect(cm?.[1]?.[0]).toBe(1);
+    expect(cm?.[0]?.[0]).toBe(0);
+  });
+
+  it('repairs a null cost-matrix cell on restore and reports it', () => {
+    // Depth defence: a snapshot (or hand-edited file) that already carries a
+    // bare `null` must come back as the default cost WITH an issue, not as a
+    // silent scoring-time fallback.
+    const p = createEmptyProject('poisoned');
+    storage.raw.set(
+      'cladeforge:workspace',
+      JSON.stringify({
+        app: 'CladeForge',
+        kind: 'workspace',
+        version: '0.3.0',
+        activeIndex: 0,
+        projects: [
+          {
+            ...p,
+            characters: [
+              {
+                id: 'c1',
+                name: 'binary',
+                type: 'discrete',
+                states: [
+                  { id: 's0', label: '0', color: '#111111' },
+                  { id: 's1', label: '1', color: '#222222' },
+                ],
+                costMatrix: [
+                  [0, null],
+                  [1, 0],
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const restored = readWorkspace();
+    expect(restored?.projects).toHaveLength(1);
+    expect(restored!.projects[0].characters[0]?.costMatrix).toEqual([
+      [0, 1],
+      [1, 0],
+    ]);
+    expect(restored?.issues.some((m) => /代价矩阵|cost matrix/.test(m))).toBe(true);
   });
 });

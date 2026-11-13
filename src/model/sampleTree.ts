@@ -36,10 +36,12 @@ import { tr } from '../ui/strings';
 /**
  * Sample characters carry a FIXED id.
  *
- * The character id is the `character` column of five fixture files plus
- * `manifest.tsv`, so it has to be stable. With `newId()` (a nanoid) every run of
- * `scripts/cross-check/dump-fixtures.mjs` would rewrite ~1 500 lines of committed
- * fixtures while changing nothing a reader could see. Pinning the character ids is
+ * The character id is the `character` column of thirteen committed fixture
+ * tables — `manifest.tsv`, `ape-agreement.tsv` and the per-character tables of
+ * the `feature-tour` and `large-tree` samples, ~300 data lines between them — so
+ * it has to be stable. With `newId()` (a nanoid) every run of
+ * `scripts/cross-check/dump-fixtures.mjs` would rewrite all of them while
+ * changing nothing a reader could see. Pinning the character ids is
  * what keeps regeneration byte-identical. Node and state ids stay random: they
  * never appear in a fixture column.
  */
@@ -391,7 +393,7 @@ export function createFeatureTourSample(): Project {
       nodeId: tipG,
       minAge: 47,
       maxAge: 50,
-      label: tr('尖端校准', 'Tip calibration'),
+      label: tr('末端校准', 'Tip calibration'),
     },
     {
       id: newId(),
@@ -401,7 +403,7 @@ export function createFeatureTourSample(): Project {
       // its own window. `validateTimeData` checks both.
       minAge: 45,
       maxAge: 49,
-      label: tr('尖端校准', 'Tip calibration'),
+      label: tr('末端校准', 'Tip calibration'),
     },
     {
       id: newId(),
@@ -736,7 +738,7 @@ export const SAMPLE_PROJECTS: SampleDescriptor[] = [
     id: 'large-tree',
     label: '大树与深时',
     labelEn: 'Large tree & deep time',
-    desc: '11 个尖端、根年龄 4000 的较大时间树：演示布局、图例与深时轴',
+    desc: '11 个末端、根年龄 4000 的较大时间树：演示布局、图例与深时轴',
     descEn: 'A larger time tree (11 tips, root age 4000) demonstrating layout, legend and the deep-time axis',
     build: createLargeTreeSample,
   },
@@ -744,8 +746,8 @@ export const SAMPLE_PROJECTS: SampleDescriptor[] = [
     id: 'recon-family',
     label: '基因家族协调',
     labelEn: 'Gene-family reconciliation',
-    desc: '物种树 + 两棵基因树的 DTL 协调演示：重复、转移、丢失各一例，含一个未解析节点警告',
-    descEn: 'DTL reconciliation of a species tree plus two gene trees: one duplication, one transfer and one loss, with one unresolved-node warning',
+    desc: '物种树 + 两棵基因树的 DTL 协调演示：重复、转移、丢失各一例，含一个未映射内部节点警告',
+    descEn: 'DTL reconciliation of a species tree plus two gene trees: one duplication, one transfer and one loss, with one unmapped internal-node warning',
     build: createReconciliationSample,
     entryView: 'recon',
   },
