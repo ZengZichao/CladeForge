@@ -1051,12 +1051,12 @@ mod tests {
             tree.clone(),
             other,
             project.clone(),
-            tree2,
+            tree2.clone(),
             bare_json,
             "/definitely/missing/tree.nwk".to_string(),
         ]);
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(paths, vec![tree, project]);
+        assert_eq!(paths, vec![tree, project, tree2]);
     }
 
     #[test]
