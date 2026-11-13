@@ -79,6 +79,63 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
   marginals 4→2, rate-sensitivity characters 11→4), with `er-control` and the
   synthetic trees unchanged.
 
+### Fixed — review-report verification and repair round (2026-11-12/13)
+Every finding of the 2026-11-12 review report (`CladeForge-审查报告-2026-11-12.md`, the
+author's archive, not checked in) verified against the working tree — data-path findings
+reproduced with throwaway scripts before touching code. Per-finding detail in
+`docs/AI_PROVENANCE.md` (2026-11-13 row).
+- **NEXUS matrix read-back**: `{…}` uncertainty cells parse as state sets at both consumers of
+  `parseNexusMatrix`; the MATRIX keyword match uses a word boundary and a mis-scoped
+  single-row warning is fixed; COSTMATRIX is reshaped as a flat row-major matrix — the app can
+  re-import its own `COSTMATRIX=(0 2 3 0)` export.
+- **Workspace autosave is non-finite-safe**: the `cf-nonfinite` tagged encoding applies to the
+  autosave path too, and a self-reporting load-time repair fixes non-numeric/NaN cost-matrix
+  cells. `docs/FORMAT.md` documents the wire format.
+- **Embedded-reconciliation segments carry unique ids** (`edge#step`), eliminating React
+  duplicate-key warnings; exports confirmed not to consume the raw id.
+- **Project-aware custom event types** flow through display, legend, editor, narrative and SVG
+  exports; the SVG arrow-marker fill is colour-sanitised.
+- **Node deletion prunes stored-layer events/states/meta**, and layer write-back filters
+  orphan events.
+- **Desktop writes over 16 MB show a busy overlay** during the IPC hop.
+- **`collapseBelowSupport` thresholds are on the 0–100 scale**; stochastic maps sample in log
+  space (no underflow bias); NEXUS import honours the declared support convention.
+- **Copy/export hardening**: CSV escaping in the matrix template, five export actions build
+  their payload once, drop-path size pre-checks, a cancelled drag no longer marks a clean tab
+  dirty, and switching the interface language no longer resets zoom/pan.
+- **Desktop shell**: launch arguments are pre-filtered by the file-association extension table
+  (with a Rust unit test); a failed staging write removes its tmp file.
+- Documentation round in the same change: `docs/UI_GLOSSARY_EN.md` created as the mandatory
+  English companion of `docs/UI_GLOSSARY.md`, the bilingual documentation audited and repaired,
+  and `docs/AI_PROVENANCE.md` updated.
+- Nine regression tests added; vitest suite green (97 files, 1201 passed / 6 skipped);
+  `tsc --noEmit` and `vite build` clean.
+
+### Changed — bilingual documentation translation audit round 2 (2026-11-13)
+
+Every markdown EN↔ZH pair re-audited by a six-agent cluster with the code and the normative
+glossary (`docs/UI_GLOSSARY.md`) as arbiters; structural equivalence (headings, tables, code
+fences, links, anchors, numeric tokens, paragraph blocks) proven before and after by
+independent scripts.
+
+- `scripts/cross-check/README.md` + `README_ZH.md`: the join-failure condition was stated
+  backwards on both sides — it fires when unresolved tips **exceed** the fixture's declared
+  missing count (`ape_agreement.R` `sum(is.na(codes)) > declared_missing`), not when the lookup
+  resolves fewer; corrected in both languages.
+- `CONTRIBUTING.md` + `CONTRIBUTING_ZH.md`: documentation-language matrix completed (rows for
+  `docs/AI_PROVENANCE.md`, `docs/FORMAT.md`, `CHANGELOG.md`); the "when those files land"
+  cross-link statement updated to present reality; Rules 3/4 enumerations synced with the
+  matrix; the CFF sentence corrected against the published CFF 1.2.0 schema (no language field
+  for the record itself — `languages` exists only on `references` entries); ZH "在 20.19 以下
+  无法运行" tightened to "在低于 20.19 的版本上无法运行".
+- `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` + `_ZH.md`: the normative §5.1 signature aligned with
+  the shipped `explicitDonorGeneChild?: NodeId` on both sides; the ZH fence comment
+  「事件尚未解析」→「事件未定」 per the glossary's ban on 「未解析」.
+- `docs/AI_PROVENANCE.md`: the "git log has seven commits" claim qualified as the 2026-10-08
+  snapshot, and this round recorded.
+- `docs/UI_STYLE_GUIDE.md` §3.8: the ShortcutsDialog wheel-row status updated to the shipped
+  spaced form (`Ctrl/⌘ + wheel`).
+
 ## [0.3.0] — 2026-11-10
 
 Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`

@@ -40,7 +40,8 @@
    `docs/MANUAL_ZH.md`、README.md、README_ZH.md 与两份 `EMBEDDED_RECON_LAYOUT_PLAN` 文档同样已改正。
    全库唯一有意保留的紧凑写法是 `CHANGELOG.md` 的 `## [0.3.0]` 段中记述历史缺陷时引用的
    `Alt+F4`（那是操作系统自身给出的键名，按 §1 的专有名词规则原样保留）。仍以本节为待整改对象的
-   只剩 `src/ui/ShortcutsDialog.tsx` 的按键列（如 `⌘Z / Ctrl+Z`）与其英文滚轮行 `Ctrl/⌘+wheel`；
+   只剩 `src/ui/ShortcutsDialog.tsx` 的按键列（如 `⌘Z / Ctrl+Z`）；其英文滚轮行已改为带空格写法
+   （`Ctrl/⌘ + wheel`），不再属于待整改项；
    对应的 `docs/MANUAL_EN.md` §13 已用带空格写法。以上待整改处均以本文档为准修改文案。
 
 ## 4. 复数与占位符

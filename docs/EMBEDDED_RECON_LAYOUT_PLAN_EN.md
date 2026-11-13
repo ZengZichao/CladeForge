@@ -357,13 +357,13 @@ export function lossesAlongSpeciesPath(
 ): Map<NodeId, number>;
 
 /** Shared with validateScenario / geneTreeNhk: the child outside the subtree is
- *  the donor; an explicit field takes precedence. */
+ *  the donor; an explicit donor gene child takes precedence. */
 export function resolveTransferDonor(
   species: Project,
   gene: Project,
   geneNodeId: NodeId,
   effective: EffectivePlacements,
-  explicitDonor?: NodeId,
+  explicitDonorGeneChild?: NodeId,
 ): { donorGeneNodeId: NodeId; donorSpeciesNodeId: NodeId } | null;
 ```
 

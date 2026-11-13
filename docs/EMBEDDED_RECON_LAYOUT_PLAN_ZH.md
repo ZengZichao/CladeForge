@@ -350,13 +350,13 @@ export function lossesAlongSpeciesPath(
   path: SpeciesPath,
 ): Map<NodeId, number>;
 
-/** 与 validateScenario / geneTreeNhk 共用：子树外子代即供体；显式字段优先。 */
+/** 与 validateScenario / geneTreeNhk 共用：子树外子代即供体；显式供体子代优先。 */
 export function resolveTransferDonor(
   species: Project,
   gene: Project,
   geneNodeId: NodeId,
   effective: EffectivePlacements,
-  explicitDonor?: NodeId,
+  explicitDonorGeneChild?: NodeId,
 ): { donorGeneNodeId: NodeId; donorSpeciesNodeId: NodeId } | null;
 ```
 
@@ -468,7 +468,7 @@ export interface EmbeddedGeneNode {
   event: ReconEventType | null;
   kind: 'tip' | 'internal';
   placementSource: 'assumption' | 'tip-label' | 'inferred-mrca' | 'none';
-  /** true = 事件尚未解析（有映射但无 event），用虚线/灰色。 */
+  /** true = 事件未定（有映射但无 event），用虚线/灰色。 */
   unresolved: boolean;
   /** true = 显示推断位置，不写入 assumptions。 */
   inferred: boolean;

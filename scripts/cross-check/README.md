@@ -204,8 +204,8 @@ Exit status **0**: every comparison the harness attempted agreed.
   return 0, so they are recorded as `EXCLUDED` rather than reported as a
   disagreement. The two `feature-tour` characters declare an explicit Sankoff step
   matrix and so are not uniform-cost material at all. The harness checks that an
-  exclusion is real: a state-label lookup that resolves fewer tips than the fixture
-  declares missing is a `join` failure, not missing data.
+  exclusion is real: a state-label lookup that leaves more tips unresolved than
+  the fixture declares missing is a `join` failure, not missing data.
 * **Marginal states — measured on 3 rows, deliberately not counted anywhere.**
   `ape::ace()` refuses any tree that is not rooted **and** fully dichotomous and
   skips characters with missing codings. The two `large-tree` characters carry `?`

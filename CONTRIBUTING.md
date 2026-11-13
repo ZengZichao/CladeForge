@@ -142,21 +142,24 @@ single-language — Chinese-only or English-only.
 | `docs/GLOSSARY.md` | — | Chinese only | Exempt — historical comparison table |
 | `docs/UI_STYLE_GUIDE.md` | — | Chinese only | Exempt — current normative guide, maintained in Chinese only |
 | `docs/UI_FIX_REPORT.md` | — | Chinese only | Exempt — dated acceptance report |
+| — | `docs/AI_PROVENANCE.md` | English only | Exempt — the per-release AI-use provenance record itself (a machine-readable table plus prose), maintained in English; no Chinese counterpart exists |
+| — | `docs/FORMAT.md` | English only | Exempt — the `.cladeforge.json` file-format reference (see Rule 5); maintained in English; no Chinese counterpart exists |
 | `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/bug_report.md`, `.github/ISSUE_TEMPLATE/feature_request.md` | same file | Single file, English and 中文 side by side | Permitted form for templates |
 | — | `SECURITY.md` | English only | Exempt — English-only normative policy: it is the private-disclosure instruction itself (it names the one URL and the one email address a report must go to), and mixing languages in that text risks misrouting reports; no Chinese counterpart exists, and both README language versions link this same file |
-| — | `CITATION.cff` | English only | Exempt by nature — a machine-readable bibliographic record: the CFF schema declares one language per record (`language`, an ISO 639-1 code) and has no Chinese counterpart fields to fill, so a translated twin would be a second citable entry for the same release |
+| — | `CITATION.cff` | English only | Exempt by nature — a machine-readable bibliographic record: the CFF schema has no language field for the record itself, and a translated twin would be a second citable entry for the same release |
 | — | `LICENSE` | English only | Exempt by nature — the SPDX MIT text must stay verbatim; its copyright line already carries both language signatures (`曾子超 (Zichao Zeng)`) |
+| — | `CHANGELOG.md` | English only | Exempt — Keep a Changelog 1.1.0 release record, maintained in English; no Chinese counterpart exists |
 | `.github/ISSUE_TEMPLATE/config.yml` | same file | Single file, English and 中文 side by side | Paired — required: `name:` and `about:` are the strings GitHub shows in the issue picker, so each carries both languages in the form of Rules §4; `url:` and `blank_issues_enabled` are repository configuration and stay as they are |
 
 File names in this matrix are written as code, never as links, so the table cannot rot when a
 document is added, renamed or retired; the links a reader actually follows are the header
 cross-links inside each paired file (`> 中文版：…` / `> English version: …`). `docs/UI_GLOSSARY_EN.md`
-and `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` are introduced by this policy — the English counterpart
+and `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` were introduced by this policy — the English counterpart
 of the normative UI glossary, and the English counterpart of the roughly 1,500-line embedded-layout
 algorithm contract that five source-header comments cite as their specification
 (`src/model/reconPlacements.ts`, `src/model/reconPlacements.test.ts`, `src/layout/embeddedRecon.ts`,
-`src/layout/embeddedRecon.test.ts`, `src/canvas/EmbeddedReconCanvas.tsx`). When those files land,
-each gains its header cross-link and the matrix row above already covers it.
+`src/layout/embeddedRecon.test.ts`, `src/canvas/EmbeddedReconCanvas.tsx`). Both files are now in
+the repository and already carry their header cross-links; the matrix row above covers them.
 
 ### Rules
 
@@ -190,16 +193,17 @@ each gains its header cross-link and the matrix row above already covers it.
    should not ask for English twins of them. When `docs/GLOSSARY.md` or `docs/UI_FIX_REPORT.md` is
    edited, keep its "historical / non-normative" banner accurate; `docs/UI_STYLE_GUIDE.md` carries
    no such banner and must not acquire one. The matrix's English-only rows are the same argument
-   seen from the other side: `SECURITY.md`, `CITATION.cff` and `LICENSE` carry no translation
-   obligation either — the first is a policy decision, the other two are exempt by nature.
+   seen from the other side: `SECURITY.md`, `docs/AI_PROVENANCE.md`, `docs/FORMAT.md`,
+   `CHANGELOG.md`, `CITATION.cff` and `LICENSE` carry no translation obligation either — each is
+   exempt for the reason its matrix row states.
 4. **Templates use a different, equally permitted form.** The three `.github/` templates listed in
    the matrix, together with the GitHub-visible strings of `.github/ISSUE_TEMPLATE/config.yml`
    (`name:`, `about:`), carry English and 中文 side by side in one file, because GitHub loads a
    single file per template and cannot serve a `*_ZH` sibling. A new template follows the same
    single-file bilingual shape, and a new `contact_links` entry follows the same bilingual `name:` /
    `about:` shape. Nothing else in the repository may cite that as a precedent for shipping a
-   document in one language; the English-only rows in the matrix stand on their own reasons (policy
-   text, machine-readable record, verbatim licence), not on this one.
+   document in one language; the English-only rows in the matrix stand on the reasons
+   stated in their own rows, not on this one.
 5. **`docs/FORMAT.md` documents the `.cladeforge.json` data file format** — the schema the
    application reads and writes — **and says nothing about the language of documentation.** It is not
    authority for bilingual delivery, and a reference to it should name its subject ("the project

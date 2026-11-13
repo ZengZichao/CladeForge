@@ -8,7 +8,7 @@
 
 ## 开发环境
 
-- **Node.js ≥ 20.19**（`package.json` 中 `engines` 声明的下限）和 **Rust 工具链**（桌面外壳需要）。CI 使用 Node 20 系列（`.github/workflows/ci.yml` 中的 `node-version: 20`），满足该下限；`vite 8` 在 20.19 以下无法运行。
+- **Node.js ≥ 20.19**（`package.json` 中 `engines` 声明的下限）和 **Rust 工具链**（桌面外壳需要）。CI 使用 Node 20 系列（`.github/workflows/ci.yml` 中的 `node-version: 20`），满足该下限；`vite 8` 在低于 20.19 的版本上无法运行。
 - 安装依赖：`npm install`
 - 开始开发：`npm run dev`（Web 版）或 `npm run tauri dev`（桌面版）。
 
@@ -126,10 +126,13 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 | `docs/GLOSSARY.md` | — | 仅中文维护 | 政策豁免——历史对照表 |
 | `docs/UI_STYLE_GUIDE.md` | — | 仅中文维护 | 政策豁免——现行规范，仅中文维护 |
 | `docs/UI_FIX_REPORT.md` | — | 仅中文维护 | 政策豁免——带日期的验收报告 |
+| — | `docs/AI_PROVENANCE.md` | 仅英文维护 | 政策豁免——逐发布版本的 AI 辅助记录本身（机器可读表格加说明文字），以英文维护；仓库中不存在中文对应件 |
+| — | `docs/FORMAT.md` | 仅英文维护 | 政策豁免——`.cladeforge.json` 文件格式参考（见规则 5）；以英文维护，仓库中不存在中文对应件 |
 | `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/bug_report.md`、`.github/ISSUE_TEMPLATE/feature_request.md` | 同一文件 | 单文件内中英并列 | 模板许可形态 |
 | — | `SECURITY.md` | 仅英文维护 | 政策豁免——现行英文规范：它本身就是私下报送的操作说明（写明报告必须送往的唯一网址与唯一邮箱地址），在这段文字里混用两种语言有误送报告的风险；仓库中不存在中文对应件，README 两个语言版本链接的都是这同一份文件 |
-| — | `CITATION.cff` | 仅英文维护 | 性质豁免——机器可读的文献记录：CFF 规范只用 `language` 字段声明整条记录所用的语言（ISO 639-1 代码），没有可填中文的对应字段，再译一份只会让同一次发布出现两条可引用记录 |
+| — | `CITATION.cff` | 仅英文维护 | 性质豁免——机器可读的文献记录：CFF 规范对记录本身没有语言字段，再译一份只会让同一次发布出现两条可引用记录 |
 | — | `LICENSE` | 仅英文维护 | 性质豁免——SPDX MIT 文本必须逐字保持，其版权行已同时带有两种语言署名（`曾子超 (Zichao Zeng)`） |
+| — | `CHANGELOG.md` | 仅英文维护 | 政策豁免——Keep a Changelog 1.1.0 格式的发布记录，以英文维护；仓库中不存在中文对应件 |
 | `.github/ISSUE_TEMPLATE/config.yml` | 同一文件 | 单文件内中英并列 | 须中英配对：`name:` 与 `about:` 是 GitHub 在 issue 选择器里展示的可见文字，因此各自在同一字符串内并列两种语言（即规则 4 的形态）；`url:` 与 `blank_issues_enabled` 属仓库配置，保持原样 |
 
 矩阵中的文件名一律写成行内代码而非 Markdown 链接，这样文档新增、改名或停用时表格不会腐烂；读者真正
@@ -138,7 +141,7 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 UI 术语表的英文版，后者是那条约 1,500 行的嵌套视图算法契约设计文档的英文版，该文档被 5 处源码头注释
 当作规范引用（`src/model/reconPlacements.ts`、`src/model/reconPlacements.test.ts`、
 `src/layout/embeddedRecon.ts`、`src/layout/embeddedRecon.test.ts`、
-`src/canvas/EmbeddedReconCanvas.tsx`）。两份文件入库后各自补上页首互链即可，上表已经覆盖它们。
+`src/canvas/EmbeddedReconCanvas.tsx`）。两份文件均已入库，且各自已带上页首互链，上表已经覆盖它们。
 
 ### 规则
 
@@ -163,14 +166,15 @@ UI 术语表的英文版，后者是那条约 1,500 行的嵌套视图算法契�
    只反映某一时点的验收报告，说的是“当时如何”，不是“现在承诺什么”，它页首也是这样自述的。三份文件都
    不承担翻译义务，审阅者不应要求为它们补英文版。改动 `docs/GLOSSARY.md` 或 `docs/UI_FIX_REPORT.md`
    时，请把文件里“历史／非规范”的说明保持准确；`docs/UI_STYLE_GUIDE.md` 没有这类说明，也不得新增。
-   上表中“仅英文维护”的几行是同一套理由的另一面：`SECURITY.md`、`CITATION.cff`、`LICENSE` 同样不承担
-   翻译义务——前者是政策决定，后两者是性质使然。
+   上表中“仅英文维护”的几行是同一套理由的另一面：`SECURITY.md`、`docs/AI_PROVENANCE.md`、
+   `docs/FORMAT.md`、`CHANGELOG.md`、`CITATION.cff`、`LICENSE` 同样不承担翻译义务——各自的豁免理由
+   写在其矩阵行内。
 4. **模板类文件采用另一种同样被许可的形态。** 矩阵中三份 `.github/` 模板，连同
    `.github/ISSUE_TEMPLATE/config.yml` 里由 GitHub 展示给用户的文字（`name:`、`about:`），都把中英并列
    写在同一个文件里，因为 GitHub 每类模板只读取一个文件，无法提供与它配对的 `*_ZH` 文件。新增模板沿用这一
    “单文件双语并列”形态；新增 `contact_links` 条目也沿用中英并列的 `name:` / `about:` 写法。仓库中其他
-   文档不得援引它作为“只交付一种语言”的先例；上表中标为仅英文维护的几行各有各的理由（政策文字、机器
-   可读记录、逐字保持的许可证文本），与本条无关。
+   文档不得援引它作为“只交付一种语言”的先例；上表中标为仅英文维护的几行各有各的理由（写在各自的
+   矩阵行内），与本条无关。
 5. **`docs/FORMAT.md` 讲的是 `.cladeforge.json` 数据文件的格式**——应用读写的数据模式——**与文档使用
    哪种语言无关。** 它不能作为双语交付的依据；引用它时应写明它所记录的对象（“项目文件格式见
    docs/FORMAT.md”），以免它再次被当成文档语言规范来读。
