@@ -350,13 +350,13 @@ export function lossesAlongSpeciesPath(
   path: SpeciesPath,
 ): Map<NodeId, number>;
 
-/** 与 validateScenario / geneTreeNhk 共用：子树外子代即供体；显式供体子代优先。 */
+/** 与 validateScenario / geneTreeNhk 共用：子树外子代即转移供体；显式转移供体物种节点优先（所存值是外层物种树的节点，按各子代的有效定位匹配）。 */
 export function resolveTransferDonor(
   species: Project,
   gene: Project,
   geneNodeId: NodeId,
   effective: EffectivePlacements,
-  explicitDonorGeneChild?: NodeId,
+  explicitDonorSpeciesNode?: NodeId,
 ): { donorGeneNodeId: NodeId; donorSpeciesNodeId: NodeId } | null;
 ```
 
