@@ -1101,6 +1101,13 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
               project: freeze(activeFresh, true),
               past: [] as HistoryEntry[],
               future: [] as HistoryEntry[],
+              // The rebuild IS the (unsaved but pristine) document: leaving
+              // `savedProject` pointing at the replaced object made the first
+              // drag CANCEL mark the tab dirty — `cancelInteraction` compares
+              // the interaction base against `savedProject` to decide whether
+              // the reverted document is still the clean one (same rule undo
+              // applies). Same semantics as `docStateFor` (revision 0/0).
+              savedProject: freeze(activeFresh, true),
               selection: [] as NodeId[],
               selectedEdgeId: null as EdgeId | null,
               activeCharacterId: activeFresh.characters[0]?.id ?? null,

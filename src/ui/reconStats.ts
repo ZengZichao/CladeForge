@@ -4,7 +4,7 @@
 // Extracted from `ReconPanel.tsx` so the counting rules are testable without
 // rendering the panel (the repository's test net covers `.ts` only).
 //
-// "已映射尖端" is a union, not a sum. A tip counts as mapped when at least one of
+// "已映射末端" is a union, not a sum. A tip counts as mapped when at least one of
 // the two sources — label hits, or an explicit assumption — says so. The sources
 // overlap: `suggestLcaScenario` writes a `speciesNode` assumption FOR THE TIPS it
 // just mapped by label, so adding the two counts every auto-mapped tip twice and

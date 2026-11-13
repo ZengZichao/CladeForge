@@ -39,11 +39,11 @@ every saved file as `project.appVersion`.
 |---|---|---|
 | `nodes` | `Record<id, TreeNode>` | adjacency map; see TreeNode below |
 | `rootId` | id | root of the tree |
-| `customEdges` | array | user-drawn reticulation/association lines (DRAWING ANNOTATIONS — they never enter parsimony/Mk/DTL computation); each may carry `kind: 'hgt' \| 'hybridization' \| 'symbiosis' \| 'recombination' \| 'association'` and `note` |
-| `layout` | object | mode/type/orientation/hGap/vGap + `timeUnit`, `timeAxisLength` (px; independent of topology), `timeScale: 'linear'|'sqrt'|'log'`, `timeLogOrigin`, `secondTimeUnit`, `supportThreshold`, `collapseBelowThreshold`, `labelLod` |
+| `customEdges` | array | user-drawn **custom links** (自定义连线, the UI object name; on the data side these are the reticulate edges, 网状关系, of `CustomEdgeKind`). DRAWING ANNOTATIONS — they never enter parsimony/Mk/DTL computation; each may carry `kind: 'hgt' \| 'hybridization' \| 'symbiosis' \| 'recombination' \| 'association'` and `note` |
+| `layout` | object | mode/type/orientation/hGap/vGap + `timeUnit`, `timeAxisLength` (px; independent of topology), `timeScale: 'linear'\|'sqrt'\|'log'`, `timeLogOrigin`, `secondTimeUnit`, `supportThreshold`, `collapseBelowThreshold`, `labelLod` |
 | `canvas` | object | width/height/background (explicit colour, never a CSS variable) |
-| `defaults` | object | node/branch/edge style defaults + branch gradient |
-| `characters` | array | traits; discrete carry ordered `states` (id/label/color) + optional `costMatrix` (Infinity forbids a transition), `model: 'unordered'|'wagner'|'dollo'|'custom'`, `weight` |
+| `defaults` | object | the `node` / `branch` / `edge` style defaults + `branchGradient`; `edge` here is the **custom-link** style, not a tree branch (枝) |
+| `characters` | array | characters (性状) — what the UI calls a user-defined feature mapped onto the tree ("trait" is the older wording, avoided in visible text); discrete characters carry ordered `states` (id/label/color) + optional `costMatrix` (Infinity forbids a transition), `model: 'unordered'\|'wagner'\|'dollo'\|'custom'`, `weight` |
 | `events` | array | evolutionary events; `typeId` keys the catalogue (built-ins + `customEventTypes`), per-event marker overrides optional |
 | `layers` / `activeLayerId` / `layerStore` | — | hypothesis layers; each layer may carry `statement`, `prediction`, `status`, `evidence[]`, `author`, `createdAt/updatedAt`; the non-active snapshots live in `layerStore` |
 | `environmentalEvents` | array | dated context bands on the time axis |
@@ -53,7 +53,7 @@ every saved file as `project.appVersion`.
 | `reconOptions` | object | `{freeRoot? (default false), rootTransferCost?, tiePriority?, }` |
 | `customEventTypes` | array | user-defined event ontology (`CustomEventType`) |
 | `analysisResults` | array | retained analysis runs `{id, kind, fingerprint, method, params, version, createdAt, payload, pinned?}` |
-| `provenance` | object | `{topologySource?, lengthSource?, dateSource?, traitSource?, methodsNote?, createdUtc?, modifiedUtc?}` |
+| `provenance` | object | `{topologySource?, lengthSource?, dateSource?, traitSource?, methodsNote?, createdUtc?, modifiedUtc?}` — `traitSource` is the character (性状) provenance key; the field name predates the terminology change and is kept for compatibility |
 | `sourcePath` | string | absolute path of the last open/save (desktop build only) |
 | `savedAt` / `savedRevision` / `modifiedAt` / `appVersion` | — | save bookkeeping |
 
@@ -126,6 +126,31 @@ every saved file as `project.appVersion`.
 
 Copy the JSON above into `minimal.cladeforge.json` and open it — that is the
 whole format for a two-tip tree.
+
+## Non-finite numbers on the wire (`cf-nonfinite`)
+
+JSON has no literal for `Infinity` / `-Infinity` / `NaN`, and
+`JSON.stringify` degrades all three to `null`. CladeForge cost matrices USE
+non-finite values as DATA — a Sankoff step-matrix cell of `Infinity` means
+"this transition is forbidden". A `null` there would silently turn a
+forbidden transition into a default cost, so every CladeForge writer
+(`serializeProject`, the workspace autosave) emits a tagged object in place
+of the number:
+
+```json
+"costMatrix": [[0, {"cf-nonfinite": "Infinity"}], [1, 0]]
+```
+
+| tag value | revives as |
+|---|---|
+| `"Infinity"` | `+Infinity` (forbidden transition) |
+| `"-Infinity"` | `-Infinity` |
+| `"NaN"` | `NaN` |
+
+A reader MUST recognise the `{"cf-nonfinite": …}` marker key inside numeric
+arrays and revive it, or forbid transitions collapse to ordinary costs. The
+marker only ever appears where a number was expected; a plain number is
+written as-is.
 
 ## JSON Schema
 

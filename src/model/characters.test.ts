@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { createEmptyProject, SAMPLE_PROJECTS } from './sampleTree';
 import { addChildren, addCharacter, setNodeState } from './treeOps';
@@ -215,6 +216,18 @@ describe('colour guards', () => {
     expect(wcagContrastRatio('#ababab', '#ababab')).toBeCloseTo(1, 6);
     expect(colorDeltaE('#0072b2', '#0072b3')).toBeLessThan(1);
     expect(colorDeltaE('#000000', '#ffffff')).toBeGreaterThan(90);
+  });
+
+  it('parses the wider colour syntaxes a colour field can carry (L2)', () => {
+    // hexToRgb used to accept 6-digit hex only, so #abc / #rrggbbaa / rgb()
+    // degraded lerp/luminance/deltaE to `from` or black.
+    expect(lerpHexColor('#fff', '#000', 0.5)).toBe('#808080'); // 3-digit
+    expect(lerpHexColor('#ffffffff', '#000000ff', 0.5)).toBe('#808080'); // 8-digit + alpha
+    expect(lerpHexColor('#ffffffcc', '#00000000', 0.5)).toBe('#808080');
+    expect(lerpHexColor('rgb(255,255,255)', 'rgb(0,0,0)', 0.5)).toBe('#808080');
+    expect(relativeLuminance('#abc')).toBe(relativeLuminance('#aabbcc'));
+    expect(relativeLuminance('rgb(255, 255, 255)')).toBeCloseTo(1, 6);
+    expect(colorDeltaE('#abc', '#aabbcc')).toBeLessThan(1);
   });
 });
 

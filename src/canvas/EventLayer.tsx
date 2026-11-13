@@ -104,7 +104,7 @@ export const EventLayer = memo(function EventLayer({
       if (!from) continue;
       for (const targetId of e.triggers) {
         const to = anchors.get(targetId);
-        if (to) out.push({ id: `${e.id}->${targetId}`, from, to, color: eventMarkerColor(e) });
+        if (to) out.push({ id: `${e.id}->${targetId}`, from, to, color: eventMarkerColor(e, project) });
       }
     }
     return out;
@@ -167,12 +167,12 @@ export const EventLayer = memo(function EventLayer({
         // catalogue defaults; the same accessors drive the exporter so a figure
         // cannot disagree with the canvas about how a badge is drawn.
         const r = eventMarkerSize(e);
-        const color = eventMarkerColor(e);
+        const color = eventMarkerColor(e, project);
         const conf = e.confidence;
-        const text = eventBadgeText(e);
+        const text = eventBadgeText(e, project);
         const fontSize = eventBadgeFontSize(e);
         const title =
-          eventDisplayLabel(e) +
+          eventDisplayLabel(e, project) +
           (conf ? ` · ${S.confidence.label}:${confLabel(conf)}` : '') +
           (e.note ? `\n${e.note}` : '');
         return (

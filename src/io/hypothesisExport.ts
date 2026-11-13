@@ -175,16 +175,16 @@ export function buildNarrative(project: Project): string {
   if (project.events.length) {
     L.push(tr('## 演化事件', '## Evolutionary events'), '');
     for (const e of project.events) {
-      const t = findEventType(e.typeId);
+      const t = findEventType(e.typeId, project);
       const where =
         e.target === 'branch'
           ? tr(`分支「${nl(e.nodeId)}」`, `branch “${nl(e.nodeId)}”`)
           : tr(`节点「${nl(e.nodeId)}」`, `node “${nl(e.nodeId)}”`);
       // The badge code is only repeated when the badge actually draws text;
       // with text off the report names the event by its localized type name.
-      const badge = eventBadgeText(e);
+      const badge = eventBadgeText(e, project);
       const typeName = md(t ? eventTypeLabel(t) : tr('事件', 'Event'));
-      const title = md(eventDisplayLabel(e));
+      const title = md(eventDisplayLabel(e, project));
       let s = badge
         ? tr(
             `- \`${md(badge)}\` **${typeName}**「${title}」位于${where}`,
@@ -204,7 +204,7 @@ export function buildNarrative(project: Project): string {
     if (pairs.length) {
       L.push('', tr('**因果链**：', '**Causal chains**:'));
       for (const p of pairs) {
-        L.push(`- ${md(eventDisplayLabel(p.from))} → ${md(eventDisplayLabel(p.to))}`);
+        L.push(`- ${md(eventDisplayLabel(p.from, project))} → ${md(eventDisplayLabel(p.to, project))}`);
       }
     }
     L.push('');
@@ -311,7 +311,7 @@ export function buildHypothesisJSON(project: Project): string {
         note: n.hypothesisNote!.trim(),
       })),
     events: project.events.map((e) => ({
-      type: findEventType(e.typeId)?.labelEn ?? findEventType(e.typeId)?.label ?? e.typeId,
+      type: findEventType(e.typeId, project)?.labelEn ?? findEventType(e.typeId, project)?.label ?? e.typeId,
       label: e.label ?? null,
       position: e.target,
       at: nodeLabel(project, e.nodeId),
@@ -321,7 +321,7 @@ export function buildHypothesisJSON(project: Project): string {
       triggers: e.triggers
         .map((id) => {
           const te = project.events.find((x) => x.id === id);
-          return te ? eventDisplayLabel(te) : null;
+          return te ? eventDisplayLabel(te, project) : null;
         })
         .filter(Boolean),
     })),

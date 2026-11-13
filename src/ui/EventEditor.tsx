@@ -119,7 +119,7 @@ function OneEvent({
   const id = event.id;
   const up = (patch: Partial<EvolutionaryEvent>) => apply((d) => updateEvent(d, id, patch));
   const others = project.events.filter((e) => e.id !== id);
-  const badgeText = eventBadgeText(event);
+  const badgeText = eventBadgeText(event, project);
   const badgeExtent = eventBadgeExtent(event);
 
   return (
@@ -128,7 +128,7 @@ function OneEvent({
         {/* Live marker preview: the same shape / colour / text the canvas draws. */}
         <span
           className="event-badge-preview"
-          title={findEventType(event.typeId) ? eventTypeLabel(findEventType(event.typeId)!) : undefined}
+          title={findEventType(event.typeId, project) ? eventTypeLabel(findEventType(event.typeId, project)!) : undefined}
           aria-hidden
         >
           <svg
@@ -139,7 +139,7 @@ function OneEvent({
             <path
               d={eventMarkerPath(eventMarkerShape(event), 0, 0, eventMarkerSize(event))}
               fill="var(--surface)"
-              stroke={eventMarkerColor(event)}
+              stroke={eventMarkerColor(event, project)}
               strokeWidth={2}
               strokeLinejoin="round"
             />
@@ -157,8 +157,8 @@ function OneEvent({
             )}
           </svg>
         </span>
-        <span className="event-title" title={eventDisplayLabel(event)}>
-          {eventDisplayLabel(event)}
+        <span className="event-title" title={eventDisplayLabel(event, project)}>
+          {eventDisplayLabel(event, project)}
         </span>
         <button className="btn" onClick={() => setOpen((v) => !v)}>
           {S.character.edit}
@@ -225,7 +225,7 @@ function OneEvent({
             </Field>
             <Field label={S.event.markerColor}>
               <ColorField
-                value={eventMarkerColor(event)}
+                value={eventMarkerColor(event, project)}
                 ariaLabel={S.event.markerColor}
                 onChange={(v) => up({ markerColor: v })}
               />
@@ -294,7 +294,7 @@ function OneEvent({
               <div className="hint">{S.event.triggersNone}</div>
             ) : (
               others.map((o) => {
-                const code = eventBadgeText(o);
+                const code = eventBadgeText(o, project);
                 return (
                   <label key={o.id} className="event-trigger-row">
                     <input
@@ -304,7 +304,7 @@ function OneEvent({
                     />
                     <span>
                       {code ? `${code} · ` : ''}
-                      {eventDisplayLabel(o)}
+                      {eventDisplayLabel(o, project)}
                       {project.nodes[o.nodeId]?.label ? ` (${project.nodes[o.nodeId].label})` : ''}
                     </span>
                   </label>
@@ -354,7 +354,7 @@ export function EventEditor({
   const isRoot = node.parentId === null;
 
   const addTyped = (typeId: string) => {
-    const def = findEventType(typeId);
+    const def = findEventType(typeId, project);
     const target: 'node' | 'branch' = def?.target === 'branch' && !isRoot ? 'branch' : 'node';
     apply((d) => addEvent(d, newEvent(typeId, target, node.id)));
   };

@@ -962,19 +962,26 @@ export function sampleStochasticMap(
         const bl = branchLengthOf(c);
         const M = P(bl, base.rate.rate);
         const Lc = Lsub.get(c.id) as number[];
-        const weights = new Array<number>(k);
-        let z = 0;
+        // Sample in LOG space: on a deep tree Lc[j] can be ~-800, so the old
+        // linear form `M[ps][j] * Math.exp(Lc[j])` underflowed EVERY weight to
+        // 0, hit the z=0 fallback and over-picked the last state — a bias the
+        // logsumexp-shifted form below cannot have.
+        const logW = new Array<number>(k);
         for (let j = 0; j < k; j += 1) {
-          weights[j] = M[ps][j] > 0 && Lc[j] > -Infinity ? M[ps][j] * Math.exp(Lc[j]) : 0;
-          z += weights[j];
+          logW[j] = M[ps][j] > 0 && Lc[j] > -Infinity ? Math.log(M[ps][j]) + Lc[j] : -Infinity;
         }
-        let u2 = rng() * (z > 0 ? z : 1);
+        const zLog = logsumexp(logW);
+        const u2 = rng();
         let cs = k - 1;
-        for (let j = 0; j < k; j += 1) {
-          u2 -= weights[j];
-          if (u2 <= 0 && weights[j] > 0) {
-            cs = j;
-            break;
+        if (Number.isFinite(zLog)) {
+          let acc = 0;
+          for (let j = 0; j < k; j += 1) {
+            if (logW[j] === -Infinity) continue;
+            acc += Math.exp(logW[j] - zLog);
+            if (u2 <= acc) {
+              cs = j;
+              break;
+            }
           }
         }
         stateOf.set(c.id, cs);

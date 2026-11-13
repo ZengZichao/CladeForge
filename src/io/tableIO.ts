@@ -548,5 +548,12 @@ export function exportMatrixTemplate(project: Project, characters?: Character[])
     .sort((a, b) => a.label.localeCompare(b.label));
   const cols = (characters ?? project.characters).map((c) => c.name);
   const header = ['taxon', ...(cols.length > 0 ? cols : ['character 1'])];
-  return [header.join(','), ...tips.map((t) => t.label)].join('\n');
+  // Same escaping as exportMatrixCsv: an unescaped comma in a character name
+  // or tip label split the row in every spreadsheet, and the filled-in file
+  // then imported misaligned.
+  const escape = (v: string): string => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [
+    header.map(escape).join(','),
+    ...tips.map((t) => escape(t.label)),
+  ].join('\n');
 }

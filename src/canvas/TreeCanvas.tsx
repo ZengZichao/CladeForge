@@ -57,6 +57,7 @@ import { branchMidpointOn } from './paths';
 import { removeCustomEdge } from '../model/treeOps';
 import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO } from './colors';
 import { importTreeText } from '../io/fileActions';
+import { MAX_PROJECT_CHARS, MAX_TREE_CHARS } from '../io/limits';
 import { createSampleProject, SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from '../ui/sampleOpener';
 import { requestDeletion } from '../ui/deleteGuard';
@@ -85,6 +86,14 @@ import { enterTimeChartLayout } from '../ui/timeChartEras';
  * nagged out twice for the same document.
  */
 const timeProposalShownFor = new Set<string>();
+
+/**
+ * The last `loadCounter` this canvas auto-fitted for. Module scope, NOT a
+ * component ref: the keyed subtree remounts on a language switch (App's
+ * `key={lang}`), and a ref restarts at 0 — `0 !== loadCounter` then re-fired
+ * the auto-fit and reset the user's zoom/pan on every language change.
+ */
+let lastAutoFitLoadCounter = -1;
 
 export function TreeCanvas() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -389,9 +398,10 @@ export function TreeCanvas() {
   }, [setViewport]);
 
   // --- fit to view (once on first size, and on every explicit fit request) ---
-  // Use loadCounter from store instead of a local ref so that re-mounting
-  // (e.g. when returning from reconciliation mode) does not reset the view.
-  const prevLoadCounter = useRef(0);
+  // Use a MODULE-level tracker for the auto-fit, not a component ref: a ref
+  // restarts at 0 on every mount, and the keyed subtree IS remounted by a
+  // language switch (App's `key={lang}`) — `0 !== loadCounter` then re-fired
+  // the fit and threw away the user's zoom/pan on every language change.
   const fitNow = useCallback(
     (layout: LayoutResult) => {
       const el = wrapRef.current;
@@ -414,14 +424,21 @@ export function TreeCanvas() {
   );
   useEffect(() => {
     // Only auto-fit when loadCounter changes (new document loaded), not on remount
-    if (loadCounter !== prevLoadCounter.current && size.w > 0 && size.h > 0) {
-      prevLoadCounter.current = loadCounter;
+    if (loadCounter !== lastAutoFitLoadCounter && size.w > 0 && size.h > 0) {
+      lastAutoFitLoadCounter = loadCounter;
       fitNow(layoutRef.current);
     }
   }, [loadCounter, size.w, size.h, fitNow]);
+  // Explicit fit requests: fire on a CHANGE of the counter only. The effect
+  // used to run on mount as well, so any remount with fitRequests > 0 (i.e.
+  // always, it never resets) refitted — the same view-reset the loadCounter
+  // guard above exists to prevent.
+  const prevFitRequests = useRef(fitRequests);
   useEffect(() => {
+    if (fitRequests === prevFitRequests.current) return;
+    prevFitRequests.current = fitRequests;
     if (fitRequests > 0) fitNow(layoutRef.current);
-  }, [fitRequests]);
+  }, [fitRequests, fitNow]);
 
   // --- pan to a searched node, keeping the current zoom ---
   useEffect(() => {
@@ -926,7 +943,22 @@ export function TreeCanvas() {
         // to be refused until renamed — the CONTENT parsers are the real gate,
         // the extension list only decides what gets a chance.
         const treeFiles = files.filter((f) => /\.(nwk|newick|tree|tre|nex|nexus|txt)$/i.test(f.name));
+        // Same `File.size` pre-check the browser open path applies: the drop
+        // path used to read a mistyped 200 MB pick WHOLESALE into the webview
+        // and only then let assertTreeInput reject it. A byte is at least one
+        // UTF-8 char, so the byte comparison never wrongly refuses.
+        const oversize = (f: File, maxBytes: number): boolean => {
+          if (!(Number.isFinite(f.size) && f.size > maxBytes)) return false;
+          notify.error(
+            tr(
+              `文件过大（${(f.size / 1e6).toFixed(1)} MB），上限为 ${(maxBytes / 1e6).toFixed(1)} MB。`,
+              `File is too large (${(f.size / 1e6).toFixed(1)} MB); the limit is ${(maxBytes / 1e6).toFixed(1)} MB.`,
+            ),
+          );
+          return true;
+        };
         if (projectFile) {
+          if (oversize(projectFile, MAX_PROJECT_CHARS)) return;
           // A project (.cladeforge.json) dropped on the canvas opens as a tab —
           // the review's PM-06: the project format used to be un-droppable.
           void projectFile.text().then((text) => {
@@ -941,6 +973,7 @@ export function TreeCanvas() {
           // match and silently dropped the rest — batch gene-tree imports are
           // exactly the multi-file case).
           for (const f of treeFiles) {
+            if (oversize(f, MAX_TREE_CHARS)) continue;
             void f.text().then((text) => importTreeText(text, f.name));
           }
           return;

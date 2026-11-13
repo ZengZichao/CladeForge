@@ -121,7 +121,7 @@ export function buildEmbeddedReconSVG(
         [palette.dup, '基因重复 δ / duplication'],
         [palette.transfer, '水平转移 τ / transfer（虚线 = 时间不可行/拓扑转移）'],
         [palette.loss, '基因丢失 λ / loss（空心 = 推断结构丢失）'],
-        [palette.unresolved, '显示推断·未解析（虚线，未写入假设）/ display-inferred'],
+        [palette.unresolved, '显示推断（虚线，不写入假说）/ display-inferred'],
       ]
     : [];
 

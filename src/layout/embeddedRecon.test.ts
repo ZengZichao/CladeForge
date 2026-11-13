@@ -213,6 +213,17 @@ describe('computeEmbeddedReconLayout — sample β (display inference)', () => {
     const issues = validateScenario(project, entry.doc, entry.assumptions, DEFAULT_RECON_COSTS);
     expect(issues.filter((i) => i.kind === 'unresolved')).toHaveLength(1);
   });
+
+  it('gives every gene segment a UNIQUE id even when one edge crosses several branches', () => {
+    // A gene edge whose path spans multiple species branches yields one
+    // segment per step; identical ids used to collide as React keys
+    // (`Encountered two children with the same key`).
+    const { scene } = layoutFor(project, 'β');
+    const ids = scene.segments.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Multi-step edges actually occur in this sample — the guard must bite.
+    expect(scene.segments.length).toBeGreaterThan(new Set(scene.segments.map((s) => `${s.parentGeneNodeId}->${s.geneNodeId}`)).size);
+  });
 });
 
 describe('computeEmbeddedReconLayout — loss display strategy', () => {

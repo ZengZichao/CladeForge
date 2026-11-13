@@ -1,6 +1,12 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
-import { parseNexus, parseNexusTrees, serializeNexus, DEFAULT_NEXUS_OPTIONS } from './nexus';
+import {
+  parseNexus,
+  parseNexusMatrix,
+  parseNexusTrees,
+  serializeNexus,
+  DEFAULT_NEXUS_OPTIONS,
+} from './nexus';
 import { addChildren, renameNode } from '../model/treeOps';
 import type { Character, Project } from '../model/types';
 import { createEmptyProject } from '../model/sampleTree';
@@ -314,6 +320,80 @@ END;`;
       addChildren(p, p.rootId, 1);
       expect(serializeNexus(p, DEFAULT_NEXUS_OPTIONS)).not.toContain('BEGIN CHARACTERS;');
       expect(serializeNexus(p, DEFAULT_NEXUS_OPTIONS)).not.toContain('BEGIN ASSUMPTIONS;');
+    });
+  });
+
+  describe('STANDARD matrix import regressions', () => {
+    const matrixFile = (body: string): string => `#NEXUS
+BEGIN DATA;
+DIMENSIONS NTAX=3 NCHAR=2;
+FORMAT DATATYPE=STANDARD GAP="-" MISSING="?" SYMBOLS="01";
+TAXLABELS A B C;
+MATRIX
+A  ${body}
+B  1 0
+C  0 1;
+END;`;
+
+    it('reads a `{01}` uncertainty cell as a state set, not four pseudo-states', () => {
+      // `{…}` is the NEXUS uncertainty notation (Mesquite / PAUP): the braces
+      // group their contents into ONE cell that carries BOTH states. Leaving
+      // the braces in place used to split the cell into `{`, `0`, `1`, `}`.
+      const r = parseNexusMatrix(matrixFile('0 {01}'));
+      expect(r.characters).toHaveLength(2);
+      const ch = r.characters[1];
+      expect(ch.states.map((s) => s.label)).toEqual(['0', '1']);
+      const asg = (ch as Character & { __assignments?: Record<string, string | string[]> })
+        .__assignments;
+      expect(asg?.A).toHaveLength(2);
+      // A single observed state assigns one state id (a bare string)…
+      expect(typeof asg?.B).toBe('string');
+      expect(typeof asg?.C).toBe('string');
+      // …and B/C sit on DIFFERENT states of the same column.
+      expect(asg?.B).not.toBe(asg?.C);
+    });
+
+    it('does not swallow the MATRIX body when OPTIONS carries `COSTMATRIX = (…)`', () => {
+      // The space before `=` is legal NEXUS; without a word boundary the
+      // MATRIX regex matched INSIDE `costmatrix` and the OPTIONS line was
+      // parsed as the matrix body, silently dropping the real data.
+      const nx = `#NEXUS
+BEGIN DATA;
+DIMENSIONS NTAX=3 NCHAR=1;
+FORMAT DATATYPE=STANDARD GAP="-" MISSING="?" SYMBOLS="01";
+TAXLABELS A B C;
+OPTIONS COSTMATRIX = (0 1 1 0) APPLYTO = (1);
+MATRIX
+A  0
+B  1
+C  1;
+END;`;
+      const r = parseNexusMatrix(nx);
+      expect(r.characters).toHaveLength(1);
+      expect(r.characters[0].states.map((s) => s.label)).toEqual(['0', '1']);
+    });
+
+    it('reshapes a flat row-major COSTMATRIX and round-trips its own export', () => {
+      // CladeForge writes `COSTMATRIX=(0 2 3 0)` (row-major flat). A k-state
+      // cost matrix is k×k, so a single n²-length row reshapes to n rows —
+      // without this the import dropped the matrix it had just exported.
+      const nx = `#NEXUS
+BEGIN DATA;
+DIMENSIONS NTAX=3 NCHAR=1;
+FORMAT DATATYPE=STANDARD GAP="-" MISSING="?" SYMBOLS="01";
+TAXLABELS A B C;
+OPTIONS COSTMATRIX=(0 2 3 0) APPLYTO=(1);
+MATRIX
+A  0
+B  1
+C  1;
+END;`;
+      const r = parseNexusMatrix(nx);
+      expect(r.characters).toHaveLength(1);
+      expect(r.characters[0].costMatrix).toEqual([
+        [0, 2],
+        [3, 0],
+      ]);
     });
   });
 });

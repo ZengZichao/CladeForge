@@ -1,4 +1,4 @@
-// "已映射尖端" must not double-count label hits and hypothesis hits:
+// "已映射末端" must not double-count label hits and hypothesis hits:
 // `suggestLcaScenario` records a `speciesNode` assumption for the very tips it
 // mapped by label, so summing the two sources lets the panel read "240/120".
 

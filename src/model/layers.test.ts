@@ -1,7 +1,7 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 import { describe, it, expect } from 'vitest';
 import { createEmptyProject, createFeatureTourSample } from './sampleTree';
-import { addCharacter, addChildren, removeCharacter, rerootAtNode, setNodeState } from './treeOps';
+import { addCharacter, addChildren, deleteNode, removeCharacter, rerootAtNode, setNodeState } from './treeOps';
 import { newCharacter } from './characters';
 import { addBlankLayer, duplicateActiveLayer, layerDiff, layerRecordCounts, pruneLayerStore, switchLayer } from './layers';
 import { newEvent } from './events';
@@ -169,6 +169,36 @@ describe('layer switching after a character deletion', () => {
 
     // Loading the document back must not report anything pruned: nothing is
     // dangling any more.
+    expect(pruneLayerStore(p).changed).toBe(false);
+  });
+
+  // Regression for the review finding (M3): deleteNode used to clean only the
+  // LIVE layer's events plus the stored layers' NOTES — the stored layers'
+  // events/states/meta kept the dead node ids, and switching back to such a
+  // layer resurrected orphan events into the live document.
+  it('deleteNode cleans stored layers so no orphan event revives on switch', () => {
+    const p = createEmptyProject();
+    const [a] = addChildren(p, p.rootId, 2);
+    const layer1 = p.activeLayerId;
+    const layer2 = addBlankLayer(p, 'H2');
+    // Park an event on node `a` inside layer 2: make it the live event list
+    // while layer 2 is active, then switch away (the switch captures it).
+    switchLayer(p, layer2);
+    p.events = [newEvent('hgt', 'node', a)];
+    switchLayer(p, layer1);
+    expect(p.layerStore[layer2].events.length).toBe(1);
+    // A stale state key for `a` in the parked snapshot (as a pre-guard
+    // document could carry).
+    p.layerStore[layer2].states[a] = { 'gone-char': 's0' };
+
+    // Delete `a` from the live (layer 1) document.
+    expect(deleteNode(p, a, true)).toBe(true);
+    expect(p.layerStore[layer2].events.length).toBe(0);
+    expect(p.layerStore[layer2].states[a]).toBeUndefined();
+
+    // Switching to layer 2 must NOT resurrect the orphan event.
+    switchLayer(p, layer2);
+    expect(p.events.length).toBe(0);
     expect(pruneLayerStore(p).changed).toBe(false);
   });
 

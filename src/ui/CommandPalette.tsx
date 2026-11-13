@@ -93,7 +93,7 @@ export function CommandPalette({
   // Two of the labels below read live store state (`reconMode`) or the active
   // locale (`S.*`) while the whole list is memoised, so the memo has to depend on
   // exactly what those labels read. Subscribing here is what keeps an open palette
-  // from going on offering "进入协同视图" after the user has entered it, or the
+  // from going on offering "进入协调视图" after the user has entered it, or the
   // pre-switch language after a locale change — the palette must not lean on App
   // remounting its tree to stay honest.
   const reconMode = useStore((s) => s.reconMode);
@@ -319,7 +319,7 @@ export function CommandPalette({
           if (sub) st().openInNewTab(sub);
         },
       },
-      // --- 协同 ---
+      // --- 协调 ---
       { id: 'reconImport', label: S.recon.importFile, category: tr('协调', 'Reconcile'), icon: <ShuffleIcon />, aliases: ['gene tree', 'import gene', 'jiyin', 'xietong'], run: () => void file.actionImportGeneTree() },
       {
         id: 'reconView',

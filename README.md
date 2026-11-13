@@ -23,11 +23,11 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 
 - **Interactive tree editing** — Rooted trees with binary/ternary/polytomy branching, node and branch styling, collapse/expand, rerooting, ladderize.
 - **Multiple layouts** — Rectangular cladogram, rectangular phylogram, time-calibrated (with geological era bands), and circular; four orientations (LR/RL/TB/BT); auto and manual layout modes.
-- **Character/state system** — Discrete and continuous characters with color-blind-friendly palettes; Sankoff step matrices for asymmetric evolutionary costs.
+- **Character/state system** — Discrete and continuous characters with colour-blind-friendly palettes; Sankoff step matrices for asymmetric evolutionary costs.
 - **Evolutionary events** — 27 built-in event types across nine groups (26 predefined + 1 custom): Speciation (4), Extinction (2), Evolutionary innovations (3), Gene flow (2), Biogeography (3), Microbial (9), Gene family evolution (2), Deep time (1), General (1). Each type has a unique two-letter code; the palette may reuse colours. Events link into causal chains.
 - **Hypothesis layers** — Manage multiple competing hypotheses on a shared topology; tip states shared, internal-node hypotheses diverge.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
-- **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and two canvas layouts: the side-by-side view and the embedded view (thick species tubes with the gene lineages nested inside, Alt+click path building, and embedded-figure SVG export).
+- **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and two canvas layouts: the side-by-side view and the embedded view (thick species tubes with the gene lineages nested inside, Alt + click path building, and embedded-figure SVG export).
 - **Time calibration** — Fossil calibration points, geological era bands, and environmental event overlays.
 - **Import/Export** — Newick and NEXUS import (NEXUS reads `TREES` **and** `DATA`/`CHARACTERS`/`ASSUMPTIONS` blocks; Newick keeps bracket comments verbatim and interprets `&support`, `&R/&U`, BEAST `height`/`height_95%_HPD`/`posterior` and NHX tags — other comment text is preserved as text, not interpreted); CSV/TSV character-matrix and annotation tables in, matrix/annotation/template CSVs out; NeXML export; project files in `.cladeforge.json` (schema documented in `docs/FORMAT.md`); image export to SVG/PNG/PDF with an export-settings dialog (DPI control, opt-in support values, scale bar, legend toggle) and auto-generated legends; hypothesis JSON + Markdown narrative + a self-contained R analysis script.
 
@@ -37,7 +37,7 @@ models, or search topologies; every inference it shows is conditional on the
 single, user-edited topology in the document. The Mk reconstruction fits a
 one-dimensional rate by maximum likelihood but implements only the
 equal-rates (ER) sub-model.
-- **Undo/redo** with structural sharing via Immer; bilingual UI (English/中文).
+- **Undo/redo** with structural sharing via Immer; bilingual UI (English / Chinese).
 
 ## System Requirements
 
@@ -124,14 +124,15 @@ CladeForge projects are stored as JSON (`.cladeforge.json`), schema version `0.2
 ## Documentation
 
 - [User Manual (English)](./docs/MANUAL_EN.md) — the complete feature-by-feature reference
-- [用户手册（中文）](./docs/MANUAL_ZH.md) — 完整的功能详解手册
+- [用户手册（中文）](./docs/MANUAL_ZH.md) — the complete feature-by-feature reference (Chinese)
 - [Contributing Guide](./CONTRIBUTING.md) · [贡献指南（中文）](./CONTRIBUTING_ZH.md)
+- [Security Policy](./SECURITY.md) — supported versions and private vulnerability reporting
 
 ## Roadmap
 
 - [x] Gene-tree/species-tree reconciliation (DTL-style)
 - [ ] Reconciliation polish: drag-to-map in the side-by-side view, multi-gene aggregate overlays
-- [x] Embedded reconciliation layout (project gene trees onto the species tree canvas): thick species tubes with nested gene lineages, Alt+click path building and SVG export
+- [x] Embedded reconciliation layout (project gene trees onto the species tree canvas): thick species tubes with nested gene lineages, Alt + click path building and SVG export
 - [ ] Forward simulation engine for hypothesis testing
 - [ ] Plugin architecture for third-party inference tools
 - [ ] Collaborative workspaces

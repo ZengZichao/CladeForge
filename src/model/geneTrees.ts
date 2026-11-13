@@ -158,19 +158,26 @@ export interface PolytomyResolution {
   resolved: number;
 }
 
-let polytomyRngState = 20260919;
-function polytomyRng(): number {
-  polytomyRngState += 0x6d2b79f5;
-  let t = polytomyRngState;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/**
+ * A deterministic mulberry32 stream OWNED by one resolution pass. The seed used
+ * to live in a module-level mutable that every `resolvePolytomiesRandom` call
+ * reset — two overlapping resolutions (a future async worker, a replay) would
+ * have polluted each other's streams. A closure keeps each call's stream private.
+ */
+function polytomyRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-/** One random binary resolution of a single polytomy's child list. */
-function randomBinaryAttach(children: NodeId[], rng: () => number): NodeId[] {
-  // Shuffle, then fold pairwise: each fold creates an internal node whose id is
-  // minted fresh, so the original ids (and any assumption keyed by them) survive.
+/** Shuffle a polytomy's child list; the fold into fresh binary joiners happens
+ *  in `resolvePolytomiesRandom` — this helper only orders the children. */
+function shuffleChildren(children: NodeId[], rng: () => number): NodeId[] {
   const pool = [...children];
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));
@@ -186,7 +193,7 @@ function randomBinaryAttach(children: NodeId[], rng: () => number): NodeId[] {
  * Not written into the document — this is a solver-side expansion.
  */
 export function resolvePolytomiesRandom(gene: Project, seed = 20260919): PolytomyResolution {
-  polytomyRngState = seed >>> 0;
+  const rng = polytomyRng(seed);
   const doc = JSON.parse(JSON.stringify(gene)) as Project;
   delete doc.geneTrees;
   let resolved = 0;
@@ -196,7 +203,7 @@ export function resolvePolytomiesRandom(gene: Project, seed = 20260919): Polytom
     const polytomies = Object.values(doc.nodes).filter((n) => n.childrenIds.length > 2);
     if (polytomies.length === 0) break;
     for (const node of polytomies) {
-      const shuffled = randomBinaryAttach(node.childrenIds, polytomyRng);
+      const shuffled = shuffleChildren(node.childrenIds, rng);
       // Fold the shuffled child list into a binary tree of fresh internal nodes.
       let current: NodeId[] = shuffled;
       while (current.length > 2) {

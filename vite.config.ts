@@ -66,10 +66,19 @@ export default defineConfig({
           // bucket. A catch-all `return 'vendor'` does exactly that, and the one
           // bucket it produces reaches 828 kB — which is why each group below is
           // named separately.
-          if (id.includes('react-dom') || /node_modules\/react\//.test(id)) return 'vendor-react';
-          if (id.includes('@radix-ui')) return 'vendor-icons';
-          if (id.includes('zustand') || id.includes('immer')) return 'vendor-state';
-          if (id.includes('d3-')) return 'vendor-d3';
+          //
+          // Match the PACKAGE NAME against the `node_modules/<pkg>/` segment
+          // (works for both flat installs and pnpm's `.pnpm/<pkg>/node_modules/<pkg>`
+          // nesting — take the LAST `node_modules/` split). The old substring
+          // matches swallowed any path merely CONTAINING the text (a future
+          // `react-dom-client` would fold into vendor-react); that stayed
+          // harmless only because today's tree has no such package.
+          const pkg = id.split('node_modules/').pop() ?? '';
+          const inPkg = (name: string): boolean => pkg.startsWith(`${name}/`);
+          if (inPkg('react-dom') || inPkg('react')) return 'vendor-react';
+          if (pkg.startsWith('@radix-ui/')) return 'vendor-icons';
+          if (inPkg('zustand') || inPkg('immer')) return 'vendor-state';
+          if (pkg.startsWith('d3-')) return 'vendor-d3';
           return undefined;
         },
       },

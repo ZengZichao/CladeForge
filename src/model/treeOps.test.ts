@@ -809,12 +809,15 @@ describe('treeOps topology and time guards', () => {
     expect(collapseBelowSupport(p, 70)).toBe(1);
     expect(p.nodes.x.collapsed).toBe(true);
     expect(p.nodes.z.collapsed).toBeFalsy();
-    // The same threshold expressed as a fraction means the same thing.
+    // The threshold itself is ALWAYS a 0–100 percent: a bare 0.7 means
+    // 0.7 % (it used to run through the "<= 1 means fraction" heuristic and
+    // read as 70 %, collapsing on a threshold the user never typed).
     const q = fourTipTree();
     q.nodes.y.support = 90;
     q.nodes.x.support = 0.5;
-    expect(collapseBelowSupport(q, 0.7)).toBe(1);
-    expect(q.nodes.x.collapsed).toBe(true);
+    expect(collapseBelowSupport(q, 0.7)).toBe(0);
+    expect(q.nodes.x.collapsed).toBeFalsy();
+    expect(q.nodes.y.collapsed).toBeFalsy();
     expect(q.nodes.y.collapsed).toBeFalsy();
   });
 

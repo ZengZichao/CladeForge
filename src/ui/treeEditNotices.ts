@@ -35,7 +35,7 @@ export function outgroupFailureText(reason: OutgroupRerootFailure | null): strin
       return null;
     case 'empty-selection':
       return tr(
-        '没有选中任何节点，无法以选定类群为外群定根。',
+        '没有选中任何节点，无法以选定支系为外群定根。',
         'Nothing is selected, so there is no outgroup to root on.',
       );
     case 'node-missing':
@@ -45,21 +45,21 @@ export function outgroupFailureText(reason: OutgroupRerootFailure | null): strin
       );
     case 'outgroup-is-root':
       return tr(
-        '选定类群的最近共同祖先就是当前的根：外群已经挂在根上了，没有可以移根的枝。',
+        '选定支系的最近共同祖先就是当前的根：外群已经挂在根上了，没有可以重新定根的枝。',
         'The most recent common ancestor of the selection IS the current root: the outgroup already hangs off the root, so there is no branch to move it onto.',
       );
     case 'not-monophyletic':
       return tr(
-        '选定类群与其补集都不是完整 clade：无论根放在哪条枝上，都会有未选中的分类单元被一并划入外群。请选择一个完整 clade（或其补集）。',
+        '选定支系与其补集都不是完整支系：无论根放在哪条枝上，都会有未选中的分类单元被一并划入外群。请选择一个完整支系（或其补集）。',
         'Neither the selection nor its complement is a complete clade: no root placement makes exactly the selected taxa the outgroup. Select a whole clade (or its complement).',
       );
     case 'unrootable':
       return tr(
-        '树形结构不支持这次移根（找不到可放置新根的枝）。',
+        '树形结构不支持这次重新定根（找不到可放置新根的枝）。',
         'The tree structure cannot host this re-root (no branch could take the new root).',
       );
     default:
-      return tr('无法以选定类群为外群定根。', 'The outgroup re-root could not be performed.');
+      return tr('无法以选定支系为外群定根。', 'The outgroup re-root could not be performed.');
   }
 }
 
@@ -122,7 +122,7 @@ export function estimateAgesText(result: EstimateAgesResult): string {
         )
       : tr(
           `数值已按填写的最深年龄 ${formatDiameter(calibrationAge)} ${timeUnit} 定标，与时间轴同单位。`,
-          ` Scaled onto the deepest entered age, ${formatDiameter(calibrationAge)} ${timeUnit}, so the numbers share the time axis's unit.`,
+          ` Scaled onto the deepest entered age, ${formatDiameter(calibrationAge)} ${timeUnit}, so the numbers share the time axis’s unit.`,
         );
   return head + tips + scale;
 }

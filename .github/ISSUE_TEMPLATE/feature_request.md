@@ -5,7 +5,11 @@ title: "[feature] "
 labels: enhancement
 ---
 
-<!-- Fill in either the English or the 中文 section; delete the other. 中英文任一栏均可，删掉另一栏。 -->
+<!-- AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md -->
+<!-- One template, two languages: fill in either the English or the 中文 section and delete the
+     other. 单文件双语并列：中英文任一栏均可，删掉另一栏。（GitHub loads a single file per template,
+     and the YAML front-matter must begin at the first line of the file, which is why this marker
+     follows it. GitHub 只加载单个模板文件，且 YAML front-matter 必须位于文件首行，故本标记紧随其后。） -->
 
 **Problem**
 What problem does this solve, or what capability is missing?

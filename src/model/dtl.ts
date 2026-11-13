@@ -12,7 +12,12 @@
 // ("unary") are tolerated but have an explicit, documented meaning: they are
 // never a speciation, so the DP chooses between (a) a duplication whose extra
 // copy is lost at the same species node, (b) a plain pass-through into exactly
-// one species child, and (c) a relocation out of that subtree. Species trees
+// one species child, and (c) a relocation out of that subtree. BOOKKEEPING OF
+// (b): the pass-through is RECORDED as 'speciation' in `scenario.events`
+// (cost 0, no extra lineage created) because the event catalogue has no
+// separate "continuation" entry — semantically it is a lineage continuation,
+// not a bifurcation, and `validateScenario` deliberately skips the
+// two-branch classification check for unary nodes. Species trees
 // may have any arity: speciation enumerates ordered distinct child pairs, and
 // unconstrained branches are not charged speculative losses (their clades
 // simply did not carry this gene's ancestry).
@@ -237,8 +242,8 @@ export function solveDtl(
   if (polytomies.length > 0) {
     return {
       error: tr(
-        `基因树存在 ${polytomies.length} 处多歧分支（polytomy）；动态规划需要二叉基因树。请使用「解析多歧枝」将其随机二叉化（可在协同面板选择重复次数），或导入已解析的二叉树`,
-        `The gene tree has ${polytomies.length} polytomies; the dynamic program needs a binary gene tree. Use "Resolve polytomies" to split them into random binary resolutions (repeat count selectable in the reconciliation panel), or import an already-resolved binary tree`,
+        `基因树存在 ${polytomies.length} 处多歧分支（polytomy）；动态规划需要二叉基因树。请使用「解析多歧枝」将其随机二叉化（可在协调面板选择重复次数），或导入已解析的二叉树`,
+        `The gene tree has ${polytomies.length} polytomies; the dynamic program needs a binary gene tree. Use “Resolve polytomies” to split them into random binary resolutions (repeat count selectable in the reconciliation panel), or import an already-resolved binary tree`,
       ),
     };
   }
@@ -525,6 +530,8 @@ export function solveDtl(
       }
     } else if (spKids.length >= 1 && unary) {
       // Unary pass-through: the lineage continues into exactly one branch.
+      // Booked as 'sigma' (→ 'speciation' in the scenario, cost 0) purely for
+      // want of a separate continuation entry — see the file header, (b).
       let best = INF;
       let bi = -1;
       for (let i = 0; i < spKids.length; i += 1) {

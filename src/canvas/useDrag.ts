@@ -292,6 +292,16 @@ export function useCanvasGestures(
       /* ignore */
     }
 
+    // Middle-button / space panning MUST be decided before the node / port /
+    // edge roles: a middle press landing ON a node used to fall through to the
+    // select branch instead of panning, so the pan convention ("the middle
+    // button pans, anywhere") silently broke over every node.
+    if (spaceHeld.current || e.button === 1) {
+      viewControls.begin();
+      gestureRef.current = { kind: 'pan', startScreen: screen, startView: view };
+      return;
+    }
+
     if (role === 'collapse-toggle' && nodeId) {
       // The expand/collapse triangle handles itself (see NodeView); never turn
       // it into a node press.
@@ -319,10 +329,7 @@ export function useCanvasGestures(
       };
       return;
     }
-    if (spaceHeld.current || e.button === 1) {
-      viewControls.begin();
-      gestureRef.current = { kind: 'pan', startScreen: screen, startView: view };
-    } else if (e.shiftKey || e.altKey) {
+    if (e.shiftKey || e.altKey) {
       // Shift/Alt + background drag = rubber-band selection (pan stays on the
       // plain drag so both gestures coexist).
       gestureRef.current = { kind: 'marquee', startScreen: screen, additive: e.shiftKey };

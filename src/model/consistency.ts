@@ -42,27 +42,13 @@ export interface ConsistencyIssue {
   severity: IssueSeverity;
   nodeId?: NodeId;
   message: string;
-  /** Human-readable tag label for the issue kind. */
+  /**
+   * Human-readable tag label for the issue kind, translated at creation time —
+   * each `checkConsistency` branch writes its own. There is no shared catalogue
+   * function: the one that existed carried a parallel copy of these tags with
+   * no production caller, so it was removed rather than left to drift.
+   */
   tag: string;
-}
-
-/**
- * The five categories, with the tags the UI shows for them.
- *
- * A function, not a module-level array: the tags are translated, and a
- * module-level `tr(...)` freezes whichever language is active at import time, so
- * switching language afterwards would leave these tags in the language the switch
- * replaced. `EventLayer` and `hypothesisExport` keep their translated labels
- * inside functions for the same reason.
- */
-export function consistenceCheckCategories(): { kind: ConsistencyIssueKind; tag: string }[] {
-  return [
-    { kind: 'local-mismatch', tag: tr('局部不一致', 'Local inconsistency') },
-    { kind: 'excess-changes', tag: tr('过多变化', 'Excess changes') },
-    { kind: 'homoplasy', tag: tr('同塑', 'Homoplasy') },
-    { kind: 'ambiguous', tag: tr('模糊重建', 'Ambiguous reconstruction') },
-    { kind: 'missing-data', tag: tr('缺失数据', 'Missing data') },
-  ];
 }
 
 const INF = Number.POSITIVE_INFINITY;
