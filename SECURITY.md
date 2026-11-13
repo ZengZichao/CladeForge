@@ -59,3 +59,16 @@ Windows, and no published checksum — `.github/workflows/release.yml` attaches 
 nothing else. A macOS user has to clear Gatekeeper on first launch. This
 is a real gap; treat a downloaded binary as unverified and prefer building from source if that
 matters to you.
+
+**A transitive `glib` unsoundness that this repository cannot patch.** `glib` 0.18.5 is flagged by
+RUSTSEC-2024-0429 / GHSA-wrw7-89jp-8q8g (medium): the `Iterator` and `DoubleEndedIterator`
+implementations for `VariantStrIter` can hand back a string pointer that is not valid. The advisory
+covers `>= 0.15.0, < 0.20.0`, so the only fix is glib 0.20 or later — and no dependency update from
+here reaches it. `src-tauri/Cargo.toml` pins `tauri = "2"`, and the newest stable release of Tauri
+(2.12.5) still requires `gtk ^0.18` on Unix, which resolves `glib` within 0.18.x; leaving that stack
+is upstream's decision, not a version bump. The affected API is also unreachable from CladeForge:
+nothing under `src-tauri/src` names `glib`, `Variant` or `VariantStrIter`, and the GTK stack exists
+only because Tauri's Linux runtime windows itself with it. Dependabot alert #36 is therefore
+dismissed as *a fix exists in an upstream dependency but is not available yet* rather than silently
+closed, and it should be re-examined — and this paragraph deleted — when a Tauri release moves to
+gtk-rs ≥ 0.20.
