@@ -66,9 +66,13 @@ implementations for `VariantStrIter` can hand back a string pointer that is not 
 covers `>= 0.15.0, < 0.20.0`, so the only fix is glib 0.20 or later — and no dependency update from
 here reaches it. `src-tauri/Cargo.toml` pins `tauri = "2"`, and the newest stable release of Tauri
 (2.12.5) still requires `gtk ^0.18` on Unix, which resolves `glib` within 0.18.x; leaving that stack
-is upstream's decision, not a version bump. The affected API is also unreachable from CladeForge:
-nothing under `src-tauri/src` names `glib`, `Variant` or `VariantStrIter`, and the GTK stack exists
-only because Tauri's Linux runtime windows itself with it. Dependabot alert #36 is therefore
-dismissed as *a fix exists in an upstream dependency but is not available yet* rather than silently
-closed, and it should be re-examined — and this paragraph deleted — when a Tauri release moves to
-gtk-rs ≥ 0.20.
+is upstream's decision, not a version bump. The affected API is also unreachable from CladeForge's
+own code: nothing under `src-tauri/src` names `glib`, `Variant` or `VariantStrIter`, and the GTK
+stack is present only because Tauri's Linux runtime windows itself with it.
+
+Dependabot alert #36 is therefore dismissed as a **tolerable risk** (`tolerable_risk`) on those two
+grounds — no reachable patched range while Tauri pins `gtk ^0.18`, and no application code that calls
+the affected iterators — rather than closed quietly. The `not_used` reason was deliberately not
+chosen: Tauri's own runtime does use the GTK stack, and whether it reaches `VariantStrIter` has not
+been verified, so claiming the dependency is unused would overstate what is known here. Revisit
+this — and delete the paragraph — when a Tauri release moves to gtk-rs ≥ 0.20.

@@ -164,8 +164,10 @@ independent scripts.
   GHSA-wrw7-89jp-8q8g — Dependabot alert #36, medium — is unsound `VariantStrIter` iteration,
   patched only from glib 0.20. Tauri 2.12.5, the newest stable release, still requires `gtk ^0.18`
   on Unix, so no update reachable from this repository leaves the 0.18.x band, and no CladeForge
-  code touches the affected iterators. The alert is dismissed as an upstream-blocked fix instead of
-  quietly ignored, and the condition for revisiting it is written into the security policy.
+  code touches the affected iterators. The alert is dismissed as a tolerable risk
+  (`tolerable_risk`) rather than quietly ignored — and deliberately not as `not_used`, because
+  Tauri's own use of the GTK stack was never audited for that API — with the condition for
+  revisiting it written into the security policy.
 - How the triage was done, so it can be repeated without credentials: `npm audit` against
   `package-lock.json` (0 findings); the eleven pinned workflow actions checked against the GitHub
   advisory database for the `actions` ecosystem (no match); all 414 packages in
