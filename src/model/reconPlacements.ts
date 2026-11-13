@@ -289,18 +289,21 @@ export interface TransferDonorInfo {
  * Resolve the DONOR side of a horizontal transfer on gene node `geneNodeId`,
  * sharing the exact convention `validateScenario` and `geneTreeNhk` use:
  * the donor is a gene child whose effective species placement lies OUTSIDE
- * the recipient subtree (`speciesNode`'s subtree). An explicit
- * `assumptions.transferDonor`-style value wins only when it names an existing
- * gene child placed outside the subtree; otherwise auto-derivation applies and
- * the FIRST such child in `childrenIds` order is taken (matching
- * `geneTreeNhk`). Returns null when no child is placeable outside the subtree.
+ * the recipient subtree (`speciesNode`'s subtree). The stored
+ * `assumptions.transferDonor` names a node of the OUTER species tree — that is
+ * what `projectIO`'s repair validates it against, what the inspector's hint
+ * says, and what `geneTreeNhk` labels — so an explicit value wins when one of
+ * the gene children is effectively placed on exactly that species node and the
+ * node lies outside the subtree; otherwise auto-derivation applies and the
+ * FIRST such child in `childrenIds` order is taken (matching `geneTreeNhk`).
+ * Returns null when no child is placeable outside the subtree.
  */
 export function resolveTransferDonor(
   species: Project,
   gene: Project,
   geneNodeId: NodeId,
   effective: EffectivePlacements,
-  explicitDonorGeneChild?: NodeId,
+  explicitDonorSpeciesNode?: NodeId,
 ): TransferDonorInfo | null {
   const self = effective.byGeneNode.get(geneNodeId);
   if (!self) return null;
@@ -317,9 +320,11 @@ export function resolveTransferDonor(
   const children = node.childrenIds
     .map((cid) => ({ cid, p: effective.byGeneNode.get(cid) }))
     .filter((x): x is { cid: NodeId; p: EffectivePlacement } => Boolean(x.p));
-  // Explicit donor: must name a direct gene child placed outside the subtree.
-  if (explicitDonorGeneChild) {
-    const hit = children.find((c) => c.cid === explicitDonorGeneChild && !inside.has(c.p.speciesNodeId));
+  // Explicit donor: a species node, matched against the children's placements.
+  if (explicitDonorSpeciesNode) {
+    const hit = children.find(
+      (c) => c.p.speciesNodeId === explicitDonorSpeciesNode && !inside.has(c.p.speciesNodeId),
+    );
     if (hit) return { donorGeneNodeId: hit.cid, donorSpeciesNodeId: hit.p.speciesNodeId };
   }
   const first = children.find((c) => !inside.has(c.p.speciesNodeId));

@@ -246,7 +246,7 @@ describe('resolveTransferDonor', () => {
     expect(donor).toMatchObject({ donorGeneNodeId: 'dC', donorSpeciesNodeId: 'C' });
   });
 
-  it('lets an explicit donor gene child override the auto-derivation', () => {
+  it('lets an explicit donor species node override the auto-derivation', () => {
     const sp = speciesDoc();
     const ge = buildDoc('tR', [
       ['tR', 'tR', null, ['dC', 'dD', 'rA']],
@@ -262,11 +262,17 @@ describe('resolveTransferDonor', () => {
     });
     // Auto-derivation picks the FIRST outside child (C).
     expect(resolveTransferDonor(sp, ge, 'tR', eff)).toMatchObject({ donorGeneNodeId: 'dC' });
-    // The explicit pointer picks D.
-    expect(resolveTransferDonor(sp, ge, 'tR', eff, 'dD')).toMatchObject({
+    // What the assumption stores is a node of the OUTER species tree (see the
+    // repair in projectIO and the hint in GeneAssumptionInspector), and the gene
+    // child placed on it becomes the donor.
+    expect(resolveTransferDonor(sp, ge, 'tR', eff, 'D')).toMatchObject({
       donorGeneNodeId: 'dD',
       donorSpeciesNodeId: 'D',
     });
+    // A species node inside the recipient subtree is not a donor, and one no
+    // child occupies selects nothing: either way auto-derivation still applies.
+    expect(resolveTransferDonor(sp, ge, 'tR', eff, 'A')).toMatchObject({ donorGeneNodeId: 'dC' });
+    expect(resolveTransferDonor(sp, ge, 'tR', eff, 'N2')).toMatchObject({ donorGeneNodeId: 'dC' });
   });
 
   it('returns null when every child stays inside the recipient subtree', () => {
