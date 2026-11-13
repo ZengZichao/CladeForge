@@ -152,6 +152,28 @@ independent scripts.
 - `docs/UI_STYLE_GUIDE.md` §3.8: the ShortcutsDialog wheel-row status updated to the shipped
   spaced form (`Ctrl/⌘ + wheel`).
 
+### Security — dependency advisory triage (2026-11-13)
+
+- **tokio patched to 1.53.3** (#64, `src-tauri/Cargo.lock`). RUSTSEC-2026-0386 covers `AsyncFd`'s
+  safe constructors — `new`, `with_interest`, `try_new`, `try_with_interest` — as an I/O-safety
+  violation with a use-after-free behind it, fixed from 1.53.3. No code under `src-tauri/src`
+  constructs an `AsyncFd`, but `tauri`, `hyper`, `reqwest`, `tower` and
+  `tauri-plugin-single-instance` all run on tokio, so the lock now carries the patched release. The
+  `desktop (linux)`, `desktop (macos)` and `desktop (windows)` jobs compile and test it.
+- **glib stays at 0.18.5, with the reason recorded** (`SECURITY.md`). RUSTSEC-2024-0429 /
+  GHSA-wrw7-89jp-8q8g — Dependabot alert #36, medium — is unsound `VariantStrIter` iteration,
+  patched only from glib 0.20. Tauri 2.12.5, the newest stable release, still requires `gtk ^0.18`
+  on Unix, so no update reachable from this repository leaves the 0.18.x band, and no CladeForge
+  code touches the affected iterators. The alert is dismissed as a tolerable risk
+  (`tolerable_risk`) rather than quietly ignored — and deliberately not as `not_used`, because
+  Tauri's own use of the GTK stack was never audited for that API — with the condition for
+  revisiting it written into the security policy.
+- How the triage was done, so it can be repeated without credentials: `npm audit` against
+  `package-lock.json` (0 findings); the eleven pinned workflow actions checked against the GitHub
+  advisory database for the `actions` ecosystem (no match); all 414 packages in
+  `src-tauri/Cargo.lock` matched against a fresh clone of `RustSec/advisory-db` by explicit
+  `patched` / `unaffected` range comparison (two hits, the two above).
+
 ## [0.3.0] — 2026-11-10
 
 Published release line. Pre-built artifacts were produced by `.github/workflows/release.yml`
