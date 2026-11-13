@@ -36,10 +36,12 @@ import { tr } from '../ui/strings';
 /**
  * Sample characters carry a FIXED id.
  *
- * The character id is the `character` column of five fixture files plus
- * `manifest.tsv`, so it has to be stable. With `newId()` (a nanoid) every run of
- * `scripts/cross-check/dump-fixtures.mjs` would rewrite ~1 500 lines of committed
- * fixtures while changing nothing a reader could see. Pinning the character ids is
+ * The character id is the `character` column of thirteen committed fixture
+ * tables — `manifest.tsv`, `ape-agreement.tsv` and the per-character tables of
+ * the `feature-tour` and `large-tree` samples, ~300 data lines between them — so
+ * it has to be stable. With `newId()` (a nanoid) every run of
+ * `scripts/cross-check/dump-fixtures.mjs` would rewrite all of them while
+ * changing nothing a reader could see. Pinning the character ids is
  * what keeps regeneration byte-identical. Node and state ids stay random: they
  * never appear in a fixture column.
  */

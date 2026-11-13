@@ -111,6 +111,22 @@ reproduced with throwaway scripts before touching code. Per-finding detail in
 - Nine regression tests added; vitest suite green (97 files, 1201 passed / 6 skipped);
   `tsc --noEmit` and `vite build` clean.
 
+### Fixed — the explicit transfer-donor assumption is honoured in the nested view (2026-11-13)
+- **`resolveTransferDonor` read its explicit argument as a gene-child id, while the stored
+  `assumptions.transferDonor` is a node of the outer species tree** — that is what the load-time
+  repair in `src/io/projectIO.ts` validates it against, what `docs/FORMAT.md` documents, what the
+  inspector's own hint says, and what `TD=` in the NHX export labels. The explicit value therefore
+  never matched any child, and both embedded-layout call sites silently fell back to "the first
+  child outside the recipient subtree": a gene tree with more than one placeable child drew one
+  donor arc on the canvas while exporting another. The parameter is now
+  `explicitDonorSpeciesNode`, matched against the children's effective placements, so the assumption
+  wins when it names an outside species node some child occupies and auto-derivation still applies
+  when it does not. `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` / `_ZH.md` §5.1 follow the signature.
+- **Stale churn estimate in the sample-character comment** (`src/model/sampleTree.ts`): the pinned
+  character ids hold the `character` column of thirteen committed fixture tables stable
+  (`manifest.tsv`, `ape-agreement.tsv` and the per-character tables of the `feature-tour` and
+  `large-tree` samples, ~300 data lines), not "five fixture files / ~1 500 lines".
+
 ### Changed — bilingual documentation translation audit round 2 (2026-11-13)
 
 Every markdown EN↔ZH pair re-audited by a six-agent cluster with the code and the normative
