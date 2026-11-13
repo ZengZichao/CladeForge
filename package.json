@@ -45,11 +45,11 @@
     "@types/node": "^20.19.43",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^6.2.1",
+    "@vitejs/plugin-react": "^6.3.0",
     "@vitest/coverage-v8": "^4.1.12",
     "jsdom": "^25.0.1",
     "typescript": "^5.6.3",
-    "vite": "^8.3.6",
+    "vite": "^8.3.7",
     "vite-node": "^6.0.0",
     "vitest": "^4.1.11"
   }
