@@ -88,7 +88,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#9ca3af", "#3b82f6", "#1e3a5f"),
     cost = NULL,
-    rate = 0.6450748573376146,
+    rate = 0.64507486,
     tips = c("Taxon_C" = "状态 A", "Taxon_E" = "状态 C", "Taxon_J" = "状态 B")
   )
 )
