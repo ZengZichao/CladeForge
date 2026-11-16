@@ -12,11 +12,10 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '..', '..');
 const fixturesDir = join(here, 'fixtures');
 const args = process.argv.slice(2);
 const fixturesOnly = args.includes('--fixtures-only');
@@ -95,7 +94,7 @@ const envRoots = (() => {
 })();
 const discovered = [];
 for (const root of envRoots) {
-  let names = [];
+  let names;
   try {
     names = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
   } catch {

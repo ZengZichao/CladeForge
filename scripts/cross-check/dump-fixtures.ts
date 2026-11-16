@@ -306,7 +306,5 @@ write(
   ]),
 );
 
-// eslint-disable-next-line no-console
 console.log(`CladeForge fixtures written to ${outDir}`);
-for (const f of written) // eslint-disable-next-line no-console
-  console.log(`  ${f}`);
+for (const f of written) console.log(`  ${f}`);
