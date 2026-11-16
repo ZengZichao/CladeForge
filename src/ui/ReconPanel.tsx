@@ -171,6 +171,33 @@ export function ReconPanel() {
                 aria-label={S.recon.laneGap}
               />
             </Field>
+            {/* PhyloRecViewer presentation knobs (用户反馈). */}
+            <Field label={S.recon.optTubeOpacity}>
+              <input
+                type="range"
+                min={20}
+                max={100}
+                step={5}
+                value={Math.round(options.embeddedTubeOpacity * 100)}
+                onChange={(e) => setReconViewOptions({ embeddedTubeOpacity: Number(e.target.value) / 100 })}
+                aria-label={S.recon.optTubeOpacity}
+              />
+            </Field>
+            <CheckboxField
+              label={S.recon.optTubeGradient}
+              checked={options.embeddedTubeGradient}
+              onChange={(v) => setReconViewOptions({ embeddedTubeGradient: v })}
+            />
+            <CheckboxField
+              label={S.recon.optFamilyColors}
+              checked={options.embeddedFamilyColors}
+              onChange={(v) => setReconViewOptions({ embeddedFamilyColors: v })}
+            />
+            <CheckboxField
+              label={S.recon.optGeneHalo}
+              checked={options.embeddedGeneHalo}
+              onChange={(v) => setReconViewOptions({ embeddedGeneHalo: v })}
+            />
             <CheckboxField
               label={S.recon.showTransfers}
               checked={options.embeddedShowTransfers}
@@ -183,11 +210,74 @@ export function ReconPanel() {
             />
           </>
         ) : (
-          <CheckboxField
-            label={S.recon.syncZoom}
-            checked={options.syncZoom}
-            onChange={(v) => setReconViewOptions({ syncZoom: v })}
-          />
+          <>
+            <CheckboxField
+              label={S.recon.optTubeStyle}
+              checked={options.speciesTubeStyle}
+              onChange={(v) => setReconViewOptions({ speciesTubeStyle: v })}
+            />
+            {options.speciesTubeStyle && (
+              <>
+                <Field label={S.recon.tubeWidth}>
+                  <input
+                    type="range"
+                    min={4}
+                    max={32}
+                    step={1}
+                    value={options.speciesTubeWidth}
+                    onChange={(e) => setReconViewOptions({ speciesTubeWidth: Number(e.target.value) })}
+                    aria-label={S.recon.tubeWidth}
+                  />
+                </Field>
+                <Field label={S.recon.optTubeOpacity}>
+                  <input
+                    type="range"
+                    min={20}
+                    max={100}
+                    step={5}
+                    value={Math.round(options.speciesTubeOpacity * 100)}
+                    onChange={(e) => setReconViewOptions({ speciesTubeOpacity: Number(e.target.value) / 100 })}
+                    aria-label={S.recon.optTubeOpacity}
+                  />
+                </Field>
+                <CheckboxField
+                  label={S.recon.optTubeGradient}
+                  checked={options.speciesTubeGradient}
+                  onChange={(v) => setReconViewOptions({ speciesTubeGradient: v })}
+                />
+              </>
+            )}
+            <CheckboxField
+              label={S.recon.optGeneCurve}
+              checked={options.geneCurveStyle}
+              onChange={(v) => setReconViewOptions({ geneCurveStyle: v })}
+            />
+            {options.geneCurveStyle && (
+              <>
+                <Field label={S.recon.optGeneThickness}>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={8}
+                    step={0.5}
+                    value={options.geneLineThickness}
+                    onChange={(e) => setReconViewOptions({ geneLineThickness: Number(e.target.value) })}
+                    aria-label={S.recon.optGeneThickness}
+                  />
+                </Field>
+                <CheckboxField
+                  label={S.recon.optGeneHalo}
+                  checked={options.geneLineHalo}
+                  onChange={(v) => setReconViewOptions({ geneLineHalo: v })}
+                />
+              </>
+            )}
+            <CheckboxField
+              label={S.recon.syncZoom}
+              checked={options.syncZoom}
+              onChange={(v) => setReconViewOptions({ syncZoom: v })}
+            />
+          </>
         )}
         <div className="field row-actions">
           <button
@@ -213,6 +303,17 @@ export function ReconPanel() {
                 embeddedLaneGap: 3,
                 embeddedShowTransfers: true,
                 embeddedShowLossStubs: true,
+                speciesTubeStyle: true,
+                speciesTubeWidth: 14,
+                speciesTubeOpacity: 1,
+                speciesTubeGradient: true,
+                geneCurveStyle: true,
+                geneLineThickness: 2.5,
+                geneLineHalo: true,
+                embeddedTubeGradient: true,
+                embeddedTubeOpacity: 1,
+                embeddedFamilyColors: true,
+                embeddedGeneHalo: true,
               });
               window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
             }}

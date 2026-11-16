@@ -26,6 +26,7 @@ import { STYLE_PRESETS, applyStylePreset } from '../model/presets';
 import { Section } from './Section';
 import {
   BranchShapeSelect,
+  CheckboxField,
   ColorField,
   DashSelect,
   DismissibleHint,
@@ -236,6 +237,15 @@ export function LayoutPanel() {
             onChange={(v) => set((d) => void (d.defaults.branch.dash = v))}
           />
         </Field>
+        <Field label={S.layoutPanel.branchOpacity}>
+          <SliderNumberField
+            value={branch.opacity ?? 1}
+            min={0.2}
+            max={1}
+            step={0.05}
+            recipe={(v) => (d) => void (d.defaults.branch.opacity = v)}
+          />
+        </Field>
       </Section>
 
       <Section title={S.layoutPanel.gradientSection} defaultOpen={false} pinable>
@@ -320,6 +330,12 @@ export function LayoutPanel() {
             <option value="italic">{tr('倾斜（斜体）', 'Italic')}</option>
           </select>
         </Field>
+        {/* PhyloRecViewer label halo (用户反馈 2026-11-16). */}
+        <CheckboxField
+          label={S.layoutPanel.labelHalo}
+          checked={node.labelHalo ?? false}
+          onChange={(v) => set((d) => void (d.defaults.node.labelHalo = v))}
+        />
         <Field label={S.layoutPanel.labelColor}>
           <ColorField
             value={node.labelColor}

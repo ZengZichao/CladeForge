@@ -94,6 +94,8 @@ export interface NodeStyle {
   labelOffsetX?: number;
   /** Manual Y offset (px) applied on top of the label placement. */
   labelOffsetY?: number;
+  /** Background-coloured outline behind the label (PhyloRecViewer halo). */
+  labelHalo?: boolean;
 }
 
 export interface BranchStyle {
@@ -101,6 +103,8 @@ export interface BranchStyle {
   width: number;
   dash: DashStyle;
   shape: BranchShape;
+  /** Branch opacity 0–1 (PhyloRecViewer speciesOpacity; default 1 = opaque). */
+  opacity?: number;
 }
 
 /** Depth-based colour gradient applied to all branches (unless overridden). */
@@ -563,6 +567,30 @@ export interface ReconViewOptions {
   embeddedShowTransfers: boolean;
   /** Embedded mode: draw gene-loss stubs inside the tubes. */
   embeddedShowLossStubs: boolean;
+
+  // --- PhyloRecViewer-style presentation (用户反馈 2026-11-16) -------------
+  /** Side-by-side: draw species branches as thick rounded slate TUBES. */
+  speciesTubeStyle: boolean;
+  /** Side-by-side species tube width (world px). */
+  speciesTubeWidth: number;
+  /** Side-by-side species tube opacity (0–1). */
+  speciesTubeOpacity: number;
+  /** Side-by-side: paint the tubes with a fill→stroke gradient. */
+  speciesTubeGradient: boolean;
+  /** Side-by-side: draw gene edges as smooth curved family-coloured lines. */
+  geneCurveStyle: boolean;
+  /** Side-by-side gene line thickness (world px). */
+  geneLineThickness: number;
+  /** Side-by-side: white halo under the gene lines (reads over the tubes). */
+  geneLineHalo: boolean;
+  /** Nested mode: paint the species tubes with a fill→stroke gradient. */
+  embeddedTubeGradient: boolean;
+  /** Nested mode: species tube opacity (0–1). */
+  embeddedTubeOpacity: number;
+  /** Nested mode: color gene lineages by gene family (event glyphs stay). */
+  embeddedFamilyColors: boolean;
+  /** Nested mode: halo under the gene lineages. */
+  embeddedGeneHalo: boolean;
 }
 
 export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
@@ -579,6 +607,18 @@ export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
   embeddedLaneGap: 3,
   embeddedShowTransfers: true,
   embeddedShowLossStubs: true,
+
+  speciesTubeStyle: true,
+  speciesTubeWidth: 14,
+  speciesTubeOpacity: 1,
+  speciesTubeGradient: true,
+  geneCurveStyle: true,
+  geneLineThickness: 2.5,
+  geneLineHalo: true,
+  embeddedTubeGradient: true,
+  embeddedTubeOpacity: 1,
+  embeddedFamilyColors: true,
+  embeddedGeneHalo: true,
 };
 
 /** Which section of the reconciliation left panel the rail currently shows. */

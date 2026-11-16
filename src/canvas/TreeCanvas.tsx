@@ -1222,6 +1222,7 @@ export function TreeCanvas() {
           {!isEmpty &&
             renderNodes.map((n) => (
               <NodeView
+                canvasBg={canvasBg}
                 key={n.id}
                 node={n}
                 pos={layout.positions.get(n.id) as Point}

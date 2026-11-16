@@ -40,6 +40,8 @@ interface NodeViewProps {
    * for rectangular layouts, where the orientation decides the side.
    */
   labelAngle?: number;
+  /** Canvas background colour — the label halo strokes with it. */
+  canvasBg?: string;
 }
 
 function Marker({
@@ -85,6 +87,7 @@ export const NodeView = memo(function NodeView({
   characterActive,
   characterColor,
   labelAngle,
+  canvasBg,
 }: NodeViewProps) {
   const selected = useStore((s) => s.selection.includes(node.id));
   const apply = useStore((s) => s.apply);
@@ -281,6 +284,16 @@ export const NodeView = memo(function NodeView({
           transform={
             style.labelRotation ? `rotate(${style.labelRotation} ${place.dx} ${labelY})` : undefined
           }
+          /* PhyloRecViewer label halo: a background-coloured outline keeps the
+             label readable where it crosses branches. */
+          {...(style.labelHalo
+            ? {
+                paintOrder: 'stroke',
+                stroke: canvasBg ?? 'var(--canvas-bg)',
+                strokeWidth: 3,
+                strokeLinejoin: 'round',
+              }
+            : {})}
           data-role="node"
           data-node-id={node.id}
           style={{ userSelect: 'none' }}

@@ -132,6 +132,28 @@
   --recon-tube: var(--gray-5);
   --recon-tube-border: var(--gray-8);
   --recon-gene-unmapped: var(--gray-8);
+
+  /* PhyloRecViewer-style theme (用户反馈 2026-11-16): slate species tubes and
+     the 16-colour Radix gene-family palette (light steps; the dark block
+     below swaps in the bright steps). */
+  --pr-tube-fill: #f0f0f3;
+  --pr-tube-stroke: #d9d9e0;
+  --pr-gene-0: #0d74ce;
+  --pr-gene-1: #cc4e00;
+  --pr-gene-2: #2a7e3b;
+  --pr-gene-3: #6550b9;
+  --pr-gene-4: #107d98;
+  --pr-gene-5: #5c7c2f;
+  --pr-gene-6: #d13415;
+  --pr-gene-7: #067a6f;
+  --pr-gene-8: #5753c6;
+  --pr-gene-9: #ab6400;
+  --pr-gene-10: #8145b5;
+  --pr-gene-11: #ca244d;
+  --pr-gene-12: #208368;
+  --pr-gene-13: #3a5bc7;
+  --pr-gene-14: #c2298a;
+  --pr-gene-15: #815e46;
   /* Bridge column between the two recon panes (overridden inline by the
      pane component; the default keeps the grid stable before mount). */
   --recon-bridge-w: 96px;
@@ -277,6 +299,25 @@
   --teal-3: #0d2d2a; --teal-9: #12a594; --teal-11: #0bd8b6;
   --pink-3: #37172f; --pink-9: #d6409f; --pink-11: #ff8dcc;
   --violet-3: #2f265f; --violet-9: #6e56cf; --violet-11: #baa7ff;
+  /* PhyloRecViewer dark palette: bright Radix 9 steps for family lines. */
+  --pr-tube-fill: #212225;
+  --pr-tube-stroke: #363a3f;
+  --pr-gene-0: #0090ff;
+  --pr-gene-1: #f76b15;
+  --pr-gene-2: #46a758;
+  --pr-gene-3: #6e56cf;
+  --pr-gene-4: #00a2c7;
+  --pr-gene-5: #bdee63;
+  --pr-gene-6: #e54d2e;
+  --pr-gene-7: #12a594;
+  --pr-gene-8: #5b5bd6;
+  --pr-gene-9: #ffc53d;
+  --pr-gene-10: #8e4ec6;
+  --pr-gene-11: #e54666;
+  --pr-gene-12: #29a383;
+  --pr-gene-13: #3e63dd;
+  --pr-gene-14: #d6409f;
+  --pr-gene-15: #ad7f58;
   /* Elevation tokens (B3) — dark mirrors. */
   --era-band-opacity: 0.3;
   --radius-inner: var(--radius-sm);
@@ -4542,9 +4583,11 @@ input.has-error {
 .recon-embedded {
   grid-area: panes;
   display: grid;
-  /* header / one-time Alt+click hint / svg (the hint row collapses when absent,
-     so the canvas keeps its full height) */
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* 用户反馈 (2026-11-16): the in-canvas header and the Alt+click hint bar are
+     gone — ONE row gives the svg the full canvas height (the old three-row
+     track left the svg in the auto row at its default 150px and an empty 1fr
+     row below, which read as "only the top third shows"). */
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;

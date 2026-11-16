@@ -3,7 +3,7 @@
 // every node/branch that has no per-object override adopts the theme at once.
 // Per-object overrides are intentionally preserved.
 
-import type { Project } from './types';
+import type { BranchGradient, BranchStyle, Project } from './types';
 
 export interface StylePreset {
   id: string;
@@ -15,6 +15,10 @@ export interface StylePreset {
   nodeStroke: string;
   labelColor: string;
   branchColor: string;
+  /** Optional branch restyling (PhyloRec 管道: curved thick tubes). */
+  branch?: Partial<Pick<BranchStyle, 'shape' | 'width' | 'opacity'>>;
+  /** Optional depth-gradient restyling. */
+  gradient?: Partial<BranchGradient>;
 }
 
 export const STYLE_PRESETS: StylePreset[] = [
@@ -49,6 +53,20 @@ export const STYLE_PRESETS: StylePreset[] = [
     branchColor: '#33658a',
   },
   {
+    // 用户反馈 (2026-11-16): PhyloRecViewer look — smooth curved slate tubes
+    // with a fill→stroke depth gradient, paper background.
+    id: 'phylo',
+    label: 'PhyloRec 管道',
+    labelEn: 'PhyloRec tubes',
+    background: '#f9f9fb',
+    nodeFill: '#fcfcfd',
+    nodeStroke: '#1c2024',
+    labelColor: '#1c2024',
+    branchColor: '#d9d9e0',
+    branch: { shape: 'curved', width: 12, opacity: 1 },
+    gradient: { enabled: true, from: '#f0f0f3', to: '#d9d9e0' },
+  },
+  {
     id: 'dark',
     label: '暗色',
     labelEn: 'Dark',
@@ -67,4 +85,15 @@ export function applyStylePreset(project: Project, preset: StylePreset): void {
   project.defaults.node.stroke = preset.nodeStroke;
   project.defaults.node.labelColor = preset.labelColor;
   project.defaults.branch.color = preset.branchColor;
+  if (preset.branch) {
+    if (preset.branch.shape !== undefined) project.defaults.branch.shape = preset.branch.shape;
+    if (preset.branch.width !== undefined) project.defaults.branch.width = preset.branch.width;
+    if (preset.branch.opacity !== undefined) project.defaults.branch.opacity = preset.branch.opacity;
+  }
+  if (preset.gradient) {
+    project.defaults.branchGradient = {
+      ...project.defaults.branchGradient,
+      ...preset.gradient,
+    };
+  }
 }
