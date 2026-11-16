@@ -63,17 +63,15 @@ rustup component add clippy
 （2）润色文档与本仓库自身的文字。所有 AI 产出的改动都经过审阅、并通过测试套件验证，其所有权归维护者，
 维护者对结果负全责。
 
-**工具名称、版本与逐文件的辅助范围记录在 [`docs/AI_PROVENANCE.md`](./docs/AI_PROVENANCE.md) 中，
-每个发布版本一行；未提交的工作区改动批次另有“Unreleased working tree …”行。** 无法从历史中追溯
-归属的文件，该记录会直接写明“not attributed”，而不是猜测。由此产生两条规则：
+**本项目使用过的 AI 工具、底层 LLM 模型以及用途记录在 [`docs/AI_PROVENANCE.md`](./docs/AI_PROVENANCE.md) 中，
+是一份简单清单，随工具变化同步更新。** 由此产生两条规则：
 
-- 被该记录列为 AI 辅助的文件，在模块头部带一行标记（TypeScript/Rust 用
+- 凡有 AI 辅助修改的文件，在模块头部带一行标记（TypeScript/Rust 用
   `// AI-PROVENANCE: …`，Markdown 用 `<!-- AI-PROVENANCE: … -->`）。
   `src-tauri/tauri.conf.json` 这类严格 JSON 不带标记——它没有注释语法，写了会让桌面端在编译期
-  构建失败（`tauri_build` 与 `tauri::generate_context!` 按严格 JSON 解析该文件）——
-  其记录只存在于表格中。
-- 若本次改动有 AI 参与，请在同一个 PR 里为 `docs/AI_PROVENANCE.md` 新增或更新对应行，
-  写清实际使用的工具名称与版本。
+  构建失败（`tauri_build` 与 `tauri::generate_context!` 按严格 JSON 解析该文件）。
+- 若本次改动有 AI 参与，请在同一个 PR 里确认 `docs/AI_PROVENANCE.md` 仍列出了实际使用的
+  工具与模型。
 
 CladeForge 内部不运行任何生成式 AI。应用执行的每一项计算——Sankoff 简约法、Mk/ER 祖先状态重建、
 DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`、`src/io` 中的确定性本地代码，
@@ -91,8 +89,8 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 2. `CITATION.cff` **在该标签所指提交中存在**，且其中的 `version` / `doi` / `date-released`
    与本次发布一致。`CITATION.cff` 是在 `v0.1.0` 之后才加入的，因此归档的 `v0.1.0` 树里并没有它；
    新发布不得重演此事，因为归档件是标签的机器快照。
-3. `docs/AI_PROVENANCE.md` 为本次发布新增一行，写出工具名称与版本、AI 辅助的文件清单，
-   且每个被列出的文件都带上模块头部标记。
+3. `docs/AI_PROVENANCE.md` 内容最新——列出了本次发布实际使用的 AI 工具、LLM 模型与用途，
+   且每个有 AI 辅助的源文件都带上模块头部标记。
 4. `src-tauri/tauri.conf.json` 的 `version`、`README.md` / `README_ZH.md` 与
    `docs/MANUAL_EN.md` / `docs/MANUAL_ZH.md` 所述的平台支持下限与架构，必须与本次**实际产出**的
    构件一致——只写了能力但未构建过的，要明确标注（见 README 中的 macOS arm64 架构说明，以及用户手册里关于通用 `.dmg` 的脚注）。
@@ -101,11 +99,11 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 
 ## 范围说明
 
-**协调（reconciliation，基因树–物种树协调）** 模块已经完成并随本版本提供，但它仍是 CladeForge 中交互设计尚未收敛的部分（见 [README_ZH.md](./README_ZH.md) 路线图中的“协调优化”一条）。改动该模块之前请先开 issue，以免把精力花在还会变动的方案上。
+**协调（reconciliation，基因树–物种树协调）** 模块已经完成并随本版本提供，但它仍是 CladeForge 中交互设计尚未收敛的部分。改动该模块之前请先开 issue，以免把精力花在还会变动的方案上。
 
 ## 用户文档
 
-完整的功能详解见[用户手册（中文）](./docs/MANUAL_ZH.md)和 [User Manual (English)](./docs/MANUAL_EN.md)。各发布版本的 AI 辅助文件记录见 [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md)。安全问题不走公开 issue，私下报送方式见 [SECURITY.md](./SECURITY.md)。
+完整的功能详解见[用户手册（中文）](./docs/MANUAL_ZH.md)和 [User Manual (English)](./docs/MANUAL_EN.md)。使用过的 AI 工具与模型记录见 [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md)。安全问题不走公开 issue，私下报送方式见 [SECURITY.md](./SECURITY.md)。
 
 ## 文档语言政策
 
@@ -122,11 +120,9 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 | `docs/MANUAL_ZH.md` | `docs/MANUAL_EN.md` | 双文件，各一种语言 | 须中英配对 |
 | `scripts/cross-check/README_ZH.md` | `scripts/cross-check/README.md` | 双文件，各一种语言 | 须中英配对 |
 | `docs/UI_GLOSSARY.md` | `docs/UI_GLOSSARY_EN.md` | 双文件，各一种语言 | 须中英配对（英文版须与中文术语表逐条同步） |
-| `docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md` | `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` | 双文件，各一种语言 | 须中英配对 |
 | `docs/GLOSSARY.md` | — | 仅中文维护 | 政策豁免——历史对照表 |
 | `docs/UI_STYLE_GUIDE.md` | — | 仅中文维护 | 政策豁免——现行规范，仅中文维护 |
-| `docs/UI_FIX_REPORT.md` | — | 仅中文维护 | 政策豁免——带日期的验收报告 |
-| — | `docs/AI_PROVENANCE.md` | 仅英文维护 | 政策豁免——逐发布版本的 AI 辅助记录本身（机器可读表格加说明文字），以英文维护；仓库中不存在中文对应件 |
+| — | `docs/AI_PROVENANCE.md` | 仅英文维护 | 政策豁免——AI 使用记录本身（工具、模型与用途的简单清单），以英文维护；仓库中不存在中文对应件 |
 | — | `docs/FORMAT.md` | 仅英文维护 | 政策豁免——`.cladeforge.json` 文件格式参考（见规则 5）；以英文维护，仓库中不存在中文对应件 |
 | `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/bug_report.md`、`.github/ISSUE_TEMPLATE/feature_request.md` | 同一文件 | 单文件内中英并列 | 模板许可形态 |
 | — | `SECURITY.md` | 仅英文维护 | 政策豁免——现行英文规范：它本身就是私下报送的操作说明（写明报告必须送往的唯一网址与唯一邮箱地址），在这段文字里混用两种语言有误送报告的风险；仓库中不存在中文对应件，README 两个语言版本链接的都是这同一份文件 |
@@ -137,11 +133,8 @@ DTL 协调、共识树、布局与导出——都是 `src/model`、`src/layout`�
 
 矩阵中的文件名一律写成行内代码而非 Markdown 链接，这样文档新增、改名或停用时表格不会腐烂；读者真正
 要点的链接在每个配对文件页首的互链里（`> 中文版：…` / `> English version: …`）。
-`docs/UI_GLOSSARY_EN.md` 与 `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` 由本政策一并新增——前者是规范性
-UI 术语表的英文版，后者是那条约 1,500 行的嵌套视图算法契约设计文档的英文版，该文档被 5 处源码头注释
-当作规范引用（`src/model/reconPlacements.ts`、`src/model/reconPlacements.test.ts`、
-`src/layout/embeddedRecon.ts`、`src/layout/embeddedRecon.test.ts`、
-`src/canvas/EmbeddedReconCanvas.tsx`）。两份文件均已入库，且各自已带上页首互链，上表已经覆盖它们。
+`docs/UI_GLOSSARY_EN.md` 由本政策一并新增，作为规范性 UI 术语表的英文版；该文件已入库，且已带上页首
+互链，上表已经覆盖它。
 
 ### 规则
 
@@ -155,16 +148,14 @@ UI 术语表的英文版，后者是那条约 1,500 行的嵌套视图算法契�
    概念、相同的推荐英文与中文写法、相同的“避免”列。两者一旦出现分歧，以 `docs/UI_GLOSSARY.md` 为准，
    并在同一个 PR 内修正英文版。`src/ui/copyQuality.test.ts` 只是把术语表对界面文案串的要求编成测试，
    不能替代术语表本身。
-3. **`docs/GLOSSARY.md`、`docs/UI_STYLE_GUIDE.md`、`docs/UI_FIX_REPORT.md` 按政策只以中文维护。**
-   这是决定而非疏漏，但三份文件的豁免理由各不相同，改它们时理由很要紧。`docs/GLOSSARY.md` 属于
+3. **`docs/GLOSSARY.md`、`docs/UI_STYLE_GUIDE.md` 按政策只以中文维护。**
+   这是决定而非疏漏，但两份文件的豁免理由各不相同，改它们时理由很要紧。`docs/GLOSSARY.md` 属于
    **“因为是记录而豁免”**：它页首自述为“历史对照（非规范性）”，界面用词的规范性职责已移交
    `docs/UI_GLOSSARY.md`。`docs/UI_STYLE_GUIDE.md` 则相反，它是一份**现行规范文档**：它管的是
    `src/ui/strings.ts`、组件内联 `tr()` 文案、通知、导出图与 NEXUS 注释的写法
    （`docs/UI_STYLE_GUIDE.md`:5），其 :37 与 :44 明确写着现存代码与本文档冲突时以本文档为准修改代码文案，
    且不得反向放宽本节；它只以中文维护，是因为项目就用中文维护它、服务的是审界面文案的人，与其内容是否
-   属于历史无关。`docs/UI_FIX_REPORT.md` 属于**“因为是记录而豁免”**：那是一份带日期（2026-10-19）、
-   只反映某一时点的验收报告，说的是“当时如何”，不是“现在承诺什么”，它页首也是这样自述的。三份文件都
-   不承担翻译义务，审阅者不应要求为它们补英文版。改动 `docs/GLOSSARY.md` 或 `docs/UI_FIX_REPORT.md`
+   属于历史无关。两份文件都不承担翻译义务，审阅者不应要求为它们补英文版。改动 `docs/GLOSSARY.md`
    时，请把文件里“历史／非规范”的说明保持准确；`docs/UI_STYLE_GUIDE.md` 没有这类说明，也不得新增。
    上表中“仅英文维护”的几行是同一套理由的另一面：`SECURITY.md`、`docs/AI_PROVENANCE.md`、
    `docs/FORMAT.md`、`CHANGELOG.md`、`CITATION.cff`、`LICENSE` 同样不承担翻译义务——各自的豁免理由

@@ -29,7 +29,8 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).
 - **DTL reconciliation** — Gene-tree/species-tree analysis with a dynamic-programming solver, manual refinement, validation, and two canvas layouts: the side-by-side view and the embedded view (thick species tubes with the gene lineages nested inside, Alt + click path building, and embedded-figure SVG export).
 - **Time calibration** — Fossil calibration points, geological era bands, and environmental event overlays.
-- **Import/Export** — Newick and NEXUS import (NEXUS reads `TREES` **and** `DATA`/`CHARACTERS`/`ASSUMPTIONS` blocks; Newick keeps bracket comments verbatim and interprets `&support`, `&R/&U`, BEAST `height`/`height_95%_HPD`/`posterior` and NHX tags — other comment text is preserved as text, not interpreted); CSV/TSV character-matrix and annotation tables in, matrix/annotation/template CSVs out; NeXML export; project files in `.cladeforge.json` (schema documented in `docs/FORMAT.md`); image export to SVG/PNG/PDF with an export-settings dialog (DPI control, opt-in support values, scale bar, legend toggle) and auto-generated legends; hypothesis JSON + Markdown narrative + a self-contained R analysis script.
+- **Import/Export** — Newick and NEXUS import (NEXUS reads `TREES` **and** `DATA`/`CHARACTERS`/`ASSUMPTIONS` blocks; Newick keeps bracket comments verbatim and interprets `&support`, `&R/&U`, BEAST `height`/`height_95%_HPD`/`posterior` and NHX tags — other comment text is preserved as text, not interpreted); CSV/TSV character-matrix and annotation tables in, matrix/annotation/template CSVs out; NeXML import/export (tree + characters + cladeforge: annotations); project files in `.cladeforge.json` (schema documented in `docs/FORMAT.md`); image export to SVG/PNG/PDF with an export-settings dialog (DPI control, opt-in support values, scale bar, legend toggle, persisted settings and named presets) and auto-generated legends; hypothesis JSON + Markdown narrative + a self-contained R analysis script.
+- **Editing & provenance** — global find & replace across tabs with a preview; document rename plus author/description/source metadata; a jumpable undo-history panel; an always-available sample library; a tree-distance comparison table; a central operation log.
 
 **Scope statement.** CladeForge is a hypothesis-editing and argumentation
 workbench. It does NOT build trees, align sequences, fit Bayesian dating
@@ -127,15 +128,6 @@ CladeForge projects are stored as JSON (`.cladeforge.json`), schema version `0.2
 - [用户手册（中文）](./docs/MANUAL_ZH.md) — the complete feature-by-feature reference (Chinese)
 - [Contributing Guide](./CONTRIBUTING.md) · [贡献指南（中文）](./CONTRIBUTING_ZH.md)
 - [Security Policy](./SECURITY.md) — supported versions and private vulnerability reporting
-
-## Roadmap
-
-- [x] Gene-tree/species-tree reconciliation (DTL-style)
-- [ ] Reconciliation polish: drag-to-map in the side-by-side view, multi-gene aggregate overlays
-- [x] Embedded reconciliation layout (project gene trees onto the species tree canvas): thick species tubes with nested gene lineages, Alt + click path building and SVG export
-- [ ] Forward simulation engine for hypothesis testing
-- [ ] Plugin architecture for third-party inference tools
-- [ ] Collaborative workspaces
 
 ## License
 

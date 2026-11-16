@@ -78,18 +78,24 @@ Prerequisites: Node.js ≥ 20.19, Rust toolchain ≥ 1.90, npm.
 
 ### First Launch
 
-On first launch, CladeForge opens an empty workspace and offers a four-step guided tour; the offer is opt-in, so dismissing it goes straight to the empty canvas. Replay it whenever you like with the **Getting Started Tour** button in the header (beside the shortcut-reference button), by searching "tour" in the ⌘K command palette, or from the shortcut-reference dialog; it walks you through the canvas, the inspector panel, the module rail, and the command palette.
+On first launch, CladeForge opens a built-in **feature-tour sample** (a time tree) so you can see character colouring, hypothesis layers, events and time calibration without importing anything. It is an ordinary document: edit it freely, or click the **+** at the end of the tab bar to start a **blank document**.
+
+The guided tour is an **explicit opt-in** and never opens automatically. Replay it whenever you like:
+
+- from the **?** Help menu in the header (**Getting Started**, 5 steps; **Workflow Tour**, 6 steps);
+- by searching "tour" / "workflow" in the ⌘K command palette;
+- or from the shortcut-reference dialog (⌘?).
 
 To start immediately, you can:
-- **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex` or `.nexus` file onto the window, or choose **Import tree** in the File menu. ⌘O / Ctrl + O is **Open project**, which reads a `.cladeforge.json` file.
+- **Import a tree** — Drag a `.nwk`, `.newick`, `.tree`, `.tre`, `.nex`, `.nexus` or `.xml` (NeXML) file onto the window (**web build only**; on the desktop build use the File menu — see *Drag-and-drop & file associations* below), or choose **Import tree** in the File menu. ⌘O / Ctrl + O is **Open project**, which reads a `.cladeforge.json` file.
 - **Build from scratch** — Select the root and click the header's **+ Add children** button, which opens one dialog for binary, ternary and polytomy splits.
-- **Load a sample project** — Click "Open sample tree" on the empty-state screen, or pick from the sample grid. Three built-in **feature-oriented** samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), carry no real biological background, and every sample tree is strictly binary: a **feature tour** (a small time tree demonstrating characters and cost matrices, hypothesis layers, event triggers and time calibration), a **large tree & deep time** sample (a larger time tree with 11 tips and a root age of 4000, demonstrating layouts, the legend and the deep-time axis), plus a **gene-family reconciliation** sample (a species tree plus two gene trees demonstrating DTL reconciliation, with a pre-wired gene tree and assumptions that opens straight into the reconciliation view). Each sample comes pre-loaded with characters, events, and hypothesis layers, and demonstrates software features rather than real scientific cases.
+- **Load a sample project** — The empty state offers an **Open tree file…** button and three sample rows. With content already open, use **File › Sample library…** (or search "sample" in ⌘K): every sample can be opened in a new tab or used to replace the current document. Three built-in **feature-oriented** samples are built entirely from **fictional taxa** (neutral code names like Taxon_A, Taxon_B, … that refer to no real organism), carry no real biological background, and every sample tree is strictly binary: a **feature tour** (a small time tree demonstrating characters and cost matrices, hypothesis layers, event triggers and time calibration), a **large tree & deep time** sample (a larger time tree with 11 tips and a root age of 4000, demonstrating layouts, the legend and the deep-time axis), plus a **gene-family reconciliation** sample (a species tree plus two gene trees demonstrating DTL reconciliation, with a pre-wired gene tree and assumptions that opens straight into the reconciliation view). Each sample comes pre-loaded with characters, events, and hypothesis layers, and demonstrates software features rather than real scientific cases.
 
 ### Language and Theme
 
-- **Language** — Follows your operating system's language on the first run, then remembers your choice. Switch between English and Chinese at any time from the language toggle; the UI remounts immediately, including node labels that ship with the built-in samples.
-- **Theme** — Defaults to System. Choose Light, Dark, or System from the theme toggle next to the language switch.
-- **Header controls** — The header carries the view-mode switch (Standard view / Reconciliation view), the **+ Add children** button, undo and redo, the project name, Save, the language and theme toggles, the shortcut reference (⌘?), and the **Getting Started Tour** button. Structural editing lives in the node context menu and the command palette, not in the header.
+- **Language** — Follows your operating system's language on the first run, then remembers your choice. Switch between English and Chinese at any time from the **Preferences** menu; the UI remounts immediately, including node labels that ship with the built-in samples.
+- **Theme** — Defaults to System. Choose Light, Dark, or System in the same **Preferences** menu.
+- **Header layout** — From left to right: app name, **File** and **Recent** menus, the toolbar (Standard view / Reconciliation view switch, **+ Add children**, undo / redo, Save), **Preferences** and the **?** Help menu. The document name lives on its **tab** in the tab bar (hover shows the path and disk state), not in the header. Language, theme, UI scale, colour-vision mode, undo depth and similar settings are all in **Preferences**; shortcuts, tours, feedback and About live in the **?** menu. Structural editing lives in the node context menu and the command palette, not in the header.
 
 ---
 
@@ -131,11 +137,18 @@ A **scale bar** appears whenever branch lengths are meaningful for the current l
 
 ### Status Bar
 
-The strip along the bottom reports what is actually on screen: node count, edge count, current zoom percentage (with a note when fit-to-window had to clamp the scale), and the number of selected objects. Selecting exactly two nodes adds a "MRCA highlighted" note. It also carries the autosave indicator described in [Autosave and Recovery](#autosave-and-recovery).
+The strip along the bottom reports what is actually on screen: node count, edge count, current zoom percentage (with a note when fit-to-window had to clamp the scale), and the number of selected objects. Selecting exactly two nodes adds an "MRCA highlighted" note.
+
+Save state is split into **two independent areas**, shown separately:
+
+- **Local recovery** — autosave (~800 ms debounce) writes the whole workspace to browser/Tauri local storage so it survives a restart; this is **not** the project file.
+- **Disk** — shows either "Not on disk yet" or the last project-file save time. Only an explicit **File › Save project** (⌘S) / **Save as** updates it.
 
 ### Small Windows
 
-Below about 1024 px of window width the shell switches to a compact arrangement: the module rail becomes a bottom tab bar, and the left and right panels become overlays that each carry their own close button. ⌘. shows or hides them. The splitters between panels drag between 180 and 620 px, and the widths are remembered between sessions.
+Below **900 px** of window width the shell switches to a compact arrangement: the module rail becomes a bottom tab bar, and the left and right panels become overlays that each carry their own close button. ⌘. shows or hides them. At ≤640 px (phones) a one-time notice explains that CladeForge is desktop-first and mobile is for viewing/demonstration; you can continue afterwards. The splitters between panels drag between 180 and 620 px, and the widths are remembered between sessions.
+
+Hiding the panels with ⌘. has an explicit trade-off: the inspector is unmounted while hidden so it does not render invisibly, which means its expanded sections and search text reset when the panel comes back. Canvas and document data are unaffected.
 
 ### Right Panel — Inspector
 
@@ -147,15 +160,24 @@ A node's label gets its own placement controls: nine anchor positions plus an au
 
 ### Command Palette (⌘K)
 
-Press ⌘K (macOS) or Ctrl + K (Windows/Linux) at any time to open the command palette; press it again to close it. Roughly thirty-five actions are grouped into seven categories — File, Edit, Tree operations, View, Analysis, Reconciliation and Help — each entry carrying an icon and its keyboard hint.
+Press ⌘K (macOS) or Ctrl + K (Windows/Linux) at any time to open the command palette; press it again to close it. The current build offers **59 commands** in seven categories — **File, Edit, View, Tree operations, Analysis, Reconciliation, Help** (displayed in that order) — each entry carrying an icon and its keyboard hint.
 
 Type to filter. Every command matches its displayed name, its English alias, and the pinyin spelling of its Chinese name, so `dakai` finds Open project and `baocun` finds Save project. Use ↑/↓ to navigate and Enter to execute.
 
-A few actions exist nowhere else but here: extract the selected subtree into a new tab, import a gene tree, enter or exit the reconciliation view, export the reconciliation report, and re-open the Getting Started Tour.
+The following live in the **File › Tools** menu (and are searchable in ⌘K):
+
+- **Find & replace** — batch-replace text across node names, hypothesis notes, event labels/notes, character and state names, hypothesis-layer text and gene-tree names; scope it to the current document or all tabs, with a full preview before anything is applied. On the active document this is one undoable step.
+- **History** — lists the undo stack and redoable steps (with action names and times); click to jump straight to a step.
+- **Sample library** — browse and open built-in samples at any time (new tab, or replace the current document).
+- **Operation log** — every import / export / save / validation notification in one reviewable list (successes, degradations, failures), copyable and clearable.
+
+The palette also keeps a few entries found nowhere else: extract the selected subtree into a new tab, import a gene tree, enter or exit the reconciliation view, export the reconciliation report, the tree-distance table, and re-open the Getting Started Tour.
 
 ### Tabs
 
 CladeForge supports multiple tabs, each holding an independent project. Click a tab to switch to it, use its × button to close it, and use the **+** button at the end of the tab bar to open a new tab. Tabs are auto-restored on the next launch; corrupt tabs are skipped with a notification.
+
+A tab's tooltip shows three lines: document name, disk path (or "not saved to disk yet"), and disk state (unsaved changes / last save time). **File › Save all tabs** writes the active tab and every parked tab that already has a disk path, then reports how many were written and how many were never saved anywhere. Use **File › Project information…** to rename the document and to fill in author, description and the topology / branch-length / dating / trait sources; the same dialog shows created, modified and on-disk times.
 
 ---
 
@@ -538,7 +560,7 @@ The **Side-by-side / Embedded** segmented control in the toolbar switches the ca
 
 - **Reading the figure**: σ speciation = children enter different sub-tubes; δ duplication = parallel lanes within one tube; τ transfer = a cross-tube transfer arc from the donor tube to the recipient tube (dashed = time-infeasible; without node ages the legend says "topological transfer"); λ loss = a loss stub at the fork where lineages die (hollow/dashed = inferred structural loss; `λ!` = the asserted count is below the structural minimum). Tube width adapts to how many gene lanes coexist on that branch (capped; an overflow badge appears) — it reflects gene copy number, not support or time.
 - **Honest display**: an internal gene node with no usable assumption whose children are *all* placed is DISPLAY-INFERRED to its children's MRCA (dashed) and never written into the project file; truly unmapped nodes land in a labelled orphan gutter (unmapped gene nodes) connected by a dashed line to their nearest placed ancestor. Trees without node ages/lengths are labelled "topological sketch" in the header.
-- **Building an evolutionary path**: select a gene node, then **Alt + click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
+- **Building an evolutionary path**: select a gene node, then **Alt + click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The first time you enter the nested view, a one-time hint bar under the header states this gesture (dismissible; it disappears automatically after the first Alt + click and remembers the dismissal). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
 - **Export the figure**: in the embedded mode the toolbar gains "Export figure", writing the nested reconciliation drawing as a standalone vector SVG (with legend and version metadata) for hypothesis documents.
 - Switching layout modes never touches selections, mappings or undo history; "Reset view settings" no longer kicks you out of the embedded mode. The status bar shows a single zoom readout there, and the sync-zoom toggle hides.
 
@@ -584,7 +606,7 @@ Switch the layout type to **Time-calibrated tree (chronogram)** in the Style mod
 
 ### Geological Era Bands
 
-In the Time module, enable the era overlay to draw coloured bands for geological time behind the tree, and choose the **display level**: eons only, periods only, or both.
+In the Time module, enable the era overlay to draw coloured bands for geological time behind the tree, and choose the **display level**: eons only, eras only, periods only, or all of them together.
 
 ### Fossil Calibration Points
 
@@ -668,9 +690,11 @@ The Style module exposes the **canvas background** colour and the **default link
 |--------|-----------|-------|
 | **Newick** | `.nwk`, `.newick`, `.tree`, `.tre` | Branch lengths and support values are parsed and NHX comments round-trip. Rootedness markers `[&R]` / `[&U]` and an explicit `[&support=…]` are read and written back, so a tree keeps what it arrived with. Files containing several trees are detected. |
 | **NEXUS** | `.nex`, `.nexus` | Every `TREE` statement in every `TREES` block is read, honouring an optional `TRANSLATE` table — not just the first tree. A file carrying several trees is passed to the multi-tree dialog. |
+| **NeXML** | `.xml`, `.nexml` | Reads OTUs, one or more trees (with branch lengths), StandardCells / ContinuousCells character matrices and the cladeforge: event / hypothesis-layer annotations. Polymorphic cells that cannot be represented are skipped and reported; a matrix-only file lands its characters on the active document. |
 | **Multi-tree files** | — | If a file contains multiple trees, a dialog lets you pick one, import all as separate tabs, or build a consensus tree (strict or 50% majority rule). |
+| **NeXML** | `.xml`, `.nexml` | Imports trees, characters and cladeforge: semantic annotations; see "NeXML import" below. |
 
-Drag-and-drop is supported: drop a file anywhere on the window to import it.
+**Drag-and-drop & file associations** — The **web build** supports dropping a file anywhere on the window to import it. The **desktop build** disables HTML5 drag-and-drop for security policy reasons: use **File › Open…** (⌘O, for `.cladeforge.json`) or **File › Import tree…**, or double-click an associated `.cladeforge.json` project file. Because `.cladeforge.json` is a compound extension, some systems match it as `.json`; if association misbehaves, set CladeForge as the default app for that file type explicitly.
 
 Both directions also work in the plain web build, where the desktop's native file dialogs are replaced by a browser download and an `<input type="file">`. Only how the file reaches disk changes; the formats and options do not.
 
@@ -684,9 +708,11 @@ Open the **Export** module (left panel, Output group) or use the ⌘K command pa
 |--------|------|-------------|
 | **SVG** | Vector | Publication-quality vector graphic. WYSIWYG — matches the canvas exactly. Includes semantic layer (character colours, transitions, events, time axis, auto legend). |
 | **PDF** | Vector | Vector PDF for print/publication (jsPDF + svg2pdf.js). Derived from the SVG. |
-| **PNG** | Raster | Bitmap rasterised from the SVG at 2×. The factor is fixed — there is no control for it yet — and a canvas large enough to reach the browser's canvas ceiling has its effective scale reduced so the export still completes. |
+| **PNG** | Raster | Bitmap rasterised from the SVG. Resolution (DPI) is set in **Export options…** (default 300 dpi); a canvas large enough to reach the browser's canvas ceiling has its effective scale reduced so the export still completes. |
+| **TIFF** | Raster | Uncompressed baseline TIFF (RGBA) from the same SVG raster pipeline; the X/Y resolution tags carry the DPI. Several journals require TIFF — set the target density under "Export options…". |
 | **Newick** | Data files | Tree topology with branch lengths and support values. |
 | **NEXUS** | Data files | Full NEXUS file with optional CHARACTERS block, ASSUMPTIONS block (hypothesis layers), MrBayes block, and BEAST block. |
+| **NeXML** | Data files | Tree + characters + cladeforge: semantic annotations (events, hypothesis layers, provenance), readable by RNeXML / pynexml / DendroPy; can also be read back with **Import tree…** (see above). |
 | **Hypothesis JSON** | Data files | A versioned archive (`kind: "hypothesis-export"`, its own schema `0.1.0`) of the **active** layer: character states for every tip, scored or not, plus events, confidence and evidence, and layer metadata. Export each layer separately to compare them. |
 | **R script** | Data files | Self-contained executable R script (sole dependency: the `ape` package) that regenerates the figure and re-runs Sankoff parsimony and Mk-model ASR outside the GUI. |
 | **Reconciliation report** | Data files | Markdown summary of the DTL reconciliation scenario. |
@@ -701,6 +727,14 @@ The dialog lets you include:
 - **Hypothesis layers** (ASSUMPTIONS block)
 - **MrBayes block** (for Bayesian inference)
 - **BEAST block** (for divergence-time dating)
+
+### Export Options & Named Presets
+
+**File › Export options…** (or the **Export options…** button in the Export module) opens the export-settings dialog. The mode (follow view / fixed preset), DPI, transparent background, support-value printing, legend, scale bar, grayscale and white background all **persist across restarts**. **Named presets** save the current combination under a name for one-click switching (e.g. "Journal halftone 600dpi"). Presets are global preferences; they are not written into project files.
+
+### NeXML Import
+
+**Import tree…** also accepts `.xml` / `.nexml`: it reads OTUs, one or more trees (with branch lengths), StandardCells / ContinuousCells matrices, and cladeforge: event and hypothesis-layer annotations. Polymorphic cells are skipped with a reason recorded per cell; trees whose tip sets differ are reported separately.
 
 ### WYSIWYG Export
 
@@ -723,13 +757,12 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | ⌘W | Close tab |
 | ⌘A | Select all tips |
 | ⌘F / Ctrl + F | Search nodes · in the reconciliation view this only points at Scene › Mappings & events |
-| ⌘⇧F | Fit to window |
-| ⌘0 | Fit to window |
+| ⌘⇧F / ⌘0 | Fit to window |
 | ⌘K | Command palette |
 | ⌘? / ⌘/ | Shortcut reference |
 | ⌘= / ⌘- | Zoom in / out |
 | ⌘. | Collapse / expand side panels |
-| ⌘1 … ⌘6 | Jump to module 1–6 |
+| ⌘1 … ⌘5 | Jump to module 1–5 |
 
 ### Canvas
 
@@ -743,11 +776,12 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | Alt + ← / ↑ · Alt + → / ↓ | Move focus between nodes through the topology — ↑ parent, ↓ first child, ← / → previous / next sibling. Where there is nowhere to go the selection stays put: it does **not** wrap around |
 | Wheel | Zoom (Ctrl/⌘ + wheel = pinch zoom; two-finger scroll = pan) |
 | Space / middle-drag | Pan canvas |
-| Shift/Alt + background drag | Marquee-select nodes |
+| Shift/Alt + background drag | Marquee-select nodes (Alt replaces the selection) |
 | Drag node | Move node |
 | Alt + drag onto node | Reparent |
 | Drag port dot | Create custom link |
 | Double-click node | Rename |
+| Alt + Enter | Rename the selected node (equivalent to F2) |
 | ⇧F10 | Open the node context menu |
 | Click the collapse arrow | Expand a collapsed branch |
 | Shift + click | Multi-select (2 selected shows MRCA) |
@@ -764,6 +798,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 
 - Wherever this table writes ⌘, **Ctrl is accepted too**, so the same chords work on Windows and Linux.
 - Shortcuts are ignored while a text field has focus **and while an input method is composing** — an otherwise-live ⌘ chord arriving mid-composition cannot fire an edit, which matters most for Chinese input.
+- **The web build does not own ⌘W** (the browser closes its own tab and a page cannot intercept it): with multiple tabs ⌘W still closes the active document tab; with a single tab it does nothing. On the desktop a single-tab ⌘W means "close the window", behind the unsaved-changes guard.
 
 ---
 
