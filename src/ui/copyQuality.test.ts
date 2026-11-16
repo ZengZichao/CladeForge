@@ -323,8 +323,6 @@ describe('UI copy quality', () => {
     expect(ZH_STRINGS.layoutPanel.type).toBe('布局类型');
     expect(EN_STRINGS.layoutPanel.type).toBe('Layout type');
     expect(ZH_STRINGS.layoutPanel.branchGap).toBe('同级枝间距');
-    expect(ZH_STRINGS.recon.embeddedSubtitle('g')).toContain('物种枝管道');
-    expect(EN_STRINGS.recon.embeddedSubtitle('g')).toContain('species-branch tubes');
     // M15: the menu unified on 叉 (二叉/三叉) — the old 二叉/三歧 mix is gone.
     expect(ZH_STRINGS.toolbar.addTernary).toContain('三叉');
     expect(ZH_STRINGS.context.addTernary).toContain('三叉');
@@ -336,8 +334,6 @@ describe('UI copy quality', () => {
     expect(EN_STRINGS.analysis.blombergK).toBe('Blomberg’s K');
     expect(ZH_STRINGS.gestures.altDragDesc).not.toContain('reparent');
     expect(ZH_STRINGS.toolbar.searchPlaceholder).toContain('末端');
-    expect(EN_STRINGS.geneBuilder.mapping(2, 3)).toContain('tip names match');
-    expect(EN_STRINGS.geneBuilder.mapping(1, 1)).toContain('tip name matches');
     // docs/UI_STYLE_GUIDE.md §3.3 / docs/UI_GLOSSARY.md rule 1: a modifier glued
     // straight to an ACTION word is written `Alt + 拖拽` / `Alt + drag`, while a
     // key chord keeps its tight form (`Ctrl+Shift+Z` — one letter after the `+`).

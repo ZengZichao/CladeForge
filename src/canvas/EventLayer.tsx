@@ -53,7 +53,13 @@ const EMPTY_BOXES = [] as const;
  * "Confidence:中" after a language switch.
  */
 function confLabel(conf: string): string {
-  return conf === 'high' || conf === 'medium' || conf === 'low' ? S.confidence[conf] : '';
+  // Static member reads (not S.confidence[conf]) — the string-usage guard
+  // counts only qualified references, and a function keeps the live binding
+  // that a module-level map would freeze.
+  if (conf === 'high') return S.confidence.high;
+  if (conf === 'medium') return S.confidence.medium;
+  if (conf === 'low') return S.confidence.low;
+  return '';
 }
 
 export const EventLayer = memo(function EventLayer({

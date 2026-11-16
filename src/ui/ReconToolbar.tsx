@@ -20,6 +20,8 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
   const setReconViewOptions = useStore((s) => s.setReconViewOptions);
   const reconEditTarget = useStore((s) => s.reconEditTarget);
   const setReconEditTarget = useStore((s) => s.setReconEditTarget);
+  const reconClickTarget = useStore((s) => s.reconClickTarget);
+  const setReconClickTarget = useStore((s) => s.setReconClickTarget);
 
   const scopes: { id: MappingScope; label: string }[] = [
     { id: 'tips', label: S.recon.scopeTips },
@@ -27,7 +29,9 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
     { id: 'all', label: S.recon.scopeAll },
   ];
   const layouts: { id: ReconLayoutMode; label: string; title: string }[] = [
-    { id: 'side-by-side', label: S.recon.layoutSideBySide, title: S.recon.analysisCladogram },
+    // 用户反馈: the pane keeps the document's own layout type now, so the
+    // tooltip must not promise a forced cladogram any more.
+    { id: 'side-by-side', label: S.recon.layoutSideBySide, title: S.recon.layoutSideBySideTitle },
     { id: 'embedded', label: S.recon.layoutEmbedded, title: S.recon.embeddedAria },
   ];
   const embedded = options.layoutMode === 'embedded';
@@ -88,6 +92,28 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
           </button>
         ))}
       </div>
+
+      {/* 用户反馈: the two panes overlap visually — this toggle decides which
+          tree receives plain clicks, so a press stops landing on the wrong
+          tree. Coordination canvas only. */}
+      {reconEditTarget === 'recon' && (
+      <div className="seg recon-click-seg" role="tablist" aria-label={S.recon.clickTargetLabel}>
+        {([
+          ['species', S.recon.paneSpecies],
+          ['gene', S.recon.paneGene],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            className={`seg-btn${reconClickTarget === id ? ' active' : ''}`}
+            onClick={() => setReconClickTarget(id)}
+            aria-selected={reconClickTarget === id}
+            role="tab"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      )}
 
       {/* Canvas layout mode: the two-pane comparison or the nested embedded
           figure. Switching never touches selections or mappings. Only the

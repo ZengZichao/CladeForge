@@ -96,21 +96,29 @@ describe('requested layout fixes', () => {
 
   it('faces the reconciliation trees towards each other with straight mapping lines', () => {
     const view = source('../canvas/ReconciliationView.tsx');
-    expect(view).toContain("horizontalCladogram(project, 'LR')");
-    expect(view).toContain("horizontalCladogram(entry.doc, 'RL')");
+    // 用户反馈 (2026-11-16): the panes keep the document's own layout type
+    // (phylogram / time-calibrated) and only the orientation is forced, so the
+    // coordination canvas draws the same tree the standard editor shows.
+    expect(view).toContain("horizontalTree(project, 'LR')");
+    expect(view).toContain("horizontalTree(entry.doc, 'RL')");
+    expect(view).toContain("doc.layout.type === 'circular' ? 'rectangular-cladogram' : doc.layout.type");
     const mapping = source('../canvas/reconMapping.ts');
     expect(mapping).toContain('export function bridgeLine');
     expect(mapping).not.toContain('bridgeCurve');
     expect(source('../canvas/ReconMappingLayer.tsx')).toContain('bridgeLine(l.from, l.to)');
   });
 
-  it('uses one-column equal-width reconciliation action stacks', () => {
+  it('slims the reconciliation left panel to 视图 + 节点映射', () => {
+    // 用户反馈 (2026-11-16): the single panel carries exactly two sections —
+    // 视图 on top, 节点映射 below; the tree-management action stacks, the
+    // costs block and the assumption search box are gone.
     const panel = source('ReconPanel.tsx');
-    expect(panel.match(/className="recon-action-stack"/g)?.length).toBe(2);
-    expect(panel).toContain('className="recon-cost-numbers"');
-    expect(css).toMatch(/\.recon-action-stack\s*\{[^}]*flex-direction:\s*column/s);
-    expect(css).toMatch(/\.recon-action-stack \.btn\s*\{[^}]*width:\s*100%/s);
-    expect(css).toMatch(/\.recon-cost-numbers \.field\s*\{[^}]*grid-template-columns/s);
+    expect(panel).toContain(`<Section title={S.recon.railView} pinable>`);
+    expect(panel).toContain(`<Section title={S.recon.nodeMapping} pinable>`);
+    expect(panel).not.toContain('recon-action-stack');
+    expect(panel).not.toContain('recon-cost-numbers');
+    expect(panel).not.toContain('assumptionSearch');
+    expect(panel.indexOf('S.recon.railView')).toBeLessThan(panel.indexOf('S.recon.nodeMapping'));
   });
 
   it('keeps dropdown menus inside the viewport with internal scrolling', () => {

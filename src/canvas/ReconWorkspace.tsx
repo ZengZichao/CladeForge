@@ -1,17 +1,16 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// The reconciliation WORKSPACE: ONE plain left panel (all reconciliation
-// sections stacked — no 基因树/场景/视图 rail), the recon inspector on the
-// right, and the canvas column (toolbar / panes / status bar) between them.
-// It replaces the standard shell entirely while `reconMode` is on — one mode,
-// one workspace (§5.1).
+// The reconciliation WORKSPACE.
 //
-// 用户反馈 (2026-11-16): the toolbar's edit-target switch now offers THREE
-// surfaces. 协调树编辑 ('recon') is the coordination canvas above. 物种树编辑 /
-// 基因树编辑 hand the tree to the STANDARD workspace — identical left/right
-// panels and identical mouse gestures (select / drag / right-click) — so a tree
-// is edited exactly the same way everywhere. The gene tree gets there through
-// a document swap (see store.enterGeneDocEdit), the species tree is already
-// the project document.
+// 用户反馈 (2026-11-16): the toolbar is a FULL-WIDTH row at the top of the
+// workspace — the gene picker and the 物种树编辑 / 基因树编辑 / 协调树编辑
+// switch keep the exact same left edge in every mode, and the side panels
+// start BELOW it. Below the toolbar:
+//   协调树编辑: ONE plain left panel (视图 + 节点映射), the coordination
+//     canvas in the middle, the inspector on the right.
+//   物种树编辑 / 基因树编辑: the STANDARD workspace (same panels and mouse
+//     gestures as 标准视图) under the same toolbar. The gene tree reaches it
+//     through a document swap (store.enterGeneDocEdit); the species tree is
+//     already the project document.
 //
 // Panel widths / visibility use their OWN localStorage keys (§5.7), never the
 // standard workspace's, and the responsive tiers follow §5.7:
@@ -68,15 +67,12 @@ function readReconWidth(key: string, fallback: number): number {
 /** Vertical splitter, shared implementation with the standard workspace. */
 export function ReconWorkspace({
   panelsHidden,
-  onBuildGeneTree,
   onCopySpeciesTree,
-  onEditGeneTree,
   onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
-  onBuildGeneTree: () => void;
+  /** Empty state: 新建协调视图 — seeds the reconciliation from the species tree. */
   onCopySpeciesTree: () => void;
-  onEditGeneTree: (id: string) => void;
   /** Opens the shared add-children dialog (owned by App) — the tree-edit
       surfaces reuse it exactly like the standard workspace does. */
   onAddChildrenDialog: (parentId: string) => void;
@@ -139,15 +135,15 @@ export function ReconWorkspace({
   }, []);
 
   // --- tree-edit surfaces (物种树编辑 / 基因树编辑) -----------------------------
-  // The full standard workspace, toolbar row on top so the edit-target switch
-  // stays reachable. Species needs no swap (the project IS the species tree);
-  // the gene tree was swapped into `project` by setReconEditTarget before this
-  // branch rendered.
+  // The full standard workspace under the SAME full-width toolbar, so the
+  // switch row keeps one fixed position across all three modes. Species needs
+  // no swap (the project IS the species tree); the gene tree was swapped into
+  // `project` by setReconEditTarget before this branch rendered.
   if (reconEditTarget !== 'recon' && !reconEmpty) {
     return (
       <div className="body recon-workspace recon-editing">
+        <ReconToolbar />
         <div className="recon-edit-column">
-          <ReconToolbar />
           <StandardWorkspace
             panelsHidden={panelsHidden}
             onAddChildrenDialog={onAddChildrenDialog}
@@ -165,87 +161,87 @@ export function ReconWorkspace({
 
   return (
     <div className="body recon-workspace">
-      {/* 用户反馈: the rail is gone — ONE plain left panel stacks every
-          reconciliation section (树库 / 场景 / 视图), like the standard
-          workspace's merged panel. On the narrowest tier a toggle button opens
-          the panel as a full overlay. */}
-      {fullNarrow && (
-        <button
-          className="panel-toggle-btn left"
-          onClick={openGenePanel}
-          title={tr('打开协调面板', 'Open reconciliation panel')}
-          aria-label={S.recon.railLabel}
-        >
-          <HamburgerMenuIcon />
-        </button>
-      )}
+      {/* 用户反馈: the toolbar spans the FULL window width — the gene picker
+          and the edit-target switch stay left-aligned exactly as in the
+          tree-edit modes, and both side panels start below this row. */}
+      <ReconToolbar onToggleRightPanel={mid && !reconEmpty ? () => { setRightDrawerOpen((o) => !o); setLeftDrawerOpen(false); } : undefined} />
 
-      <div
-        ref={leftPanelRef}
-        className={`panel panel-left recon-left${!leftInline ? ' overlay' : ''}`}
-        style={{
-          width: leftInline ? leftWidth : 280,
-          ...(!leftInline && !leftDrawerOpen && { display: 'none' }),
-        }}
-      >
-        {!leftInline && (
+      <div className="recon-workspace-row">
+        {/* 用户反馈: ONE plain left panel stacks the two surviving sections
+            (视图 / 节点映射). On the narrowest tier a toggle button opens the
+            panel as a full overlay. */}
+        {fullNarrow && (
           <button
-            className="overlay-close"
-            onClick={() => setLeftDrawerOpen(false)}
-            title={S.panel.closeOverlay}
-            aria-label={S.panel.closeOverlay}
+            className="panel-toggle-btn left"
+            onClick={openGenePanel}
+            title={tr('打开协调面板', 'Open reconciliation panel')}
+            aria-label={S.recon.railLabel}
           >
-            <Cross1Icon />
+            <HamburgerMenuIcon />
           </button>
         )}
-        {/* No `section` prop: the single panel shows ALL sections stacked. */}
-        <ReconPanel
-          onBuildGeneTree={onBuildGeneTree}
-          onCopySpeciesTree={onCopySpeciesTree}
-          onEditGeneTree={onEditGeneTree}
-        />
-      </div>
-      {!fullNarrow && !panelsHidden && !reconEmpty && (
-        <ResizeHandle side="left" width={leftWidth} panelRef={leftPanelRef} onCommit={setLeftWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
-      )}
 
-      <div className="recon-main">
-        <ReconToolbar onToggleRightPanel={mid && !reconEmpty ? () => { setRightDrawerOpen((o) => !o); setLeftDrawerOpen(false); } : undefined} />
-        {/* M9 (review finding 8): the empty canvas carries the creation actions
-            itself — it is the primary surface for a first-time user, and in
-            narrow mode it is the only reachable one. */}
-        <ReconWorkspacePanel
-          onCopySpeciesTree={onCopySpeciesTree}
-        />
-      </div>
-
-      {rightInline && (
-        <ResizeHandle side="right" width={rightWidth} panelRef={rightPanelRef} onCommit={setRightWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
-      )}
-      {/* 用户反馈：no 场景概览 side panel on the EMPTY reconciliation front
-          page — the stage itself carries every entry. */}
-      {!reconEmpty && (
         <div
-          ref={rightPanelRef}
-          className={`panel panel-right recon-right${!rightInline ? ' overlay' : ''}`}
+          ref={leftPanelRef}
+          className={`panel panel-left recon-left${!leftInline ? ' overlay' : ''}`}
           style={{
-            width: rightInline ? rightWidth : 300,
-            ...(!rightInline && !rightDrawerOpen && { display: 'none' }),
+            width: leftInline ? leftWidth : 280,
+            ...(!leftInline && !leftDrawerOpen && { display: 'none' }),
           }}
         >
-          {mid && (
+          {!leftInline && (
             <button
               className="overlay-close"
-              onClick={() => setRightDrawerOpen(false)}
+              onClick={() => setLeftDrawerOpen(false)}
               title={S.panel.closeOverlay}
               aria-label={S.panel.closeOverlay}
             >
               <Cross1Icon />
             </button>
           )}
-          <ReconInspector />
+          <ReconPanel />
         </div>
-      )}
+        {!fullNarrow && !panelsHidden && !reconEmpty && (
+          <ResizeHandle side="left" width={leftWidth} panelRef={leftPanelRef} onCommit={setLeftWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
+        )}
+
+        <div className="recon-main">
+          {/* M9 (review finding 8): the empty canvas carries the creation
+              actions itself — it is the primary surface for a first-time user,
+              and in narrow mode it is the only reachable one. */}
+          <ReconWorkspacePanel
+            onCopySpeciesTree={onCopySpeciesTree}
+          />
+        </div>
+
+        {rightInline && (
+          <ResizeHandle side="right" width={rightWidth} panelRef={rightPanelRef} onCommit={setRightWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
+        )}
+        {/* 用户反馈：no 场景概览 side panel on the EMPTY reconciliation front
+            page — the stage itself carries every entry. */}
+        {!reconEmpty && (
+          <div
+            ref={rightPanelRef}
+            className={`panel panel-right recon-right${!rightInline ? ' overlay' : ''}`}
+            style={{
+              width: rightInline ? rightWidth : 300,
+              ...(!rightInline && !rightDrawerOpen && { display: 'none' }),
+            }}
+          >
+            {mid && (
+              <button
+                className="overlay-close"
+                onClick={() => setRightDrawerOpen(false)}
+                title={S.panel.closeOverlay}
+                aria-label={S.panel.closeOverlay}
+              >
+                <Cross1Icon />
+              </button>
+            )}
+            <ReconInspector />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

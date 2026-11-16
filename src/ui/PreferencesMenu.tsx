@@ -24,7 +24,7 @@ import {
   MoonIcon,
   SunIcon,
 } from '@radix-ui/react-icons';
-import { changeLanguage, useLanguage } from './i18n';
+import { changeLanguage, useLanguagePref } from './i18n';
 import { setTheme, storedTheme, type Theme } from './theme';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
@@ -55,7 +55,7 @@ interface ThemeOption {
 }
 
 export function PreferencesMenu() {
-  const lang = useLanguage();
+  const langPref = useLanguagePref();
   const historyLimit = useStore((s) => s.historyLimit);
   const [pref, setPref] = useState<Theme>(storedTheme);
   const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
@@ -91,7 +91,7 @@ export function PreferencesMenu() {
     setOpen(true);
   };
 
-  const chooseLanguage = (value: 'zh' | 'en') => {
+  const chooseLanguage = (value: 'zh' | 'en' | 'system') => {
     // M2: close before switching — the locale change relabels the whole tree,
     // and a closed dialog is the clean state either way.
     setOpen(false);
@@ -171,22 +171,32 @@ export function PreferencesMenu() {
                   size, equal weight, comparable label lengths — instead of one
                   full-width row per option with a check glyph. */}
               <div className="menu-section-label">{S.lang.label}</div>
+              {/* 用户反馈: 跟随系统 joins 中文 / English — the stored preference
+                  may be 'system', resolved against the OS locale. */}
               <div className="prefs-seg-group" role="radiogroup" aria-label={S.lang.label}>
                 <button
-                  className={`prefs-seg${lang === 'zh' ? ' active' : ''}`}
+                  className={`prefs-seg${langPref === 'zh' ? ' active' : ''}`}
                   role="radio"
-                  aria-checked={lang === 'zh'}
+                  aria-checked={langPref === 'zh'}
                   onClick={() => chooseLanguage('zh')}
                 >
                   中文
                 </button>
                 <button
-                  className={`prefs-seg${lang === 'en' ? ' active' : ''}`}
+                  className={`prefs-seg${langPref === 'en' ? ' active' : ''}`}
                   role="radio"
-                  aria-checked={lang === 'en'}
+                  aria-checked={langPref === 'en'}
                   onClick={() => chooseLanguage('en')}
                 >
                   English
+                </button>
+                <button
+                  className={`prefs-seg${langPref === 'system' ? ' active' : ''}`}
+                  role="radio"
+                  aria-checked={langPref === 'system'}
+                  onClick={() => chooseLanguage('system')}
+                >
+                  {S.lang.system}
                 </button>
               </div>
               <div className="menu-section-label">{S.theme.label}</div>

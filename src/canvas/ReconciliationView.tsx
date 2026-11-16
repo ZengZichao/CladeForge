@@ -22,6 +22,7 @@ import { notify } from '../ui/toast';
 import { isImeComposing } from '../ui/imeGuard';
 import { modalIsOpen } from '../ui/useDialogFocus';
 import { geneTreeRows } from '../ui/reconStats';
+import { layoutTypeName } from '../ui/layoutTypeName';
 import * as file from '../io/fileActions';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from '../ui/sampleOpener';
@@ -49,10 +50,16 @@ export const DTL_STYLE = {
 
 const IDENTITY: PaneTransform = { tx: 40, ty: 40, scale: 1 };
 
-/** Force predictable horizontal cladogram geometry inside this view. The two
- *  panes face each other: species grows rightwards (LR), gene leftwards (RL). */
-function horizontalCladogram(doc: Project, orientation: 'LR' | 'RL'): Project {
-  return { ...doc, layout: { ...doc.layout, type: 'rectangular-cladogram', orientation } };
+/** Force a predictable HORIZONTAL geometry inside this view while KEEPING the
+ *  document's own layout type: the coordination canvas must draw the same
+ *  tree the user edited in 标准视图 — branch lengths (phylogram), ages
+ *  (time-calibrated) and node placement carry over untouched (用户反馈
+ *  2026-11-16). Only the orientation is forced so the two panes can face
+ *  each other; a circular document falls back to the cladogram like the
+ *  embedded figure does. */
+function horizontalTree(doc: Project, orientation: 'LR' | 'RL'): Project {
+  const type = doc.layout.type === 'circular' ? 'rectangular-cladogram' : doc.layout.type;
+  return { ...doc, layout: { ...doc.layout, type, orientation } };
 }
 
 export function ReconciliationView({
@@ -75,6 +82,11 @@ export function ReconciliationView({
   // 用户反馈: the edit-mode toggle in the recon toolbar decides which pane
   // carries the 编辑中 badge.
   const reconEditTarget = useStore((s) => s.reconEditTarget);
+  // 用户反馈: the two panes overlap visually — the 点选目标 toggle decides
+  // which tree receives plain clicks, so a press lands where it is aimed.
+  const reconClickTarget = useStore((s) => s.reconClickTarget);
+  const clickSpecies = reconClickTarget === 'species';
+  const clickGene = reconClickTarget === 'gene';
   const hoveredGeneId = useStore((s) => s.reconHoverGeneId);
   const focusTarget = useStore((s) => s.reconFocusTarget);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
@@ -88,11 +100,11 @@ export function ReconciliationView({
   // embedded mode the two-pane layouts are skipped entirely (hooks cannot be
   // conditional, so the memos short-circuit inside).
   const speciesLayout = useMemo(
-    () => (embedded ? null : computeLayout(horizontalCladogram(project, 'LR'))),
+    () => (embedded ? null : computeLayout(horizontalTree(project, 'LR'))),
     [project, embedded],
   );
   const geneLayout = useMemo(
-    () => (embedded || !entry ? null : computeLayout(horizontalCladogram(entry.doc, 'RL'))),
+    () => (embedded || !entry ? null : computeLayout(horizontalTree(entry.doc, 'RL'))),
     [entry, embedded],
   );
 
@@ -644,9 +656,9 @@ export function ReconciliationView({
             speciesSelection={speciesSelection}
             hoveredGeneId={hoveredGeneId}
             focusTarget={focusTarget}
-            onGeneNodeClick={onGeneNodeClick}
-            onSpeciesNodeClick={onSpeciesNodeClick}
-            onTubeClick={assignSelectedToTube}
+            onGeneNodeClick={clickGene ? onGeneNodeClick : undefined}
+            onSpeciesNodeClick={clickSpecies ? onSpeciesNodeClick : undefined}
+            onTubeClick={clickSpecies ? assignSelectedToTube : undefined}
             onGeneHover={setReconHoverGene}
             onZoomChange={onEmbeddedZoomChange}
           />
@@ -677,14 +689,14 @@ export function ReconciliationView({
               onFit={fitBoth}
               onResetZoom={resetBoth}
               title={S.recon.paneSpecies}
-              subtitle={S.recon.analysisCladogram}
+              subtitle={layoutTypeName(project.layout.type)}
               nodeCount={speciesNodeCount}
               nodeMeta={speciesMeta}
               stubs={speciesStubs}
               side="species"
               ariaLabel={S.recon.ariaSpeciesPane}
               options={options}
-              onNodeClick={onSpeciesNodeClick}
+              onNodeClick={clickSpecies ? onSpeciesNodeClick : undefined}
               badge={reconEditTarget === 'species' ? S.recon.editingBadge : undefined}
               badgeTone={reconEditTarget === 'species' ? 'editing' : 'neutral'}
             />
@@ -710,7 +722,9 @@ export function ReconciliationView({
               side="gene"
               ariaLabel={S.recon.ariaGenePane}
               options={options}
-              onNodeClick={onGeneNodeClick}
+              onNodeClick={clickGene ? onGeneNodeClick : undefined}
+              /* Hover stays live in both click modes — it only drives the
+                 mapping-line highlight, it never selects. */
               onNodeHover={setReconHoverGene}
             />
             <ReconMappingLayer

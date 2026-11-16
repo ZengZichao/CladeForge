@@ -28,7 +28,6 @@ import {
   useState,
 } from 'react';
 import type { GeneTreeEntry, NodeId, Project, ReconViewOptions } from '../model/types';
-import { hasAges, hasBranchLengths } from '../model/treeOps';
 import { computeLayout } from '../layout/autoLayout';
 import {
   computeEmbeddedReconLayout,
@@ -65,10 +64,13 @@ export interface EmbeddedReconCanvasProps {
   speciesSelection: NodeId[];
   hoveredGeneId: NodeId | null;
   focusTarget: { id: NodeId; seq: number } | null;
-  onGeneNodeClick: (id: NodeId, e: React.MouseEvent) => void;
-  onSpeciesNodeClick: (id: NodeId, e: React.MouseEvent) => void;
+  /** Plain clicks select gene nodes — gated by the 点选目标 toggle upstream;
+   *  undefined renders the markers inert so presses fall through to pan. */
+  onGeneNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
+  /** Plain clicks select species nodes (tubes fall back to this without Alt). */
+  onSpeciesNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
   /** Alt+click a tube: map the selected gene node to this branch at `t`. */
-  onTubeClick: (branchId: NodeId, t: number, e: React.MouseEvent) => void;
+  onTubeClick?: (branchId: NodeId, t: number, e: React.MouseEvent) => void;
   onGeneHover: (id: NodeId | null) => void;
   /** Single-viewport zoom readout (status bar). */
   onZoomChange?: (zoom: number) => void;
@@ -91,26 +93,6 @@ export function EmbeddedReconCanvas({
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [transform, setTransformState] = useState<Transform>(IDENTITY);
-  // One-time Alt+click affordance (2026-11-15 review ID-39 / OP-15): the nested
-  // view's core mapping gesture had no in-app hint even though the string was
-  // already in the catalogue. Shown until the user either performs an Alt+click
-  // mapping or dismisses it; the dismissal is remembered across sessions.
-  const ALT_HINT_KEY = 'cladeforge:embeddedAltHintSeen';
-  const [altHintVisible, setAltHintVisible] = useState(() => {
-    try {
-      return localStorage.getItem(ALT_HINT_KEY) !== '1';
-    } catch {
-      return true;
-    }
-  });
-  const dismissAltHint = useCallback(() => {
-    setAltHintVisible(false);
-    try {
-      localStorage.setItem(ALT_HINT_KEY, '1');
-    } catch {
-      /* storage blocked — the hint simply returns next session */
-    }
-  }, []);
   const fitMode = useRef(true);
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
 
@@ -297,8 +279,7 @@ export function EmbeddedReconCanvas({
 
   // Fit on entry/size change while in fit mode.
   useEffect(() => {
-    if (box.w <= 0 || box.h <= 0) return;
-    if (!fitMode.current) return;
+    if (box.w <= 0 || box.h <= 0) return;    if (!fitMode.current) return;
     const t = requestAnimationFrame(fit);
     return () => cancelAnimationFrame(t);
   }, [box.w, box.h, geneEntry.id, fit]);
@@ -310,6 +291,31 @@ export function EmbeddedReconCanvas({
     window.addEventListener('cladeforge:recon-fit', onFitEvt);
     return () => window.removeEventListener('cladeforge:recon-fit', onFitEvt);
   }, [fit]);
+
+  // 用户反馈: the zoom control lives in the status bar's 嵌套视图缩放 readout
+  // (bottom-right) — these events carry its slider / 1:1 button into the canvas.
+  useEffect(() => {
+    const onZoomTo = (e: Event) => {
+      const scale = (e as CustomEvent<number>).detail;
+      if (!Number.isFinite(scale)) return;
+      fitMode.current = false;
+      const cx = box.w / 2;
+      const cy = box.h / 2;
+      setTransformState((t: Transform) => {
+        const wx = (cx - t.tx) / t.scale;
+        const wy = (cy - t.ty) / t.scale;
+        const s = Math.max(EMBEDDED_MIN_SCALE, Math.min(EMBEDDED_MAX_SCALE, scale));
+        return { scale: s, tx: cx - wx * s, ty: cy - wy * s };
+      });
+    };
+    const onZoomReset = () => resetZoom();
+    window.addEventListener('cladeforge:embedded-zoom', onZoomTo);
+    window.addEventListener('cladeforge:embedded-zoom-reset', onZoomReset);
+    return () => {
+      window.removeEventListener('cladeforge:embedded-zoom', onZoomTo);
+      window.removeEventListener('cladeforge:embedded-zoom-reset', onZoomReset);
+    };
+  }, [box.w, box.h, resetZoom]);
 
   // Zoom readout for the workspace status bar.
   useEffect(() => {
@@ -377,7 +383,6 @@ export function EmbeddedReconCanvas({
   }, [geneEntry.doc.nodes, geneEntry.assumptions, speciesDoc, options.showLabels, hideGeneTipLabels, selectedGene, hoveredGeneId]);
 
   // No ages and no usable lengths ⇒ the nested figure is a topological sketch.
-  const sketchMode = !hasAges(speciesDoc) && !hasBranchLengths(speciesDoc);
 
   // Multiple loss marks can share one fork — fan them out horizontally.
   const lossOffsets = useMemo(() => {
@@ -402,20 +407,22 @@ export function EmbeddedReconCanvas({
     };
   }, []);
 
+  // 用户反馈: the 点选目标 toggle decides which side is interactive — a
+  // press aimed at the gene lines must not be swallowed by a nearby tube.
+  const tubeClickable = Boolean(onTubeClick || onSpeciesNodeClick);
   const handleTubeClick = useCallback(
     (branchId: NodeId, e: React.MouseEvent) => {
+      if (!tubeClickable) return;
       if (e.altKey) {
         e.stopPropagation();
         const w = eventToWorld(e);
         const hit = w ? hitTestTube(scene.tubes.values(), w, 2) : null;
-        onTubeClick(branchId, hit?.tube.branchId === branchId ? hit.t : 1, e);
-        // Performing the gesture once retires the one-time hint.
-        dismissAltHint();
+        onTubeClick?.(branchId, hit?.tube.branchId === branchId ? hit.t : 1, e);
         return;
       }
-      onSpeciesNodeClick(branchId, e);
+      onSpeciesNodeClick?.(branchId, e);
     },
-    [eventToWorld, scene, onTubeClick, onSpeciesNodeClick, dismissAltHint],
+    [eventToWorld, scene, onTubeClick, onSpeciesNodeClick, tubeClickable],
   );
 
   // --- viewport culling -----------------------------------------------------------------
@@ -461,51 +468,9 @@ export function EmbeddedReconCanvas({
 
   return (
     <div className="recon-embedded" role="group" aria-label={S.recon.embeddedAria}>
-      <div className="recon-pane-header recon-embedded-header">
-        <div className="recon-pane-title">
-          <span className="recon-pane-name">{S.recon.embeddedTitle}</span>
-          <span className="recon-pane-sub">
-            {S.recon.embeddedSubtitle(geneEntry.name)}
-            {sketchMode ? ` (${S.recon.topologicalSketch})` : ''}
-          </span>
-        </div>
-        <span className="recon-pane-count">
-          {tr('节点', 'nodes')}{' '}
-          {Object.keys(geneEntry.doc.nodes).length + Object.keys(speciesDoc.nodes).length}
-        </span>
-        <span className="recon-pane-zoom" title={S.status.zoom}>
-          {Math.round(transform.scale * 100)}%
-        </span>
-        <button
-          className="btn icon tiny"
-          title={S.recon.fitEmbedded}
-          aria-label={S.recon.fitEmbedded}
-          onClick={fit}
-        >
-          ⤢
-        </button>
-        <button
-          className="btn icon tiny"
-          title={S.recon.zoomReset}
-          aria-label={S.recon.zoomReset}
-          onClick={resetZoom}
-        >
-          1:1
-        </button>
-      </div>
-      {altHintVisible && (
-        <div className="recon-embedded-hint" role="status">
-          <span className="recon-embedded-hint-text">{S.recon.altClickTubeHint}</span>
-          <button
-            className="btn icon tiny"
-            title={tr('知道了', 'Got it')}
-            aria-label={tr('知道了', 'Got it')}
-            onClick={dismissAltHint}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* 用户反馈: no in-canvas header (title / subtitle / node count / zoom
+          buttons) and no Alt-click hint bar — the toolbar fits the view, and
+          the zoom control lives in the status bar's 嵌套视图缩放 readout. */}
       <div
         className="recon-embedded-svg"
         ref={svgBoxRef}
@@ -576,7 +541,7 @@ export function EmbeddedReconCanvas({
                 key={`t${t.branchId}`}
                 tube={t}
                 highlighted={selectedSpecies.has(t.branchId)}
-                onClick={handleTubeClick}
+                onClick={tubeClickable ? handleTubeClick : undefined}
               />
             ))}
             {view.hubs.map((h) => (
@@ -598,12 +563,13 @@ export function EmbeddedReconCanvas({
                     stroke="var(--recon-node-stroke)"
                     strokeWidth={selected ? 2.5 : 1.5}
                     vectorEffect="non-scaling-stroke"
-                    style={{ cursor: 'pointer' }}
-                    role="button"
-                    tabIndex={0}
+                    style={onSpeciesNodeClick ? { cursor: 'pointer' } : undefined}
+                    role={onSpeciesNodeClick ? 'button' : undefined}
+                    tabIndex={onSpeciesNodeClick ? 0 : undefined}
                     aria-label={S.recon.ariaSpeciesNode(n?.label || id.slice(0, 6))}
-                    onClick={(e) => onSpeciesNodeClick(id, e)}
+                    onClick={onSpeciesNodeClick ? (e) => onSpeciesNodeClick(id, e) : undefined}
                     onKeyDown={(e) => {
+                      if (!onSpeciesNodeClick) return;
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         onSpeciesNodeClick(id, e as unknown as React.MouseEvent);
@@ -684,18 +650,19 @@ export function EmbeddedReconCanvas({
                 <g
                   key={`gn${p.geneNodeId}`}
                   data-node-id={p.geneNodeId}
-                  onClick={(e) => onGeneNodeClick(p.geneNodeId, e)}
+                  onClick={onGeneNodeClick ? (e) => onGeneNodeClick(p.geneNodeId, e) : undefined}
                   onPointerEnter={() => onGeneHover(p.geneNodeId)}
                   onPointerLeave={() => onGeneHover(null)}
                   onKeyDown={(e) => {
+                    if (!onGeneNodeClick) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       onGeneNodeClick(p.geneNodeId, e as unknown as React.MouseEvent);
                     }
                   }}
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: 'pointer', outline: 'none' }}
+                  role={onGeneNodeClick ? 'button' : undefined}
+                  tabIndex={onGeneNodeClick ? 0 : undefined}
+                  style={onGeneNodeClick ? { cursor: 'pointer', outline: 'none' } : undefined}
                   aria-label={S.recon.ariaGeneNode(
                     n?.label || p.geneNodeId.slice(0, 6),
                     p.speciesNodeId
@@ -833,17 +800,19 @@ const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
 }: {
   tube: EmbeddedTube;
   highlighted: boolean;
-  onClick: (branchId: NodeId, e: React.MouseEvent) => void;
+  /** Undefined = the 点选目标 toggle points at the gene tree — render inert. */
+  onClick?: (branchId: NodeId, e: React.MouseEvent) => void;
 }) {
   return (
     <g
       data-tube-id={tube.branchId}
-      role="button"
-      tabIndex={0}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       aria-label={`${S.recon.legendTube} ${tube.branchId}`}
-      style={{ cursor: 'pointer', outline: 'none' }}
-      onClick={(e) => onClick(tube.branchId, e)}
+      style={onClick ? { cursor: 'pointer', outline: 'none' } : undefined}
+      onClick={onClick ? (e) => onClick(tube.branchId, e) : undefined}
       onKeyDown={(e) => {
+        if (!onClick) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onClick(tube.branchId, e as unknown as React.MouseEvent);
