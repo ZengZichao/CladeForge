@@ -77,21 +77,20 @@ describe('exportImage', () => {
     expect(svg).toContain(curvedBranchPath(from, to, p.layout.orientation));
   });
 
-  it('draws badge letters by default and honours the per-event opt-out', () => {
-    // Default markers carry their two-letter code now (eventMarkerTextVisible:
-    // with 15+ event types and four near-identical greens the code is the
-    // redundant channel that survives greyscale and dichromat printing).
+  it('keeps the default badges text-free and honours the per-event opt-in', () => {
+    // Default markers draw NO letter text (2026-11-15 review): the shape and
+    // ring colour carry the type, the legend and tooltip carry the name.
     const p = createSampleProject();
     const plain = exportSVGString(p, { showEvents: true });
-    expect(plain).toContain('>KI<'); // key innovation on the branch
-    expect(plain).toContain('>AR<'); // adaptive radiation
+    expect(plain).not.toContain('>KI<'); // key innovation — text-free now
+    expect(plain).not.toContain('>AR<'); // adaptive radiation — text-free now
 
-    // Opting out drops the code while a custom markerText still renders,
+    // Opting IN draws the code, and a custom markerText still renders,
     // XML-escaped like every other text run in the export.
-    p.events[0].markerShowText = false;
+    p.events[0].markerShowText = true;
     p.events[1].markerText = '创<&>';
     const withText = exportSVGString(p, { showEvents: true });
-    expect(withText).not.toContain('>KI<');
+    expect(withText).toContain('>KI<');
     expect(withText).toContain('创&lt;&amp;&gt;');
     expect(withText).toContain('font-weight="700"');
   });
@@ -355,7 +354,7 @@ describe('the figure and the interface agree on one font stack', () => {
     expect(css).not.toMatch(/@font-face/);
     const stack = css.match(/--font:\s*([^;]+);/)![1];
     const named = [...stack.matchAll(/'([^']+)'|"([^"]+)"/g)].map((m) => m[1] ?? m[2]);
-    const SYSTEM = /^(Segoe UI|Roboto|Helvetica|Arial|Times|Georgia|Menlo|SF Mono)$/;
+    const SYSTEM = /^(Segoe UI|Roboto|Helvetica|Arial|Times|Georgia|Menlo|SF Mono|PingFang SC|Microsoft YaHei|Noto Sans CJK SC)$/;
     for (const family of named) {
       expect(SYSTEM.test(family), `named family ${family} must be a system font`).toBe(true);
     }

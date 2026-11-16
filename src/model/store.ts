@@ -15,10 +15,13 @@ import { create, type StateCreator } from 'zustand';
 import { produce, freeze, setAutoFreeze } from 'immer';
 import type {
   AnalysisResult,
+  BranchStyle,
   CharacterColorTarget,
   EdgeId,
   NodeId,
+  NodeStyle,
   Project,
+  ProjectProvenance,
   ReconSection,
   ReconViewOptions,
   ViewTransform,
@@ -62,10 +65,75 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   whiteBackground: true,
   transparentBackground: false,
 };
+
+/** A user-named snapshot of the export settings (2026-11-15 P-7 / OP-12). */
+export interface ExportPreset {
+  id: string;
+  name: string;
+  settings: ExportSettings;
+}
+
+// --- persisted export settings ----------------------------------------------
+// The settings used to live only in memory: restarting the app silently reset
+// DPI / legend / support-value choices, so "same figure again" needed the same
+// re-dialing every time. They are global (not per document) and now survive a
+// restart; named presets layer on top for one-click switching.
+const EXPORT_SETTINGS_KEY = 'cladeforge:exportSettings';
+const EXPORT_PRESETS_KEY = 'cladeforge:exportPresets';
+
+export function loadExportSettings(): ExportSettings {
+  try {
+    const raw = localStorage.getItem(EXPORT_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_EXPORT_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<ExportSettings>;
+    // Merge over the defaults so a setting added in a later version keeps its
+    // documented default instead of reading as `undefined` downstream.
+    return { ...DEFAULT_EXPORT_SETTINGS, ...parsed };
+  } catch {
+    return { ...DEFAULT_EXPORT_SETTINGS };
+  }
+}
+
+function persistExportSettings(settings: ExportSettings): void {
+  try {
+    localStorage.setItem(EXPORT_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* storage blocked / quota — the in-memory settings still work */
+  }
+}
+
+export function loadExportPresets(): ExportPreset[] {
+  try {
+    const raw = localStorage.getItem(EXPORT_PRESETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p): p is ExportPreset =>
+        Boolean(p) &&
+        typeof p === 'object' &&
+        typeof (p as ExportPreset).id === 'string' &&
+        typeof (p as ExportPreset).name === 'string' &&
+        Boolean((p as ExportPreset).settings),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistExportPresets(presets: ExportPreset[]): void {
+  try {
+    localStorage.setItem(EXPORT_PRESETS_KEY, JSON.stringify(presets));
+  } catch {
+    /* ignore */
+  }
+}
 import { DEFAULT_RECON_VIEW_OPTIONS, IDENTITY_VIEW } from './types';
 import { HISTORY_LIMIT, pushSnapshot, type HistoryEntry } from './history';
-import { createEmptyProject, createSampleProject, SAMPLE_PROJECTS } from './sampleTree';
+import { createEmptyProject, SAMPLE_PROJECTS } from './sampleTree';
 import { applyDisplayThreshold, reconstructMk, type AsrDisplayNode, type AsrResult, type AsrOptions, DEFAULT_ASR_OPTIONS } from './asr';
+import type { DtlScenario } from './dtl';
+import { applyReplacements, type Replacement } from './replace';
 import { tr } from '../ui/strings';
 // Side-effectful import ON PURPOSE: i18n.ts resolves the stored / OS locale at
 // module load and swaps the string catalogue via setLanguage(). ESM evaluates
@@ -86,6 +154,26 @@ setAutoFreeze(true);
 
 export type Recipe = (draft: Project) => void;
 
+/** 用户反馈: where the on-canvas legend docks (样式 › 图例设置). */
+export type LegendPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+/** 用户反馈: how legend items flow — one/two vertical columns or one/two horizontal rows. */
+export type LegendLayout = 'one-column' | 'two-columns' | 'one-row' | 'two-rows';
+/** 用户反馈: which tree the reconciliation edit gestures target. */
+export type ReconEditTarget = 'species' | 'gene';
+
+const LS_LEGEND_POSITION = 'cladeforge:legendPosition';
+const LS_LEGEND_LAYOUT = 'cladeforge:legendLayout';
+
+function readLegendPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    if (v && (allowed as readonly string[]).includes(v)) return v as T;
+  } catch {
+    /* storage unavailable */
+  }
+  return fallback;
+}
+
 function pruneSelection(project: Project, selection: NodeId[]): NodeId[] {
   return selection.filter((id) => project.nodes[id]);
 }
@@ -105,13 +193,77 @@ function keptSelection(project: Project, selection: NodeId[]): NodeId[] {
  * view of it the user was looking at — restoring only the document would
  * teleport the canvas and switch the coloured character back on every step.
  */
-function entryOf(s: {
-  project: Project;
-  selection: NodeId[];
-  selectedEdgeId: EdgeId | null;
-  view: ViewTransform;
-  activeCharacterId: string | null;
-}): HistoryEntry {
+/** m6/S23 (Sonus+UI_UX_REVIEW): 134 `apply(` call sites, 3 labels — the history
+ *  panel was a wall of "编辑". When a caller passes no label, derive one from
+ *  the top-level document fields the edit actually touched (reference compare
+ *  per field; nodes compare per node id and report add/rename/delete counts). */
+function autoEditLabel(prev: Project, next: Project): string | undefined {
+  const fields: [keyof Project, string][] = [
+    ['name', tr('文档名', 'Document name')],
+    ['provenance', tr('来源信息', 'Provenance')],
+    ['layout', tr('布局设置', 'Layout settings')],
+    ['defaults', tr('全局样式', 'Global styles')],
+    ['canvas', tr('画布设置', 'Canvas settings')],
+    ['characters', tr('性状', 'Characters')],
+    ['events', tr('事件', 'Events')],
+    ['customEventTypes', tr('事件类型', 'Event types')],
+    ['customEdges', tr('自定义连线', 'Custom links')],
+    ['environmentalEvents', tr('环境事件', 'Environmental events')],
+    ['calibrationPoints', tr('校准点', 'Calibration points')],
+    ['layers', tr('假说层', 'Hypothesis layers')],
+    ['activeLayerId', tr('切换假说层', 'Active hypothesis layer')],
+    ['layerStore', tr('假说层内容', 'Layer contents')],
+    ['geneTrees', tr('基因树', 'Gene trees')],
+    ['reconCosts', tr('协调代价', 'Reconciliation costs')],
+    ['analysisResults', tr('分析记录', 'Analysis records')],
+  ];
+  const changed: string[] = [];
+  for (const [key, name] of fields) {
+    if (prev[key] !== next[key]) changed.push(name);
+  }
+  if (prev.nodes !== next.nodes) {
+    const prevIds = new Set(Object.keys(prev.nodes));
+    const nextIds = new Set(Object.keys(next.nodes));
+    let added = 0;
+    let removed = 0;
+    let renamed = 0;
+    let aged = 0;
+    for (const id of nextIds) {
+      if (!prevIds.has(id)) {
+        added += 1;
+        continue;
+      }
+      const a = prev.nodes[id];
+      const b = next.nodes[id];
+      if (a.label !== b.label) renamed += 1;
+      if (a.age !== b.age) aged += 1;
+    }
+    for (const id of prevIds) {
+      if (!nextIds.has(id)) removed += 1;
+    }
+    const bits: string[] = [];
+    if (added) bits.push(tr(`新增 ${added}`, `${added} added`));
+    if (removed) bits.push(tr(`删除 ${removed}`, `${removed} removed`));
+    if (renamed) bits.push(tr(`重命名 ${renamed}`, `${renamed} renamed`));
+    if (aged) bits.push(tr(`改年龄 ${aged}`, `${aged} re-aged`));
+    changed.push(bits.length ? `${tr('节点', 'Nodes')}（${bits.join('，')}）` : tr('节点', 'Nodes'));
+  }
+  if (changed.length === 0) return undefined;
+  const head = changed.slice(0, 3).join('、');
+  const more = changed.length > 3 ? tr(` 等 ${changed.length} 处`, ` +${changed.length - 3} more`) : '';
+  return `${tr('修改：', 'Edit: ')}${head}${more}`;
+}
+
+function entryOf(
+  s: {
+    project: Project;
+    selection: NodeId[];
+    selectedEdgeId: EdgeId | null;
+    view: ViewTransform;
+    activeCharacterId: string | null;
+  },
+  label?: string,
+): HistoryEntry {
   return {
     project: s.project,
     // Copied AND frozen: `history.ts` reasons that storing these fields by
@@ -121,8 +273,17 @@ function entryOf(s: {
     selectedEdgeId: s.selectedEdgeId,
     view: s.view,
     activeCharacterId: s.activeCharacterId,
+    at: Date.now(),
+    ...(label && label.trim() ? { label } : {}),
   };
 }
+
+// NOTE on modification timestamps: they are NOT baked into the Project
+// snapshots. Undo/redo and the saved-dirty check depend on restoring the EXACT
+// object that was captured (`savedProject === project`, delete targets, …);
+// adding a fresh timestamp to every produced document broke that identity. The
+// session's "last modified" therefore lives in the UI slice (`modifiedAt`) and
+// the FILE keeps its own `modifiedAt`/`savedAt` stamps written at save time.
 
 // --- tabs (multi-document) ---------------------------------------------------
 // Each open document is a tab. The ACTIVE tab's state lives in the top-level
@@ -155,6 +316,14 @@ interface TabSnapshot {
   showEvents: boolean;
   showEras: boolean;
   eraLevel: EraLevel;
+  /**
+   * M8 (review finding 14): the Mk reconstruction belongs to THIS document, so
+   * a tab switch used to silently discard it (`asr: null` on restore) and the
+   * user came back to a bare canvas with no notice. The result and its options
+   * now travel with the tab snapshot.
+   */
+  asr: AsrResult | null;
+  asrOptions: AsrOptions;
   reconMode: boolean;
   activeGeneTreeId: string | null;
   geneSelection: NodeId[];
@@ -178,6 +347,8 @@ function captureTab(s: AppState): TabSnapshot {
     showEvents: s.showEvents,
     showEras: s.showEras,
     eraLevel: s.eraLevel,
+    asr: s.asr,
+    asrOptions: s.asrOptions,
     reconMode: s.reconMode,
     activeGeneTreeId: s.activeGeneTreeId,
     geneSelection: s.geneSelection,
@@ -202,6 +373,9 @@ function snapshotFor(project: Project): TabSnapshot {
     showEvents: true,
     showEras: false,
     eraLevel: 'both',
+    // A parked tab has no reconstruction yet; a fresh snapshot starts clean.
+    asr: null as AsrResult | null,
+    asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: false,
     activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
     geneSelection: [],
@@ -220,6 +394,7 @@ function docStateFor(project: Project): Partial<AppState> {
     // edit bumps `revision`, and a successful save pins `lastSavedRevision`.
     revision: 0 as number,
     lastSavedRevision: 0 as number,
+    modifiedAt: null as string | null,
     savedProject: project as Project | null,
     selection: [] as NodeId[],
     selectedEdgeId: null as EdgeId | null,
@@ -230,6 +405,7 @@ function docStateFor(project: Project): Partial<AppState> {
     showEvents: true,
     showEras: false,
     eraLevel: 'both',
+    stylePresetId: null,
     focusTarget: null,
     renameRequest: null,
     asr: null,
@@ -243,6 +419,9 @@ function docStateFor(project: Project): Partial<AppState> {
     reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
     reconHoverGeneId: null as NodeId | null,
     reconFocusTarget: null,
+    /** Last DTL optimum for the active gene tree — shared by the panel and
+     *  the overview so both entries show the same result (2026-11-15 OP-14). */
+    reconDp: null,
   };
 }
 
@@ -256,6 +435,9 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     draggingId: null as NodeId | null,
     revision: snap.revision,
     lastSavedRevision: snap.lastSavedRevision,
+    // A parked tab carries the timestamp its document had on disk; the
+    // session's own edits update the active copy only.
+    modifiedAt: snap.project.modifiedAt ?? null,
     savedProject: snap.savedProject,
     selection: pruneSelection(snap.project, snap.selection),
     selectedEdgeId: snap.selectedEdgeId,
@@ -268,10 +450,14 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     eraLevel: snap.eraLevel,
     focusTarget: null,
     renameRequest: null,
-    asr: null,
+    // M8: the reconstruction travels with the tab instead of being dropped —
+    // previously this line hard-nulled `asr`, so returning to a tab lost the
+    // Mk result with no notice (review finding 14).
+    asr: snap.asr ?? null,
     asrRunning: false,
     historyLimit: HISTORY_LIMIT,
-    asrOptions: DEFAULT_ASR_OPTIONS,
+    // Old in-session snapshots (pre-M8) may lack the field; fall back cleanly.
+    asrOptions: snap.asrOptions ?? DEFAULT_ASR_OPTIONS,
     reconMode: snap.reconMode,
     // Drop a stale gene-tree pointer (e.g. removed while tab was parked).
     activeGeneTreeId:
@@ -282,6 +468,9 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
       (id) =>
         Boolean(snap.project.geneTrees?.find((g) => g.id === snap.activeGeneTreeId)?.doc.nodes[id]),
     ),
+    // The DP optimum belongs to the document that produced it; a parked tab's
+    // result must not resurface when an unrelated tab is swapped in.
+    reconDp: null,
   };
 }
 
@@ -304,6 +493,12 @@ export interface DocumentSlice {
   /** Value `revision` had at the last successful disk save. */
   lastSavedRevision: number;
   /**
+   * When the ACTIVE document last changed in this session (UI state, not part
+   * of the Project snapshot — see the note above `entryOf`). Null until the
+   * first edit after load.
+   */
+  modifiedAt: string | null;
+  /**
    * The exact document object that was last written to disk (or loaded from
    * it). Undo/redo compares against this reference: a pure revision counter
    * misreports "undo back to the saved content" as dirty, because the undo
@@ -313,7 +508,7 @@ export interface DocumentSlice {
    */
   savedProject: Project | null;
 
-  apply: (recipe: Recipe) => void;
+  apply: (recipe: Recipe, label?: string) => void;
   beginInteraction: (dragId?: NodeId) => void;
   live: (recipe: Recipe) => void;
   /**
@@ -321,12 +516,15 @@ export interface DocumentSlice {
    * An optional final recipe is applied atomically before committing
    * (e.g. reparent + unpin on drop).
    */
-  commitInteraction: (finalRecipe?: Recipe) => void;
+  commitInteraction: (finalRecipe?: Recipe, label?: string) => void;
   /** Abort an interaction, reverting to the pre-interaction snapshot. */
   cancelInteraction: () => void;
 
   undo: () => void;
   redo: () => void;
+  /** Jump several steps at once (history panel). Clamped to the stack depth. */
+  undoSteps: (n: number) => void;
+  redoSteps: (n: number) => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
 
@@ -334,8 +532,27 @@ export interface DocumentSlice {
   newProject: () => void;
   /** Pin the current revision as the last-saved one (called after a disk save). */
   markSaved: () => void;
+  /**
+   * M21 (UI_UX_REVIEW): stamp savedAt/modifiedAt (and adopt a source path)
+   * WITHOUT pushing an undo step — saving is not an edit. The old path wrote
+   * the stamps through `apply`, so ⌘S pushed a history row, the first ⌘Z after
+   * a save restored an un-stamped object ≠ savedProject (content-identical but
+   * flagged dirty), and the history panel grew a meaningless "编辑" row.
+   */
+  stampSaved: (adopt?: { sourcePath?: string }) => void;
+  /** Rename the document (undoable like any other edit). Empty names refused. */
+  renameProject: (name: string) => void;
+  /** Merge fields into the document provenance record (undoable). */
+  setProvenance: (patch: Partial<ProjectProvenance>) => void;
   /** Store a completed analysis run on the document (one undo-able step). */
   recordAnalysis: (result: AnalysisResult) => void;
+  /**
+   * Apply a batched find & replace across documents. `jobs` maps a tab id to
+   * the replacements collected for it; the ACTIVE tab goes through `apply`
+   * (history + dirty bookkeeping), parked tabs are rewritten in `tabStore`.
+   * Returns how many replacements actually landed.
+   */
+  applyReplaceJobs: (jobs: Record<string, Replacement[]>) => number;
 }
 
 // --- UI slice ------------------------------------------------------------------
@@ -361,6 +578,19 @@ export interface UISlice {
   showEras: boolean;
   /** Which rank of the geological time scale to draw: eons, periods or both. */
   eraLevel: EraLevel;
+  /** m1 (UI_UX_REVIEW): last-applied style preset id (session-level) so the
+   *  preset row can show WHICH preset is active instead of four equal buttons. */
+  stylePresetId: string | null;
+  /** 用户反馈: legend placement on the canvas (样式 › 图例设置). */
+  legendPosition: LegendPosition;
+  /** 用户反馈: legend item arrangement — vertical columns or horizontal rows. */
+  legendLayout: LegendLayout;
+  /**
+   * A14 (review §4.2): draw each node's calibration interval as an error bar on
+   * the time-calibrated axis. Transient UI state like the era toggle — the
+   * intervals themselves live in `project.calibrationPoints`.
+   */
+  showCalibrationBars: boolean;
   /** A node the canvas should pan to (bumped `seq` re-triggers the same id). */
   focusTarget: { id: NodeId; seq: number } | null;
   /** A node whose label the canvas should switch into inline rename (bumped `seq` re-triggers). */
@@ -380,6 +610,17 @@ export interface UISlice {
   asrOptions: AsrOptions;
   /** Figure-export settings (decoupled from the live view; see ExportSettings). */
   exportSettings: ExportSettings;
+  /** Named export-setting snapshots, persisted alongside the settings. */
+  exportPresets: ExportPreset[];
+  /**
+   * Style clipboard for copy/paste between nodes (2026-11-15 ID-11). Session
+   * only: it is a convenience, not document data, and never enters history or
+   * autosave.
+   */
+  styleClipboard: {
+    node?: Partial<NodeStyle>;
+    branch?: Partial<BranchStyle>;
+  } | null;
   // --- gene-tree / species-tree reconciliation -------------------------------
   /** Whether the canvas shows the side-by-side reconciliation view. */
   reconMode: boolean;
@@ -389,12 +630,21 @@ export interface UISlice {
   geneSelection: NodeId[];
   /** Which section of the reconciliation left panel is shown (UI state only). */
   reconSection: ReconSection;
+  /** 用户反馈: which tree edit gestures target in the reconciliation workspace. */
+  reconEditTarget: ReconEditTarget;
   /** Transient reconciliation canvas display options (UI state only). */
   reconViewOptions: ReconViewOptions;
   /** Gene node currently hovered (mapping-line highlight); null = none. */
   reconHoverGeneId: NodeId | null;
   /** Bumped to request the gene pane to centre a node (left-panel locate). */
   reconFocusTarget: { id: NodeId; seq: number } | null;
+  /**
+   * The last DTL optimum for the active gene tree. Shared between the left
+   * panel and the overview (both used to keep their own copy, so an optimum
+   * computed in one was invisible in the other). Cleared whenever the
+   * document changes under it.
+   */
+  reconDp: { geneId: string; scenario: DtlScenario } | null;
 
   select: (id: NodeId | null, additive?: boolean) => void;
   selectMany: (ids: NodeId[]) => void;
@@ -412,7 +662,20 @@ export interface UISlice {
   setShowEvents: (v: boolean) => void;
   setShowEras: (v: boolean) => void;
   setEraLevel: (v: EraLevel) => void;
+  /** m1: remember which style preset was applied (session-level). */
+  setStylePresetId: (id: string | null) => void;
+  setLegendPosition: (v: LegendPosition) => void;
+  setLegendLayout: (v: LegendLayout) => void;
+  setShowCalibrationBars: (v: boolean) => void;
   setExportSettings: (patch: Partial<ExportSettings>) => void;
+  /** Save the CURRENT settings under a name (creates or replaces). */
+  saveExportPreset: (name: string) => void;
+  /** Replace the current settings with a stored preset. */
+  applyExportPreset: (id: string) => void;
+  deleteExportPreset: (id: string) => void;
+  /** Copy one node's resolved node/branch style for pasting elsewhere (ID-11). */
+  copyStyle: (style: { node?: Partial<NodeStyle>; branch?: Partial<BranchStyle> }) => void;
+  clearStyleClipboard: () => void;
   focusNode: (id: NodeId) => void;
   /** Open the inline rename editor for a node (keyboard F2 path). */
   requestRename: (id: NodeId) => void;
@@ -427,9 +690,12 @@ export interface UISlice {
   selectGeneNode: (id: NodeId | null, additive?: boolean) => void;
   clearGeneSelection: () => void;
   setReconSection: (s: ReconSection) => void;
+  setReconEditTarget: (t: ReconEditTarget) => void;
   setReconViewOptions: (patch: Partial<ReconViewOptions>) => void;
   setReconHoverGene: (id: NodeId | null) => void;
   focusGeneNode: (id: NodeId) => void;
+  /** Store / clear the shared DTL optimum for a gene tree. */
+  setReconDp: (v: { geneId: string; scenario: DtlScenario } | null) => void;
   /**
    * Open the reconciliation WORKSPACE (the single mode switch): pick the first
    * surviving gene tree when none is active, then set `reconMode`. With no gene
@@ -460,6 +726,13 @@ export interface TabsSlice {
   closeTab: (id: string) => void;
   /** Replace all tabs with the given projects (used to restore a workspace). */
   loadWorkspace: (projects: Project[], activeIndex: number) => void;
+  /**
+   * Pin a parked tab as saved to disk after an explicit "save all" write.
+   * Without this the tab kept reporting unsaved changes even though its file
+   * was current — the dirty flag compares revisions, and the write happened
+   * outside the store's own save path.
+   */
+  markTabSaved: (tabId: string) => void;
   /**
    * Rebuild every UNTOUCHED sample document in the current UI language.
    *
@@ -549,16 +822,20 @@ function reconciledGenePointers(
 }
 
 const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set, get) => ({
-  project: freeze(createSampleProject(), true),
+  // Cold start = a BLANK untitled document: the empty-state canvas (open /
+  // new tree file / sample cards) is the front page, and no sample loads
+  // until the user picks one. The sample used to auto-load here.
+  project: freeze(createEmptyProject(), true),
   past: [],
   future: [],
   interactionBase: null,
   draggingId: null,
   revision: 0,
   lastSavedRevision: 0,
+  modifiedAt: null,
   savedProject: null,
 
-  apply: (recipe) =>
+  apply: (recipe, label) =>
     set((s) => {
       // Wrap so a treeOp's return value is ignored (Immer forbids returning
       // a value *and* mutating the draft).
@@ -577,6 +854,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       return {
         project: next,
         revision: s.revision + 1,
+        modifiedAt: new Date().toISOString(),
         selection: keptSelection(next, s.selection),
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
@@ -586,13 +864,18 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         // mid-drag state here made the first undo resurrect a half-finished
         // drag (e.g. begin → live move → apply delete → commit → undo restored
         // the dragged position instead of the pre-drag document).
-        past: s.interactionBase ? s.past : pushSnapshot(s.past, entryOf(s), s.historyLimit),
+        past: s.interactionBase
+          ? s.past
+          : pushSnapshot(s.past, entryOf(s, label ?? autoEditLabel(s.project, next)), s.historyLimit),
         future: [],
         // A completed ASR is marked STALE, not deleted: the posterior was
         // computed from data that just changed, but the reader may still want
         // to see (and export) it — the UI renders the stale badge and offers a
         // one-click recompute instead of silently discarding the result.
         asr: s.asr ? { ...s.asr, stale: true } : null,
+        // A solved optimum was computed against the pre-edit assumptions;
+        // after the document moves it is no longer the optimum of anything.
+        reconDp: null,
       };
     }),
 
@@ -618,6 +901,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
         interactionBase: base,
+        reconDp: null,
       };
     }),
 
@@ -632,7 +916,7 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       if (!base) {
         return current === s.project
           ? { draggingId: null }
-          : { project: current, draggingId: null };
+          : { project: current, draggingId: null, modifiedAt: new Date().toISOString() };
       }
       // Structural sharing means an unchanged interaction yields the very same
       // Project reference, so a cheap identity check is enough — no O(n) deep
@@ -649,9 +933,11 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         ...(changed
           ? {
               revision: s.revision + 1,
+              modifiedAt: new Date().toISOString(),
               asr: s.asr ? { ...s.asr, stale: true } : null,
               past: pushSnapshot(s.past, base, s.historyLimit),
               future: [],
+              reconDp: null,
             }
           : {}),
       };
@@ -702,11 +988,15 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
         revision: s.revision + 1,
+        modifiedAt: new Date().toISOString(),
         // Restoring the exact document that was last saved means the document
         // is clean again, whatever the revision counter says (the undo itself
         // bumped it past `lastSavedRevision`).
         lastSavedRevision: previous.project === s.savedProject ? s.revision + 1 : s.lastSavedRevision,
         asr: s.asr ? { ...s.asr, stale: true } : null,
+        // A solved optimum was computed against the pre-edit assumptions;
+        // after the document moves it is no longer the optimum of anything.
+        reconDp: null,
       };
     }),
 
@@ -726,8 +1016,73 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
         activeGeneTreeId: pointers.activeGeneTreeId,
         geneSelection: pointers.geneSelection,
         revision: s.revision + 1,
+        modifiedAt: new Date().toISOString(),
         lastSavedRevision: nextEntry.project === s.savedProject ? s.revision + 1 : s.lastSavedRevision,
         asr: s.asr ? { ...s.asr, stale: true } : null,
+        // A solved optimum was computed against the pre-edit assumptions;
+        // after the document moves it is no longer the optimum of anything.
+        reconDp: null,
+      };
+    }),
+
+  /**
+   * Multi-step undo/redo in ONE state update (the history panel jumps to a
+   * specific step). Doing N separate `undo()` calls would re-render N times
+   * and, worse, push N intermediate snapshots onto the redo stack; slicing the
+   * stacks here keeps the jump atomic and leaves exactly one chronological
+   * path back.
+   */
+  undoSteps: (n) =>
+    set((s) => {
+      const count = Math.max(0, Math.min(Math.floor(n), s.past.length));
+      if (count === 0) return {};
+      const idx = s.past.length - count;
+      const target = s.past[idx];
+      const pointers = reconciledGenePointers(target.project, s.activeGeneTreeId, s.geneSelection);
+      // Chronological redo path from the target: every past snapshot after it,
+      // then the state we are leaving, then whatever was already redoable.
+      const future = [...s.past.slice(idx + 1), entryOf(s), ...s.future];
+      return {
+        project: target.project,
+        past: s.past.slice(0, idx),
+        future,
+        selection: pruneSelection(target.project, target.selection),
+        selectedEdgeId: target.selectedEdgeId,
+        view: target.view,
+        activeCharacterId: target.activeCharacterId,
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+        revision: s.revision + count,
+        modifiedAt: new Date().toISOString(),
+        lastSavedRevision:
+          target.project === s.savedProject ? s.revision + count : s.lastSavedRevision,
+        asr: s.asr ? { ...s.asr, stale: true } : null,
+        reconDp: null,
+      };
+    }),
+
+  redoSteps: (n) =>
+    set((s) => {
+      const count = Math.max(0, Math.min(Math.floor(n), s.future.length));
+      if (count === 0) return {};
+      const target = s.future[count - 1];
+      const pointers = reconciledGenePointers(target.project, s.activeGeneTreeId, s.geneSelection);
+      return {
+        project: target.project,
+        past: [...s.past, entryOf(s), ...s.future.slice(0, count - 1)],
+        future: s.future.slice(count),
+        selection: pruneSelection(target.project, target.selection),
+        selectedEdgeId: target.selectedEdgeId,
+        view: target.view,
+        activeCharacterId: target.activeCharacterId,
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+        revision: s.revision + count,
+        modifiedAt: new Date().toISOString(),
+        lastSavedRevision:
+          target.project === s.savedProject ? s.revision + count : s.lastSavedRevision,
+        asr: s.asr ? { ...s.asr, stale: true } : null,
+        reconDp: null,
       };
     }),
 
@@ -737,10 +1092,77 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
   markSaved: () =>
     set((s) => ({ lastSavedRevision: s.revision, savedProject: s.project })),
 
+  // M21: implemented with set+produce like markTabSaved — same no-history
+  // contract, one undo-step-shaped mutation fewer per save.
+  stampSaved: (adopt) =>
+    set((s) => {
+      const next = produce(s.project, (d) => {
+        const now = new Date().toISOString();
+        d.savedAt = now;
+        d.modifiedAt = now;
+        if (adopt?.sourcePath) d.sourcePath = adopt.sourcePath;
+      });
+      if (next === s.project) return {};
+      return { project: next, modifiedAt: next.modifiedAt };
+    }),
+
+  renameProject: (name) => {
+    const next = name.trim();
+    // An empty name would leave the tab bar, window title and exports showing
+    // "Untitled" through three different code paths; refuse it instead.
+    if (!next) return;
+    get().apply(
+      (d) => {
+        d.name = next;
+      },
+      tr('重命名项目', 'Rename project'),
+    );
+  },
+
+  setProvenance: (patch) =>
+    get().apply((d) => {
+      d.provenance = { ...d.provenance, ...patch };
+    }, tr('编辑项目出处', 'Edit project provenance')),
+
   recordAnalysis: (result) =>
     get().apply((d) => {
       d.analysisResults = [...(d.analysisResults ?? []), result].slice(-100);
     }),
+
+  applyReplaceJobs: (jobs) => {
+    let applied = 0;
+    const activeId = get().activeTabId;
+    // Parked tabs first: they are plain snapshots, so the rewrite is a pure
+    // project replacement (their revision moves but they have no history).
+    const hasInactive = Object.keys(jobs).some((id) => id !== activeId && jobs[id].length > 0);
+    if (hasInactive) {
+      set((s) => {
+        const tabStore = { ...s.tabStore };
+        for (const [tabId, reps] of Object.entries(jobs)) {
+          if (tabId === activeId) continue;
+          const snap = tabStore[tabId];
+          if (!snap || reps.length === 0) continue;
+          const project = produce(snap.project, (d) => {
+            applied += applyReplacements(d, reps);
+          });
+          if (project !== snap.project) {
+            tabStore[tabId] = { ...snap, project, revision: snap.revision + 1 };
+          }
+        }
+        return { tabStore };
+      });
+    }
+    const activeReps = jobs[activeId] ?? [];
+    if (activeReps.length > 0) {
+      get().apply(
+        (d) => {
+          applied += applyReplacements(d, activeReps);
+        },
+        tr('批量替换', 'Find & replace'),
+      );
+    }
+    return applied;
+  },
 
   loadProject: (project) =>
     set((s) => ({
@@ -788,20 +1210,28 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   showEvents: true,
   showEras: false,
   eraLevel: 'both',
+  stylePresetId: null,
+  legendPosition: readLegendPreference(LS_LEGEND_POSITION, ['top-left', 'top-right', 'bottom-left', 'bottom-right'], 'top-left'),
+  legendLayout: readLegendPreference(LS_LEGEND_LAYOUT, ['one-column', 'two-columns', 'one-row', 'two-rows'], 'one-column'),
+  showCalibrationBars: false,
   focusTarget: null,
   asr: null,
   asrRunning: false,
   historyLimit: HISTORY_LIMIT,
   asrOptions: DEFAULT_ASR_OPTIONS,
-  exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+  exportSettings: loadExportSettings(),
+  exportPresets: loadExportPresets(),
+  styleClipboard: null,
   renameRequest: null,
   reconMode: false,
   activeGeneTreeId: null,
   geneSelection: [],
   reconSection: 'trees',
+  reconEditTarget: 'species',
   reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
   reconHoverGeneId: null,
   reconFocusTarget: null,
+  reconDp: null,
 
   select: (id, additive = false) =>
     set((s) => {
@@ -849,9 +1279,65 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   setShowEras: (v) => set({ showEras: v }),
 
   setEraLevel: (v) => set({ eraLevel: v }),
+  setStylePresetId: (id) => set({ stylePresetId: id }),
+
+  setLegendPosition: (v) => {
+    try { localStorage.setItem(LS_LEGEND_POSITION, v); } catch { /* ignore */ }
+    set({ legendPosition: v });
+  },
+
+  setLegendLayout: (v) => {
+    try { localStorage.setItem(LS_LEGEND_LAYOUT, v); } catch { /* ignore */ }
+    set({ legendLayout: v });
+  },
+
+  setShowCalibrationBars: (v) => set({ showCalibrationBars: v }),
 
   setExportSettings: (patch) =>
-    set((s) => ({ exportSettings: { ...s.exportSettings, ...patch } })),
+    set((s) => {
+      const exportSettings = { ...s.exportSettings, ...patch };
+      persistExportSettings(exportSettings);
+      return { exportSettings };
+    }),
+
+  saveExportPreset: (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    set((s) => {
+      const settings = { ...s.exportSettings };
+      persistExportSettings(settings);
+      const existing = s.exportPresets.find((p) => p.name === trimmed);
+      const preset: ExportPreset = {
+        id: existing?.id ?? `preset_${Date.now().toString(36)}`,
+        name: trimmed,
+        settings,
+      };
+      const exportPresets = existing
+        ? s.exportPresets.map((p) => (p.id === existing.id ? preset : p))
+        : [...s.exportPresets, preset];
+      persistExportPresets(exportPresets);
+      return { exportPresets };
+    });
+  },
+
+  applyExportPreset: (id) =>
+    set((s) => {
+      const preset = s.exportPresets.find((p) => p.id === id);
+      if (!preset) return {};
+      const exportSettings = { ...DEFAULT_EXPORT_SETTINGS, ...preset.settings };
+      persistExportSettings(exportSettings);
+      return { exportSettings };
+    }),
+
+  deleteExportPreset: (id) =>
+    set((s) => {
+      const exportPresets = s.exportPresets.filter((p) => p.id !== id);
+      persistExportPresets(exportPresets);
+      return { exportPresets };
+    }),
+
+  copyStyle: (style) => set({ styleClipboard: style }),
+  clearStyleClipboard: () => set({ styleClipboard: null }),
 
   focusNode: (id) =>
     set((s) => ({ focusTarget: { id, seq: (s.focusTarget?.seq ?? 0) + 1 } })),
@@ -946,6 +1432,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   clearGeneSelection: () => set({ geneSelection: [] }),
 
   setReconSection: (section) => set({ reconSection: section }),
+  setReconEditTarget: (t) => set({ reconEditTarget: t }),
 
   setReconViewOptions: (patch) =>
     set((s) => ({ reconViewOptions: { ...s.reconViewOptions, ...patch } })),
@@ -955,6 +1442,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
 
   focusGeneNode: (id) =>
     set((s) => ({ reconFocusTarget: { id, seq: (s.reconFocusTarget?.seq ?? 0) + 1 } })),
+
+  setReconDp: (v) => set({ reconDp: v }),
 
   enterReconWorkspace: () =>
     set((s) => {
@@ -1062,6 +1551,23 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
         ...docStateFor(projects[clamped]),
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
+      };
+    }),
+
+  markTabSaved: (tabId) =>
+    set((s) => {
+      const snap = s.tabStore[tabId];
+      if (!snap) return {};
+      const project = produce(snap.project, (d) => {
+        const now = new Date().toISOString();
+        d.savedAt = now;
+        d.modifiedAt = now;
+      });
+      return {
+        tabStore: {
+          ...s.tabStore,
+          [tabId]: { ...snap, project, lastSavedRevision: snap.revision, savedProject: project },
+        },
       };
     }),
 

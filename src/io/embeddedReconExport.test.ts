@@ -44,7 +44,7 @@ describe('buildEmbeddedReconSVG', () => {
     const branchCount = Object.values(project.nodes).filter(
       (n) => n.parentId !== null && n.parentId !== undefined,
     ).length;
-    const tubeBorders = (svg.match(/stroke="#a1a1aa"/g) ?? []).length;
+    const tubeBorders = (svg.match(/stroke="#bbbbbb"/g) ?? []).length;
     expect(tubeBorders).toBe(branchCount);
   });
 
@@ -56,7 +56,7 @@ describe('buildEmbeddedReconSVG', () => {
     });
     expect(svg).not.toContain('<metadata>');
     expect(svg).not.toContain('物种枝管道');
-    expect(svg).toContain('#3f3f46'); // dark tube fill
+    expect(svg).toContain('#313131'); // dark tube fill (Radix gray-5)
   });
 });
 

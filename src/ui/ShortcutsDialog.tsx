@@ -35,22 +35,22 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
   {
     title: S.shortcuts.global,
     rows: [
-      { keys: '⌘Z / Ctrl+Z', label: tr('撤销', 'Undo') },
-      { keys: '⌘⇧Z / Ctrl+Y', label: tr('重做', 'Redo') },
-      { keys: '⌘S / Ctrl+S', label: tr('保存项目（有路径则就地保存）', 'Save project (in place when a path is known)') },
+      { keys: '⌘Z / Ctrl + Z', label: tr('撤销', 'Undo') },
+      { keys: '⌘⇧Z / Ctrl + Y', label: tr('重做', 'Redo') },
+      { keys: '⌘S / Ctrl + S', label: tr('保存项目（有路径则就地保存）', 'Save project (in place when a path is known)') },
       { keys: '⌘⇧S', label: S.review.cmdSaveAs },
-      { keys: '⌘O / Ctrl+O', label: tr('打开工程…', 'Open project…') },
+      { keys: '⌘O / Ctrl + O', label: tr('打开工程…', 'Open project…') },
       { keys: '⌘T / ⌘N', label: tr('新建标签页', 'New tab') },
       { keys: '⌘W', label: S.review.shortcutCmdW },
       { keys: '⌘A', label: S.review.shortcutCmdA },
-      { keys: '⌘F / Ctrl+F', label: tr('搜索节点', 'Search nodes'), mode: tr('协调视图下仅提示：请用「场景 › 映射与事件」定位', 'in the reconciliation view this only points to Scene › Mappings & events') },
-      { keys: '⌘⇧F', label: tr('适应窗口', 'Fit to window') },
-      { keys: '⌘0', label: S.review.shortcutCmd0 },
+      { keys: '⌘F / Ctrl + F', label: tr('搜索节点', 'Search nodes'), mode: tr('协调视图下仅提示：请用「场景 › 映射与事件」定位', 'in the reconciliation view this only points to Scene › Mappings & events') },
+      { keys: '⌘⇧F / ⌘0', label: S.review.shortcutCmd0 },
       { keys: '⌘K', label: tr('命令面板', 'Command palette') },
+      { keys: 'Alt + Enter', label: S.review.shortcutF2, mode: tr('与 F2 等效', 'equivalent to F2') },
       { keys: '⌘? / ⌘/', label: tr('快捷键速查', 'Shortcut reference') },
       { keys: '⌘= / ⌘-', label: tr('放大 / 缩小', 'Zoom in / out') },
       { keys: '⌘.', label: tr('收起 / 展开左右面板', 'Collapse / expand side panels') },
-      { keys: '⌘1 … ⌘6', label: S.review.shortcutCmdNum('1–6') },
+      { keys: '⌘1', label: S.review.shortcutCmdNum('1') },
     ],
   },
   {
@@ -61,15 +61,15 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
       { keys: 'Esc', label: tr('取消选择 / 中断手势', 'Clear selection / abort gesture') },
       { keys: 'Esc', label: S.review.shortcutEscExitRecon, mode: tr('仅协调视图', 'reconciliation view only') },
       { keys: 'Arrow keys', label: tr('微调选中节点（Shift = 10 px 步进）', 'Nudge selected nodes (Shift = 10 px steps)') },
-      { keys: 'Alt + ← / ↑ · Alt + → / ↓', label: tr('在树节点间移动焦点（父 / 子 / 同级）', 'Move focus between nodes (parent/child/sibling)') },
+      { keys: 'Alt + ← / ↑, Alt + → / ↓', label: tr('在树节点间移动焦点（父 / 子 / 同级）', 'Move focus between nodes (parent/child/sibling)') },
       { keys: 'Wheel', label: tr('缩放（Ctrl/⌘ + 滚轮 = 捏合缩放；双指平移 = 平移画布）', 'Zoom (Ctrl/⌘ + wheel = pinch zoom; two-finger scroll = pan)') },
       { keys: 'Space / middle-drag', label: tr('平移画布', 'Pan canvas') },
-      { keys: 'Shift/Alt + background drag', label: tr('框选节点', 'Marquee-select nodes') },
+      { keys: 'Shift/Alt + background drag', label: tr('框选节点（Alt 为替换所选）', 'Marquee-select (Alt replaces the selection)') },
       { keys: 'Drag node', label: tr('移动节点', 'Move node') },
       { keys: 'Alt + drag onto node', label: tr('重定父（改父）', 'Reparent') },
       { keys: 'Drag port dot', label: tr('创建自定义连线', 'Create custom link') },
       { keys: 'Double-click node', label: tr('重命名', 'Rename') },
-      { keys: '⇧F10', label: tr('打开节点右键菜单', 'Open the node context menu') },
+      { keys: '⇧F10 / ContextMenu', label: tr('打开节点右键菜单', 'Open the node context menu') },
       { keys: 'Click the collapse arrow', label: tr('展开被折叠的枝', 'Expand a collapsed branch') },
       { keys: 'Shift + click', label: tr('多选节点（选 2 个显示 MRCA）', 'Multi-select (2 selected shows MRCA)') },
     ],
@@ -137,6 +137,14 @@ export function ShortcutsDialog({
               '⌘ combinations in this table also accept Ctrl (Windows / Linux).',
             )}
           </div>
+          {/* OP-08: ⌘Z / ⌘Y are deliberately NOT intercepted while a text field
+              has focus — the correct behaviour, but invisible unless said. */}
+          <div className="hint">
+            {tr(
+              '在文本输入框内，撤销 / 重做等文本编辑快捷键由输入框与系统接管，CladeForge 不会拦截；移出输入框后 ⌘Z / ⌘⇧Z 恢复为文档撤销 / 重做。',
+              'While a text field has focus, text-editing chords are handled by the field and the OS — CladeForge does not intercept them; once you leave the field, ⌘Z / ⌘⇧Z undo/redo the document again.',
+            )}
+          </div>
           {groups.length === 0 && <div className="hint">{S.shortcuts.noResults}</div>}
           {groups.map((g) => (
             <div className="shortcuts-group" key={g.title}>
@@ -145,7 +153,7 @@ export function ShortcutsDialog({
                 <div className="shortcut-row" key={r.keys + r.label}>
                   <span className="shortcut-label">
                     {r.label}
-                    {r.mode && <span className="hint"> · {r.mode}</span>}
+                    {r.mode && <span className="hint"> ({r.mode})</span>}
                   </span>
                   <kbd className="shortcut-keys">{r.keys}</kbd>
                 </div>

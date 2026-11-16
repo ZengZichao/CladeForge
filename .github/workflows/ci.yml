@@ -47,6 +47,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Frontend lint gate. The Rust side is covered by `cargo clippy` in the
+      # desktop job; this is the TypeScript/React counterpart. It runs before
+      # the tests so a lint error is not masked by a green suite.
+      - run: npm run lint
       - run: npm test
       # `npm run build` is what `tauri build` runs, so the PRODUCTION bundle is
       # built here too: a type-check plus unit tests would let a bundle that only

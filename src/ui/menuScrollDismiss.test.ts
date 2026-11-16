@@ -75,18 +75,26 @@ function scrollOn(el: Element): void {
 afterEach(cleanup);
 
 describe('scrolling inside an open menu leaves it open', () => {
-  it('preferences panel', () => {
+  it('preferences dialog (M2: a centered modal has no drift to dismiss)', () => {
     mount(createElement(PreferencesMenu));
     click(host!.querySelector('.prefs-trigger')!);
-    const panel = document.querySelector('.prefs-panel');
+    const panel = document.querySelector('.prefs-dialog');
     expect(panel).not.toBeNull();
 
+    // Scrolling — inside or elsewhere — must NOT close a modal dialog: it is
+    // centered and cannot drift away from a trigger (the old flyout's rule).
     scrollOn(panel!);
-    expect(document.querySelector('.prefs-panel')).not.toBeNull();
-
-    // A scroll elsewhere still dismisses it (the panel would drift).
+    expect(document.querySelector('.prefs-dialog')).not.toBeNull();
     scrollOn(document.body);
-    expect(document.querySelector('.prefs-panel')).toBeNull();
+    expect(document.querySelector('.prefs-dialog')).not.toBeNull();
+
+    // The dismissal contract is now the modal one: backdrop click.
+    act(() => {
+      (document.querySelector('.dialog-backdrop') as HTMLElement).dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true }),
+      );
+    });
+    expect(document.querySelector('.prefs-dialog')).toBeNull();
   });
 
   it('generic dropdown used by File / Recent', () => {

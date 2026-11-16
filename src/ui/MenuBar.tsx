@@ -17,7 +17,7 @@ import { ChevronDownIcon, QuestionMarkIcon } from '@radix-ui/react-icons';
 import * as file from '../io/fileActions';
 import { RECENTS_CHANGED_EVENT, readRecents, clearRecents, type RecentEntry } from '../io/recent';
 import { Dropdown, type DropdownItem } from './Dropdown';
-import { buildFileMenuItems, buildRecentItems } from './fileMenu';
+import { buildFileMenuItems, buildRecentItems, buildExportMenuItems } from './fileMenu';
 import { S, tr } from './strings';
 import { notify } from './toast';
 
@@ -95,7 +95,9 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
     <div className="dropdown menubar-help" ref={boxRef}>
       <button
         ref={btnRef}
-        className="btn icon ghost menubar-help-btn"
+        /* 用户反馈：the SAME boxed shape as 文件 / 最近 — the ghost-icon
+           variant made 帮助 a different size in the same row. */
+        className="btn menubar-help-btn"
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -128,6 +130,12 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
             {items.map((it, i) =>
               it.sep ? (
                 <div key={`sep-${i}`} className="menu-sep" />
+              ) : it.heading ? (
+                // Group headings (ID-01): the five entries used to be one flat
+                // list with no indication of what kind of thing each one is.
+                <div key={`heading-${i}`} className="menu-heading">
+                  {it.heading}
+                </div>
               ) : (
                 <button
                   key={it.label}
@@ -173,19 +181,22 @@ export function MenuBar({
   // Both lists are built by `fileMenu.ts`: every export action
   // is wrapped there, so no handler can receive the click event as an argument.
   const recentItems = buildRecentItems(recents, openRecent, () => clearRecents());
-  const fileItems = buildFileMenuItems(recents[0], openRecent);
+  const fileItems = buildFileMenuItems();
+  // 用户反馈: 导出 is a top-level dropdown next to 文件 / 最近 / 帮助 (it used
+  // to live in the left rail, which no longer carries it).
+  const exportItems = buildExportMenuItems();
 
   const helpItems: DropdownItem[] = [
+    { heading: tr('帮助', 'Help') },
     { label: S.menu.shortcuts, onClick: onOpenShortcuts, kbd: '⌘?' },
     { label: S.menu.guide, onClick: onOpenTour },
     {
-      label: tr(
-        '工作流引导：性状 → 假说 → 分析 → 导出',
-        'Workflow tour: Characters → Hypotheses → Analysis → Export',
-      ),
+      label: tr('工作流引导', 'Workflow tour'),
       onClick: onOpenWorkflowTour,
     },
+    { label: S.menu.manual, onClick: () => file.openAppDialog('manual') },
     { sep: true },
+    { heading: tr('反馈', 'Feedback') },
     // In-app feedback channel: the manual said "file an issue" without a URL,
     // so a stuck user had no path back to the author. The URL is copied to the
     // clipboard (the webview cannot open a browser without an extra plugin).
@@ -194,17 +205,20 @@ export function MenuBar({
       onClick: () => {
         const url = 'https://github.com/zengzichao/CladeForge/issues/new?template=bug_report.md';
         void import('../io/clipboardIO').then(({ writeClipboardText }) =>
-          writeClipboardText(url),
-        );
-        notify.info(
-          tr(
-            `问题反馈地址已复制：${url}`,
-            `Issue-report URL copied: ${url}`,
+          // m13: honour the boolean — a denied clipboard must not announce
+          // success. The URL itself is the fallback the user can still read.
+          writeClipboardText(url).then((ok) =>
+            notify.info(
+              ok
+                ? tr(`问题反馈地址已复制：${url}`, `Issue-report URL copied: ${url}`)
+                : tr(`无法访问剪贴板，请手动复制：${url}`, `Clipboard unavailable — copy manually: ${url}`),
+            ),
           ),
         );
       },
     },
     { sep: true },
+    { heading: tr('关于', 'About') },
     { label: S.menu.about, onClick: onOpenAbout },
   ];
 
@@ -215,13 +229,15 @@ export function MenuBar({
     // HelpMenu buttons — children without the attribute — keep opening menus.
     <div className="menubar" data-tauri-drag-region>
       <div className="brand" data-tauri-drag-region>
-        <span className="dot" />
         <span className="brand-name">{S.app.name}</span>
       </div>
 
       <div className="group">
-        <Dropdown label={S.menu.fileGroup} items={fileItems} />
-        <Dropdown label={S.menu.recent} items={recentItems} />
+        {/* 用户反馈: the four top-level triggers share ONE boxed rounded-rect
+            shape — the text variant made 文件/最近/导出 look different from 帮助. */}
+        <Dropdown label={S.menu.fileGroup} items={fileItems} variant="boxed" />
+        <Dropdown label={S.menu.recent} items={recentItems} variant="boxed" />
+        <Dropdown label={S.nav.export} items={exportItems} variant="boxed" />
       </div>
 
       <div className="group">

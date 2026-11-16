@@ -119,7 +119,7 @@ export const AsrPieLayer = memo(function AsrPieLayer({
       <g key={id}>
         {wedges}
         {shown.length === 0 && (
-          <circle cx={pos.x} cy={pos.y} r={r} fill="none" stroke="var(--muted)" strokeWidth={1} strokeDasharray="2 1.6" />
+          <circle cx={pos.x} cy={pos.y} r={r} fill="none" stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="2 1.6" />
         )}
         <circle cx={pos.x} cy={pos.y} r={r} fill="none" stroke="var(--text)" strokeWidth={0.75} />
         <circle cx={pos.x} cy={pos.y} r={Math.max(r, 7)} fill="transparent">

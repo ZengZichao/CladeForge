@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 大树与深时
+# Project : 非时间树示例
 # Format  : CladeForge project v0.2.0
 # Software: CladeForge 0.3.0 (this header is the provenance stamp a
 #           reproducibility checklist asks for: software version, generation
@@ -88,7 +88,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#7c3aed", "#0ea5e9", "#f59e0b"),
     cost = NULL,
-    rate = 0.00006778334067067193,
+    rate = 0.0000677833,
     tips = c("Taxon_N" = "状态 A", "Taxon_O" = "状态 A", "Taxon_P" = "状态 B", "Taxon_Q" = "状态 B", "Taxon_R" = "状态 C", "Taxon_S" = "状态 C", "Taxon_T" = "状态 C", "Taxon_U" = "状态 C")
   ),
   list(
@@ -97,7 +97,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#dc2626", "#f97316", "#22c55e"),
     cost = NULL,
-    rate = 0.00006856783131526523,
+    rate = 0.0000685678,
     tips = c("Taxon_N" = "状态 C", "Taxon_O" = "状态 C", "Taxon_P" = "状态 C", "Taxon_Q" = "状态 C", "Taxon_R" = "状态 A", "Taxon_S" = "状态 A", "Taxon_T" = "状态 B", "Taxon_U" = "状态 B")
   )
 )
@@ -267,7 +267,7 @@ plot(tree, type = "cladogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "大树与深时", cex.main = 1.0)
+title(main = "非时间树示例", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

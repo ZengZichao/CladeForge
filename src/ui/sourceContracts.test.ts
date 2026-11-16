@@ -5,7 +5,6 @@
  * a non-finite pinned position: cleared on load, ignored at draw time
  * `depthOf` is cycle-guarded like every other upward walk
  * every `Field`-wrapped control has an accessible name
- * the inspector suggests the `chosen` state, not the first declared one
  * a stale `draggingId` cannot keep serving a cached drag baseline
  * panel widths are re-clamped on render, not only on drag commit
  *
@@ -48,7 +47,7 @@ describe('a non-finite pinned position cannot reach the SVG', () => {
     const [child] = addChildren(p, p.rootId, 1);
     // `1e999` is how a non-finite value actually arrives: JSON has no NaN
     // literal, but a hand-edited document can carry a numeral that overflows.
-    pin(p, child, 1e999, 42);
+    pin(p, child, 1e308 * 10, 42);
     const { project, issues } = validateProject(p);
     expect(project.nodes[child].position).toBeUndefined();
     expect(issues.join(' ')).toMatch(/不是有限数值|not a finite number/);
@@ -175,19 +174,6 @@ describe('Field gives its control an accessible name', () => {
 });
 
 describe('the remaining source-level contracts', () => {
-  it('the inspector’s suggestion reads `chosen` first', () => {
-    // `parsimony().states[0]` follows DECLARATION order, which parsimony.ts
-    // documents as not being the minimum-cost choice, so showing it would make
-    // the panel suggest a state that disagrees with the reported cost and with
-    // the canvas' change flags — all of which read `chosen`.
-    const panel = sourceOf('./PropertiesPanel.tsx');
-    // The suggestion must be `chosen` first, `states[0]` only as a fallback.
-    expect(panel).toMatch(/chosen\.get\([^)]*\)\s*\?\?\s*[^;\n]{0,40}states\.get\(/);
-    // Reading `states[0]` alone anywhere in this file would be the defect back.
-    const standalone = panel.match(/=\s*result\.states\.get\([^)]*\)\?\.?\[0\]/g) ?? [];
-    expect(standalone, `declaration-order suggestions: ${standalone.join(' | ')}`).toEqual([]);
-  });
-
   it('a cached drag baseline requires an interaction still in progress', () => {
     const canvas = sourceOf('../canvas/TreeCanvas.tsx');
     expect(canvas).toContain('draggingId && interactionActive');

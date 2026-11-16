@@ -37,7 +37,7 @@
    本条（§3.8）与 §3.5 为规范方向，不得反向放宽本节。现状核对：`src/ui/strings.ts` 已全量符合本节——
    原先的紧凑写法 `Cmd/Ctrl+Z`、`Cmd/Ctrl+Shift+Z`、`Ctrl+Y`、`Ctrl+K`、`Ctrl+O` 已全部改为
    `Cmd/Ctrl + Z` 一类的带空格写法，修饰键对 `Cmd/Ctrl` 仍按 §3.6 保持紧凑；`docs/MANUAL_EN.md`、
-   `docs/MANUAL_ZH.md`、README.md、README_ZH.md 与两份 `EMBEDDED_RECON_LAYOUT_PLAN` 文档同样已改正。
+   `docs/MANUAL_ZH.md`、README.md、README_ZH.md 同样已改正。
    全库唯一有意保留的紧凑写法是 `CHANGELOG.md` 的 `## [0.3.0]` 段中记述历史缺陷时引用的
    `Alt+F4`（那是操作系统自身给出的键名，按 §1 的专有名词规则原样保留）。仍以本节为待整改对象的
    只剩 `src/ui/ShortcutsDialog.tsx` 的按键列（如 `⌘Z / Ctrl+Z`）；其英文滚轮行已改为带空格写法
@@ -84,3 +84,23 @@
 5. `aria-label`、`title`、`placeholder` 也属于 UI 文案，必须走同一目录或同一 `tr()` 体系。
 6. `document.documentElement.lang` 在启动即设置（见 `index.html`）。
 7. 提交前运行 `npm test`；`src/ui/copyQuality.test.ts` 是文案质量门禁。
+
+## 9. 对比度与色觉可达性
+
+2026-11-15 界面审阅对关键前景/背景组合做了 WCAG 2.x 相对亮度计算（公式见 `src/model/types.ts` 的 `wcagContrastRatio`），结果与处置如下。
+
+| 组合 | 浅色主题 | 深色主题 | 结论 |
+|---|---|---|---|
+| 正文 `--text` / `--surface` | 15.88 : 1 | 16.28 : 1 | 通过 AAA（≥7） |
+| 次要文字 `--muted` / `--surface` | 5.77 : 1 | 9.11 : 1 | 通过 AA（≥4.5） |
+| 次要文字 `--muted` / `--surface-2` | 5.19 : 1 | 7.67 : 1 | 通过 AA |
+| 控件描边 `--border-strong` / `--surface` | 旧 1.53 : 1 → 新 **2.96 : 1** | 旧 2.06 : 1 → 新 **3.00 : 1** | 已加深至 WCAG 1.4.11 的 3:1 非文本阈值（浅色取最浅可过阈值的灰阶 `#949494`） |
+| 焦点环 `--text` 轮廓 / `--surface` | 15.88 : 1 | 16.28 : 1 | 通过；焦点不能只靠颜色——键盘焦点使用 1px 墨色轮廓 + 2px 偏移 |
+
+规则：
+
+1. 新增语义色 token 必须先用 `wcagContrastRatio` 量化，再写进本表；不要凭肉眼判断“够深了”。
+2. 正文与次要文字至少 4.5:1；大号文字（≥18pt 或 14pt 粗体）至少 3:1；图标、控件边界、焦点指示等承载信息的非文本元素至少 3:1。
+3. 浅色主题的下限灰阶为 `#949494`（`--border-strong`）；更浅的灰色只能用于纯装饰线。
+4. 「偏好 › 色觉友好模式」开启后，事件徽标除强制形状与两位代号外，类型颜色切换到 Okabe–Ito CVD 安全调色板（见 `src/model/events.ts` 的 `EVENT_CVD_PALETTE`）；颜色映射按目录索引固定，因此画布、图例、检视面板与导出保持一致。
+5. 不使用EDA检测器式“颜色微调”；所有修复必须有上表的数值依据。

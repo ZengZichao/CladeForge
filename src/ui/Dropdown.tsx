@@ -6,10 +6,19 @@
 // windows, P3), which would otherwise clip an absolutely-positioned child
 // menu — the 阶梯化 / 定根 submenus appeared cut off. A portal escapes that
 // clipping entirely while keeping the z-index above the chrome.
+//
+// M10 (UI_UX_REVIEW 2026-11-15): the file/recent menus had NO keyboard
+// contract — Escape did not close, arrows did nothing, and Tab jumped from the
+// trigger straight to the next menubar button. This component now implements
+// the APG menu pattern: Escape close + focus return, ↑/↓/Home/End navigation,
+// typeahead, Enter/Space activation, Tab dismiss, and roving focus that skips
+// disabled items. The help and preferences menus keep their own (existing)
+// window-level Escape handling — M10's scope is the two Dropdown-based menus.
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
+import { isImeComposing } from './imeGuard';
 
 export interface DropdownItem {
   label?: string;
@@ -31,7 +40,16 @@ interface PanelPos {
   maxHeight: number;
 }
 
-export function Dropdown({ label, items }: { label: string; items: DropdownItem[] }) {
+export function Dropdown({
+  label,
+  items,
+  variant = 'boxed',
+}: {
+  label: string;
+  items: DropdownItem[];
+  /** Text variant is for the menu bar: no box, just the word and a caret. */
+  variant?: 'boxed' | 'text';
+}) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -48,8 +66,7 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
       setOpen(false);
     };
     // Long menus scroll internally (inline maxHeight/overflowY below); their own
-    // scroll must not dismiss the panel. Only a scroll elsewhere moves the
-    // trigger relative to the fixed panel.
+    // focus follows the items; their own scroll must not dismiss the panel.
     const onDismiss = (e: Event) => {
       const target = e.target;
       if (panelRef.current && target instanceof Node && panelRef.current.contains(target)) return;
@@ -86,9 +103,108 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
     setOpen((o) => !o);
   };
 
+  // M10: the menu contract. `open` triggers the portal; after it mounts, focus
+  // the first enabled item; the document keydown handles Escape / arrows /
+  // typeahead / activation while the menu is open.
+  const typeaheadRef = useRef({ seq: '', at: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus the first enabled item once the portal content is in the DOM.
+    const t = window.setTimeout(() => {
+      const first = panelRef.current?.querySelector<HTMLButtonElement>('.menu-item:not([aria-disabled="true"])');
+      first?.focus();
+    }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (isImeComposing(e)) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+        btnRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Tab') {
+        // APG menus consume Tab; focus returns to the trigger.
+        e.preventDefault();
+        setOpen(false);
+        btnRef.current?.focus();
+        return;
+      }
+      const items = Array.from(
+        panelRef.current?.querySelectorAll<HTMLButtonElement>('.menu-item:not([aria-disabled="true"])') ?? [],
+      );
+      const current = document.activeElement as HTMLButtonElement | null;
+      const idx = current ? items.indexOf(current) : -1;
+      const move = (delta: number) => {
+        e.preventDefault();
+        const next = items[(idx + delta + items.length) % items.length] ?? items[0];
+        next?.focus();
+        next?.scrollIntoView({ block: 'nearest' });
+      };
+      if (e.key === 'ArrowDown') return move(1);
+      if (e.key === 'ArrowUp') return move(-1);
+      if (e.key === 'Home') {
+        e.preventDefault();
+        items[0]?.focus();
+        return;
+      }
+      if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1]?.focus();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (current && items.includes(current)) {
+          e.preventDefault();
+          current.click();
+        }
+        return;
+      }
+      // Typeahead: printable characters cycle through labels starting with
+      // the accumulated sequence (reset after 700ms of inactivity).
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const now = Date.now();
+        if (now - typeaheadRef.current.at > 700) typeaheadRef.current.seq = '';
+        typeaheadRef.current.seq += e.key.toLowerCase();
+        typeaheadRef.current.at = now;
+        const seq = typeaheadRef.current.seq;
+        const start = idx + 1;
+        const ordered = [...items.slice(start), ...items.slice(0, start)];
+        const hit = ordered.find((b) => (b.textContent ?? '').trim().toLowerCase().startsWith(seq));
+        if (hit) {
+          e.preventDefault();
+          hit.focus();
+          hit.scrollIntoView({ block: 'nearest' });
+        } else {
+          // A label can hold the sequence's TAIL only (e.g. "树" then "木");
+          // retry with just the last character before giving up.
+          typeaheadRef.current.seq = e.key.toLowerCase();
+          const retry = ordered.find((b) => (b.textContent ?? '').trim().toLowerCase().startsWith(typeaheadRef.current.seq));
+          if (retry) {
+            e.preventDefault();
+            retry.focus();
+            retry.scrollIntoView({ block: 'nearest' });
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
   return (
     <div className="dropdown" ref={ref}>
-      <button ref={btnRef} className="btn" onClick={toggle} aria-haspopup="menu" aria-expanded={open}>
+      <button
+        ref={btnRef}
+        className={`btn${variant === 'text' ? ' text' : ''}`}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
         {label}
         <ChevronDownIcon style={{ marginLeft: 2, opacity: 0.6 }} />
       </button>
@@ -99,6 +215,7 @@ export function Dropdown({ label, items }: { label: string; items: DropdownItem[
             ref={panelRef}
             className="dropdown-panel"
             role="menu"
+            aria-label={label}
             style={{
               position: 'fixed',
               top: pos.top,

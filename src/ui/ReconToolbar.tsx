@@ -18,6 +18,8 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
   const clearGeneSelection = useStore((s) => s.clearGeneSelection);
   const options = useStore((s) => s.reconViewOptions);
   const setReconViewOptions = useStore((s) => s.setReconViewOptions);
+  const reconEditTarget = useStore((s) => s.reconEditTarget);
+  const setReconEditTarget = useStore((s) => s.setReconEditTarget);
 
   const scopes: { id: MappingScope; label: string }[] = [
     { id: 'tips', label: S.recon.scopeTips },
@@ -29,11 +31,19 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
     { id: 'embedded', label: S.recon.layoutEmbedded, title: S.recon.embeddedAria },
   ];
   const embedded = options.layoutMode === 'embedded';
+  const hasGeneTrees = (project.geneTrees ?? []).length > 0;
+
+  // With no gene tree there is nothing for this row to control: the layout
+  // switch, fit, sync zoom and mapping scope all act on a gene pane that does
+  // not exist. The canvas empty state owns the next step instead.
+  if (!hasGeneTrees) return null;
 
   return (
     <div className="recon-toolbar" role="toolbar" aria-label={S.recon.section}>
+      {/* 用户反馈: a rounded button look for the family picker, sitting left of
+          the layout switch. */}
       <select
-        className="recon-gene-select"
+        className="recon-gene-select btn"
         value={activeGeneTreeId ?? ''}
         onChange={(e) => {
           setActiveGeneTree(e.target.value || null);
@@ -48,6 +58,25 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
           </option>
         ))}
       </select>
+
+      {/* 用户反馈: both layouts support two edit modes — the toggle declares
+          which tree edit gestures target (物种树编辑 / 基因树编辑). */}
+      <div className="seg recon-edit-seg" role="tablist" aria-label={tr('编辑目标', 'Edit target')}>
+        {([
+          ['species', tr('物种树编辑', 'Edit species tree')],
+          ['gene', tr('基因树编辑', 'Edit gene tree')],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            className={`seg-btn${reconEditTarget === id ? ' active' : ''}`}
+            onClick={() => setReconEditTarget(id)}
+            aria-selected={reconEditTarget === id}
+            role="tab"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Canvas layout mode: the two-pane comparison or the nested embedded
           figure. Switching never touches selections or mappings. */}

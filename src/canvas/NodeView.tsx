@@ -14,6 +14,7 @@ import {
   hypothesisNoteFontSize,
   hypothesisNotePlacement,
   hypothesisNoteText,
+  collapsedLabelSuffix,
   labelPlacement,
 } from './labels';
 import { estimateLabelWidth } from './labelBounds';
@@ -140,6 +141,13 @@ export const NodeView = memo(function NodeView({
     style.labelOffsetY,
     labelAngle,
   );
+  // A2 (review §4.2): a collapsed subtree shows how many tips it hides. The
+  // suffix is part of the LABEL (not a detached badge) so the collision
+  // planner and the exporter account for it through the shared width model.
+  const collapsedSuffix = collapsedLabelSuffix(project, node);
+  const collapsedTips = collapsedSuffix
+    ? Number(collapsedSuffix.replace(/[^\d]/g, ''))
+    : 0;
   const showPort = hovered || selected;
   const showLabel = style.showLabel && (node.label !== '' || editing);
   const note = node.hypothesisNote?.trim();
@@ -157,7 +165,10 @@ export const NodeView = memo(function NodeView({
 
   // Accessible name: label + support + leaf/internal, for the tree role.
   const ariaLabel = [
-    node.label || tr('未命名节点', 'Unnamed node'),
+    (node.label || tr('未命名节点', 'Unnamed node')) +
+      (collapsedSuffix
+        ? tr(`（含 ${collapsedTips} 个末端）`, ` (${collapsedTips} tips inside)`)
+        : ''),
     isLeaf ? tr('末端', 'Tip') : tr('内部节点', 'Internal node'),
     node.support !== undefined ? `${tr('支持度', 'Support')} ${node.support}` : '',
     node.age !== undefined ? `${tr('年龄', 'Age')} ${node.age}` : '',
@@ -173,6 +184,7 @@ export const NodeView = memo(function NodeView({
 
   return (
     <g
+      className="node-group"
       transform={`translate(${pos.x} ${pos.y})`}
       role="treeitem"
       aria-label={ariaLabel}
@@ -180,7 +192,10 @@ export const NodeView = memo(function NodeView({
       aria-expanded={node.collapsed ? false : node.childrenIds.length > 0 ? true : undefined}
       // Roving tab index: the selection carries keyboard focus, so Tab reaches
       // the tree canvas as a real stop and Alt+arrows walk the tree from it.
-      tabIndex={selected ? 0 : -1}
+      // S10 (Sonus): with NOTHING selected the tree had no Tab dock point at
+      // all — every node started at -1. The root is a permanent stop, so Tab
+      // can always enter the tree; from there Alt+arrows walk and select.
+      tabIndex={selected || node.parentId === null ? 0 : -1}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onDoubleClick={(e) => {
@@ -224,7 +239,7 @@ export const NodeView = memo(function NodeView({
 
       <Marker style={style} role="node" id={node.id} fill={markerFill} stroke={markerStroke} dashed={markerDashed} />
 
-      {node.collapsed && node.childrenIds.length > 0 && (
+          {node.collapsed && node.childrenIds.length > 0 && (
         // The collapse arrow used to carry data-role="node", so the FIRST thing
         // a user tried with it (click the triangle to expand) selected or began
         // dragging the node instead. It is now its own toggle target.
@@ -239,7 +254,11 @@ export const NodeView = memo(function NodeView({
           }}
           style={{ cursor: 'pointer' }}
         >
-          <title>{tr('点击展开此枝', 'Click to expand this branch')}</title>
+          <title>
+            {collapsedTips > 0
+              ? tr(`点击展开此枝（${collapsedTips} 个末端）`, `Click to expand this branch (${collapsedTips} tips)`)
+              : tr('点击展开此枝', 'Click to expand this branch')}
+          </title>
         </path>
       )}
 
@@ -253,7 +272,7 @@ export const NodeView = memo(function NodeView({
           fontStyle={style.fontStyle}
           fontWeight={style.fontWeight}
           fill={
-            // Default label colour (#111111) is unreadable on the dark canvas;
+            // Default label colour (#202020) is unreadable on the dark canvas;
             // use the theme text colour when the user has not customised it.
             style.labelColor === DEFAULT_NODE_STYLE.labelColor
               ? 'var(--text)'
@@ -267,6 +286,27 @@ export const NodeView = memo(function NodeView({
           style={{ userSelect: 'none' }}
         >
           {node.label}
+          {collapsedSuffix}
+        </text>
+      )}
+
+      {/* 用户反馈：support shown ON the figure — a small value above the node
+          marker whenever a support value exists (5b: the inspector's edits
+          must be visible in the drawing, not only in tooltips). */}
+      {node.support !== undefined && (
+        <text
+          x={0}
+          y={-style.size - 4}
+          textAnchor="middle"
+          fontSize={Math.max(9, style.fontSize - 3)}
+          fill="var(--muted-foreground)"
+          data-role="node"
+          data-node-id={node.id}
+          style={{ userSelect: 'none', pointerEvents: 'none' }}
+        >
+          {node.supportKind === 'posterior' || (node.support <= 1 && node.supportScale !== 'percent')
+            ? node.support.toFixed(2).replace(/0$/, '')
+            : String(node.support)}
         </text>
       )}
 
@@ -303,7 +343,7 @@ export const NodeView = memo(function NodeView({
                 dominantBaseline={nPlace.baseline}
                 fontSize={nFont}
                 fontStyle="italic"
-                fill="var(--muted)"
+                fill="var(--muted-foreground)"
               >
                 {nText}
                 <title>{note}</title>
@@ -342,9 +382,9 @@ export const NodeView = memo(function NodeView({
               width: '100%',
               boxSizing: 'border-box',
               textAlign: 'center',
-              fontSize: 13,
-              border: `1px solid ${C_SELECT}`,
-              borderRadius: 4,
+              fontSize: 'var(--text-sm)',
+              border: `0.5px solid ${C_SELECT}`,
+              borderRadius: 0,
               padding: '2px 4px',
               outline: 'none',
             }}
@@ -366,7 +406,12 @@ export const NodeView = memo(function NodeView({
             data-role="port"
             data-node-id={node.id}
             data-hit="port"
-          />
+            /* M23: the enlarged hit area carried neither cursor nor tooltip —
+               hovering beside the visible dot gave no signal. */
+            style={{ cursor: 'crosshair' }}
+          >
+            <title>{S.node.portTitle}</title>
+          </circle>
           <circle
             cx={style.size + 11}
             cy={-(style.size + 11)}

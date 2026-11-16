@@ -38,10 +38,37 @@ import {
 } from 'react';
 import type { LayoutResult } from '../layout/autoLayout';
 import type { NodeId, Project, ReconViewOptions } from '../model/types';
+import { useStore } from '../model/store';
+import { isImeComposing } from '../ui/imeGuard';
 import { elbowPath } from './paths';
 import { estimateLabelWidth, type Box } from './labelBounds';
 import { cullPaneNodes } from './reconViewport';
 import type { MappingColorToken, PaneTransform } from './reconMapping';
+
+/** M37 (UI_UX_REVIEW): Alt+click mapping had one dismissable banner and no
+ *  persistent affordance. Tracks the Alt key so panes can answer with a copy
+ *  cursor while it is held (see EmbeddedReconCanvas). */
+export function useAltHeld(): boolean {
+  const [altDown, setAltDown] = useState(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltDown(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltDown(false);
+    };
+    const blur = () => setAltDown(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
+  return altDown;
+}
 export type { PaneTransform };
 import { S, tr } from '../ui/strings';
 
@@ -81,9 +108,8 @@ interface ReconPaneProps {
   title: string;
   subtitle: string;
   badge?: string;
-  badgeTone?: 'neutral' | 'readonly';
+  badgeTone?: 'neutral' | 'readonly' | 'editing';
   nodeCount: number;
-  zoomPercent: number;
   headerExtra?: ReactNode;
   nodeMeta?: Map<NodeId, PaneNodeMeta>;
   stubs?: PaneStub[];
@@ -337,7 +363,7 @@ const PaneNode = memo(function PaneNode({
       data-node-id={nodeId}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={interactive ? `${paneAriaLabel} · ${label}` : undefined}
+      aria-label={interactive ? `${paneAriaLabel} ${label}` : undefined}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onPointerEnter={handleEnter}
@@ -388,13 +414,18 @@ const PaneNode = memo(function PaneNode({
           fill="var(--recon-loss)"
           style={{ pointerEvents: 'none' }}
         >
-          λ{losses}
+          L{losses}
         </text>
       )}
       {showTipLabel && (
         <text
-          x={mirrored ? x - 9 : x + 9}
-          y={y + 4}
+          /* S12/M39 (Sonus+UI_UX_REVIEW): screen-space font floor. Below 100%
+             zoom the label holds a readable on-screen size instead of shrinking
+             into nothing (a 4-tip tree fitted to 43% used to show zero names);
+             at/above 100% it scales with the tree as before. The offsets are
+             multiplied by the same inverse so the anchor distance stays fixed
+             on screen too. */
+          transform={`translate(${x + (mirrored ? -9 : 9) * inv}, ${y + 4 * inv}) scale(${inv})`}
           textAnchor={mirrored ? 'end' : 'start'}
           fontSize={11.5}
           fill="currentColor"
@@ -435,7 +466,6 @@ export const ReconPane = memo(function ReconPane({
   badge,
   badgeTone = 'neutral',
   nodeCount,
-  zoomPercent,
   headerExtra,
   nodeMeta,
   stubs,
@@ -448,7 +478,7 @@ export const ReconPane = memo(function ReconPane({
 }: ReconPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
-  const drag = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved?: boolean } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
 
   // --- imperative transform fast path -----------------------------------------
@@ -456,6 +486,13 @@ export const ReconPane = memo(function ReconPane({
   // through `onTransform` at most once per animation frame. The parent still
   // owns the committed transform, but input devices that report 125–1000 Hz no
   // longer cause 125–1000 React renders.
+  const altHeld = useAltHeld();
+  // 用户反馈: the typed zoom value mirrors the live scale; a wheel burst
+  // keeps it current through the same effect that renders the header.
+  const [zoomInput, setZoomInput] = useState(String(Math.round(transform.scale * 100)));
+  useEffect(() => {
+    setZoomInput(String(Math.round(transform.scale * 100)));
+  }, [transform.scale]);
   const transformRef = useRef(transform);
   const gestureRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -551,6 +588,29 @@ export const ReconPane = memo(function ReconPane({
     return () => ro.disconnect();
   }, []);
 
+  // 用户反馈：three ways to set the pane scale — wheel (existing), a typed
+  // exact value, and preset steps. zoomToScale anchors at the pane centre and
+  // commits once (a single action, not a wheel burst).
+  const zoomToScale = useCallback(
+    (nextScale: number) => {
+      const live = transformRef.current;
+      const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, nextScale));
+      if (scale === live.scale) return;
+      const k = scale / live.scale;
+      const cx = box.w / 2;
+      const cy = box.h / 2;
+      gestureRef.current = true;
+      transformRef.current = {
+        scale,
+        tx: cx - (cx - live.tx) * k,
+        ty: cy - (cy - live.ty) * k,
+      };
+      scheduleCommit();
+      finishGesture();
+    },
+    [box.w, box.h, scheduleCommit, finishGesture],
+  );
+
   const onWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
@@ -559,18 +619,30 @@ export const ReconPane = memo(function ReconPane({
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+      gestureRef.current = true;
       // Compound on the LIVE transform: several wheel events can arrive before
       // the next frame, and each must build on the previous one.
       const live = transformRef.current;
-      const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, live.scale * k));
-      const kk = scale / live.scale;
-      gestureRef.current = true;
-      transformRef.current = {
-        scale,
-        tx: mx - (mx - live.tx) * kk,
-        ty: my - (my - live.ty) * kk,
-      };
+      // M32 (UI_UX_REVIEW): the main canvas contract — Ctrl/⌘+wheel (trackpad
+      // pinch) zooms, a plain two-finger scroll PANS. The recon pane used to
+      // zoom on every wheel, so the pan gesture users learned on the main
+      // canvas turned into zoom jitter here. Same contract, same limits.
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const scale = Math.max(RECON_MIN_SCALE, Math.min(RECON_MAX_SCALE, live.scale * k));
+        const kk = scale / live.scale;
+        transformRef.current = {
+          scale,
+          tx: mx - (mx - live.tx) * kk,
+          ty: my - (my - live.ty) * kk,
+        };
+      } else {
+        transformRef.current = {
+          ...live,
+          tx: live.tx - e.deltaX,
+          ty: live.ty - e.deltaY,
+        };
+      }
       scheduleCommit();
       // One final commit when the burst settles, mirroring the main canvas.
       if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
@@ -593,6 +665,8 @@ export const ReconPane = memo(function ReconPane({
   const bgMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
+    // M33: track total travel so a still press can be told from a pan.
+    d.moved = Math.abs(e.clientX - d.x) > 4 || Math.abs(e.clientY - d.y) > 4 ? true : d.moved;
     transformRef.current = {
       ...transformRef.current,
       tx: d.tx + (e.clientX - d.x),
@@ -601,14 +675,33 @@ export const ReconPane = memo(function ReconPane({
     scheduleCommit();
   };
   const bgUp = () => {
-    if (!drag.current) return;
+    const d = drag.current;
+    if (!d) return;
     drag.current = null;
+    // M33 (UI_UX_REVIEW): a still background click (≤4px travel) clears the
+    // selection, matching the main canvas; the pan keeps moving the view.
+    if (!d.moved) {
+      const st = useStore.getState();
+      if (st.selection.length > 0 || st.geneSelection.length > 0) {
+        st.clearSelection();
+        st.clearGeneSelection();
+      }
+    }
     finishGesture();
   };
 
   // LOD thresholds: hide labels whose SCREEN font size drops below readability.
+  // S12/M39: SMALL trees keep their tip labels — they now carry a screen-space
+  // font floor, so hiding them bought nothing but lost identity. Large trees
+  // keep the density-based LOD (labels would overlap into a solid band).
+  const tipCount = useMemo(
+    () => Object.values(doc.nodes).filter((n) => n.childrenIds.length === 0).length,
+    [doc],
+  );
+  const RECON_READABLE_TIP_LIMIT = 30;
   const hideInternalLabels = options.showLabels && transform.scale * 10.5 < 8;
-  const hideTipLabels = options.showLabels && transform.scale * 11.5 < 7;
+  const hideTipLabels =
+    options.showLabels && tipCount > RECON_READABLE_TIP_LIMIT && transform.scale * 11.5 < 7;
   const boxW = box.w;
   const boxH = box.h;
   const invScale = 1 / transform.scale;
@@ -636,16 +729,62 @@ export const ReconPane = memo(function ReconPane({
           <span className="recon-pane-sub">{subtitle}</span>
         </div>
         {badge && (
-          <span className={`recon-pane-badge${badgeTone === 'readonly' ? ' readonly' : ''}`}>
+          <span className={`recon-pane-badge${badgeTone === 'readonly' ? ' readonly' : ''}${badgeTone === 'editing' ? ' editing' : ''}`}>
             {badge}
           </span>
         )}
         <span className="recon-pane-count">
           {tr('节点', 'nodes')} {nodeCount}
         </span>
-        <span className="recon-pane-zoom" title={S.status.zoom}>
-          {zoomPercent}%
-        </span>
+        {/* 用户反馈：ONE combined 缩放 control — the typed value lives inside the
+            same rounded box as the preset menu (the old row had a separate left
+            number field and a 档位 select). */}
+        <div className="recon-zoom-group" title={tr('缩放', 'Zoom')}>
+          <select
+            className="recon-zoom-presets"
+            value={
+              [50, 75, 100, 150, 200, 300].includes(Math.round(transform.scale * 100))
+                ? String(Math.round(transform.scale * 100))
+                : ''
+            }
+            aria-label={tr('缩放', 'Zoom')}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (v) zoomToScale(v / 100);
+            }}
+          >
+            <option value="" disabled>
+              {tr('缩放', 'Zoom')}
+            </option>
+            {[50, 75, 100, 150, 200, 300].map((p) => (
+              <option key={p} value={p}>
+                {p}%
+              </option>
+            ))}
+          </select>
+          <input
+            className="recon-zoom-input"
+            type="number"
+            min={Math.round(RECON_MIN_SCALE * 100)}
+            max={Math.round(RECON_MAX_SCALE * 100)}
+            step={5}
+            value={zoomInput}
+            aria-label={tr('缩放百分比', 'Zoom percentage')}
+            onChange={(e) => setZoomInput(e.target.value)}
+            onBlur={() => {
+              const n = parseFloat(zoomInput);
+              if (Number.isFinite(n)) zoomToScale(n / 100);
+              else setZoomInput(String(Math.round(transform.scale * 100)));
+            }}
+            onKeyDown={(e) => {
+              if (isImeComposing(e)) return;
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.currentTarget as HTMLInputElement).blur();
+              }
+            }}
+          />
+        </div>
         <button className="btn icon tiny" title={S.recon.zoomFit} aria-label={S.recon.zoomFit} onClick={onFit}>
           ⤢
         </button>
@@ -667,6 +806,9 @@ export const ReconPane = memo(function ReconPane({
         onPointerMove={bgMove}
         onPointerUp={bgUp}
         onPointerCancel={bgUp}
+        /* M37: copy cursor while Alt is held — the mapping gesture answers
+           before the click, not only in a dismissable banner. */
+        style={{ cursor: altHeld ? 'copy' : undefined }}
       >
         <svg>
           <g transform={`translate(${transform.tx},${transform.ty}) scale(${transform.scale})`}>

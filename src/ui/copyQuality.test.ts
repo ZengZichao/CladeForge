@@ -251,12 +251,12 @@ describe('UI copy quality', () => {
   });
 
   it('pins the P0 scientific corrections', () => {
-    expect(ZH_STRINGS.recon.cntDuplication).toBe('基因重复 δ');
-    expect(ZH_STRINGS.recon.cntSpeciation).toBe('物种形成 σ');
-    expect(ZH_STRINGS.recon.cntTransfer).toBe('水平转移 τ');
-    expect(ZH_STRINGS.recon.cntLosses).toBe('基因丢失 λ');
-    expect(ZH_STRINGS.recon.costDup).toBe('重复代价 δ');
-    expect(ZH_STRINGS.recon.costLoss).toBe('丢失代价 λ');
+    expect(ZH_STRINGS.recon.cntDuplication).toBe('基因重复 D');
+    expect(ZH_STRINGS.recon.cntSpeciation).toBe('物种形成 S');
+    expect(ZH_STRINGS.recon.cntTransfer).toBe('水平转移 T');
+    expect(ZH_STRINGS.recon.cntLosses).toBe('基因丢失 L');
+    expect(ZH_STRINGS.recon.costDup).toBe('重复代价 D');
+    expect(ZH_STRINGS.recon.costLoss).toBe('丢失代价 L');
     expect(ZH_STRINGS.recon.lossSplit(1, 2)).toContain('末端枝');
     expect(ZH_STRINGS.recon.lossSplit(1, 2)).not.toContain('入枝');
 
@@ -280,9 +280,6 @@ describe('UI copy quality', () => {
     expect(EN_STRINGS.review.exportDpiHint).toContain('DPI');
     expect(ZH_STRINGS.review.clearLocalDataConfirm).toContain('主题保留');
     expect(ZH_STRINGS.layoutPanel.timeUnitHint('Ma')).toContain('66,000 ka');
-
-    expect(ZH_STRINGS.layoutPanel.calibrationHint).toContain('按校准点拟合年龄');
-    expect(ZH_STRINGS.layoutPanel.calibrationHint).not.toContain('仅随 NEXUS 导出');
 
     expect(ZH_STRINGS.notify.outgroupNoOp).not.toContain('基部');
     expect(EN_STRINGS.notify.outgroupNoOp).not.toContain('basal');
@@ -321,14 +318,17 @@ describe('UI copy quality', () => {
     // language, and the two locales disagreed on all three.
     expect(EN_STRINGS.recon.mappedCount).toBe('Mapped internal nodes');
     expect(EN_STRINGS.recon.filterUnresolved).toBe('Unmapped');
-    expect(ZH_STRINGS.recon.dataQuality).toBe('映射校验');
-    expect(EN_STRINGS.recon.dataQuality).toBe('Mapping validation');
+    expect(ZH_STRINGS.recon.dataQuality).toBe('校验');
+    expect(EN_STRINGS.recon.dataQuality).toBe('Validation');
     expect(ZH_STRINGS.layoutPanel.type).toBe('布局类型');
     expect(EN_STRINGS.layoutPanel.type).toBe('Layout type');
     expect(ZH_STRINGS.layoutPanel.branchGap).toBe('同级枝间距');
     expect(ZH_STRINGS.recon.embeddedSubtitle('g')).toContain('物种枝管道');
     expect(EN_STRINGS.recon.embeddedSubtitle('g')).toContain('species-branch tubes');
-    expect(ZH_STRINGS.toolbar.addTernary).toContain('三歧');
+    // M15: the menu unified on 叉 (二叉/三叉) — the old 二叉/三歧 mix is gone.
+    expect(ZH_STRINGS.toolbar.addTernary).toContain('三叉');
+    expect(ZH_STRINGS.context.addTernary).toContain('三叉');
+    expect(ZH_STRINGS.context.addBinary).toContain('二叉');
     expect(EN_STRINGS.context.addTernary).toBe('Add ternary branch');
     expect(EN_STRINGS.review.analysisApplyParsimonyNoData).toContain('Characters module');
     expect(EN_STRINGS.reconInspector.transferDonorHint).not.toMatch(/\b[A-Z]{5,}\b/);

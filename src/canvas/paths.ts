@@ -134,6 +134,115 @@ export function branchMidpoint(
 }
 
 /**
+ * Point at fraction `t` (0 = parent end, 1 = child end) ALONG the drawn branch
+ * path — the same construction `branchPath` renders. A branch event's
+ * 「在分支上的相对位置」is read on this path, so the marker sits on the branch
+ * at the chosen fraction in every layout and shape; a plain linear
+ * interpolation between the endpoints would float off elbow bends (and the
+ * circular arc) for any t away from ~0.5. t = 0.5 is exactly
+ * `branchMidpointOn`, so the default position coincides with the historical
+ * midpoint anchor (and stays 18 px from a co-located node-event badge).
+ */
+export function branchPointAt(
+  from: Point,
+  to: Point,
+  t: number,
+  orientation: Orientation,
+  layoutType?: LayoutType,
+  curved = false,
+): Point {
+  const tt = Math.min(1, Math.max(0, t));
+  const mid = branchMidpointOn(from, to, orientation, layoutType, curved);
+  if (tt === 0.5) return mid;
+
+  // Walk one half at a time: parent→mid for t < 0.5, mid→child beyond it.
+  // Each half follows the drawn geometry (arc + radial / bezier parameter /
+  // elbow polyline) scaled to its own length share, so the marker never
+  // leaves the branch and the pace stays even.
+  if (layoutType === 'circular') {
+    const rp = Math.hypot(from.x, from.y);
+    const rc = Math.hypot(to.x, to.y);
+    if (rp < 0.5 || rc < 0.5) {
+      // Degenerate fan (parent essentially at the centre): straight halves.
+      const base = tt < 0.5 ? from : mid;
+      const tip = tt < 0.5 ? mid : to;
+      const f = tt < 0.5 ? tt * 2 : (tt - 0.5) * 2;
+      return { x: base.x + (tip.x - base.x) * f, y: base.y + (tip.y - base.y) * f };
+    }
+    const ap = Math.atan2(from.y, from.x);
+    const ac = Math.atan2(to.y, to.x);
+    let delta = ac - ap;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    if (tt < 0.5) {
+      // Parent → arc end → radial mid, by length.
+      const f = tt * 2;
+      const arcLen = Math.abs(rp * delta);
+      const radLen = Math.abs((rp + rc) / 2 - rp);
+      const total = arcLen + radLen;
+      if (total < 1e-6) return mid;
+      const along = f * total;
+      if (along <= arcLen) {
+        const a = delta === 0 ? ac : ap + delta * (along / arcLen);
+        return { x: rp * Math.cos(a), y: rp * Math.sin(a) };
+      }
+      const r = rp + ((rc - rp) / 2) * ((along - arcLen) / radLen);
+      return { x: r * Math.cos(ac), y: r * Math.sin(ac) };
+    }
+    // Radial mid → child: straight radial segment.
+    const f = (tt - 0.5) * 2;
+    const r = (rp + rc) / 2 + ((rc - rp) / 2) * f;
+    return { x: r * Math.cos(ac), y: r * Math.sin(ac) };
+  }
+
+  if (curved) {
+    // Exact cubic-bezier evaluation (same control points as curvedBranchPath),
+    // parameter 0→0.5 for the first half, 0.5→1 for the second.
+    const horizontal = orientation === 'LR' || orientation === 'RL';
+    const xm = (from.x + to.x) / 2;
+    const ym = (from.y + to.y) / 2;
+    const c1 = horizontal ? { x: xm, y: from.y } : { x: from.x, y: ym };
+    const c2 = horizontal ? { x: xm, y: to.y } : { x: to.x, y: ym };
+    const u = tt < 0.5 ? tt * 2 * 0.5 : 0.5 + (tt - 0.5) * 2 * 0.5;
+    const w0 = (1 - u) ** 3;
+    const w1 = 3 * (1 - u) ** 2 * u;
+    const w2 = 3 * (1 - u) * u * u;
+    const w3 = u ** 3;
+    return {
+      x: w0 * from.x + w1 * c1.x + w2 * c2.x + w3 * to.x,
+      y: w0 * from.y + w1 * c1.y + w2 * c2.y + w3 * to.y,
+    };
+  }
+
+  // Elbow polyline: parent → corner → child. The midpoint anchor sits on the
+  // second segment (see branchMidpoint), so each half is itself a polyline
+  // walk: first half parent → corner → (maybe part of) corner → mid, second
+  // half the remainder of corner → mid → child.
+  const horizontal = orientation === 'LR' || orientation === 'RL';
+  const corner = horizontal ? { x: from.x, y: to.y } : { x: to.x, y: from.y };
+  const pointOnPolyline = (pts: Point[], frac: number): Point => {
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (total < 1e-6) return pts[pts.length - 1];
+    let along = frac * total;
+    for (let i = 1; i < pts.length; i++) {
+      const len = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (along <= len || i === pts.length - 1) {
+        const f = len < 1e-6 ? 0 : Math.min(1, along / len);
+        return {
+          x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
+          y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
+        };
+      }
+      along -= len;
+    }
+    return pts[pts.length - 1];
+  };
+  if (tt < 0.5) return pointOnPolyline([from, corner, mid], tt * 2);
+  return pointOnPolyline([mid, to], (tt - 0.5) * 2);
+}
+
+/**
  * Curved connector for custom edges. `curvature` (0..1) bows the quadratic
  * control point perpendicular to the straight line between endpoints.
  */

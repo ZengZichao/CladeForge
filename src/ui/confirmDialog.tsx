@@ -7,7 +7,7 @@
 // ConfirmDialog that resolves the pending request. The dialog supports a
 // "don't ask again for this key" opt-out persisted to localStorage.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDialogFocus } from './useDialogFocus';
 import { S } from './strings';
 
@@ -19,6 +19,13 @@ export interface ConfirmRequest {
   confirmLabel: string;
   danger?: boolean;
   onConfirm: () => void;
+  /**
+   * B4 (UI_UX_REVIEW): an optional third choice rendered between Cancel and
+   * Confirm as the solid-primary button — the close-tab dialog offers
+   * 保存并关闭 (safe, primary) beside 不保存 (destructive, danger). It runs
+   * INSTEAD of onConfirm/onCancel; the dialog closes either way.
+   */
+  alternate?: { label: string; onAction: () => void };
   /**
    * Runs when the dialog is dismissed WITHOUT confirming (cancel button,
    * backdrop, Escape). Lets a caller that must branch on the answer (the M12
@@ -63,14 +70,24 @@ export function requestConfirm(req: ConfirmRequest): void {
 export function ConfirmDialog() {
   const [req, setReq] = useState<ConfirmRequest | null>(null);
   const [skip, setSkip] = useState(false);
+  // m20: the currently pending request, mirrored in a ref so `open()` can
+  // cancel the previous one even under React StrictMode (state updaters run
+  // twice there — a side effect inside the updater would cancel twice).
+  const reqRef = useRef<ConfirmRequest | null>(null);
   const ref = useDialogFocus(Boolean(req), () => {
     const cancel = req?.onCancel;
     setReq(null);
+    reqRef.current = null;
     cancel?.();
   });
 
   const open = useCallback((r: ConfirmRequest) => {
     setSkip(false);
+    // m20 (UI_UX_REVIEW): a singleton replacing a pending request used to drop
+    // the old one silently — its awaiting promise (e.g. the save-then-replace
+    // flow in fileActions) then never resolved. Cancel it explicitly.
+    reqRef.current?.onCancel?.();
+    reqRef.current = r;
     setReq(r);
   }, []);
 
@@ -83,6 +100,7 @@ export function ConfirmDialog() {
   const dismiss = () => {
     const cancel = req.onCancel;
     setReq(null);
+    reqRef.current = null;
     cancel?.();
   };
 
@@ -96,6 +114,7 @@ export function ConfirmDialog() {
     }
     const fn = req.onConfirm;
     setReq(null);
+    reqRef.current = null;
     fn();
   };
 
@@ -123,11 +142,25 @@ export function ConfirmDialog() {
             onClick={() => {
               const cancel = req.onCancel;
               setReq(null);
+              reqRef.current = null;
               cancel?.();
             }}
           >
             {S.confirm.cancel}
           </button>
+          {req.alternate && (
+            <button
+              className="btn primary"
+              onClick={() => {
+                const act = req.alternate!.onAction;
+                setReq(null);
+                reqRef.current = null;
+                act();
+              }}
+            >
+              {req.alternate.label}
+            </button>
+          )}
           <button className={`btn ${req.danger ? 'danger' : 'primary'}`} onClick={confirm}>
             {req.confirmLabel}
           </button>

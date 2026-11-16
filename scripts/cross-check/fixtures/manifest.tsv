@@ -3,4 +3,5 @@ feature-tour	sample-char:feature-tour-c1	3	4	3	17.66666667	0.05660377358	3	Sanko
 feature-tour	sample-char:feature-tour-c2	3	4	3	17.66666667	0.05660377358	3	Sankoff
 large-tree	sample-char:large-tree-c1	3	11	10	1300.000000	0.0007692307692	2	uniform
 large-tree	sample-char:large-tree-c2	3	11	10	1300.000000	0.0007692307692	2	uniform
+demo-neutral	sample-char:demo-neutral-c1	3	6	5	20.30000000	0.04926108374	2	uniform
 er-control	erControlChar	2	8	7	0.3785714286	2.641509434	3	uniform

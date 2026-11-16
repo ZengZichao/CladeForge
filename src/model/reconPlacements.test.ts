@@ -1,6 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Contracts for the EMBEDDED reconciliation placement resolver
-// (docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md §5.1 / §9.1):
+// Contracts for the EMBEDDED reconciliation placement resolver:
 //   * explicit assumptions beat tip-label matches; unmatched tips stay unmapped;
 //   * display inference (child MRCA) keeps unannotated internal nodes connected
 //     WITHOUT touching `assumptions` (the sample's β4 contract);

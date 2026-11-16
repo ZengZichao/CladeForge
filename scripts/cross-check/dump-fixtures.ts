@@ -263,7 +263,7 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
       for (const id of flat.ids) {
         const probs = asr.probs.get(id);
         if (!probs) continue;
-        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id) ?? '', i, char.states[i]?.label ?? '', p.toPrecision(10)]));
+        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id) ?? '', i, char.states[i]?.label ?? '', p.toPrecision(7)]));
       }
     }
     const par = parsimony(project, char);
@@ -306,7 +306,5 @@ write(
   ]),
 );
 
-// eslint-disable-next-line no-console
 console.log(`CladeForge fixtures written to ${outDir}`);
-for (const f of written) // eslint-disable-next-line no-console
-  console.log(`  ${f}`);
+for (const f of written) console.log(`  ${f}`);

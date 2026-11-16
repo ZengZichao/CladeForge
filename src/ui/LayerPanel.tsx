@@ -30,9 +30,6 @@ import { requestConfirm } from './confirmDialog';
 import { useDialogFocus } from './useDialogFocus';
 import type { HypothesisStatus } from '../model/types';
 
-/** Hypothesis statuses in dropdown order (keys of the old STATUS_LABEL record). */
-const LAYER_STATUSES: HypothesisStatus[] = ['draft', 'tested', 'supported', 'refuted'];
-
 /**
  * Status labels resolve `S` AT CALL TIME. A module-level `Record` would freeze
  * them to whichever locale was active at import and never follow a language
@@ -51,18 +48,21 @@ function statusLabel(status: HypothesisStatus): string {
   }
 }
 
-/** The A/B compare view (a small dialog over the canvas). */
-function LayerCompareDialog({
-  project,
+/** The A/B compare view (a small dialog over the canvas). Exported so the
+ *  command palette can open the SAME dialog (S14/m14: one command, one
+ *  definition — the palette's quick toast variant is retired). */
+export function LayerCompareDialog({
   initialA,
   initialB,
   onClose,
 }: {
-  project: ReturnType<typeof useStore.getState>['project'];
   initialA: string;
   initialB: string;
   onClose: () => void;
 }) {
+  // Reads the live project from the store itself so the dialog can live at App
+  // level without App subscribing to every document edit.
+  const project = useStore((s) => s.project);
   const [aId, setAId] = useState(initialA);
   const [bId, setBId] = useState(initialB);
   const select = useStore((s) => s.select);
@@ -112,7 +112,7 @@ function LayerCompareDialog({
               diff.eventsOnlyA.length === 0 &&
               diff.eventsOnlyB.length === 0
                 ? S.review.layerCompareNoDiff
-                : `${S.review.layerCompareStates(diff.stateDiffs.length)} · ${S.review.layerCompareEventsOnlyA(diff.eventsOnlyA.length)} · ${S.review.layerCompareEventsOnlyB(diff.eventsOnlyB.length)}`}
+                : `${S.review.layerCompareStates(diff.stateDiffs.length)}；${S.review.layerCompareEventsOnlyA(diff.eventsOnlyA.length)}；${S.review.layerCompareEventsOnlyB(diff.eventsOnlyB.length)}`}
             </div>
             {diff.stateDiffs.length > 0 && (
               <ul className="issue-list">
@@ -125,7 +125,7 @@ function LayerCompareDialog({
                       focusNode(d.nodeId);
                     }}
                   >
-                    <strong>{project.nodes[d.nodeId]?.label || d.nodeId.slice(0, 6)}</strong> ·{' '}
+                    <strong>{project.nodes[d.nodeId]?.label || d.nodeId.slice(0, 6)}</strong>{' '}
                     {d.characterName}: {nameOf(aId)}={d.a ?? '—'} ↔ {nameOf(bId)}={d.b ?? '—'}
                   </li>
                 ))}
@@ -175,7 +175,6 @@ export function LayerPanel() {
     <Section title={S.layer.section} pinable>
       {compareOpen && (
         <LayerCompareDialog
-          project={project}
           initialA={compareOpen.a}
           initialB={compareOpen.b}
           onClose={() => setCompareOpen(null)}
@@ -193,13 +192,6 @@ export function LayerPanel() {
             <div
               key={l.id}
               className={`layer-card${isActive ? ' active' : ''}`}
-              style={{
-                border: '1px solid var(--border, rgba(128,128,128,0.3))',
-                borderRadius: 6,
-                padding: 8,
-                marginBottom: 6,
-                cursor: 'pointer',
-              }}
               onClick={() => !isActive && apply((d) => switchLayer(d, l.id))}
               role="button"
               tabIndex={0}
@@ -211,16 +203,16 @@ export function LayerPanel() {
                 }
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <strong style={{ fontSize: 12 }}>{l.name}</strong>
-                {l.status && (
-                  <span style={{ fontSize: 11, opacity: 0.8 }}>{statusLabel(l.status)}</span>
-                )}
+              {/* ID-17: these rows used to carry inline style bags that
+                  bypassed the theme variables (a dark-mode drift waiting to
+                  happen). Every visual decision now lives in app.css; the JSX
+                  keeps only structure and dynamic values. */}
+              <div className="layer-card-head">
+                <strong className="layer-card-name">{l.name}</strong>
+                {l.status && <span className="layer-card-status">{statusLabel(l.status)}</span>}
               </div>
-              {l.statement && (
-                <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>{l.statement}</div>
-              )}
-              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
+              {l.statement && <div className="layer-card-statement">{l.statement}</div>}
+              <div className="layer-card-counts">
                 {S.review.layerCounts(counts.states, counts.meta, counts.notes, counts.events)}
               </div>
             </div>
@@ -235,57 +227,6 @@ export function LayerPanel() {
               value={active.name}
               onCommit={(v) => apply((d) => renameLayer(d, active.id, v))}
             />
-          </Field>
-          {/* The hypothesis BODY: a competitive hypothesis is a claim with a
-              test, not just a name — without somewhere to put it, the conclusion
-              of a comparison lands in a screenshot or a Word file. */}
-          <Field label={S.review.layerStatement}>
-            <TextField
-              value={active.statement ?? ''}
-              onCommit={(v) =>
-                apply((d) => {
-                  const l = d.layers.find((x) => x.id === active.id);
-                  if (l) {
-                    l.statement = v || undefined;
-                    l.updatedAt = new Date().toISOString();
-                  }
-                })
-              }
-            />
-          </Field>
-          <Field label={S.review.layerPrediction}>
-            <TextField
-              value={active.prediction ?? ''}
-              onCommit={(v) =>
-                apply((d) => {
-                  const l = d.layers.find((x) => x.id === active.id);
-                  if (l) {
-                    l.prediction = v || undefined;
-                    l.updatedAt = new Date().toISOString();
-                  }
-                })
-              }
-            />
-          </Field>
-          <Field label={S.review.layerStatus}>
-            <select
-              value={active.status ?? 'draft'}
-              onChange={(e) =>
-                apply((d) => {
-                  const l = d.layers.find((x) => x.id === active.id);
-                  if (l) {
-                    l.status = e.target.value as HypothesisStatus;
-                    l.updatedAt = new Date().toISOString();
-                  }
-                })
-              }
-            >
-              {LAYER_STATUSES.map((k) => (
-                <option key={k} value={k}>
-                  {statusLabel(k)}
-                </option>
-              ))}
-            </select>
           </Field>
         </>
       )}
@@ -322,7 +263,7 @@ export function LayerPanel() {
           </button>
         </div>
         <button
-          className="btn danger"
+          className="btn ghost-danger"
           disabled={layers.length <= 1}
           onClick={() => {
             const currentName = active?.name ?? S.layer.section;

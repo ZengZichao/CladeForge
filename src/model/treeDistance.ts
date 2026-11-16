@@ -36,6 +36,8 @@ export interface TreeDistanceResult {
   wrf: number | null;
   /** Shared tip labels (the two trees must agree for a distance to exist). */
   sharedTips: string[];
+  /** Clades present in BOTH trees (the complement of the symmetric difference). */
+  sharedClades: number;
   /** Clades present only in tree A / only in tree B, as tip-label lists. */
   onlyA: string[][];
   onlyB: string[][];
@@ -153,6 +155,7 @@ export function treeDistance(a: Project, b: Project): TreeDistanceResult {
     rfNormalized: rfMax > 0 ? rf / rfMax : 0,
     wrf,
     sharedTips: tips,
+    sharedClades: cladesA.size - onlyA.length,
     onlyA,
     onlyB,
   };

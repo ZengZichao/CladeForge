@@ -11,10 +11,10 @@
 // calibration points). On a purely topological tree the panel shows a warning
 // and disables the time-consuming controls, preventing "orphan" time data.
 
-import { Cross1Icon } from '@radix-ui/react-icons';
+import { useState } from 'react';
+import { ChevronDownIcon, ChevronRightIcon, Cross1Icon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import {
-  estimateAges,
   hasEstimatedAges,
   addEnvironmentalEvent,
   removeEnvironmentalEvent,
@@ -29,37 +29,33 @@ import {
   unpinAll,
 } from '../model/treeOps';
 import type { Project } from '../model/types';
-import type { EstimateAgesResult } from '../model/treeOps';
-import { estimateAgesText } from './treeEditNotices';
 
 /** Dropdown options = recognised geological units, in formal case. */
 const TIME_UNIT_OPTIONS = ['ma', 'myr', 'ka', 'kyr', 'ga', 'gyr', 'yr'];
 
-function timeUnitOptionLabel(unit: string): string {
+function shortTimeUnitLabel(unit: string): string {
   switch (unit) {
     case 'ma':
-      return S.layoutPanel.timeUnitMa;
+      return 'Ma';
     case 'myr':
-      return S.layoutPanel.timeUnitMyr;
+      return 'Myr';
     case 'ka':
-      return S.layoutPanel.timeUnitKa;
+      return 'ka';
     case 'kyr':
-      return S.layoutPanel.timeUnitKyr;
+      return 'kyr';
     case 'ga':
-      return S.layoutPanel.timeUnitGa;
+      return 'Ga';
     case 'gyr':
-      return S.layoutPanel.timeUnitGyr;
+      return 'Gyr';
     case 'yr':
-      return S.layoutPanel.timeUnitYr;
+      return 'yr';
     default:
       return unit;
   }
 }
 import type { EraLevel } from '../layout/timescale';
 import {
-  CheckboxField,
   ColorField,
-  DismissibleHint,
   Field,
   NumberField,
   TextField,
@@ -73,84 +69,25 @@ import { notify } from './toast';
 import { layoutTypeName } from './layoutTypeName';
 import { enterTimeChartLayout, rememberErasToggle } from './timeChartEras';
 
-/** Build a comma-separated list of missing-age node names (max 5, then "…N more"). */
-function missingAgeNames(names: string[]): string {
-  const shown = names.slice(0, 5);
-  const rest = names.length - shown.length;
-  const parts = shown.join(', ');
-  if (rest > 0) {
-    return `${parts} ${S.layoutPanel.missingAgesMore(rest)}`;
-  }
-  return parts;
-}
-
 type Apply = (recipe: (d: Project) => void) => void;
 
 // Timeline environmental-context events (climate, drift, mass extinction, …).
+// M4 (review finding 6): each row used to spread its colour + label + delete +
+// from + to + unit across TWO always-visible lines in a ~280 px panel — the
+// numeric row was cramped to the point of clipping. Each row now has a
+// collapsed state (colour + label + one-line range summary + delete) and an
+// expandable numeric editor.
 function EnvEvents({ project, apply, disabled }: { project: Project; apply: Apply; disabled: boolean }) {
   const events = project.environmentalEvents;
+  const unit = timeUnitSymbol(project.layout.timeUnit ?? 'Ma');
   return (
     <div className="env-events">
       {events.length === 0 && <div className="hint">{S.layoutPanel.envEmpty}</div>}
       {events.map((e) => (
-        <div className="env-item" key={e.id}>
-          <div className="env-row">
-            {/* A raw `<input type="color" onChange={apply}>` would push one undo
-                step per pixel of the native picker's drag; ColorField coalesces a
-                drag into one step. */}
-            <ColorField
-              value={e.color}
-              disabled={disabled}
-              ariaLabel={tr('环境事件颜色', 'Environmental event colour')}
-              onChange={(v) =>
-                apply((d) => updateEnvironmentalEvent(d, e.id, { color: v }))
-              }
-            />
-            <TextField
-              value={e.label}
-              ariaLabel={S.layoutPanel.envSection}
-              onCommit={(v) => apply((d) => updateEnvironmentalEvent(d, e.id, { label: v }))}
-            />
-            <button
-              className="btn icon danger"
-              title={S.layoutPanel.envDelete}
-              disabled={disabled}
-              onClick={() => apply((d) => removeEnvironmentalEvent(d, e.id))}
-            >
-              <Cross1Icon />
-            </button>
-          </div>
-          <div className="env-row">
-            <label>{S.layoutPanel.envFrom}</label>
-            {/* One shared unit chip instead of one per field: two chips in a
-                ~200 px row squeezed each input below two-digit width, so "34"
-                rendered as "3" plus a clipped digit. The unit is the project's
-                time unit, the same axis the node ages are read on. */}
-            <NumberField
-              value={e.from}
-              step={0.1}
-              onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { from: v }))}
-            />
-            <label>{S.layoutPanel.envTo}</label>
-            <NumberField
-              value={e.to}
-              step={0.1}
-              onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, e.id, { to: v }))}
-            />
-            <span
-              className="number-unit"
-              title={tr(
-                '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
-                'The same time unit as the node ages (change it under “Time unit” in this module)',
-              )}
-            >
-              {timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
-            </span>
-          </div>
-        </div>
+        <EnvItem key={e.id} event={e} unit={unit} apply={apply} disabled={disabled} />
       ))}
       <button
-        className="btn"
+        className="link-btn"
         disabled={disabled}
         onClick={() =>
           apply((d) =>
@@ -159,13 +96,116 @@ function EnvEvents({ project, apply, disabled }: { project: Project; apply: Appl
               label: S.layoutPanel.envSection,
               from: 0,
               to: 0,
-              color: '#f59e0b',
+              // `<input type="color">` only accepts #rrggbb; a CSS variable
+              // fell back to black inside the picker while the canvas drew the
+              // resolved amber. `--amber-11` in the light theme is #ab6400 —
+              // the same hue, stored as a value every colour field accepts.
+              color: '#ab6400',
             }),
           )
         }
       >
         {S.layoutPanel.envAdd}
       </button>
+    </div>
+  );
+}
+
+/** One collapsible environmental-event row (see EnvEvents for the rationale). */
+function EnvItem({
+  event,
+  unit,
+  apply,
+  disabled,
+}: {
+  event: Project['environmentalEvents'][number];
+  unit: string;
+  apply: Apply;
+  disabled: boolean;
+}) {
+  // Collapsed by default: the summary answers "what and when"; expanding is
+  // only needed when the numbers themselves change.
+  const [open, setOpen] = useState(false);
+  // 用户反馈: always show the RANGE, never a bare single age — an event's time
+  // is an interval (a point event is the degenerate from === to case).
+  const summary = `${event.from}–${event.to} ${unit}`;
+  return (
+    <div className="env-item">
+      <div className="env-row">
+        {/* A raw `<input type="color" onChange={apply}>` would push one undo
+            step per pixel of the native picker's drag; ColorField coalesces a
+            drag into one step. */}
+        <ColorField
+          value={event.color}
+          disabled={disabled}
+          ariaLabel={tr('环境事件颜色', 'Environmental event colour')}
+          onChange={(v) =>
+            apply((d) => updateEnvironmentalEvent(d, event.id, { color: v }))
+          }
+        />
+        <TextField
+          value={event.label}
+          ariaLabel={S.layoutPanel.envSection}
+          onCommit={(v) => apply((d) => updateEnvironmentalEvent(d, event.id, { label: v }))}
+        />
+        <span
+          className="env-summary"
+          title={tr(
+            '时间范围（与节点年龄相同的时间单位）',
+            'Time range (same unit as the node ages)',
+          )}
+        >
+          {summary}
+        </span>
+        <button
+          className="btn icon"
+          title={open ? tr('收起', 'Collapse') : tr('展开编辑时间范围', 'Edit the time range')}
+          aria-label={open ? tr('收起', 'Collapse') : tr('展开编辑时间范围', 'Edit the time range')}
+          aria-expanded={open}
+          disabled={disabled}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+        </button>
+        <button
+          className="btn icon ghost-danger"
+          title={S.layoutPanel.envDelete}
+          aria-label={S.layoutPanel.envDelete}
+          disabled={disabled}
+          onClick={() => apply((d) => removeEnvironmentalEvent(d, event.id))}
+        >
+          <Cross1Icon />
+        </button>
+      </div>
+      {open && (
+        <div className="env-row">
+          <label>{S.layoutPanel.envFrom}</label>
+          {/* One shared unit chip instead of one per field: two chips in a
+              ~200 px row squeezed each input below two-digit width, so "34"
+              rendered as "3" plus a clipped digit. The unit is the project's
+              time unit, the same axis the node ages are read on. */}
+          <NumberField
+            value={event.from}
+            step={0.1}
+            onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, event.id, { from: v }))}
+          />
+          <label>{S.layoutPanel.envTo}</label>
+          <NumberField
+            value={event.to}
+            step={0.1}
+            onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, event.id, { to: v }))}
+          />
+          <span
+            className="number-unit"
+            title={tr(
+              '与节点年龄相同的时间单位（可在本模块「时间单位」中修改）',
+              'The same time unit as the node ages (change it under “Time unit” in this module)',
+            )}
+          >
+            {unit}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -180,9 +220,12 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
       {points.map((c) => (
         <div className="env-item" key={c.id}>
           <div className="env-row">
+            {/* S09 (Sonus): the node picker needs a programmatic name — four
+                calibration selects read as four identical unnamed menus. */}
             <select
               value={c.nodeId}
               disabled={disabled}
+              aria-label={`${S.layoutPanel.calibrationNode} #${points.indexOf(c) + 1}`}
               onChange={(e) => apply((d) => updateCalibrationPoint(d, c.id, { nodeId: e.target.value }))}
             >
               {internalNodes.map((n) => (
@@ -192,34 +235,42 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
               ))}
             </select>
             <button
-              className="btn icon danger"
+              className="btn icon ghost-danger"
               title={S.layoutPanel.calibrationDelete}
+              aria-label={`${S.layoutPanel.calibrationDelete} #${points.indexOf(c) + 1}`}
               disabled={disabled}
               onClick={() => apply((d) => removeCalibrationPoint(d, c.id))}
             >
               <Cross1Icon />
             </button>
           </div>
-          <div className="env-row">
-            <label>{S.layoutPanel.calibrationMin}</label>
-            <NumberField
-              value={c.minAge}
-              step={0.1}
-              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
-              onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { minAge: v }))}
-            />
-            <label>{S.layoutPanel.calibrationMax}</label>
-            <NumberField
-              value={c.maxAge}
-              step={0.1}
-              unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
-              onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { maxAge: v }))}
-            />
+          {/* S05 (Sonus): one flex row squeezed both number inputs to 14px —
+              unreadable. Object on one row, min/max as two stacked columns;
+              the unit chip stays with each field. */}
+          <div className="cal-age-grid">
+            <label className="cal-age-cell">
+              <span className="cal-age-label">{S.layoutPanel.calibrationMin}</span>
+              <NumberField
+                value={c.minAge}
+                step={0.1}
+                unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
+                onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { minAge: v }))}
+              />
+            </label>
+            <label className="cal-age-cell">
+              <span className="cal-age-label">{S.layoutPanel.calibrationMax}</span>
+              <NumberField
+                value={c.maxAge}
+                step={0.1}
+                unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
+                onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { maxAge: v }))}
+              />
+            </label>
           </div>
         </div>
       ))}
       <button
-        className="btn"
+        className="link-btn"
         disabled={disabled}
         onClick={() => {
           const firstInternal = internalNodes[0];
@@ -248,6 +299,17 @@ export function TimePanel() {
   const setShowEras = useStore((s) => s.setShowEras);
   const eraLevel = useStore((s) => s.eraLevel);
   const setEraLevel = useStore((s) => s.setEraLevel);
+  // A14: the canvas overlay toggle for calibration intervals.
+
+  // "Custom…" is a MODE, not a value: selecting it must keep the input on
+  // screen. Deriving the select's value purely from `timeUnit` made choosing
+  // 自定义… write `'Ma'` and then immediately hide the very field it was meant
+  // to reveal (the stored unit was a preset again). This flag survives until
+  // the user picks a preset or commits a custom value.
+  const [customUnitMode, setCustomUnitMode] = useState(false);
+  const storedUnit = project.layout.timeUnit ?? 'Ma';
+  const storedIsPreset = TIME_UNIT_OPTIONS.includes(storedUnit.toLowerCase());
+  const showCustomField = !storedIsPreset || customUnitMode;
 
   // STATE MACHINE: check whether the tree carries time-calibration data.
   const timeReady = isTimeCalibrated(project);
@@ -260,22 +322,18 @@ export function TimePanel() {
   // only layout that reads `age`.
   const isTimeLayout = project.layout.type === 'time-calibrated';
   const missingNodes = isTimeLayout ? nodesMissingAges(project) : [];
-  const missingNames = missingNodes.map(
-    (n) => n.label || n.id.slice(0, 6),
-  );
 
   return (
     <>
       <div className="panel-header">
         <span className="panel-header-title">{S.nav.time}</span>
-        <span className="panel-header-subtitle">{S.layoutPanel.timeSection}</span>
-      </div>
+              </div>
 
       {/* --- Layered status hints --- */}
       {/* Case 0: no time data at all — show the "not calibrated" warning. */}
       {!timeReady && (
-        <div className="time-warning">
-          <div className="time-warning-title">{S.layoutPanel.timeNotCalibrated}</div>
+        <div className="panel-note">
+          <div className="panel-note-title">{S.layoutPanel.timeNotCalibrated}</div>
           <div className="hint">{S.layoutPanel.timeNotCalibratedHint}</div>
         </div>
       )}
@@ -317,17 +375,6 @@ export function TimePanel() {
           </div>
         </div>
       )}
-      {/* Case 2: time-calibrated layout is active but some nodes lack ages. */}
-      {timeReady && isTimeLayout && missingNodes.length > 0 && (
-        <div className="time-warning">
-          <div className="time-warning-title">
-            {S.layoutPanel.missingAgesWarning(missingNodes.length)}
-          </div>
-          <div className="hint">
-            {S.layoutPanel.missingAgesListPrefix}{missingAgeNames(missingNames)}
-          </div>
-        </div>
-      )}
       {/* Time-data consistency issues (shown alongside the missing-ages warning). */}
       {timeReady && timeIssues.length > 0 && (
         <div className="time-warning">
@@ -343,55 +390,62 @@ export function TimePanel() {
       {timeReady && timeIssues.length === 0 && isTimeLayout && missingNodes.length === 0 && (
         <div className="hint time-ok">{S.layoutPanel.timeCalibrated}</div>
       )}
-
-      <Section title={S.layoutPanel.timeSection} pinable>
+      {/* 用户反馈：the section starts COLLAPSED like every other submodule of
+          the merged panel. */}
+      <Section title={S.layoutPanel.timeSection} defaultOpen={false} pinable>
         <Field label={S.layoutPanel.timeUnit}>
-          {/* Known units become a dropdown (a free-text field where the SPELLING
-              decides whether geological bands draw is a trap); the custom entry
-              stays available for exotic units. */}
+          {/* Known units become a dropdown; the custom entry stays available
+              for exotic units. */}
           <select
-            value={TIME_UNIT_OPTIONS.includes((project.layout.timeUnit ?? 'Ma').toLowerCase())
-              ? (project.layout.timeUnit ?? 'Ma').toLowerCase()
-              : 'custom'}
+            value={storedIsPreset ? storedUnit.toLowerCase() : 'custom'}
             onChange={(e) => {
               const v = e.target.value;
-              apply((d) => void (d.layout.timeUnit = v === 'custom' ? 'Ma' : v));
+              if (v === 'custom') {
+                setCustomUnitMode(true);
+                return;
+              }
+              setCustomUnitMode(false);
+              apply((d) => void (d.layout.timeUnit = v));
             }}
           >
             {TIME_UNIT_OPTIONS.map((u) => (
               <option key={u} value={u}>
-                {timeUnitOptionLabel(u)}
+                {shortTimeUnitLabel(u)}
               </option>
             ))}
             <option value="custom">{tr('自定义…', 'Custom…')}</option>
           </select>
         </Field>
-        {!TIME_UNIT_OPTIONS.includes((project.layout.timeUnit ?? 'Ma').toLowerCase()) && (
+        {showCustomField && (
           <Field label={tr('自定义单位', 'Custom unit')}>
             <TextField
-              value={project.layout.timeUnit ?? 'Ma'}
-              onCommit={(v) => apply((d) => void (d.layout.timeUnit = v))}
+              value={storedUnit}
+              onCommit={(v) => {
+                setCustomUnitMode(false);
+                const next = v.trim();
+                apply((d) => void (d.layout.timeUnit = next === '' ? 'Ma' : next));
+              }}
             />
           </Field>
         )}
-        <div className="hint">{S.review.icsNote}</div>
-        <CheckboxField
-          label={S.layoutPanel.showEras}
-          checked={showEras}
-          disabled={!timeReady}
-          onChange={(v) => {
-            // An EXPLICIT choice is remembered across sessions: once the user
-            // unchecks the bands themselves, switching layouts must never turn
-            // them back on behind their back (BUG-7 follow-up); re-checking
-            // opts back in. Only this handler records a choice — the automatic
-            // first-entry enable does not.
-            rememberErasToggle(v);
-            setShowEras(v);
-            // The era labels stack above the band edge; refit so the newly
-            // revealed label rows are inside the viewport.
-            if (v) requestFit();
-          }}
-        />
+        <Field label={S.layoutPanel.showEras}>
+          {/* 用户反馈：rounded dropdown (显示 / 隐藏) instead of a checkbox. */}
+          <select
+            value={showEras ? 'show' : 'hide'}
+            disabled={!timeReady}
+            onChange={(e) => {
+              const v = e.target.value === 'show';
+              // An EXPLICIT choice is remembered across sessions (BUG-7
+              // follow-up); the automatic first-entry enable records nothing.
+              rememberErasToggle(v);
+              setShowEras(v);
+              if (v) requestFit();
+            }}
+          >
+            <option value="show">{tr('显示', 'Show')}</option>
+            <option value="hide">{tr('隐藏', 'Hide')}</option>
+          </select>
+        </Field>
         <Field label={S.layoutPanel.eraLevelLabel}>
           <select
             value={eraLevel}
@@ -407,32 +461,6 @@ export function TimePanel() {
             <option value="both">{S.layoutPanel.eraLevelBoth}</option>
           </select>
         </Field>
-        <div className="field row-actions">
-          {/* `.btn` is nowrap; this label ("Fill relative ages from topological
-              depth (heuristic)") is longer than the 272 px panel, so without
-              wrapping the button overflows into the canvas. */}
-          <button
-            className="btn btn-multiline"
-            onClick={() => {
-              // `estimateAges` returns what it wrote, and that result drives the
-              // toast. Discarding it and toasting a flat "done" would hide both
-              // that user-entered ages were preserved and — the dangerous part —
-              // that with no absolute age anywhere the numbers are EDGE COUNTS,
-              // not Ma; a "0–12 Ma Phanerozoic" axis gets built that way.
-              const box: { result: EstimateAgesResult | null } = { result: null };
-              apply((d) => {
-                box.result = estimateAges(d);
-              });
-              requestFit();
-              const text = box.result ? estimateAgesText(box.result) : S.layoutPanel.agesEstimated;
-              const absolute = !!box.result && box.result.changed && box.result.unit === 'project';
-              if (absolute) notify.success(text);
-              else notify.info(text);
-            }}
-          >
-            {S.layoutPanel.estimateAges}
-          </button>
-        </div>
         {/* `hasEstimatedAges` marks every node the estimator wrote, so
             the panel keeps saying "these ages are inferred" after the toast is
             gone instead of the values quietly becoming facts. */}
@@ -441,19 +469,16 @@ export function TimePanel() {
             {S.layoutPanel.agesAreEstimated}
           </div>
         )}
-        <DismissibleHint id="time-hint">{S.layoutPanel.timeHint}</DismissibleHint>
       </Section>
-
-      <Section title={S.layoutPanel.envSection} pinable>
+      <Section title={S.layoutPanel.envSection} defaultOpen={false} pinable>
         <EnvEvents project={project} apply={apply} disabled={!timeReady} />
       </Section>
 
-      <Section title={S.layoutPanel.calibrationSection} pinable>
-        {/* Clarification: calibration points are NEXUS-export-only; they do
-            not affect the layout (no solver exists yet). */}
-        <div className="hint" style={{ marginBottom: '8px' }}>
-          {S.layoutPanel.calibrationHint}
-        </div>
+      <Section title={S.layoutPanel.calibrationSection} defaultOpen={false} pinable>
+        {/* 用户反馈: the hint paragraph is gone — the manager stays usable on a
+            purely topological tree so the first calibration can be added at
+            all; once one exists, `timeReady` flips true and the other controls
+            unlock. */}
         <CalibrationPoints project={project} apply={apply} disabled={false} />
       </Section>
     </>

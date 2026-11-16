@@ -4,13 +4,13 @@
 //
 // Two modes share one component:
 //
-//   basics   — canvas → inspector → module rail → command palette. This is the
+//   basics   — canvas → inspector → left panel → command palette. This is the
 //              original 4-step tour, still reachable from Help → 新手指南, from
 //              the command palette (⌘K) and from the shortcut reference.
-//   workflow — Traits → Hypotheses → Analysis → Export (BUG-11). Each step
-//              switches the left module through App's `setNavModule` and then
-//              spotlights the panel that just changed, ending with a card that
-//              offers replay / shortcut reference.
+//   workflow — bring-tree → 编辑 panel → export → complete. Each step
+//              spotlights the relevant surface (the left panel on narrow
+//              screens is opened through the tour-navigate event), ending with
+//              a card that offers replay / shortcut reference.
 //
 // The tour is opt-in: it does not auto-show on first launch. Completion is
 // persisted PER MODE (basics keeps `cladeforge:onboarded`, the workflow tour uses
@@ -21,13 +21,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { S, tr } from './strings';
 import { useDialogFocus } from './useDialogFocus';
-import type { NavModule } from './NavigationRail';
+import { useStore } from '../model/store';
+import { documentHasTree } from './documentContent';
+import * as file from '../io/fileActions';
 
 const LS_ONBOARDED = 'cladeforge:onboarded';
 /** Completion key for the workflow tour (basics keeps `cladeforge:onboarded`). */
 export const LS_WORKFLOW_TOUR = 'cladeforge:workflowTour';
 
 export type TourMode = 'basics' | 'workflow';
+/** 用户反馈: the left rail is gone — ONE merged panel is all there is, so the
+ *  tour's per-step "module" is now only a signal to open the left overlay on
+ *  narrow screens. Kept as a type for the event payload. */
+export type NavModule = 'edit';
 
 interface TourStep {
   /** CSS selector of the element to spotlight; null = centered card. */
@@ -78,54 +84,37 @@ function getWorkflowSteps(): TourStep[] {
       // Traits, which presumes a tree already sits in the document; the first
       // real action is getting one in (file, drop, or clipboard).
       target: '.canvas-host',
-      title: tr('第 0 步 · 把你的树放进来', 'Step 0 · Bring your own tree'),
+      title: tr('第 0 步：把你的树放进来', 'Step 0: Bring your own tree'),
       desc: tr(
         '三种方式：文件 › 导入树、把 .nwk/.nex 文件拖进画布、或 文件 › 从剪贴板导入树。没有树时也可以先打开一个示例（帮助 › 新手指南）。',
         'Three ways: File › Import tree, drop a .nwk/.nex file onto the canvas, or File › Paste tree from clipboard. With no tree yet, open a sample first (Help › Guide).',
       ),
     },
     {
+      // 用户反馈: 性状 / 假说 modules are gone and 导出 moved to the top menu
+      // bar — the workflow now runs bring-tree → edit (时间/样式) → export.
       target: '.panel-left',
-      module: 'traits',
-      title: tr('第 1 步 · 编码性状 Traits', 'Step 1 · Encode traits'),
+      module: 'edit',
+      title: tr('第 1 步：设置时间与样式', 'Step 1: Set time & style'),
       desc: tr(
-        '在「性状」模块定义性状与颜色映射，再到右侧检查器为每个末端节点赋予状态——这是整条分析工作流的输入。',
-        'Define characters and colour maps in Traits, then assign each tip its state in the inspector — this is the input the whole workflow consumes.',
+        '在左侧合并面板中设置时间数据（时间轴、环境事件、校准点）与全局样式（布局、分支、字体、颜色渐变）。',
+        'Set time data (time axis, environmental events, calibration points) and global styles (layout, branches, fonts, colour gradient) in the merged left panel.',
       ),
     },
     {
-      target: '.panel-left',
-      module: 'layers',
-      title: tr('第 2 步 · 建立假说 Hypotheses', 'Step 2 · Build hypotheses'),
+      target: null,
+      title: tr('第 2 步：导出', 'Step 2: Export'),
       desc: tr(
-        '在「假说」模块创建相互竞争的假说层，用同一棵树比较不同的祖先状态假设。',
-        'Create competing hypothesis layers in Hypotheses to compare alternative ancestral-state hypotheses on the same tree.',
-      ),
-    },
-    {
-      target: '.panel-left',
-      module: 'analysis',
-      title: tr('第 3 步 · 查看分析 Analysis', 'Step 3 · Run analysis'),
-      desc: tr(
-        '在「分析」模块运行 Mk 概率祖先状态重建，或打开性状矩阵与推理辅助。',
-        'Run Mk likelihood ancestral-state reconstruction in Analysis, or open the character matrix and the inference assistant.',
-      ),
-    },
-    {
-      target: '.panel-left',
-      module: 'export',
-      title: tr('第 4 步 · 导出 Export', 'Step 4 · Export'),
-      desc: tr(
-        '在「导出」模块输出 SVG / PDF / PNG 图、Newick / Nexus 数据，或可重复的分析脚本。',
-        'Export figures (SVG / PDF / PNG), data (Newick / Nexus), or a reproducible analysis script from Export.',
+        '通过顶部菜单栏的「导出」下拉输出 SVG / PDF / PNG 图、Newick / Nexus 数据，或可重复的分析脚本。',
+        'Export figures (SVG / PDF / PNG), data (Newick / Nexus), or a reproducible analysis script from the Export dropdown in the top menu bar.',
       ),
     },
     {
       target: null,
       title: tr('工作流走完了', 'Workflow complete'),
       desc: tr(
-        '这就是从性状到导出的完整路径。可以重放本引导，或打开快捷键速查继续探索。',
-        'That is the full path from traits to export. Replay this tour, or open the shortcut reference to keep exploring.',
+        '这就是从导入到导出的完整路径。可以重放本引导，或打开快捷键速查继续探索。',
+        'That is the full path from import to export. Replay this tour, or open the shortcut reference to keep exploring.',
       ),
     },
   ];
@@ -230,6 +219,10 @@ export function FirstRunTour({
   const steps = STEPS[mode]();
   const current = steps[step];
   const isLast = step === steps.length - 1;
+  // A16: on an EMPTY document the natural next step after a tour is to see a
+  // worked example — offer the sample library right on the finish card instead
+  // of sending the user hunting through the File menu.
+  const documentIsEmpty = !documentHasTree(useStore.getState().project);
 
   /**
    * Place the card around the spotlight. Preference order: below the target,
@@ -286,10 +279,23 @@ export function FirstRunTour({
       <div className={`tour-card tour-card-${mode}`} style={cardStyle} data-tour-step={step}>
         <div className="tour-step">
           {step + 1} / {steps.length}
-          {mode === 'workflow' ? ` · ${tr('工作流', 'Workflow')}` : ''}
+          {mode === 'workflow' ? tr(`（工作流）`, ` (Workflow)`) : ''}
         </div>
         <div className="tour-title">{current.title}</div>
         <div className="tour-desc">{current.desc}</div>
+        {isLast && documentIsEmpty && (
+          <div className="tour-actions">
+            <button
+              className="btn"
+              onClick={() => {
+                markOnboarded(mode);
+                file.openAppDialog('sampleLibrary');
+              }}
+            >
+              {tr('打开示例库…', 'Open sample library…')}
+            </button>
+          </div>
+        )}
         {mode === 'workflow' && isLast ? (
           <div className="tour-actions wrap">
             <button className="btn ghost" onClick={() => setStep(0)}>

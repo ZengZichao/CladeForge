@@ -231,13 +231,9 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
     // stretch the radius scale behind a 100 Ma root and silently shrink every
     // drawn radius.
     let circMaxAge = 0;
-    let visibleDated = 0;
-    let visibleUndated = 0;
     root.each((hn) => {
       const a = finiteAge(hn.data);
       if (a !== undefined && a > circMaxAge) circMaxAge = a;
-      if (a !== undefined && a > 0) visibleDated += 1;
-      else visibleUndated += 1;
     });
     if (circMaxAge > 0) {
       const maxRadius = Math.max(1, root.height) * depthGap;

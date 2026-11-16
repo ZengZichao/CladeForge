@@ -370,9 +370,9 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
   // Issue tag color mapping
   const tagColor = (tag: string): string => {
     if (tag === tr('局部不一致', 'Local inconsistency')) return 'var(--danger)';
-    if (tag === tr('同塑', 'Homoplasy')) return 'var(--warning, #f59e0b)';
-    if (tag === tr('模糊重建', 'Ambiguous reconstruction')) return 'var(--info, #3b82f6)';
-    return 'var(--muted)';
+    if (tag === tr('同塑', 'Homoplasy')) return 'var(--c-warn)';
+    if (tag === tr('模糊重建', 'Ambiguous reconstruction')) return 'var(--c-info)';
+    return 'var(--muted-foreground)';
   };
 
   return (
@@ -390,7 +390,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
         {/* Conditional-on-topology statement: the methodological boundary every
             reader of these numbers has to know, ON SCREEN, not just in a manual
             chapter nobody opens. */}
-        <div className="hint" style={{ borderColor: 'var(--warning, #f59e0b)' }}>
+        <div className="hint" style={{ borderColor: 'var(--c-warn)' }}>
           ⚠ {S.review.analysisTopologyWarning}
         </div>
 
@@ -413,8 +413,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               key={id}
               type="button"
               className="btn ghost"
-              style={{ fontSize: 11, padding: '2px 8px' }}
-              onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={{ fontSize: 12, padding: '2px 8px' }}
+              onClick={() => document.getElementById(id)?.scrollIntoView({ block: 'start' })}
             >
               {label}
             </button>
@@ -435,7 +435,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               being hidden behind a silently imputed scale. */}
           <div className="field">
             <label>{S.analysis.treeHeight}</label>
-            <span>{summary.treeHeight.toFixed(3)} · {summary.treeHeightUnit === 'branch-length' ? S.analysis.treeHeightUnitBranch : S.analysis.treeHeightUnitEdges}</span>
+            <span>{summary.treeHeight.toFixed(3)}; {summary.treeHeightUnit === 'branch-length' ? S.analysis.treeHeightUnitBranch : S.analysis.treeHeightUnitEdges}</span>
           </div>
           {summary.missingBranchLengths > 0 && (
             <div className="hint">{S.analysis.branchLengthCoverage(summary.branchLengthNodes, summary.missingBranchLengths)}</div>
@@ -453,8 +453,13 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
         ) : (
           <>
             <div className="field">
-              <label>{S.analysis.character}</label>
-              <select value={effectiveId} onChange={(e) => setCharId(e.target.value)}>
+              {/* S09 (Sonus): associate the bare label with its control. */}
+              <label htmlFor="analysis-character">{S.analysis.character}</label>
+              <select
+                id="analysis-character"
+                value={effectiveId}
+                onChange={(e) => setCharId(e.target.value)}
+              >
                 {discrete.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -472,7 +477,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               {character && Object.values(project.nodes).every(
                 (n) => n.childrenIds.length > 0 || !isObservedState(character, n.charStates?.[character.id]),
               ) ? (
-                <div className="hint" style={{ color: 'var(--warning, #f59e0b)' }}>
+                <div className="hint" style={{ color: 'var(--c-warn)' }}>
                   {S.review.analysisApplyParsimonyNoData}
                 </div>
               ) : (
@@ -481,10 +486,9 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <span>{mp ? (mp.feasible ? mp.cost : tr('无可行解', 'infeasible')) : 0}</span>
                 </div>
               )}
-              <div className="hint">{S.analysis.fillHint}</div>
-              {/* The apply exit the module comment always promised: one action
-                  writes the MP baseline to every internal node as ONE undo-able
-                  step, and the user then reviews per-node. */}
+              {/* S15 (Sonus): the two adoption paths (inspector per-node vs
+                  batch overwrite) are the section's real content; the method
+                  note collapses so the actions read first. */}
               <div className="field row-actions">
                 <button className="btn" onClick={applyParsimonyBaseline}>
                   {S.review.analysisApplyParsimony}
@@ -508,6 +512,10 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   {S.review.analysisRecordRun}
                 </button>
               </div>
+              <details className="hint-details">
+                <summary className="hint">{tr('方法说明', 'Method note')}</summary>
+                <div className="hint">{S.analysis.fillHint}</div>
+              </details>
             </div>
 
             <div className="panel-section" id="sec-signal">
@@ -588,22 +596,22 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     return (
                       <li key={`${c.aId}-${c.bId}`} className="issue issue-info">
                         <div>
-                          {c.aName} ↔ {c.bName} · {S.analysis.correlationType}:{' '}
-                          {c.score.toFixed(3)} ·{' '}
+                          {c.aName} ↔ {c.bName}; {S.analysis.correlationType}:{' '}
+                          {c.score.toFixed(3)};{' '}
                           {S.analysis.correlationSample(c.sampleSize)}
                         </div>
                         <div className="hint">
-                          {S.analysis.correlationShared(c.shared, c.aBranches, c.bBranches)} ·{' '}
+                          {S.analysis.correlationShared(c.shared, c.aBranches, c.bBranches)};{' '}
                           {S.analysis.correlationExpected(c.expectedShared)}
                         </div>
                         {row ? (
                           <div className="hint">
                             <strong>{S.analysis.correlationPValue}</strong>{' '}
                             {S.analysis.correlationPSummary(row.pValue, row.permutations, row.resolution)}{' '}
-                            · {S.analysis.correlationNullMean(row.nullMean)}
+                           ; {S.analysis.correlationNullMean(row.nullMean)}
                             <div>
                               <strong>{S.analysis.correlationPAdjusted}</strong>{' '}
-                              {row.adjustedP.toFixed(4)} ·{' '}
+                              {row.adjustedP.toFixed(4)};{' '}
                               {row.adjustedP <= 0.05
                                 ? S.analysis.correlationVerdictYes
                                 : S.analysis.correlationVerdictNo}
@@ -697,13 +705,13 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     {tests.map((test) => (
                       <li key={`all-${test.aId}-${test.bId}`} className="issue issue-info">
                         <div>
-                          {test.aName} ↔ {test.bName} · {S.analysis.correlationType}:{' '}
+                          {test.aName} ↔ {test.bName}; {S.analysis.correlationType}:{' '}
                           {test.score.toFixed(3)}
                         </div>
                         <div className="hint">
                           {S.analysis.correlationPSummary(test.pValue, test.permutations, test.resolution)}{' '}
-                          ·{' '}
-                          <strong>{S.analysis.correlationPAdjusted}</strong> {test.adjustedP.toFixed(4)} ·{' '}
+                         ;{' '}
+                          <strong>{S.analysis.correlationPAdjusted}</strong> {test.adjustedP.toFixed(4)};{' '}
                           {test.adjustedP <= 0.05
                             ? S.analysis.correlationVerdictYes
                             : S.analysis.correlationVerdictNo}
@@ -713,7 +721,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   </ul>
                   <div className="hint">
                     {S.analysis.correlationSignificant(tests.filter((r) => r.adjustedP <= 0.05).length)}{' '}
-                    · {S.analysis.correlationMultiTest(tests.length)}
+                   ; {S.analysis.correlationMultiTest(tests.length)}
                   </div>
                 </>
               )}
@@ -739,12 +747,12 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                           would assert an evolutionary conclusion from a point
                           estimate nobody tested. The simulated BM null p-value
                           is one click away and the zero-variation case is named. */}
-                      {S.analysis.blombergK}: {result.k.toFixed(3)} (n = {result.n}) ·{' '}
+                      {S.analysis.blombergK}: {result.k.toFixed(3)} (n = {result.n});{' '}
                       {S.analysis.blombergKScale(result.imputedBranches, result.totalBranches)}
                       {result.zeroBranches > 0 && (
                         <span>
                           {' '}
-                          ·{' '}
+                         ;{' '}
                           {tr(
                             `${result.zeroBranches} 条真实零枝长（同期分化，按 0 计入）`,
                             `${result.zeroBranches} real zero-length branch${result.zeroBranches === 1 ? '' : 'es'} (synchronous divergence, used as 0)`,
@@ -762,7 +770,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <span className="field row-actions" style={{ display: 'inline-flex', gap: 6 }}>
                     <button
                       className="btn ghost"
-                      style={{ fontSize: 11 }}
+                      style={{ fontSize: 12 }}
                       disabled={kNullRunning !== null}
                       onClick={() => runKNull(c.id)}
                     >
@@ -894,13 +902,13 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <span>
                     {b ?? (
                       <>
-                        {tr('斜率', 'slope')} = {(rtt as RootToTipRegression).slope.toFixed(4)} · R² = {(rtt as RootToTipRegression).r2.toFixed(3)} · p ≈ {(rtt as RootToTipRegression).pValue.toFixed(4)} · n = {(rtt as RootToTipRegression).tips}
+                        {tr('斜率', 'slope')} = {(rtt as RootToTipRegression).slope.toFixed(4)}; R² = {(rtt as RootToTipRegression).r2.toFixed(3)}; p ≈ {(rtt as RootToTipRegression).pValue.toFixed(4)}; n = {(rtt as RootToTipRegression).tips}
                         {((rtt as RootToTipRegression).excludedNoAge > 0 || (rtt as RootToTipRegression).excludedNoLength > 0) && (
                           <span className="hint">
-                            {' '}· {tr(`排除无年龄 ${(rtt as RootToTipRegression).excludedNoAge} 个、无枝长 ${(rtt as RootToTipRegression).excludedNoLength} 个末端`, `excluded ${(rtt as RootToTipRegression).excludedNoAge} tip${(rtt as RootToTipRegression).excludedNoAge === 1 ? '' : 's'} without ages and ${(rtt as RootToTipRegression).excludedNoLength} without branch lengths`)}
+                            {' '}; {tr(`排除无年龄 ${(rtt as RootToTipRegression).excludedNoAge} 个、无枝长 ${(rtt as RootToTipRegression).excludedNoLength} 个末端`, `excluded ${(rtt as RootToTipRegression).excludedNoAge} tip${(rtt as RootToTipRegression).excludedNoAge === 1 ? '' : 's'} without ages and ${(rtt as RootToTipRegression).excludedNoLength} without branch lengths`)}
                           </span>
                         )}
-                        <span className="hint"> · {tr('斜率是速率的估计；R² 度量钟状信号。', 'the slope estimates a rate; R² measures clock-likeness.')}</span>
+                        <span className="hint">{tr('斜率是速率的估计；R² 度量钟状信号。', 'the slope estimates a rate; R² measures clock-likeness.')}</span>
                       </>
                     )}
                   </span>
@@ -916,8 +924,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <span>
                     {b ?? (
                       <>
-                        Sackin z = {(yule as BalanceZScores).sackin.z.toFixed(3)} · Colless z = {(yule as BalanceZScores).colless.z.toFixed(3)}
-                        <span className="hint"> · {tr(`对 ${(yule as BalanceZScores).replicates} 棵同规模 Yule 零树标准化（seed ${(yule as BalanceZScores).seed}）；z 明显为负 = 更平衡，明显为正 = 更不平衡。`, `standardised against ${(yule as BalanceZScores).replicates} same-size Yule nulls (seed ${(yule as BalanceZScores).seed}); clearly negative z = more balanced than Yule, clearly positive = less balanced.`)}</span>
+                        Sackin z = {(yule as BalanceZScores).sackin.z.toFixed(3)}; Colless z = {(yule as BalanceZScores).colless.z.toFixed(3)}
+                        <span className="hint">{tr(`对 ${(yule as BalanceZScores).replicates} 棵同规模 Yule 零树标准化（seed ${(yule as BalanceZScores).seed}）；z 明显为负 = 更平衡，明显为正 = 更不平衡。`, `standardised against ${(yule as BalanceZScores).replicates} same-size Yule nulls (seed ${(yule as BalanceZScores).seed}); clearly negative z = more balanced than Yule, clearly positive = less balanced.`)}</span>
                       </>
                     )}
                   </span>
@@ -933,8 +941,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <span>
                     {b ?? (
                       <>
-                        D = {(fritz as { d: number }).d.toFixed(3)} · p ≈ {(fritz as { pValue: number }).pValue.toFixed(4)} · n = {(fritz as { tips: number }).tips}
-                        <span className="hint"> · {tr(`对 ${(fritz as { replicates: number }).replicates} 次 BM 零模拟；D≈1 = 随机，D≈0 = 系统发育聚集。`, `against ${(fritz as { replicates: number }).replicates} BM null simulations; D ≈ 1 = random, D ≈ 0 = phylogenetically clustered.`)}</span>
+                        D = {(fritz as { d: number }).d.toFixed(3)}; p ≈ {(fritz as { pValue: number }).pValue.toFixed(4)}; n = {(fritz as { tips: number }).tips}
+                        <span className="hint">{tr(`对 ${(fritz as { replicates: number }).replicates} 次 BM 零模拟；D≈1 = 随机，D≈0 = 系统发育聚集。`, `against ${(fritz as { replicates: number }).replicates} BM null simulations; D ≈ 1 = random, D ≈ 0 = phylogenetically clustered.`)}</span>
                       </>
                     )}
                   </span>
@@ -946,8 +954,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                 <div className="field" key="faith">
                   <label>{tr("Faith 系统发育多样性", "Faith’s PD")}</label>
                   <span>
-                    {extra.faith.map((f) => `${f.state}: ${f.pd === null ? tr('无末端', 'no tips') : f.pd.toFixed(3)}`).join(' · ')}
-                    <span className="hint"> · {tr('被该状态覆盖的最小 spanning 枝长总和（不含根路径）。', 'total length of the minimum spanning branches covered by each state (root path excluded).')}</span>
+                    {extra.faith.map((f) => `${f.state}: ${f.pd === null ? tr('无末端', 'no tips') : f.pd.toFixed(3)}`).join('; ')}
+                    <span className="hint">{tr('被该状态覆盖的最小 spanning 枝长总和（不含根路径）。', 'total length of the minimum spanning branches covered by each state (root path excluded).')}</span>
                   </span>
                 </div>,
               );
@@ -962,8 +970,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                       return b
                         ? `${c.state}: ${b}`
                         : `${c.state}: NRI ${(c.stats as CommunityPhyloStats).nri.toFixed(3)} / NTI ${(c.stats as CommunityPhyloStats).nti.toFixed(3)}`;
-                    }).join(' · ')}
-                    <span className="hint"> · {tr('正值 = 该状态的末端比随机更聚集；NRI 用平均对间距离，NTI 用最近邻距离。', 'positive = the state\u2019s tips are more clustered than random; NRI uses mean pairwise distance, NTI nearest-neighbour.')}</span>
+                    }).join('; ')}
+                    <span className="hint">{tr('正值 = 该状态的末端比随机更聚集；NRI 用平均对间距离，NTI 用最近邻距离。', 'positive = the state\u2019s tips are more clustered than random; NRI uses mean pairwise distance, NTI nearest-neighbour.')}</span>
                   </span>
                 </div>,
               );
@@ -977,7 +985,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     {b ?? (
                       <>
                         {tr(`在 ${extra.mpr && typeof extra.mpr === 'object' && 'samples' in extra.mpr ? extra.mpr.samples : 0} 次等价最优 MPR 抽样中，${extra.mpr && typeof extra.mpr === 'object' && 'changedBranches' in extra.mpr ? extra.mpr.changedBranches : 0} 条枝至少一次发生状态变化`, `across ${extra.mpr && typeof extra.mpr === 'object' && 'samples' in extra.mpr ? extra.mpr.samples : 0} equally-optimal MPR draws, ${extra.mpr && typeof extra.mpr === 'object' && 'changedBranches' in extra.mpr ? extra.mpr.changedBranches : 0} branches change at least once`)}
-                        <span className="hint"> · {tr('变化支数的分布即是简约重建对该性状的不确定度。', 'the spread of change branches IS the parsimony uncertainty for this character.')}</span>
+                        <span className="hint">{tr('变化支数的分布即是简约重建对该性状的不确定度。', 'the spread of change branches IS the parsimony uncertainty for this character.')}</span>
                       </>
                     )}
                   </span>
@@ -993,7 +1001,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     {b ?? (
                       <>
                         {tr(`每次映射平均 ${extra.stoch && typeof extra.stoch === 'object' && 'meanChangesPerSample' in extra.stoch ? extra.stoch.meanChangesPerSample.toFixed(2) : '—'} 次变化（100 次抽样），${extra.stoch && typeof extra.stoch === 'object' && 'changedBranches' in extra.stoch ? extra.stoch.changedBranches : 0} 条枝至少一次变化`, `mean of ${extra.stoch && typeof extra.stoch === 'object' && 'meanChangesPerSample' in extra.stoch ? extra.stoch.meanChangesPerSample.toFixed(2) : '—'} changes per map (100 draws); ${extra.stoch && typeof extra.stoch === 'object' && 'changedBranches' in extra.stoch ? extra.stoch.changedBranches : 0} branches change at least once`)}
-                        <span className="hint"> · {tr('Mk 后验条件下的随机映射；固定 seed 20260919，同文档可复现。', 'stochastic mapping conditioned on the Mk posterior; fixed seed 20260919, replayable.')}</span>
+                        <span className="hint">{tr('Mk 后验条件下的随机映射；固定 seed 20260919，同文档可复现。', 'stochastic mapping conditioned on the Mk posterior; fixed seed 20260919, replayable.')}</span>
                       </>
                     )}
                   </span>
@@ -1050,24 +1058,24 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               <div className="field">
                 <label>{S.review.analysisMethod}</label>
                 <span>
-                  {asr.model} ·{' '}
+                  {asr.model};{' '}
                   {asr.rate.method === 'ml'
                     ? `${S.review.analysisRate}: ${S.review.analysisRateMl}`
                     : S.review.analysisRateMoment}
                   {asr.rate.method === 'ml' && Number.isFinite(asr.rate.rate) && (
                     <>
                       {' '}
-                      · r = {Number(asr.rate.rate.toPrecision(4))}
+                     ; r = {Number(asr.rate.rate.toPrecision(4))}
                       {asr.rate.logLikelihood !== undefined && (
                         <>
                           {' '}
-                          · {S.review.analysisLnL} = {asr.rate.logLikelihood.toFixed(3)}
+                         ; {S.review.analysisLnL} = {asr.rate.logLikelihood.toFixed(3)}
                         </>
                       )}
                       {asr.rate.logLikelihoodCi && (
                         <>
                           {' '}
-                          · 95% CI [{asrCiBound(asr.rate.logLikelihoodCi[0])}, {asrCiBound(asr.rate.logLikelihoodCi[1])}]
+                         ; 95% CI [{asrCiBound(asr.rate.logLikelihoodCi[0])}, {asrCiBound(asr.rate.logLikelihoodCi[1])}]
                         </>
                       )}
                     </>
@@ -1081,7 +1089,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               </div>
             )}
             {asr?.stale && (
-              <div className="hint" style={{ color: 'var(--warning, #f59e0b)' }}>
+              <div className="hint" style={{ color: 'var(--c-warn)' }}>
                 {S.review.analysisStale}
               </div>
             )}
@@ -1164,8 +1172,8 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               {runHistory.slice(0, 12).map((r) => (
                 <li key={r.id} className="issue issue-info">
                   <div>
-                    {r.title ?? r.kind} · {new Date(r.createdAt).toLocaleString()} · v{r.version}
-                    {r.pinned ? ' · 📌' : ''}
+                    {r.title ?? r.kind}; {new Date(r.createdAt).toLocaleString()}; v{r.version}
+                    {r.pinned ? '; 📌' : ''}
                   </div>
                   <div className="hint">{r.method}</div>
                 </li>

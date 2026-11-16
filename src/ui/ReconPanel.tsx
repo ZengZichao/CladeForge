@@ -14,21 +14,18 @@
 //    non-empty document too (§7.4).
 
 import { useMemo, useState } from 'react';
-import { Cross1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
+import { ArrowRightIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import {
   clearAssumptions as clearAssumptionsOp,
   makeGeneTreeEntry,
-  removeGeneTree,
   renameGeneTree,
   setReconCosts,
 } from '../model/geneTrees';
 import { DEFAULT_RECON_COSTS, type ReconCosts, type ReconSection, type ReconEventType } from '../model/types';
-import { mapTipsByLabel, suggestLcaScenario, type ReconIssue } from '../model/reconciliation';
+import { type ReconIssue } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
-import { dtlScenarioToAssumptions, type DtlScenario } from '../model/dtl';
 import { rerootGeneTree } from '../model/geneTrees';
-import { solveDtlWithPolytomiesAsync } from '../model/dtlAsync';
 import { RECON_COST_PRESETS } from '../model/types';
 import * as file from '../io/fileActions';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
@@ -41,35 +38,6 @@ import { notify } from './toast';
 import { isImeComposing } from './imeGuard';
 import { requestConfirm } from './confirmDialog';
 
-function issueTagText(issue: ReconIssue): string {
-  switch (issue.kind) {
-    case 'unmatched-tip':
-      return tr('未匹配', 'Unmatched');
-    case 'unresolved':
-      return tr('未映射', 'Unmapped');
-    case 'dangling':
-      return tr('悬空', 'Dangling');
-    case 'event-conflict':
-      return tr('冲突', 'Conflict');
-    case 'mislabelled':
-      return tr('可疑标记', 'Mislabelled');
-    case 'loss-shortfall':
-      // PM-44: the literal calque "损失不足" is readable only by the author.
-      // Say what the validator actually observed, and let the tooltip carry
-      // the technical term for those who want it.
-      return tr('丢失事件少于路径要求', 'Fewer losses than the path requires');
-    case 'timing':
-      return tr('时序', 'Timing');
-    case 'tip-on-internal':
-      // PM-44: "末端居祖先" asserts that a sampled tip sits at an ancestral
-      // species node — express it as the claim it is, tooltip keeps the term.
-      return tr('末端被映射到祖先节点', 'Tip mapped onto an ancestral node');
-    case 'leaf-event':
-      return tr('末端事件', 'Tip event');
-    default:
-      return '?';
-  }
-}
 
 type ListFilter = 'all' | 'unresolved' | 'errors' | 'internal';
 
@@ -89,7 +57,6 @@ export function ReconPanel({
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
   const setActiveGeneTree = useStore((s) => s.setActiveGeneTree);
-  const setReconMode = useStore((s) => s.setReconMode);
   const selectGeneNode = useStore((s) => s.selectGeneNode);
   const focusGeneNode = useStore((s) => s.focusGeneNode);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
@@ -98,10 +65,8 @@ export function ReconPanel({
   const tabs = useStore((s) => s.tabs);
   const activeTabId = useStore((s) => s.activeTabId);
   const tabStore = useStore((s) => s.tabStore);
-  /** Last DP run for the ACTIVE gene tree (id guarded) — transient, per panel. */
-  const [dp, setDp] = useState<{ geneId: string; scenario: DtlScenario } | null>(null);
-  /** True while the DTL worker is solving; the button is disabled meanwhile. */
-  const [solving, setSolving] = useState(false);
+  // 用户反馈: the DP optimum and the MRCA suggestion are removed from the UI;
+  // the model layer keeps them for the gene-tree builder and the tests.
 
   const [tabChoice, setTabChoice] = useState<string>('');
   const [listQuery, setListQuery] = useState('');
@@ -146,61 +111,6 @@ export function ReconPanel({
     }
   };
 
-  const runLcaSuggestion = () => {
-    if (!activeEntry) return;
-    apply((d) => {
-      const g = d.geneTrees?.find((x) => x.id === activeEntry.id);
-      if (!g) return;
-      const tipMap = mapTipsByLabel(d, g.doc).mappings;
-      g.assumptions = suggestLcaScenario(d, g.doc, tipMap, g.assumptions);
-    });
-    notify.success(tr('已生成 MRCA 建议场景', 'MRCA suggestion applied'));
-  };
-
-  /**
-   * Polytomy sweep: random binary resolutions × replicates. The pure solver
-   * runs on the DTL worker, so the window stays responsive even on large
-   * families; a result computed against a document that has since changed is
-   * discarded instead of being applied to a tree the user no longer sees.
-   */
-  const runPolytomyDp = async () => {
-    if (!activeEntry || solving) return;
-    const entryId = activeEntry.id;
-    const doc = project;
-    const geneDoc = activeEntry.doc;
-    const polytomies = Object.values(geneDoc.nodes).filter((n) => n.childrenIds.length > 2).length;
-    setSolving(true);
-    try {
-      const r = await solveDtlWithPolytomiesAsync(doc, geneDoc, costs, undefined, {}, 8);
-      if (useStore.getState().project !== doc) {
-        notify.info(
-          tr(
-            '求解期间文档已更改，本次结果已丢弃，请重新运行',
-            'The document changed during the solve; the result was discarded — run it again',
-          ),
-        );
-        return;
-      }
-      if (r.error || !r.scenario) {
-        notify.info(r.error ?? tr('求解失败', 'Solver failed'));
-        setDp(null);
-        return;
-      }
-      setDp({ geneId: entryId, scenario: r.scenario });
-      if (polytomies > 0 && r.polytomySummary) {
-        const c = r.polytomySummary.counts;
-        notify.info(
-          tr(
-            `${polytomies} 处多歧枝已随机解析 ×${r.polytomySummary.replicates} 次重复：σ ${c.speciation.min}–${c.speciation.max}，δ ${c.duplication.min}–${c.duplication.max}，τ ${c.transfer.min}–${c.transfer.max}，λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? '（计数随解析方式变化——结论对解析敏感）' : ''}`,
-            `${polytomies} polytom${polytomies === 1 ? 'y' : 'ies'} randomly resolved ×${r.polytomySummary.replicates} replicate${r.polytomySummary.replicates === 1 ? '' : 's'}: σ ${c.speciation.min}–${c.speciation.max}, δ ${c.duplication.min}–${c.duplication.max}, τ ${c.transfer.min}–${c.transfer.max}, λ ${c.losses.min}–${c.losses.max}${r.polytomySummary.sensitive ? ' (counts vary with the resolution — the answer is resolution-sensitive)' : ''}`,
-          ),
-        );
-      }
-    } finally {
-      setSolving(false);
-    }
-  };
-
   const clearAll = () => {
     if (!activeEntry) return;
     requestConfirm({
@@ -215,23 +125,9 @@ export function ReconPanel({
     });
   };
 
-  const removeOne = (id: string) => {
-    const name = project.geneTrees?.find((g) => g.id === id)?.name ?? '';
-    requestConfirm({
-      key: 'recon-remove-gene',
-      title: S.recon.remove,
-      message: tr(`将删除基因树「${name}」。`, `Delete gene tree "${name}".`),
-      confirmLabel: S.recon.remove,
-      danger: true,
-      onConfirm: () => {
-        apply((d) => removeGeneTree(d, id));
-      },
-    });
-  };
-
-  const importFromTab = () => {
-    if (!tabChoice) return;
-    const snapProject = tabStore[tabChoice]?.project;
+  const importFromTab = (id: string) => {
+    if (!id) return;
+    const snapProject = tabStore[id]?.project;
     if (!snapProject) return;
     const entry = makeGeneTreeEntry(snapProject, snapProject.name);
     apply((d) => {
@@ -263,14 +159,29 @@ export function ReconPanel({
       unresolved: boolean;
       hasError: boolean;
       internal: boolean;
+      /** S07: where the effective mapping came from — shown in the row. */
+      mappingSource: 'explicit' | 'auto' | 'none';
     }[] = [];
     for (const n of Object.values(activeEntry.doc.nodes)) {
       const a = activeEntry.assumptions[n.id];
       const internal = n.childrenIds.length > 0;
       const label = n.label || n.id.slice(0, 6);
-      const target = a?.speciesNode
-        ? project.nodes[a.speciesNode]?.label || a.speciesNode.slice(0, 6)
+      // S07 (Sonus): ONE effective-mapping view model — the list previously
+      // read only explicit assumptions while the header read label mappings
+      // too, so an auto-mapped tip showed "6/6 mapped" in the summary and
+      // "未映射" in the list at the same time. Order: explicit assumption
+      // wins, then the label mapping the summary counts.
+      const fromAssumption = a?.speciesNode ?? null;
+      const fromLabel = internal ? null : (activeStat?.tipMappings[n.id] ?? null);
+      const effective = fromAssumption ?? fromLabel;
+      const target = effective
+        ? project.nodes[effective]?.label || effective.slice(0, 6)
         : '';
+      const mappingSource: 'explicit' | 'auto' | 'none' = fromAssumption
+        ? 'explicit'
+        : fromLabel
+          ? 'auto'
+          : 'none';
       const rowIssues = issuesByNode.get(n.id) ?? [];
       const hasError = rowIssues.some((i) => i.severity === 'error');
       const unresolved = internal && (!a || !a.event);
@@ -290,29 +201,36 @@ export function ReconPanel({
         unresolved,
         hasError,
         internal,
+        mappingSource,
       });
     }
     return rows;
   }, [activeEntry, activeStat, project, listQuery, listFilter]);
 
+  // 演化事件 rows: the subset of the filtered list carrying an event or losses.
+  const eventRows = useMemo(
+    () => listRows.filter((r) => r.event !== null || r.losses > 0),
+    [listRows],
+  );
+
   const showTrees = !section || section === 'trees';
   const showScenario = !section || section === 'scenario';
-  const showValidation = !section || section === 'validation';
   const showView = section === 'view';
 
   const eventGlyph = (ev: ReconEventType | null) =>
-    ev === 'speciation' ? 'σ' : ev === 'duplication' ? 'δ' : ev === 'transfer' ? 'τ' : '·';
+    ev === 'speciation' ? 'S' : ev === 'duplication' ? 'D' : ev === 'transfer' ? 'T' : '–';
 
   return (
     <>
       {!section && (
         <div className="panel-header">
           <span className="panel-header-title">{S.nav.recon}</span>
-          <span className="panel-header-subtitle">{S.recon.section}</span>
-        </div>
+                  </div>
       )}
 
-      {/* ---- panel head: always-visible identity + completeness (§5.3) ---- */}
+      {/* ---- panel head: identity only. M3 (UI_UX_REVIEW): the counts live in
+          the status bar (one authoritative position) — the panel head, the
+          inspector overview and the pane headers used to repeat them. ---- */}
       {section && (
         <div className="recon-panel-head">
           <div className="recon-panel-head-title">{S.recon.section}</div>
@@ -321,12 +239,6 @@ export function ReconPanel({
               <>
                 <span className="recon-panel-gene" title={activeEntry.name}>{activeEntry.name}</span>
                 <span className="recon-readonly-tag">{S.recon.readonlyPane}</span>
-                {activeStat && (
-                  <span>
-                    {S.recon.sbTipsMapped(activeStat.mappedTips, activeStat.tips)} ·{' '}
-                    {S.recon.sbInternal(activeStat.summary.mappedInternal, activeStat.summary.totalInternal)}
-                  </span>
-                )}
               </>
             ) : (
               <span>{S.recon.emptyReconTitle}</span>
@@ -338,61 +250,6 @@ export function ReconPanel({
       {/* ---- 树库 ---- */}
       {showTrees && (
         <Section title={S.recon.railTrees} pinable>
-          {(project.geneTrees ?? []).length === 0 && (
-            <div className="hint">{S.recon.empty}</div>
-          )}
-          <div className="gene-list">
-            {stats.map((row) => (
-              <div
-                key={row.id}
-                className={`gene-row${row.id === activeGeneTreeId ? ' active' : ''}`}
-                onClick={() => setActiveGeneTree(row.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  // Enter on a focused row activates that gene tree — a
-                  // composition keystroke must not switch documents.
-                  if (isImeComposing(e)) return;
-                  if (e.key === 'Enter') setActiveGeneTree(row.id);
-                }}
-              >
-                <span className="gene-name" title={row.name}>
-                  {row.name}
-                </span>
-                <span
-                  className={`issue-badge${row.errors > 0 ? ' bad' : row.warnings > 0 ? ' warn' : ''}`}
-                  title={tr(`${row.errors} 错误 / ${row.warnings} 提示`, `${row.errors} error${row.errors === 1 ? '' : 's'} / ${row.warnings} note${row.warnings === 1 ? '' : 's'}`)}
-                >
-                  {row.errors > 0 ? row.errors : row.warnings > 0 ? row.warnings : '✓'}
-                </span>
-                <span className="gene-meta">
-                  {tr(`${row.mappedTips}/${row.tips}`, `${row.mappedTips}/${row.tips}`)}
-                </span>
-                <button
-                  className="btn icon tiny"
-                  title={S.recon.enterView}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveGeneTree(row.id);
-                    setReconMode(true);
-                  }}
-                >
-                  {S.recon.sampleBadge}
-                </button>
-                <button
-                  className="btn icon danger"
-                  title={S.recon.remove}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeOne(row.id);
-                  }}
-                >
-                  <Cross1Icon />
-                </button>
-              </div>
-            ))}
-          </div>
-
           <div className="recon-action-stack">
             <button className="btn primary" onClick={onBuildGeneTree}>
               <PlusIcon /> {S.recon.buildGeneTree}
@@ -400,22 +257,31 @@ export function ReconPanel({
             <button className="btn" onClick={onCopySpeciesTree}>
               {S.recon.copySpeciesTree}
             </button>
-            <button className="btn" onClick={() => void file.actionImportGeneTree()}>
-              {S.recon.importFile}
-            </button>
-            <button
-              className="btn"
-              title={S.recon.loadReconSampleTitle}
-              onClick={() => openSample(SAMPLE_PROJECTS.find((d) => d.id === 'recon-family')!)}
-            >
-              {S.recon.loadReconSample}
-            </button>
+            <div className="recon-action-links">
+              {/* 用户反馈: real rounded buttons, not bare text links. */}
+              <button className="btn" onClick={() => void file.actionImportGeneTree()}>
+                {S.recon.importFile}
+              </button>
+              <button
+                className="btn"
+                title={S.recon.loadReconSampleTitle}
+                onClick={() => openSample(SAMPLE_PROJECTS.find((d) => d.id === 'recon-family')!)}
+              >
+                {S.recon.loadReconSample}
+              </button>
+            </div>
             {tabOptions.length > 0 && (
-              <>
+              <div className="recon-action-tab">
                 <select
                   className="recon-action-select"
                   value={tabChoice}
-                  onChange={(e) => setTabChoice(e.target.value)}
+                  title={S.recon.importTab}
+                  aria-label={S.recon.importTab}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setTabChoice(id);
+                    importFromTab(id);
+                  }}
                 >
                   <option value="">{S.recon.importTab}</option>
                   {tabOptions.map((t) => (
@@ -424,10 +290,7 @@ export function ReconPanel({
                     </option>
                   ))}
                 </select>
-                <button className="btn" disabled={!tabChoice} onClick={importFromTab}>
-                  {S.recon.importTab}
-                </button>
-              </>
+              </div>
             )}
           </div>
         </Section>
@@ -444,30 +307,27 @@ export function ReconPanel({
               />
             </Field>
             <div className="recon-stat-grid">
-              <span className="recon-chip chip-sigma">σ {activeStat.summary.speciation}</span>
-              <span className="recon-chip chip-dup">δ {activeStat.summary.duplication}</span>
-              <span className="recon-chip chip-transfer">τ {activeStat.summary.transfer}</span>
-              <span className="recon-chip chip-loss">λ {activeStat.summary.losses}</span>
+              <span className="recon-chip chip-sigma">S {activeStat.summary.speciation}</span>
+              <span className="recon-chip chip-dup">D {activeStat.summary.duplication}</span>
+              <span className="recon-chip chip-transfer">T {activeStat.summary.transfer}</span>
+              <span className="recon-chip chip-loss">L {activeStat.summary.losses}</span>
               <span className="recon-chip">
                 {S.recon.mappedCount} {activeStat.summary.mappedInternal}/{activeStat.summary.totalInternal}
               </span>
             </div>
 
             <div className="recon-action-stack" style={{ marginTop: 8 }}>
-              <button className="btn" onClick={() => onEditGeneTree(activeEntry.id)}>
+              <button className="btn" onClick={() => {
+                if (useStore.getState().reconEditTarget !== 'gene') {
+                  notify.info(tr('请先切换到「基因树编辑」模式（顶部工具栏）', 'Switch to “Edit gene tree” mode first (top toolbar)'));
+                  return;
+                }
+                onEditGeneTree(activeEntry.id);
+              }}>
                 {S.recon.editTopology}
               </button>
-              <button className="btn primary" onClick={runLcaSuggestion}>
-                {S.recon.suggestLca}
-              </button>
-              <button
-                className="btn"
-                title={tr('把每处多歧枝随机二叉化为多次求解（报告计数散布）', 'Randomly binary-resolve each polytomy across replicates (reports the count spread)')}
-                onClick={() => void runPolytomyDp()}
-                disabled={solving}
-              >
-                {solving ? tr('求解中…', 'Solving…') : S.recon.dpRun}
-              </button>
+              {/* 用户反馈: the MRCA suggestion and the DP optimum are gone from
+                  the panel. */}
               <button
                 className="btn"
                 title={tr('以选中的基因节点为新根（DTL 结果对根位高度敏感）', 'Re-root on the selected gene node (DTL counts are highly root-sensitive)')}
@@ -494,50 +354,11 @@ export function ReconPanel({
                 <TrashIcon /> {S.recon.clearAssumptions}
               </button>
             </div>
-
-            {dp && dp.geneId === activeEntry.id && (
-              <>
-                <div className="recon-stat-grid" style={{ marginTop: 8 }}>
-                  <span className="recon-chip">
-                    {S.recon.dpCurrent} {activeStat.summary.cost}
-                  </span>
-                  <span className="recon-chip chip-sigma">
-                    {S.recon.dpOptimal} {dp.scenario.cost}
-                  </span>
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      apply((d) => {
-                        const g = d.geneTrees?.find((x) => x.id === activeEntry.id);
-                        if (!g) return;
-                        // Keep the visual path fields (branchFraction /
-                        // transferDonor) of nodes whose target is unchanged.
-                        g.assumptions = dtlScenarioToAssumptions(d, g.doc, dp.scenario, g.assumptions);
-                      });
-                      notify.success(S.recon.dpApply);
-                    }}
-                  >
-                    {S.recon.dpApply}
-                  </button>
-                </div>
-                {/* The honesty strings the model already computes, rendered NEXT
-                    to the numbers they qualify (A-17): without them, "k equally
-                    optimal scenarios" and the free-root subsidy are invisible —
-                    the displayed event classes read as THE answer. */}
-                <div className="hint" style={{ marginTop: 6 }}>{S.recon.dpInvariant}</div>
-                {dp.scenario.ambiguous.length > 0 && (
-                  <div className="hint">{S.recon.dpAmbiguousNodes(dp.scenario.ambiguous.length)}</div>
-                )}
-                {dp.scenario.rootFees > 0 && (
-                  <div className="hint">{S.recon.dpFreeRoot(dp.scenario.rootFees)}</div>
-                )}
-                <div className="hint">{S.recon.dpComparability}</div>
-              </>
-            )}
           </Section>
 
-          {/* ---- assumption list: the text equivalent of the mapping lines ---- */}
-          <Section title={S.recon.assumptionList} pinable>
+          {/* ---- 节点映射 (用户反馈: split from 映射与事件) — the text
+              equivalent of the mapping lines: gene node → species node. ---- */}
+          <Section title={S.recon.nodeMapping} pinable>
             <input
               className="cc-search-input recon-list-search"
               value={listQuery}
@@ -545,7 +366,7 @@ export function ReconPanel({
               onChange={(e) => setListQuery(e.target.value)}
               aria-label={S.recon.assumptionSearch}
             />
-            <div className="recon-filter-chips" role="tablist" aria-label={S.recon.assumptionList}>
+            <div className="recon-filter-chips" role="tablist" aria-label={S.recon.nodeMapping}>
               {([
                 ['all', S.recon.filterAll],
                 ['unresolved', S.recon.filterUnresolved],
@@ -589,13 +410,28 @@ export function ReconPanel({
                     }}
                     title={S.recon.hoverLineHint}
                   >
-                    <span className="recon-row-glyph">{eventGlyph(row.event)}</span>
                     <span className="recon-row-label" title={row.label}>{row.label}</span>
-                    <span className="recon-row-arrow">→</span>
-                    <span className="recon-row-target" title={row.target}>
+                    <span className="recon-row-arrow"><ArrowRightIcon /></span>
+                    <span
+                      className={`recon-row-target${row.mappingSource === 'auto' ? ' auto' : ''}`}
+                      title={
+                        row.mappingSource === 'explicit'
+                          ? tr('显式假设', 'Explicit assumption')
+                          : row.mappingSource === 'auto'
+                            ? tr('按名称自动匹配', 'Matched automatically by label')
+                            : tr('无匹配', 'No match')
+                      }
+                    >
                       {row.target || S.recon.tipUnmapped}
                     </span>
-                    {row.losses > 0 && <span className="recon-row-loss">λ{row.losses}</span>}
+                    {/* S07: say WHERE the mapping came from — an auto-matched
+                        tip is not "未映射", and an explicit one should not look
+                        identical to an automatic one. */}
+                    {row.mappingSource === 'auto' && (
+                      <span className="recon-row-flag" title={tr('按名称自动匹配', 'Matched automatically by label')}>
+                        {tr('自动', 'auto')}
+                      </span>
+                    )}
                     {row.unresolved && <span className="recon-row-flag">{S.recon.filterUnresolved}</span>}
                     {row.hasError && <span className="recon-row-flag bad">{S.recon.severityError}</span>}
                   </li>
@@ -603,44 +439,53 @@ export function ReconPanel({
               </ul>
             )}
           </Section>
-        </>
-      )}
 
-      {/* ---- 校验 ---- */}
-      {showValidation && activeEntry && activeStat && (
-        <Section title={S.recon.validation} pinable>
-          {activeStat.issues.length === 0 ? (
-            <div className="hint">✓ {S.recon.noIssues}</div>
-          ) : (
-            <>
-              <div className="hint">
-                {tr(
-                  `${activeStat.errors} 错误 / ${activeStat.warnings} 提示 · ${S.recon.issuesTitle}`,
-                  `${activeStat.errors} error${activeStat.errors === 1 ? '' : 's'} / ${activeStat.warnings} note${activeStat.warnings === 1 ? '' : 's'} · ${S.recon.issuesTitle}`,
-                )}
-              </div>
-              <ul className="issue-list">
-                {activeStat.issues.map((it, i) => (
+          {/* ---- 演化事件 (用户反馈: split from 映射与事件) — one row per gene
+              node carrying an event or losses: glyph + node + event + count. */}
+          {eventRows.length > 0 && (
+            <Section title={S.recon.eventList} pinable>
+              <ul className="recon-assumption-list">
+                {eventRows.map((row) => (
                   <li
-                    key={i}
-                    className={`issue issue-${it.severity}${it.nodeId ? ' issue-click' : ''}`}
+                    key={`ev-${row.gid}`}
+                    className="recon-assumption-row"
                     onClick={() => {
-                      if (it.nodeId) {
-                        // Stay IN the reconciliation workspace: select + centre
-                        // the offending gene node instead of hopping modes.
-                        setActiveGeneTree(activeEntry.id);
-                        selectGeneNode(it.nodeId);
-                        focusGeneNode(it.nodeId);
+                      selectGeneNode(row.gid);
+                      focusGeneNode(row.gid);
+                    }}
+                    onPointerEnter={() => setReconHoverGene(row.gid)}
+                    onPointerLeave={() => setReconHoverGene(null)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (isImeComposing(e)) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectGeneNode(row.gid);
+                        focusGeneNode(row.gid);
                       }
                     }}
+                    title={S.recon.hoverLineHint}
                   >
-                    <span className="issue-tag">[{issueTagText(it)}]</span> {it.message}
+                    <span className="recon-row-glyph">{eventGlyph(row.event)}</span>
+                    <span className="recon-row-label" title={row.label}>{row.label}</span>
+                    <span className="recon-row-event-name">
+                      {row.event
+                        ? row.event === 'speciation'
+                          ? tr('物种形成', 'Speciation')
+                          : row.event === 'duplication'
+                            ? tr('基因重复', 'Duplication')
+                            : tr('水平转移', 'Horizontal transfer')
+                        : ''}
+                    </span>
+                    {row.losses > 0 && <span className="recon-row-loss">L{row.losses}</span>}
+                    {row.hasError && <span className="recon-row-flag bad">{S.recon.severityError}</span>}
                   </li>
                 ))}
               </ul>
-            </>
+            </Section>
           )}
-        </Section>
+        </>
       )}
 
       {/* ---- 视图 ---- */}
@@ -802,8 +647,8 @@ export function ReconPanel({
                 commitCosts(preset.costs);
                 notify.info(
                   tr(
-                    `已应用预设「${preset.label}」（δ=${preset.costs.dup}, τ=${preset.costs.transfer}, λ=${preset.costs.loss}）。水平转移代价低时 HGT 更容易被采纳；默认等价代价（1, 1, 1）取代了旧的 transfer=2 偏置`,
-                    `Applied preset "${preset.labelEn}" (δ=${preset.costs.dup}, τ=${preset.costs.transfer}, λ=${preset.costs.loss}). Cheap transfers make HGT easier to adopt; the default is now the unbiased unit vector (1,1,1)`,
+                    `已应用预设「${preset.label}」（D=${preset.costs.dup}, T=${preset.costs.transfer}, L=${preset.costs.loss}）。基因转移代价低时 HGT 更容易被采纳；默认等价代价（1, 1, 1）取代了旧的 transfer=2 偏置`,
+                    `Applied preset "${preset.labelEn}" (D=${preset.costs.dup}, T=${preset.costs.transfer}, L=${preset.costs.loss}). Cheap transfers make HGT easier to adopt; the default is now the unbiased unit vector (1,1,1)`,
                   ),
                 );
               }}

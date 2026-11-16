@@ -7,7 +7,7 @@
 import { memo } from 'react';
 import { tr } from '../ui/strings';
 import { timeUnitSymbol } from '../ui/units';
-import type { EnvironmentalEvent } from '../model/types';
+import type { CalibrationPoint, EnvironmentalEvent, NodeId, Point, TreeNode } from '../model/types';
 import {
   ERA_LANE_HEIGHT,
   planEraOverlay,
@@ -55,7 +55,7 @@ export const TimeAxis = memo(function TimeAxis({
             y={ay}
             textAnchor="end"
             fontSize={FONT}
-            fill="var(--muted)"
+            fill="var(--muted-foreground)"
             transform={`rotate(-90 ${ax} ${ay})`}
           >
             {l.label}
@@ -77,7 +77,7 @@ export const TimeAxis = memo(function TimeAxis({
               opacity={0.7}
             />
           )}
-          <text x={l.center} y={y} textAnchor="middle" fontSize={FONT} fill="var(--muted)">
+          <text x={l.center} y={y} textAnchor="middle" fontSize={FONT} fill="var(--muted-foreground)">
             {l.label}
           </text>
         </g>
@@ -94,7 +94,7 @@ export const TimeAxis = memo(function TimeAxis({
           textAnchor="middle"
           dominantBaseline="central"
           fontSize={FONT}
-          fill="var(--muted)"
+          fill="var(--muted-foreground)"
           transform={`rotate(-90 ${ax} ${ay})`}
         >
           {l.label}
@@ -116,7 +116,7 @@ export const TimeAxis = memo(function TimeAxis({
             opacity={0.7}
           />
         )}
-        <text x={x} y={l.center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--muted)">
+        <text x={x} y={l.center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--muted-foreground)">
           {l.label}
         </text>
       </g>
@@ -153,6 +153,9 @@ ${e.note}` : e.label}</title>
       )}
       {showEras &&
         plan.bands.map((e) => {
+          /* V13: theme-aware opacity — dark theme keeps the pastel bands from
+             becoming the brightest blocks on the canvas (light 0.45, dark 0.3
+             via --era-band-opacity). */
           return info.horizontal ? (
             <rect
               key={e.key}
@@ -161,7 +164,7 @@ ${e.note}` : e.label}</title>
               width={e.hi - e.lo}
               height={span}
               fill={e.color}
-              opacity={0.45}
+              style={{ opacity: 'var(--era-band-opacity, 0.45)' }}
             />
           ) : (
             <rect
@@ -171,7 +174,7 @@ ${e.note}` : e.label}</title>
               width={span}
               height={e.hi - e.lo}
               fill={e.color}
-              opacity={0.45}
+              style={{ opacity: 'var(--era-band-opacity, 0.45)' }}
             />
           );
         })}
@@ -191,7 +194,7 @@ ${e.note}` : e.label}</title>
               strokeWidth={1}
               strokeDasharray="3 3"
             />
-            <text x={t.coord} y={b1 + 13} textAnchor="middle" fontSize={FONT} fill="var(--muted)">
+            <text x={t.coord} y={b1 + 13} textAnchor="middle" fontSize={FONT} fill="var(--muted-foreground)">
               {label}
             </text>
           </g>
@@ -214,7 +217,7 @@ ${e.note}` : e.label}</title>
               textAnchor="start"
               dominantBaseline="central"
               fontSize={FONT}
-              fill="var(--muted)"
+              fill="var(--muted-foreground)"
             >
               {label}
             </text>
@@ -285,6 +288,62 @@ ${e.note}` : e.label}</title>
           );
         });
       })()}
+    </g>
+  );
+});
+
+/**
+ * A14 (review §4.2): calibration intervals drawn as node-anchored error bars.
+ * Each bar spans the node's [minAge, maxAge] interval along the DEPTH axis and
+ * sits at the node's own position on the breadth axis — the standard way a
+ * calibrated node is drawn in a chronogram. Off by default (the 时间 module
+ * owns the toggle); purely an overlay, it never touches layout or data.
+ */
+export const CalibrationBars = memo(function CalibrationBars({
+  info,
+  points,
+  nodes,
+  positions,
+}: {
+  info: TimeAxisInfo;
+  points: CalibrationPoint[];
+  nodes: Record<string, TreeNode>;
+  positions: Map<NodeId, Point>;
+}) {
+  const unit = timeUnitSymbol(info.unit);
+  const TICK = 5; // world-unit end-tick half-height
+  return (
+    <g className="calibration-bars" style={{ pointerEvents: 'none' }}>
+      {points.map((c) => {
+        const node = nodes[c.nodeId];
+        const pos = positions.get(c.nodeId);
+        if (!node || !pos) return null;
+        const a = info.ageToCoord(Math.min(c.minAge, c.maxAge));
+        const b = info.ageToCoord(Math.max(c.minAge, c.maxAge));
+        const label = node.label || node.id.slice(0, 6);
+        const title = tr(
+          `校准区间：${c.minAge}–${c.maxAge} ${unit}（${label}）`,
+          `Calibrated range: ${c.minAge}–${c.maxAge} ${unit} (${label})`,
+        );
+        if (info.horizontal) {
+          return (
+            <g key={c.id}>
+              <line x1={a} y1={pos.y} x2={b} y2={pos.y} stroke="var(--primary)" strokeWidth={1.5} opacity={0.9} />
+              <line x1={a} y1={pos.y - TICK} x2={a} y2={pos.y + TICK} stroke="var(--primary)" strokeWidth={1.5} />
+              <line x1={b} y1={pos.y - TICK} x2={b} y2={pos.y + TICK} stroke="var(--primary)" strokeWidth={1.5} />
+              <title>{title}</title>
+            </g>
+          );
+        }
+        return (
+          <g key={c.id}>
+            <line x1={pos.x} y1={a} x2={pos.x} y2={b} stroke="var(--primary)" strokeWidth={1.5} opacity={0.9} />
+            <line x1={pos.x - TICK} y1={a} x2={pos.x + TICK} y2={a} stroke="var(--primary)" strokeWidth={1.5} />
+            <line x1={pos.x - TICK} y1={b} x2={pos.x + TICK} y2={b} stroke="var(--primary)" strokeWidth={1.5} />
+            <title>{title}</title>
+          </g>
+        );
+      })}
     </g>
   );
 });

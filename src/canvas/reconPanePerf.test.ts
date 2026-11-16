@@ -66,7 +66,6 @@ function Harness() {
     title: 'Species',
     subtitle: '',
     nodeCount: Object.keys(doc.nodes).length,
-    zoomPercent: Math.round(t.scale * 100),
     ariaLabel: 'Species pane',
     options: DEFAULT_RECON_VIEW_OPTIONS,
     side: 'species',
@@ -157,7 +156,10 @@ describe('reconciliation pane coalesces input gestures', () => {
     const setAttribute = vi.spyOn(group, 'setAttribute');
 
     // 30 ticks inside one frame: all accumulate in the ref, nothing renders.
-    for (let i = 0; i < 30; i += 1) wheel(pane, { deltaY: -100, clientX: 50, clientY: 50 });
+    // M32 contract: pinch-zoom carries ctrlKey (a trackpad pinch sends
+    // ctrl+wheel); a plain wheel PANS now, so the zoom assertions must pinch.
+    for (let i = 0; i < 30; i += 1)
+      wheel(pane, { deltaY: -100, ctrlKey: true, clientX: 50, clientY: 50 });
     expect(commits).toBe(0);
     expect(groupScale(group)).toBe(1);
 

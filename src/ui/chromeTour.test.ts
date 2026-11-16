@@ -28,7 +28,7 @@ import {
 import { NarrowScreenHint, LS_NARROW_HINT, NARROW_HINT_MAX_WIDTH } from './NarrowScreenHint';
 import { PreferencesMenu } from './PreferencesMenu';
 import { MenuBar } from './MenuBar';
-import { Toolbar } from './Toolbar';
+import { Toolbar, HeaderActions } from './Toolbar';
 import { changeLanguage, currentLanguage } from './i18n';
 import { useStore } from '../model/store';
 import { createEmptyProject } from '../model/sampleTree';
@@ -112,8 +112,8 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-describe('header target budget (BUG-10)', () => {
-  it('renders at most ten clickable targets in the menu bar + toolbar', () => {
+describe('header target budget (BUG-10, revised by S19)', () => {
+  it('renders at most eleven clickable targets in the menu bar + toolbar', () => {
     mount(
       createElement(
         'div',
@@ -125,10 +125,16 @@ describe('header target budget (BUG-10)', () => {
           onOpenAbout: () => {},
         }),
         createElement(Toolbar, { onAddChildrenDialog: () => {} }),
+        // Save + Preferences live beside the toolbar, outside its scroll
+        // container, but they are still header targets and count here.
+        createElement(HeaderActions),
       ),
     );
     const targets = host!.querySelectorAll('button, select, a');
-    expect(targets.length).toBeLessThanOrEqual(10);
+    // BUG-10 capped the header at ten targets. S19 (Sonus) asked for a
+    // VISIBLE panel-visibility toggle (⌘. was undiscoverable), so the budget
+    // moves to eleven — the toggle button is the deliberate eleventh.
+    expect(targets.length).toBeLessThanOrEqual(11);
     // The consolidation is present: one Help trigger and one Preferences trigger.
     expect(host!.querySelector('.menubar-help-btn')).not.toBeNull();
     expect(host!.querySelector('.prefs-trigger')).not.toBeNull();
@@ -140,25 +146,30 @@ describe('header target budget (BUG-10)', () => {
     expect(trigger.textContent).toContain('偏好');
     act(() => trigger.click());
 
-    const panel = document.body.querySelector('.prefs-panel');
+    // M2 + 用户反馈: preferences render as a real DIALOG whose groups are
+    // rounded segmented BUTTON rows (`.prefs-seg`, role=radio) — no per-option
+    // full-width rows.
+    const panel = document.body.querySelector('.prefs-dialog');
     expect(panel).not.toBeNull();
-    const options = [...panel!.querySelectorAll('[role="menuitemradio"]')];
-    // The check glyph marks the active option; strip it for a stable label list.
-    const labels = options.map((o) => (o.textContent ?? '').replace('✓', ''));
+    const options = [...panel!.querySelectorAll('[role="radio"]')];
+    const labels = options.map((o) => (o.textContent ?? '').trim());
     expect(labels).toEqual(
       expect.arrayContaining(['中文', 'English', '浅色', '深色', '跟随系统']),
     );
-    expect(panel!.querySelector('[role="menuitemradio"][aria-checked="true"]')).not.toBeNull();
+    expect(panel!.querySelector('[role="radio"][aria-checked="true"]')).not.toBeNull();
+    // The segmented rows are real rounded buttons, equal width in a group.
+    expect(panel!.querySelectorAll('.prefs-seg').length).toBe(options.length);
+    expect(panel!.querySelectorAll('.prefs-seg-group').length).toBeGreaterThanOrEqual(4);
 
-    // Language swap still works and closes the menu.
+    // Language swap still works; the dialog closes because the locale switch
+    // remounts the app tree.
     const en = options.find((o) => /English/.test(o.textContent ?? '')) as HTMLElement;
     act(() => en.click());
     expect(currentLanguage()).toBe('en');
-    expect(document.body.querySelector('.prefs-panel')).toBeNull();
 
     // Theme choice still works and persists.
     act(() => trigger.click());
-    const dark = [...document.body.querySelectorAll('.prefs-panel .menu-item')].find((o) =>
+    const dark = [...document.body.querySelectorAll('.prefs-dialog .prefs-seg')].find((o) =>
       /Dark|深色/.test(o.textContent ?? ''),
     ) as HTMLElement;
     act(() => dark.click());
@@ -182,7 +193,7 @@ describe('workflow tour (BUG-11)', () => {
     expect(tourCompleted('basics')).toBe(true);
   });
 
-  it('walks Traits → Hypotheses → Analysis → Export and marks completion on Done', () => {
+  it('walks Bring-your-tree → Edit panel → Export and marks completion on Done', () => {
     const visited: string[] = [];
     let closed = 0;
     mount(
@@ -197,30 +208,29 @@ describe('workflow tour (BUG-11)', () => {
       }),
     );
 
-    // The tour gained "Step 0 · bring your own tree" (no target/module), so
-    // the counter runs 1 / 6 and the first advance reaches Traits.
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 6');
+    // Four cards now (Step 0 + 编辑 panel + 导出 + complete), and only the
+    // 编辑 card carries a module — exactly ONE navigation happens.
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 4');
     expect(host!.querySelector('.tour-title')?.textContent).toContain('把你的树放进来');
     expect(visited).toEqual([]);
 
     click(/^下一步$/);
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('2 / 6');
-    expect(visited).toEqual(['traits']);
-    expect(host!.querySelector('.tour-title')?.textContent).toContain('编码性状');
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('2 / 4');
+    expect(visited).toEqual(['edit']);
+    expect(host!.querySelector('.tour-title')?.textContent).toContain('设置时间与样式');
 
     click(/^下一步$/);
-    expect(visited).toEqual(['traits', 'layers']);
+    expect(visited).toEqual(['edit']);
+    expect(host!.querySelector('.tour-title')?.textContent).toContain('导出');
+    // Later cards carry no module: advancing again must not navigate.
     click(/^下一步$/);
-    expect(visited).toEqual(['traits', 'layers', 'analysis']);
-    click(/^下一步$/);
-    expect(visited).toEqual(['traits', 'layers', 'analysis', 'export']);
-    // The final card has no target/module: advancing again must not navigate.
-    click(/^下一步$/);
-    expect(visited).toEqual(['traits', 'layers', 'analysis', 'export']);
+    expect(visited).toEqual(['edit']);
 
-    // Final card: replay / shortcut reference / done.
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('6 / 6');
+    // Final card: on an EMPTY document the sample-library action (A16) rides
+    // along first, then replay / shortcut reference / done.
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('4 / 4');
     expect([...host!.querySelectorAll('.tour-actions .btn')].map((b) => b.textContent)).toEqual([
+      '打开示例库…',
       '重放',
       '快捷键速查',
       '完成',
@@ -284,16 +294,14 @@ describe('workflow tour (BUG-11)', () => {
         },
       }),
     );
-    // Six cards now (Step 0 brought its own tree in), so five advances land
+    // Four cards now (Step 0 brought its own tree in), so three advances land
     // on the final card.
     click(/^下一步$/);
     click(/^下一步$/);
     click(/^下一步$/);
-    click(/^下一步$/);
-    click(/^下一步$/);
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('6 / 6');
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('4 / 4');
     click(/^重放$/);
-    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 6');
+    expect(host!.querySelector('.tour-step')?.textContent).toContain('1 / 4');
     expect(closed).toBe(0);
     expect(localStorage.getItem(LS_WORKFLOW_TOUR)).toBeNull();
   });

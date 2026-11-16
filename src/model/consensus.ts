@@ -427,7 +427,7 @@ export function buildConsensusTree(
   };
 
   const project2 = buildTreeFromClades(tips, selected, name, onIssues);
-  let memberIdxByNode: Map<NodeId, number[]> = new Map();
+  let memberIdxByNode: Map<NodeId, number[]>;
   // Decorate the built tree with the consensus branch data. TIPS participate
   // through their singleton clade key: the branch-length contract of a
   // consensus tree is "the MEAN incoming length over the input trees that carry

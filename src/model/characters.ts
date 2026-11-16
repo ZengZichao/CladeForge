@@ -24,8 +24,8 @@ import { newId } from './treeOps';
 
 /** The canvas backgrounds the palette has to stay legible on (app.css tokens
  *  `--canvas-bg`, light and dark). */
-export const LIGHT_CANVAS_BG = '#f0f0f2';
-export const DARK_CANVAS_BG = '#141416';
+export const LIGHT_CANVAS_BG = '#f0f0f0';
+export const DARK_CANVAS_BG = '#111111';
 
 /**
  * WCAG 1.4.11 floor for a node fill / legend swatch against the light canvas.
@@ -38,7 +38,7 @@ export const MIN_STATE_COLOR_CONTRAST = 3;
  *
  * Derived from the Okabe–Ito colour-blind-safe set, with the three members that
  * failed as a FILL on the light canvas darkened to clear the contrast floor
- * (measured against `LIGHT_CANVAS_BG` = #f0f0f2, WCAG ratio):
+ * (measured against `LIGHT_CANVAS_BG` = #f0f0f0, WCAG ratio):
  *   #56b4e9 sky blue 2.03:1 → dropped (its hue is covered by #0072b2)
  *   #e69f00 orange   1.98:1 → #a66100 4.26:1
  *   #f0e442 yellow   1.16:1 → #7f7f00 3.74:1
@@ -504,7 +504,7 @@ export function characterValueColor(
   if (character.type === 'continuous') {
     if (typeof value !== 'number' || !range) return undefined;
     const t = range.max > range.min ? (value - range.min) / (range.max - range.min) : 0;
-    return lerpHexColor(character.lowColor ?? '#dbeafe', character.highColor ?? '#1e3a8a', t);
+    return lerpHexColor(character.lowColor ?? '#e6f4fe', character.highColor ?? '#113264', t);
   }
   return discreteColor(character, value);
 }

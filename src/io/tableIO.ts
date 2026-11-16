@@ -275,8 +275,8 @@ export function importMatrixTable(text: string, _projectName: string): MatrixImp
         name: col.name,
         type: 'continuous',
         states: [],
-        lowColor: '#60a5fa',
-        highColor: '#f97316',
+        lowColor: '#0090ff',
+        highColor: '#f76b15',
       });
       (characters[characters.length - 1] as Character & { __values?: Map<string, number> }).__values =
         new Map([...col.values.entries()].map(([k, v]) => [k, toNumber(v)]));

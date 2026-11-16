@@ -29,13 +29,16 @@ describe('the reconciliation sample descriptor', () => {
   it('is registered with entryView=recon alongside the two standard samples', () => {
     expect(reconDescriptor()).toBeTruthy();
     expect(reconDescriptor()?.entryView).toBe('recon');
-    // The two standard samples keep their ids and stay standard-entry.
-    for (const id of ['feature-tour', 'large-tree']) {
+    // The two standard samples keep their ids and stay standard-entry. The
+    // fourth entry (2026-11-15) is the neutral calibration-and-events demo,
+    // also standard-entry (its former real-taxon whale content was removed per
+    // the user's no-biology-in-samples rule).
+    for (const id of ['feature-tour', 'large-tree', 'demo-neutral']) {
       const d = SAMPLE_PROJECTS.find((s) => s.id === id);
       expect(d, id).toBeTruthy();
       expect(d?.entryView ?? 'standard').toBe('standard');
     }
-    expect(SAMPLE_PROJECTS).toHaveLength(3);
+    expect(SAMPLE_PROJECTS).toHaveLength(4);
   });
 });
 

@@ -19,6 +19,8 @@ import {
   eventBadgeFontSize,
   eventBadgeText,
   eventMarkerColor,
+  eventMarkerFill,
+  eventMarkerStrokeWidth,
   eventMarkerShape,
   eventMarkerSize,
   eventDisplayLabel,
@@ -125,7 +127,7 @@ export const EventLayer = memo(function EventLayer({
           orient="auto-start-reverse"
           markerUnits="strokeWidth"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted-foreground)" />
         </marker>
       </defs>
 
@@ -134,7 +136,7 @@ export const EventLayer = memo(function EventLayer({
           key={l.id}
           d={curvedPath(l.from, l.to, 0.25)}
           fill="none"
-          stroke="var(--muted)"
+          stroke="var(--muted-foreground)"
           strokeWidth={1.25}
           strokeDasharray="4 3"
           markerEnd="url(#cf-causal-arrow)"
@@ -152,11 +154,11 @@ export const EventLayer = memo(function EventLayer({
             y1={l.from.y}
             x2={l.to.x}
             y2={l.to.y}
-            stroke="var(--muted)"
+            stroke="var(--muted-foreground)"
             strokeWidth={1}
             opacity={0.7}
           />
-          <circle cx={l.to.x} cy={l.to.y} r={1.6} fill="var(--muted)" />
+          <circle cx={l.to.x} cy={l.to.y} r={1.6} fill="var(--muted-foreground)" />
         </g>
       ))}
 
@@ -173,16 +175,15 @@ export const EventLayer = memo(function EventLayer({
         const fontSize = eventBadgeFontSize(e);
         const title =
           eventDisplayLabel(e, project) +
-          (conf ? ` · ${S.confidence.label}:${confLabel(conf)}` : '') +
+          (conf ? ` (${S.confidence.label}: ${confLabel(conf)})` : '') +
           (e.note ? `\n${e.note}` : '');
         return (
           <g key={e.id}>
             <path
               d={eventMarkerPath(eventMarkerShape(e), a.x, a.y, r)}
-              fill="var(--surface)"
+              fill={eventMarkerFill(e)}
               stroke={color}
-              strokeWidth={conf === 'high' ? 2.5 : 2}
-              strokeDasharray={conf === 'low' ? '2 2' : undefined}
+              strokeWidth={eventMarkerStrokeWidth(e)}
               strokeLinejoin="round"
               data-role="node"
               data-node-id={e.nodeId}

@@ -15,13 +15,14 @@ import { useStore } from './model/store';
 import type { Project } from './model/types';
 import { confirmCloseTab } from './ui/tabs';
 import * as file from './io/fileActions';
-import { registerMultiTreeHandler, registerExportSettingsHandler } from './io/fileActions';
+import { registerMultiTreeHandler, registerExportSettingsHandler, registerCompareHandler, registerAppDialogHandler } from './io/fileActions';
 import { getAppInfo, isTauri } from './io/native';
 import { initDesktopShell, requestWindowClose } from './io/desktopShell';
 import { readAutoSave, readWorkspace, writeWorkspace } from './io/projectIO';
 import { isImeComposing } from './ui/imeGuard';
+import { modalIsOpen } from './ui/useDialogFocus';
 import { MenuBar } from './ui/MenuBar';
-import { Toolbar } from './ui/Toolbar';
+import { Toolbar, HeaderActions } from './ui/Toolbar';
 import { GeneTreeBuilderDialog } from './ui/GeneTreeBuilderDialog';
 import { CharacterMatrixDialog } from './ui/CharacterMatrixDialog';
 import { AnalysisDialog } from './ui/AnalysisDialog';
@@ -44,10 +45,18 @@ import { addBuiltGeneTree, createGeneDocFromSpecies } from './model/geneTreeBuil
 import { AboutDialog } from './ui/AboutDialog';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { ExportSettingsDialog } from './ui/ExportSettingsDialog';
+import { ProjectInfoDialog } from './ui/ProjectInfoDialog';
+import { HistoryPanel } from './ui/HistoryPanel';
+import { FindReplaceDialog } from './ui/FindReplaceDialog';
+import { TreeDistanceDialog } from './ui/TreeDistanceDialog';
+import { SampleLibraryDialog } from './ui/SampleLibraryDialog';
+import { ManualDialog } from './ui/ManualDialog';
+import { OperationLogDialog } from './ui/OperationLogDialog';
 import { StandardWorkspace } from './ui/StandardWorkspace';
 import { ReconWorkspace } from './canvas/ReconWorkspace';
 import { AddChildrenDialog } from './ui/AddChildrenDialog';
-import type { NavModule } from './ui/NavigationRail';
+import { LayerCompareDialog } from './ui/LayerPanel';
+import type { NavModule } from './ui/FirstRunTour';
 
 // Locale switch side effect OUTSIDE the React tree: sample documents that the
 // user has not touched are rebuilt from the catalogue in the new language, so
@@ -62,9 +71,10 @@ onLanguageChange(() => {
 });
 
 // --- tab bar -----------------------------------------------------------------
-function TabBar() {  const tabs = useStore((s) => s.tabs);
+function TabBar() {
+  const tabs = useStore((s) => s.tabs);
   const activeTabId = useStore((s) => s.activeTabId);
-  const activeName = useStore((s) => s.project.name);
+  const activeProject = useStore((s) => s.project);
   const tabStore = useStore((s) => s.tabStore);
   const switchTab = useStore((s) => s.switchTab);
   const newTab = useStore((s) => s.newTab);
@@ -75,13 +85,36 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
   const revision = useStore((s) => s.revision);
   const lastSavedRevision = useStore((s) => s.lastSavedRevision);
   const titleOf = (id: string) =>
-    (id === activeTabId ? activeName : tabStore[id]?.project.name) || S.tabs.untitled;
+    (id === activeTabId ? activeProject.name : tabStore[id]?.project.name) || S.tabs.untitled;
   const dirtyOf = (id: string): boolean => {
     if (id === activeTabId) {
       return revision !== lastSavedRevision;
     }
     const snap = tabStore[id];
     return snap ? snap.revision !== snap.lastSavedRevision : false;
+  };
+  // ID-02: a tab showed only its name, so with several documents open there was
+  // no way to tell which tab mapped to which file on disk. The hover tooltip
+  // now carries the path, the disk state and the on-disk timestamp.
+  const tooltipOf = (id: string): string => {
+    const p = id === activeTabId ? activeProject : tabStore[id]?.project;
+    if (!p) return titleOf(id);
+    const lines = [titleOf(id), p.sourcePath ?? tr('尚未保存到磁盘', 'Not saved to disk yet')];
+    if (dirtyOf(id)) lines.push(S.review.unsavedDot);
+    else if (p.savedAt) {
+      const d = new Date(p.savedAt);
+      if (!Number.isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        // m12: hardcoded zh label → tr(); the date format is locale-stable ISO.
+        lines.push(
+          tr(
+            `磁盘版本 ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+            `On disk: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+          ),
+        );
+      }
+    }
+    return lines.join('\n');
   };
 
   // The × button and the ⌘W chord MUST share one close path — the guard lives
@@ -91,19 +124,49 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
   };
 
   return (
-    <div className="tabbar" data-tauri-drag-region>
+    <div className="tabbar" data-tauri-drag-region role="tablist" aria-label={S.tabs.listLabel}>
       {tabs.map((id) => (
         <div
           key={id}
+          role="tab"
           className={`tab${id === activeTabId ? ' active' : ''}`}
-          title={titleOf(id)}
+          title={tooltipOf(id)}
+          aria-selected={id === activeTabId}
+          /* S08 (Sonus): the tab strip had no keyboard contract — tabs were
+             plain divs and close worked only on mousedown. Roving tabindex +
+             Left/Right selection closes that gap. */
+          tabIndex={id === activeTabId ? 0 : -1}
           onClick={() => switchTab(id)}
+          onKeyDown={(e) => {
+            if (isImeComposing(e)) return;
+            const i = tabs.indexOf(id);
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              const dir = e.key === 'ArrowLeft' ? -1 : 1;
+              const next = tabs[(i + dir + tabs.length) % tabs.length];
+              if (next && next !== id) switchTab(next);
+              // Move DOM focus to the newly active tab (roving tabindex).
+              requestAnimationFrame(() => {
+                const el = document.querySelector<HTMLElement>(`[role="tab"][data-tab-id="${next}"]`);
+                el?.focus();
+              });
+            } else if (e.key === 'Home' || e.key === 'End') {
+              e.preventDefault();
+              const next = e.key === 'Home' ? tabs[0] : tabs[tabs.length - 1];
+              if (next && next !== id) switchTab(next);
+              requestAnimationFrame(() => {
+                const el = document.querySelector<HTMLElement>(`[role="tab"][data-tab-id="${next}"]`);
+                el?.focus();
+              });
+            }
+          }}
+          data-tab-id={id}
         >
           {/* The title attribute also sits on the inner span: the tab bar is
               a window drag region in Tauri and some builds suppress the
               container tooltip, so a per-span title guarantees the full file
               name is shown on hover (truncated tab labels stay readable). */}
-          <span className="tab-title" title={titleOf(id)}>
+          <span className="tab-title" title={tooltipOf(id)}>
             {titleOf(id)}
           </span>
           {dirtyOf(id) && (
@@ -111,10 +174,13 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
               aria-label={S.review.unsavedDot}
               title={S.review.unsavedDot}
               style={{
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                background: 'var(--accent, #2563eb)',
+                width: 6,
+                height: 6,
+                borderRadius: 0,
+                // S01 (Sonus): surface tokens are not ink — the unsaved dot
+                // used to resolve to a near-white surface color and vanish.
+                // Amber is the dirty-state ink, readable on both themes.
+                background: 'var(--amber-9)',
                 flex: 'none',
               }}
             />
@@ -123,10 +189,16 @@ function TabBar() {  const tabs = useStore((s) => s.tabs);
             <button
               className="tab-close"
               title={S.tabs.close}
-              aria-label={S.tabs.close}
-              onMouseDown={(e) => {
+              aria-label={`${S.tabs.close} ${titleOf(id)}`}
+              /* m10: activate on click like every other button in the app —
+                 mousedown-only closed the tab even when the press was part of
+                 a drag on the tab bar and ignored keyboard-generated clicks. */
+              onClick={(e) => {
                 e.stopPropagation();
                 handleClose(id);
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
               }}
             >
               <CrossClose />
@@ -182,7 +254,7 @@ export function App() {
     st.apply((d) => {
       const doc = createGeneDocFromSpecies(
         d,
-        tr(`${d.name} · 基因树`, `${d.name} · gene tree`),
+        tr(`${d.name}：基因树`, `${d.name}: gene tree`),
       );
       const built = addBuiltGeneTree(d, doc);
       id = built.id;
@@ -219,6 +291,17 @@ export function App() {
   const openAboutFromPalette = useCallback(() => { setPaletteOpen(false); setAboutOpen(true); }, []);
   const [multiTreeProjects, setMultiTreeProjects] = useState<Project[] | null>(null);
   const [exportSettingsOpen, setExportSettingsOpen] = useState(false);
+  // App-level dialogs opened from the FILE menu / command palette (2026-11-15).
+  const [projectInfoOpen, setProjectInfoOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [treeDistanceOpen, setTreeDistanceOpen] = useState(false);
+  const [sampleLibraryOpen, setSampleLibraryOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [operationLogOpen, setOperationLogOpen] = useState(false);
+  // S14/m14: the palette's layer-compare command opens the SAME dialog as the
+  // hypothesis panel — one command, one definition.
+  const [layerCompareOpen, setLayerCompareOpen] = useState(false);
 
   // ⌘. toggles both side panels in the active workspace — a quick collapse on
   // small windows. Shared state: whichever workspace is live reads it.
@@ -245,6 +328,10 @@ export function App() {
       // ⌘-key chords are delivered to the page while the candidate list is up.
       // Nothing here may fire mid-composition.
       if (isImeComposing(e)) return;
+      // M11 (UI_UX_REVIEW) / S03 (Sonus): while ANY modal is open the shell
+      // chords stand down — ⌘N/⌘W/⌘Z used to act on the hidden document behind
+      // the export dialog, and ⌘K stacked a palette on top of a modal.
+      if (modalIsOpen()) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       const k = e.key.toLowerCase();
       const s = useStore.getState();
@@ -265,14 +352,27 @@ export function App() {
         // ⌘W closes the ACTIVE TAB (with the dirty confirm), not the window;
         // the system window-close used to bypass the unsaved-changes guard.
         // With a single tab the chord MEANS "close the window": desktop routes
-        // through the same dirty-check guard, and a browser says why the chord
-        // cannot act (C#13 — both used to be silent no-ops).
-        e.preventDefault();
-        if (s.tabs.length > 1) confirmCloseTab(s.activeTabId);
-        else requestWindowClose();
+        // through the same dirty-check guard. R9/M7: a BROWSER keeps ⌘W for
+        // itself (it closes the browser tab, and preventDefault cannot stop
+        // that), so the desktop-only window close is not even attempted on the
+        // web — the multi-tab close still went through, matching what the chord
+        // can actually do in each host.
+        if (s.tabs.length > 1) {
+          e.preventDefault();
+          confirmCloseTab(s.activeTabId);
+        } else if (isTauri()) {
+          e.preventDefault();
+          requestWindowClose();
+        }
       } else if (k === '0') {
         e.preventDefault();
-        s.requestFit();
+        // S11: route by ACTIVE workspace — recon mode must not zoom the
+        // hidden standard canvas.
+        if (s.reconMode) {
+          window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
+        } else {
+          s.requestFit();
+        }
       } else if (k === 'a' && !e.shiftKey && !e.altKey) {
         // ⌘A selects ALL tips (the palette's 选中全部末端, on the natural key):
         // the review's keyboard-main-path item, one chord.
@@ -281,16 +381,11 @@ export function App() {
           .filter((n) => n.childrenIds.length === 0)
           .map((n) => n.id);
         s.selectMany(tips);
-      } else if (k >= '1' && k <= '6' && !e.altKey && !e.shiftKey) {
-        // ⌘1–6 jump the left rail to the corresponding module — the rail is
-        // fully keyboard-reachable through these, which the reference table
-        // used to promise for nothing.
+      } else if (k === '1' && !e.altKey && !e.shiftKey) {
+        // ⌘1 focuses the single left module (时间 + 样式 merged panel) — the
+        // rail is fully keyboard-reachable through this one chord.
         e.preventDefault();
-        const modules = ['traits', 'layers', 'time', 'style', 'analysis', 'export'];
-        const target = modules[Number(k) - 1];
-        if (target) {
-          window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: target }));
-        }
+        window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'edit' }));
       } else if (k === 'o') {
         e.preventDefault();
         void file.actionOpenProject();
@@ -331,15 +426,24 @@ export function App() {
         e.preventDefault();
         setShortcutsOpen(true);
       } else if (k === '.') {
-        // ⌘. toggles the side panels.
+        // ⌘. toggles the side panels (same path as the header button, S19).
         e.preventDefault();
         setPanelsHidden((h) => !h);
       } else if (k === '=' || k === '+') {
         e.preventDefault();
-        s.zoomBy(1.2);
+        // S11: zoom keys route to the active workspace.
+        if (s.reconMode) {
+          window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-in'));
+        } else {
+          s.zoomBy(1.2);
+        }
       } else if (k === '-' || k === '_') {
         e.preventDefault();
-        s.zoomBy(1 / 1.2);
+        if (s.reconMode) {
+          window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-out'));
+        } else {
+          s.zoomBy(1 / 1.2);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -354,7 +458,7 @@ export function App() {
       if (e.key !== 'F2' && e.key !== 'Enter') return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (isImeComposing(e)) return;
+      if (modalIsOpen()) return;
       const st = useStore.getState();
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) return; // let ⌘Enter pass
       if (st.selection.length !== 1) return;
@@ -422,15 +526,39 @@ export function App() {
       setMultiTreeProjects(projects);
     });
     registerExportSettingsHandler(() => setExportSettingsOpen(true));
+    registerCompareHandler(() => setTreeDistanceOpen(true));
+    registerAppDialogHandler((id) => {
+      if (id === 'projectInfo') setProjectInfoOpen(true);
+      else if (id === 'findReplace') setFindReplaceOpen(true);
+      else if (id === 'history') setHistoryOpen(true);
+      else if (id === 'sampleLibrary') setSampleLibraryOpen(true);
+      else if (id === 'manual') setManualOpen(true);
+      else if (id === 'operationLog') setOperationLogOpen(true);
+      // S14/m14: the command palette's layer-compare entry now opens the SAME
+      // A/B dialog the hypothesis panel opens — no toast-only variant.
+      else if (id === 'layerCompare') setLayerCompareOpen(true);
+      else if (id === 'nexusExport') setNexusExportOpen(true);
+    });
     return () => {
       registerMultiTreeHandler(null);
       registerExportSettingsHandler(null);
+      registerCompareHandler(null);
+      registerAppDialogHandler(null);
     };
   }, []);
 
   // Desktop shell (Tauri only, no-op in a browser): the unsaved-changes close
   // guard and the OS file association. Returns its unlisten cleanup.
   useEffect(() => initDesktopShell(), []);
+
+  // S19: the header's panel-visibility button drives the same state as ⌘.
+  // (The Toolbar is rendered outside the handler's closure scope, so the
+  // button talks through a window event rather than a prop drilling chain.)
+  useEffect(() => {
+    const onToggle = () => setPanelsHidden((h) => !h);
+    window.addEventListener('cladeforge:toggle-panels', onToggle);
+    return () => window.removeEventListener('cladeforge:toggle-panels', onToggle);
+  }, []);
 
   return (
     <div className={`app${macosTitlebar ? ' macos-titlebar' : ''}`} key={lang}>
@@ -443,6 +571,7 @@ export function App() {
           onOpenAbout={() => setAboutOpen(true)}
         />
         <Toolbar onAddChildrenDialog={openAddForSelection} />
+        <HeaderActions />
       </div>
 
       {reconMode ? (
@@ -458,12 +587,6 @@ export function App() {
         <ErrorBoundary scope={tr('标准工作区', 'Standard workspace')}>
           <StandardWorkspace
             panelsHidden={panelsHidden}
-            onOpenMatrix={() => setMatrixOpen(true)}
-            onOpenAnalysis={() => setAnalysisOpen(true)}
-            onNexusExport={() => setNexusExportOpen(true)}
-            onBuildGeneTree={() => openGeneBuilder(null)}
-            onCopySpeciesTree={copySpeciesTreeToGene}
-            onEditGeneTree={(id) => openGeneBuilder(id)}
             onAddChildrenDialog={openAddForNode}
           />
         </ErrorBoundary>
@@ -496,8 +619,10 @@ export function App() {
         onClose={() => setExportSettingsOpen(false)}
         onExport={(format) => {
           setExportSettingsOpen(false);
-          // Preset mode engages so the export follows the panel, not the view.
-          useStore.getState().setExportSettings({ followView: false });
+          // S04/m15 (Sonus+UI_UX_REVIEW): the user's follow-view choice IS the
+          // export contract. Forcing followView:false here silently overrode
+          // the checked "按当前屏幕导出" box and switched the left panel's mode
+          // chip to "导出预设" — execute the chosen mode instead.
           void file.actionExportWithSettings(format);
         }}
       />
@@ -514,6 +639,26 @@ export function App() {
         }}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ProjectInfoDialog open={projectInfoOpen} onClose={() => setProjectInfoOpen(false)} />
+      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <FindReplaceDialog open={findReplaceOpen} onClose={() => setFindReplaceOpen(false)} />
+      <TreeDistanceDialog open={treeDistanceOpen} onClose={() => setTreeDistanceOpen(false)} />
+      <SampleLibraryDialog open={sampleLibraryOpen} onClose={() => setSampleLibraryOpen(false)} />
+      {/* S14: the command palette's layer-compare entry lands here, on the SAME
+          A/B dialog the hypothesis panel uses. Initial picks follow the store's
+          active layer vs the first other layer, resolved lazily at open time. */}
+      {layerCompareOpen && (
+        <LayerCompareDialog
+          initialA={useStore.getState().project.activeLayerId}
+          initialB={
+            useStore.getState().project.layers.find((l) => l.id !== useStore.getState().project.activeLayerId)?.id ??
+            useStore.getState().project.activeLayerId
+          }
+          onClose={() => setLayerCompareOpen(false)}
+        />
+      )}
+      <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />
+      <OperationLogDialog open={operationLogOpen} onClose={() => setOperationLogOpen(false)} />
       {multiTreeProjects && (
         <ImportTreesDialog
           projects={multiTreeProjects}

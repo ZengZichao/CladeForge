@@ -18,99 +18,104 @@ import type { DropdownItem } from './Dropdown';
 import { S, tr } from './strings';
 import type { RecentEntry } from '../io/recent';
 import { useStore } from '../model/store';
-import { ladderize, rerootAtNode } from '../model/treeOps';
 
-/** The consolidated "文件" dropdown: lifecycle, import, and every export target. */
-export function buildFileMenuItems(
-  firstRecent: RecentEntry | undefined,
-  onOpenRecent: (entry: RecentEntry) => void,
-): DropdownItem[] {
+/** Reroot at the current selection, with the same guards as every other entry
+ *  point (shared by the left-panel 树操作 section). */
+export function rerootAtSelection(): void {
+  const st = useStore.getState();
+  const id = st.selection[0];
+  if (!id) {
+    import('./toast').then(({ notify }) =>
+      notify.info(tr('请先在画布上选中一个节点', 'Select a node on the canvas first')),
+    );
+    return;
+  }
+  if (id === st.project.rootId) {
+    import('./toast').then(({ notify }) =>
+      notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead')),
+    );
+    return;
+  }
+  file.actionRerootAtNode(id);
+}
+
+/** Ladderize the whole tree (shared by the left-panel 树操作 section). */
+export function ladderizeTree(): void {
+  file.actionLadderize(false);
+}
+
+/** The consolidated "文件" dropdown: lifecycle, tree import and the export
+ *  entry. 用户反馈: 树操作 moved to the left panel, 导入表格 / 项目详情 are
+ *  gone, and 查找与替换 / 历史记录 became toolbar buttons. */
+export function buildFileMenuItems(): DropdownItem[] {
   return [
-    { label: S.menu.new, onClick: () => file.actionNewProject() },
-    { label: S.menu.open, onClick: () => void file.actionOpenProject() },
+    { label: S.menu.new, onClick: () => file.actionNewProject(), kbd: '⌘T' },
+    { label: S.menu.open, onClick: () => void file.actionOpenProject(), kbd: '⌘O' },
     // 保存 lives in the FILE menu — it used to exist only on the toolbar and
     // ⌘S, which is the least conventional place for the most conventional action.
-    { label: S.review.saveMenu, onClick: () => void file.actionSaveProject() },
-    { label: S.review.saveAsMenu, onClick: () => void file.actionSaveProjectAs() },
+    { label: S.review.saveMenu, onClick: () => void file.actionSaveProject(), kbd: '⌘S' },
+    { label: S.review.saveAsMenu, onClick: () => void file.actionSaveProjectAs(), kbd: '⌘⇧S' },
+    // OP-10: multi-tab users had to switch tabs and press ⌘S once each; the
+    // string existed but no entry point ever used it.
+    { label: S.review.saveAllTabs, onClick: () => void file.actionSaveAllProjects() },
     { label: S.review.revertMenu, onClick: () => void file.actionRevertProject() },
     { sep: true },
-    {
-      // The recent entry OPENS THE LIST — the old behaviour jumped straight to
-      // the most recent file with no submenu and no feedback, and with no
-      // recents it silently did nothing at all.
-      label: S.review.recentProjects,
-      onClick: () => {
-        if (firstRecent) onOpenRecent(firstRecent);
-      },
-    },
-    { sep: true },
-    // C#27: reroot and ladderize used to exist ONLY in the right-click menu —
-    // a discovery dead-end for trackpad users and anyone who does not think to
-    // right-click. The menu bar carries the two safe, self-explanatory ones.
-    { heading: tr('树操作', 'Tree operations') },
-    {
-      label: tr('在选中节点重新定根', 'Reroot at the selected node'),
-      onClick: () => {
-        const st = useStore.getState();
-        const id = st.selection[0];
-        if (!id) {
-          import('./toast').then(({ notify }) =>
-            notify.info(tr('请先在画布上选中一个节点', 'Select a node on the canvas first')),
-          );
-          return;
-        }
-        if (id === st.project.rootId) {
-          import('./toast').then(({ notify }) =>
-            notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead')),
-          );
-          return;
-        }
-        st.apply((d) => rerootAtNode(d, id));
-      },
-    },
-    {
-      label: tr('阶梯化整树', 'Ladderize the tree'),
-      onClick: () => {
-        const st = useStore.getState();
-        st.apply((d) => ladderize(d, false));
-      },
-    },
+    // M1/m9 (UI_UX_REVIEW): the file-menu "最近项目" entry is gone — it
+    // duplicated the dedicated 最近 dropdown (one data, one position) and its
+    // old behaviour — silently opening the newest file, or doing nothing when
+    // the list was empty — surprised rather than served. Recents stay in the
+    // one place named for them.
+    // 用户反馈: 树操作 (reroot / ladderize) lives in the left panel now; the
+    // shared guards live in `rerootAtSelection` / `ladderizeTree` above.
     { heading: S.review.importGroup },
     { label: S.menu.importTree, onClick: () => void file.actionImportTree() },
-    { label: S.review.importTable, onClick: () => void file.actionImportTable('matrix') },
     { label: S.review.pasteTree, onClick: () => void file.actionPasteTreeFromClipboard() },
     { sep: true },
+    // M1 (UI_UX_REVIEW): the file menu carried THIRTEEN export entries that
+    // duplicated the left 导出 module and the palette. ONE "导出…" entry now
+    // opens the export surface (settings dialog + grouped list); every format
+    // stays reachable there, in the palette, and on the left panel.
     { heading: S.review.exportFigures },
     {
-      // Opens the export-settings dialog (preset mode, DPI, support values,
-      // legend, scale bar). The ellipsis marks the extra dialog, per the
-      // style guide; the three direct exports below skip it.
-      label: S.exportItems.options,
+      label: tr('导出…', 'Export…'),
       onClick: () => file.actionOpenExportSettings(),
     },
+    { sep: true },
+    // 工具 group: 用户反馈 — 查找与替换 / 历史记录 are toolbar buttons now.
+    { heading: tr('工具', 'Tools') },
+    { label: tr('示例库…', 'Sample library…'), onClick: () => file.openAppDialog('sampleLibrary') },
+    // OP-22: import notes had a report; everything else evaporated as a toast.
+    { label: tr('操作日志…', 'Operation log…'), onClick: () => file.openAppDialog('operationLog') },
+  ];
+}
+
+/** The top-bar 导出 dropdown (用户反馈: 导出 moved out of the left rail into a
+ *  top-level menu next to 文件 / 最近 / 帮助). Same actions and the same
+ *  gene-tree gate as the old rail panel; the NEXUS row opens the options
+ *  dialog through the app-dialog route. */
+export function buildExportMenuItems(): DropdownItem[] {
+  const hasGeneTrees = (useStore.getState().project.geneTrees?.length ?? 0) > 0;
+  return [
+    { label: S.exportItems.options, onClick: () => file.actionOpenExportSettings() },
+    { sep: true },
+    { heading: S.exportGroup.vector },
     { label: S.exportItems.svg, onClick: () => void file.actionExportSVG() },
-    { label: S.exportItems.png, onClick: () => void file.actionExportPNG() },
     { label: S.exportItems.pdf, onClick: () => void file.actionExportPDF() },
-    { sep: true },
-    { heading: S.review.exportData },
+    { heading: S.exportGroup.raster },
+    { label: S.exportItems.png, onClick: () => void file.actionExportPNG() },
+    { label: S.exportItems.tiff, onClick: () => void file.actionExportTIFF() },
+    { heading: S.exportGroup.data },
     { label: S.exportItems.newick, onClick: () => void file.actionExportNewick() },
-    {
-      // Called with NO arguments — never `onClick: file.actionExportNexus`,
-      // which would pass the click event through as the options bag.
-      label: S.exportItems.nexus,
-      onClick: () => void file.actionExportNexus(),
-    },
-    { label: S.review.exportNexml, onClick: () => void file.actionExportNexml() },
-    { sep: true },
-    { heading: S.review.exportTables },
-    { label: S.review.exportMatrixCsv, onClick: () => void file.actionExportMatrixCsv() },
-    { label: S.review.exportAnnotationsCsv, onClick: () => void file.actionExportAnnotationsCsv() },
-    { label: S.review.exportMatrixTemplate, onClick: () => void file.actionExportMatrixTemplate() },
-    { sep: true },
-    { heading: S.review.exportReports },
-    { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },
+    { label: S.exportItems.nexus, onClick: () => file.openAppDialog('nexusExport') },
     { label: S.exportItems.hypothesisJSON, onClick: () => void file.actionExportHypothesisJSON() },
     { label: S.exportItems.rScript, onClick: () => void file.actionExportRScript() },
+    {
+      label: S.exportItems.reconReport,
+      onClick: () => void file.actionExportReconciliationReport(),
+      disabled: !hasGeneTrees,
+    },
+    { heading: S.exportGroup.report },
+    { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },
   ];
 }
 

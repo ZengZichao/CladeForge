@@ -1,14 +1,8 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Preferences dropdown: language, theme, UI scale, colour-vision-friendly
-// badges, diagnostics and local-data controls, consolidated into ONE target.
-//
-// A "preferences" entry that only switched appearance was an appearance
-// switcher; the settings that actually shape a session live here now:
-//   * UI scale (interface chrome zoom — the 11px baseline is small on 4K);
-//   * CVD-friendly badges (force shape+code emphasis on event markers);
-//   * copy diagnostics (version / platform / doc stats for bug reports);
-//   * clear local data (autosave / recents / prefs), with confirmation.
+// Preferences dialog: language, theme, UI scale and the undo-history limit.
+// 用户反馈: the CVD mode, diagnostics copy and restore-confirmation-prompts
+// entries were removed together with their functionality; the undo-limit
+// consumption note is gone too.
 //
 // BUG-10 caps the header at ten clickable targets. The two segmented controls
 // that used to live here cost five of them (中, EN, light, dark, system) while
@@ -32,14 +26,12 @@ import {
 } from '@radix-ui/react-icons';
 import { changeLanguage, useLanguage } from './i18n';
 import { setTheme, storedTheme, type Theme } from './theme';
+import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
-import { APP_VERSION } from '../model/types';
 import { requestConfirm } from './confirmDialog';
 import { notify } from './toast';
-import { writeClipboardText } from '../io/clipboardIO';
 
 const UI_SCALE_KEY = 'cladeforge:uiScale';
-const CVD_MODE_KEY = 'cladeforge:cvdMode';
 
 function storedUiScale(): number {
   try {
@@ -56,17 +48,6 @@ function applyUiScale(scale: number): void {
   document.documentElement.style.setProperty('zoom', String(scale));
 }
 
-function storedCvdMode(): boolean {
-  try {
-    return localStorage.getItem(CVD_MODE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-/** Panel width, also used to keep the right-aligned flyout inside the viewport. */
-const PANEL_WIDTH = 208;
-
 interface ThemeOption {
   value: Theme;
   icon: ReactNode;
@@ -78,11 +59,12 @@ export function PreferencesMenu() {
   const historyLimit = useStore((s) => s.historyLimit);
   const [pref, setPref] = useState<Theme>(storedTheme);
   const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
-  const [cvd, setCvd] = useState<boolean>(storedCvdMode);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  // M2: the dialog contract — focus trap + Escape + focus return (replaces the
+  // flyout's hand-rolled dismissal listeners; a centered dialog needs no
+  // positioning math, which also retires the S02 zoom-space conversion).
+  const dialogRef = useDialogFocus(open, () => setOpen(false));
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Track OS changes so the "system" row's active state stays honest even
@@ -94,67 +76,24 @@ export function PreferencesMenu() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // Restore the stored UI scale + CVD flag on mount.
+  // Restore the stored UI scale on mount.
   useEffect(() => {
     applyUiScale(storedUiScale());
-    if (storedCvdMode()) {
-      (window as unknown as Record<string, unknown>).__cladeforgeCvd = true;
-      document.documentElement.dataset.cvdMode = '1';
-    }
   }, []);
 
-  // Close on outside click, any scrollable ancestor scrolling, resize or Escape
-  // — the same dismissal contract the file/recent dropdowns implement.
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (boxRef.current?.contains(target) || panelRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    // The panel scrolls internally (max-height in app.css). Its own scroll must
-    // not dismiss it — only a scroll elsewhere would drift the fixed panel away
-    // from its trigger.
-    const onDismiss = (e: Event) => {
-      const target = e.target;
-      if (panelRef.current && target instanceof Node && panelRef.current.contains(target)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      setOpen(false);
-    };
-    window.addEventListener('mousedown', onDoc);
-    window.addEventListener('scroll', onDismiss, true);
-    window.addEventListener('resize', onDismiss);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDoc);
-      window.removeEventListener('scroll', onDismiss, true);
-      window.removeEventListener('resize', onDismiss);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  const toggle = () => {
-    if (!open && btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({
-        top: r.bottom + 4,
-        left: Math.max(8, Math.min(r.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 8)),
-      });
-    }
-    setOpen((o) => !o);
-  };
+  const toggle = () => setOpen((o) => !o);
 
   const chooseTheme = (value: Theme) => {
     setTheme(value);
     setPref(value);
-    setOpen(false);
+    // M2: inside a dialog, a theme switch keeps the dialog open so the user
+    // sees the effect and can undo a wrong pick in place.
+    setOpen(true);
   };
 
   const chooseLanguage = (value: 'zh' | 'en') => {
+    // M2: close before switching — the locale change relabels the whole tree,
+    // and a closed dialog is the clean state either way.
     setOpen(false);
     changeLanguage(value);
   };
@@ -167,38 +106,6 @@ export function PreferencesMenu() {
     } catch {
       /* storage unavailable — session-only */
     }
-  };
-
-  const chooseCvd = (value: boolean) => {
-    setCvd(value);
-    try {
-      localStorage.setItem(CVD_MODE_KEY, value ? '1' : '0');
-    } catch {
-      /* storage unavailable */
-    }
-    // The flag is read by the event layers / exporter through the store-agnostic
-    // global so badge rendering can respond without threading a prop everywhere.
-    (window as unknown as Record<string, unknown>).__cladeforgeCvd = value;
-    document.documentElement.dataset.cvdMode = value ? '1' : '';
-    setOpen(false);
-  };
-
-  const copyDiagnostics = () => {
-    const st = (window as unknown as { __cladeforge?: { useStore: { getState: () => { project: { nodes: Record<string, unknown>; characters: unknown[]; events: unknown[]; geneTrees?: unknown[] } } } } }).__cladeforge?.useStore.getState();
-    const docStats = st
-      ? `nodes=${Object.keys(st.project.nodes).length}, characters=${st.project.characters.length}, events=${st.project.events.length}, geneTrees=${st.project.geneTrees?.length ?? 0}`
-      : 'store unavailable';
-    const text = [
-      `CladeForge ${APP_VERSION}`,
-      `ua: ${navigator.userAgent}`,
-      `lang: ${lang}`,
-      `doc: ${docStats}`,
-      `time: ${new Date().toISOString()}`,
-    ].join('\n');
-    void writeClipboardText(text).then((ok) =>
-      notify.success(ok ? S.review.diagnosticsCopied : text),
-    );
-    setOpen(false);
   };
 
   const clearLocalData = () => {
@@ -222,23 +129,6 @@ export function PreferencesMenu() {
     });
   };
 
-  // P0-15 / U-41: “Don't ask again” is stored permanently, so Preferences must
-  // offer a way back. Clearing the skip keys re-enables every confirmation.
-  const restoreConfirmPrompts = () => {
-    setOpen(false);
-    try {
-      const keys: string[] = [];
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (key?.startsWith('cladeforge:confirm:skip:')) keys.push(key);
-      }
-      for (const key of keys) localStorage.removeItem(key);
-    } catch {
-      /* storage already broken */
-    }
-    notify.success(S.review.restoredConfirmPrompts);
-  };
-
   const themeOptions: ThemeOption[] = [
     { value: 'light', icon: <SunIcon />, label: S.theme.light },
     { value: 'dark', icon: <MoonIcon />, label: S.theme.dark },
@@ -251,7 +141,7 @@ export function PreferencesMenu() {
         ref={btnRef}
         className="btn prefs-trigger"
         onClick={toggle}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={tr('偏好设置', 'Preferences')}
         title={tr('偏好设置', 'Preferences')}
@@ -260,139 +150,106 @@ export function PreferencesMenu() {
         <span className="prefs-trigger-label">{tr('偏好', 'Preferences')}</span>
         <ChevronDownIcon className="prefs-caret" />
       </button>
+      {/* M2 (UI_UX_REVIEW): a 12-radio + destructive-action settings page is a
+          DIALOG, not a dropdown — the flyout scrolled 896px of content in a
+          420px window and anchored off-screen at 130% zoom. The centered dialog
+          gives the real modal contract (focus trap, Escape, backdrop dismiss)
+          and the widest layout the content needs. */}
       {open &&
-        pos &&
         createPortal(
-          <div
-            ref={panelRef}
-            className="dropdown-panel prefs-panel"
-            role="menu"
-            aria-label={tr('偏好设置', 'Preferences')}
-            style={{
-              position: 'fixed',
-              top: pos.top,
-              left: pos.left,
-              minWidth: PANEL_WIDTH,
-              // max-content keeps long English labels (the 54-char workflow-tour
-              // entry) on one line instead of wrapping mid-phrase.
-              width: 'max-content',
-              maxWidth: Math.min(360, window.innerWidth - pos.left - 8),
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="menu-section-label">{S.lang.label}</div>
-            <button
-              className="menu-item prefs-item"
-              role="menuitemradio"
-              aria-checked={lang === 'zh'}
-              onClick={() => chooseLanguage('zh')}
+          <div className="dialog-backdrop" onMouseDown={() => setOpen(false)}>
+            <div
+              ref={dialogRef}
+              className="dialog prefs-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={tr('偏好设置', 'Preferences')}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true">{lang === 'zh' ? '✓' : ''}</span>
-                <span>中文</span>
-              </span>
-            </button>
-            <button
-              className="menu-item prefs-item"
-              role="menuitemradio"
-              aria-checked={lang === 'en'}
-              onClick={() => chooseLanguage('en')}
-            >
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true">{lang === 'en' ? '✓' : ''}</span>
-                <span>English</span>
-              </span>
-            </button>
-            <div className="menu-sep" />
-            <div className="menu-section-label">{S.theme.label}</div>
-            {themeOptions.map((opt) => (
-              <button
-                key={opt.value}
-                className="menu-item prefs-item"
-                role="menuitemradio"
-                aria-checked={pref === opt.value}
-                onClick={() => chooseTheme(opt.value)}
-              >
-                <span className="prefs-item-label">
-                  <span className="prefs-check" aria-hidden="true">{pref === opt.value ? '✓' : ''}</span>
-                  <span className="prefs-item-icon">{opt.icon}</span>
-                  <span>{opt.label}</span>
-                </span>
-              </button>
-            ))}
-            <div className="menu-sep" />
-            <div className="menu-section-label">{S.review.preferencesUiScale}</div>
-            {[1, 1.15, 1.3].map((v) => (
-              <button
-                key={v}
-                className="menu-item prefs-item"
-                role="menuitemradio"
-                aria-checked={Math.abs(uiScale - v) < 0.01}
-                onClick={() => chooseUiScale(v)}
-              >
-                <span className="prefs-item-label">
-                  <span className="prefs-check" aria-hidden="true">
-                    {Math.abs(uiScale - v) < 0.01 ? '✓' : ''}
-                  </span>
-                  <span>
-                    {v === 1 ? tr('标准 100%', 'Standard 100%') : `${Math.round(v * 100)}%`}
-                  </span>
-                </span>
-              </button>
-            ))}
-            <div className="menu-sep" />
+              <h2>{tr('偏好设置', 'Preferences')}</h2>
+              {/* 用户反馈：each group is a rounded segmented BUTTON ROW — equal
+                  size, equal weight, comparable label lengths — instead of one
+                  full-width row per option with a check glyph. */}
+              <div className="menu-section-label">{S.lang.label}</div>
+              <div className="prefs-seg-group" role="radiogroup" aria-label={S.lang.label}>
+                <button
+                  className={`prefs-seg${lang === 'zh' ? ' active' : ''}`}
+                  role="radio"
+                  aria-checked={lang === 'zh'}
+                  onClick={() => chooseLanguage('zh')}
+                >
+                  中文
+                </button>
+                <button
+                  className={`prefs-seg${lang === 'en' ? ' active' : ''}`}
+                  role="radio"
+                  aria-checked={lang === 'en'}
+                  onClick={() => chooseLanguage('en')}
+                >
+                  English
+                </button>
+              </div>
+              <div className="menu-section-label">{S.theme.label}</div>
+              <div className="prefs-seg-group" role="radiogroup" aria-label={S.theme.label}>
+                {themeOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`prefs-seg${pref === opt.value ? ' active' : ''}`}
+                    role="radio"
+                    aria-checked={pref === opt.value}
+                    onClick={() => chooseTheme(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="menu-section-label">{S.review.preferencesUiScale}</div>
+              <div className="prefs-seg-group" role="radiogroup" aria-label={S.review.preferencesUiScale}>
+                {[1, 1.15, 1.3].map((v) => (
+                  <button
+                    key={v}
+                    className={`prefs-seg${Math.abs(uiScale - v) < 0.01 ? ' active' : ''}`}
+                    role="radio"
+                    aria-checked={Math.abs(uiScale - v) < 0.01}
+                    onClick={() => chooseUiScale(v)}
+                  >
+                    {v === 1 ? tr('100%', '100%') : `${Math.round(v * 100)}%`}
+                  </button>
+                ))}
+              </div>
             <div className="menu-section-label">{tr('撤销步数上限', 'Undo history limit')}</div>
-            {[100, 300, 1000].map((v) => (
-              <button
-                key={v}
-                className="menu-item prefs-item"
-                role="menuitemradio"
-                aria-checked={historyLimit === v}
-                onClick={() => useStore.getState().setHistoryLimit(v)}
-              >
-                <span className="prefs-item-label">
-                  <span className="prefs-check" aria-hidden="true">
-                    {historyLimit === v ? '✓' : ''}
-                  </span>
-                  <span>
-                    {v === 100
-                      ? tr('100 步（默认）', '100 steps (default)')
-                      : tr(`${v} 步（更大内存占用，适合超长编辑）`, `${v} steps (more memory, for very long sessions)`)}
-                  </span>
-                </span>
-              </button>
-            ))}
+            <div className="prefs-seg-group" role="radiogroup" aria-label={tr('撤销步数上限', 'Undo history limit')}>
+              {[100, 300, 1000].map((v) => (
+                <button
+                  key={v}
+                  className={`prefs-seg${historyLimit === v ? ' active' : ''}`}
+                  role="radio"
+                  aria-checked={historyLimit === v}
+                  title={
+                    v === 100
+                      ? tr('默认', 'Default')
+                      : tr('更大内存占用，适合超长编辑', 'More memory, for very long sessions')
+                  }
+                  onClick={() => useStore.getState().setHistoryLimit(v)}
+                >
+                  {v === 100 ? tr('100 步', '100 steps') : tr(`${v} 步`, `${v} steps`)}
+                </button>
+              ))}
+            </div>
             <div className="menu-sep" />
-            <button
-              className="menu-item prefs-item"
-              role="menuitemcheckbox"
-              aria-checked={cvd}
-              onClick={() => chooseCvd(!cvd)}
-            >
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true">{cvd ? '✓' : ''}</span>
-                <span>{S.review.cvdMode}</span>
-              </span>
-            </button>
-            <div className="menu-sep" />
-            <button className="menu-item prefs-item" onClick={copyDiagnostics}>
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true" />
-                <span>{S.review.diagnosticsCopy}</span>
-              </span>
-            </button>
-            <button className="menu-item prefs-item" onClick={restoreConfirmPrompts}>
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true" />
-                <span>{S.review.restoreConfirmPrompts}</span>
-              </span>
-            </button>
-            <button className="menu-item prefs-item" onClick={clearLocalData} style={{ color: 'var(--danger)' }}>
+            {/* 用户反馈: a long rounded rectangle wrapping the destructive row. */}
+            <button className="menu-item prefs-item prefs-reset-btn" onClick={clearLocalData} style={{ color: 'var(--danger)' }}>
               <span className="prefs-item-label">
                 <span className="prefs-check" aria-hidden="true" />
                 <span>{S.review.clearLocalData}</span>
               </span>
             </button>
+              <div className="actions">
+                <button className="btn primary" onClick={() => setOpen(false)}>
+                  {S.shortcuts.close}
+                </button>
+              </div>
+            </div>
           </div>,
           document.body,
         )}

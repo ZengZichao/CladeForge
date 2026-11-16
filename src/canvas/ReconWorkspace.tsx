@@ -13,7 +13,7 @@
 //    <1024 both drawers (full overlay)
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Cross1Icon, PinLeftIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, HamburgerMenuIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { S, tr } from '../ui/strings';
 import { ReconRail } from '../ui/ReconRail';
@@ -22,6 +22,9 @@ import { ReconInspector } from '../ui/ReconInspector';
 import { ReconToolbar } from '../ui/ReconToolbar';
 import { ReconStatusBar } from '../ui/ReconStatusBar';
 import { ReconciliationView } from './ReconciliationView';
+// OP-17: the drag interaction now lives in ONE place, shared with the standard
+// workspace; only the remembered width bounds differ between the two.
+import { ResizeHandle } from '../ui/ResizeHandle';
 
 const LS_RECON_LEFT_WIDTH = 'cladeforge:reconLeftWidth';
 const LS_RECON_RIGHT_WIDTH = 'cladeforge:reconRightWidth';
@@ -55,65 +58,6 @@ function readReconWidth(key: string, fallback: number): number {
 }
 
 /** Vertical splitter, shared implementation with the standard workspace. */
-function ReconResizeHandle({
-  side,
-  width,
-  panelRef,
-  onCommit,
-}: {
-  side: 'left' | 'right';
-  width: number;
-  panelRef: React.RefObject<HTMLDivElement | null>;
-  onCommit: (w: number) => void;
-}) {
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const panel = panelRef.current;
-    const startX = e.clientX;
-    const startW = width;
-    let last = startW;
-    let raf = 0;
-    let pending = false;
-    document.body.classList.add('panel-resizing');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const applyWidth = () => {
-      raf = 0;
-      pending = false;
-      if (panel) panel.style.width = `${last}px`;
-    };
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - startX;
-      last = clampReconPanel(side === 'left' ? startW + dx : startW - dx);
-      if (!pending) {
-        pending = true;
-        raf = requestAnimationFrame(applyWidth);
-      }
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      if (raf) cancelAnimationFrame(raf);
-      if (panel) panel.style.width = `${last}px`;
-      document.body.classList.remove('panel-resizing');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      onCommit(last);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-  return (
-    <div
-      className="resizer"
-      role="separator"
-      aria-orientation="vertical"
-      title={S.panel.resizeTitle}
-      onPointerDown={onPointerDown}
-    />
-  );
-}
-
 export function ReconWorkspace({
   panelsHidden,
   onBuildGeneTree,
@@ -132,6 +76,7 @@ export function ReconWorkspace({
   const reconSection = useStore((s) => s.reconSection);
   const geneSelection = useStore((s) => s.geneSelection);
   const speciesSelection = useStore((s) => s.selection);
+  const geneTreeCount = useStore((s) => s.project.geneTrees?.length ?? 0);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -161,11 +106,15 @@ export function ReconWorkspace({
   const mid = windowWidth < MID;
   const wide = windowWidth >= WIDE;
   const fullNarrow = windowWidth < FULL_NARROW;
+  // 用户反馈：with NO gene tree there is nothing for the left rail/panel to
+  // list or edit — the empty stage carries the creation entries itself, so
+  // the sidebar stays out of the way until a gene tree exists.
+  const reconEmpty = geneTreeCount === 0;
   // Right panel: inline on wide screens, overlay drawer below.
   // §5.7 tiers — drawers start CLOSED: at 1280 the two panes need the room far
   // more than a permanently mounted inspector does.
-  const rightInline = wide && !panelsHidden;
-  const leftInline = !fullNarrow && !panelsHidden;
+  const rightInline = wide && !panelsHidden && !reconEmpty;
+  const leftInline = !fullNarrow && !panelsHidden && !reconEmpty;
 
   const openGenePanel = useCallback(() => {
     setLeftDrawerOpen(true);
@@ -176,14 +125,14 @@ export function ReconWorkspace({
     <div className="body recon-workspace">
       {/* Rail: always visible inline; on the narrowest tier it collapses and a
           toggle button opens the panel as a full overlay (§5.7). */}
-      {!fullNarrow && !panelsHidden && <ReconRail />}
+      {!fullNarrow && !panelsHidden && !reconEmpty && <ReconRail />}
       {fullNarrow && (
         <button
           className="panel-toggle-btn left"
           onClick={openGenePanel}
           title={tr('打开协调面板', 'Open reconciliation panel')}
         >
-          <PinLeftIcon />
+          <HamburgerMenuIcon />
         </button>
       )}
 
@@ -212,12 +161,21 @@ export function ReconWorkspace({
           onEditGeneTree={onEditGeneTree}
         />
       </div>
-      {!fullNarrow && !panelsHidden && (
-        <ReconResizeHandle side="left" width={leftWidth} panelRef={leftPanelRef} onCommit={setLeftWidth} />
+      {!fullNarrow && !panelsHidden && !reconEmpty && (
+        <ResizeHandle side="left" width={leftWidth} panelRef={leftPanelRef} onCommit={setLeftWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
       )}
 
       <div className="recon-main">
-        <ReconToolbar onToggleRightPanel={mid ? () => { setRightDrawerOpen((o) => !o); setLeftDrawerOpen(false); } : undefined} />
+        <ReconToolbar onToggleRightPanel={mid && !reconEmpty ? () => { setRightDrawerOpen((o) => !o); setLeftDrawerOpen(false); } : undefined} />
+        {/* At desktop the left panel is already showing the creation actions;
+            only hand the empty canvas its own entry when that panel is out of
+            sight, so the same primary never appears twice at once. */}
+        {/* M9 (review finding 8): the empty canvas carries all four creation
+            actions itself — it is the primary surface for a first-time user,
+            and in narrow mode it is the only reachable one. The left panel
+            keeps its copies; the old "never twice at once" gating is retired
+            because the empty stage is a different surface, not a duplicate
+            primary. */}
         <ReconWorkspacePanel
           onBuildGeneTree={onBuildGeneTree}
           onCopySpeciesTree={onCopySpeciesTree}
@@ -225,28 +183,32 @@ export function ReconWorkspace({
       </div>
 
       {rightInline && (
-        <ReconResizeHandle side="right" width={rightWidth} panelRef={rightPanelRef} onCommit={setRightWidth} />
+        <ResizeHandle side="right" width={rightWidth} panelRef={rightPanelRef} onCommit={setRightWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
       )}
-      <div
-        ref={rightPanelRef}
-        className={`panel panel-right recon-right${!rightInline ? ' overlay' : ''}`}
-        style={{
-          width: rightInline ? rightWidth : 300,
-          ...(!rightInline && !rightDrawerOpen && { display: 'none' }),
-        }}
-      >
-        {mid && (
-          <button
-            className="overlay-close"
-            onClick={() => setRightDrawerOpen(false)}
-            title={S.panel.closeOverlay}
-            aria-label={S.panel.closeOverlay}
-          >
-            <Cross1Icon />
-          </button>
-        )}
-        <ReconInspector onBuildGeneTree={onBuildGeneTree} />
-      </div>
+      {/* 用户反馈：no 场景概览 side panel on the EMPTY reconciliation front
+          page — the stage itself carries every entry. */}
+      {!reconEmpty && (
+        <div
+          ref={rightPanelRef}
+          className={`panel panel-right recon-right${!rightInline ? ' overlay' : ''}`}
+          style={{
+            width: rightInline ? rightWidth : 300,
+            ...(!rightInline && !rightDrawerOpen && { display: 'none' }),
+          }}
+        >
+          {mid && (
+            <button
+              className="overlay-close"
+              onClick={() => setRightDrawerOpen(false)}
+              title={S.panel.closeOverlay}
+              aria-label={S.panel.closeOverlay}
+            >
+              <Cross1Icon />
+            </button>
+          )}
+          <ReconInspector />
+        </div>
+      )}
     </div>
   );
 }
@@ -261,8 +223,8 @@ function ReconWorkspacePanel({
   onBuildGeneTree,
   onCopySpeciesTree,
 }: {
-  onBuildGeneTree: () => void;
-  onCopySpeciesTree: () => void;
+  onBuildGeneTree?: () => void;
+  onCopySpeciesTree?: () => void;
 }) {
   const [zoom, setZoom] = useState({ species: 1, gene: 1 });
   const [embeddedZoom, setEmbeddedZoom] = useState(1);
@@ -277,10 +239,10 @@ function ReconWorkspacePanel({
   return (
     <div className="recon-canvas-frame">
       <ReconciliationView
-        onBuildGeneTree={onBuildGeneTree}
-        onCopySpeciesTree={onCopySpeciesTree}
         onZoomChange={onZoomChange}
         onEmbeddedZoomChange={onEmbeddedZoomChange}
+        onBuildGeneTree={onBuildGeneTree}
+        onCopySpeciesTree={onCopySpeciesTree}
       />
       <ReconStatusBar
         speciesZoom={zoom.species}

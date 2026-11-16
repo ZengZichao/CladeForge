@@ -410,6 +410,7 @@ export function planEraOverlay(
   let lane = 0;
   if (showEons) addRank(info.eons, 'eon', lane++);
   if (showEras) addRank(info.eras, 'era', lane++);
+  // eslint-disable-next-line no-useless-assignment -- the counter's final value is intentionally unused; the post-increment keeps each shown rank on its own lane.
   if (showPeriods) addRank(info.periods, 'period', lane++);
 
   // Clamp horizontal label centres into the drawn axis extent (tick span) so

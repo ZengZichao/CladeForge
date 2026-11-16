@@ -334,6 +334,41 @@ describe('event badge placement — clears labels, markers, axis text and other 
     }
   });
 
+  it('label X/Y offsets never move event badges (用户反馈 10)', () => {
+    // A uniform offset shifts every label by the same vector, so the
+    // label-stagger result is unchanged; the badge anchors must then be
+    // identical too — offsets move the label text only, never the events.
+    // (Sample builds mint fresh random ids, so anchors are compared in the
+    // document's own event order, not by id across builds.)
+    const anchorsFor = (applyOffsets: boolean) => {
+      const project = featureTour('rectangular-cladogram');
+      if (applyOffsets) {
+        for (const node of Object.values(project.nodes)) {
+          node.style = {
+            ...node.style,
+            labelOffsetX: 40,
+            labelOffsetY: -25,
+          } as typeof node.style;
+        }
+      }
+      const layout = computeLayout(project);
+      getCanvasCollisionPlan(project, AXIS);
+      const anchors = planEventAnchors(anchorInput(project, layout)).anchors;
+      return project.events.map((e) => {
+        const p = anchors.get(e.id);
+        if (!p) throw new Error(`no anchor for ${e.id}`);
+        return p;
+      });
+    };
+    const before = anchorsFor(false);
+    const after = anchorsFor(true);
+    expect(after.length).toBe(before.length);
+    for (let i = 0; i < before.length; i++) {
+      expect(after[i].x).toBeCloseTo(before[i].x, 6);
+      expect(after[i].y).toBeCloseTo(before[i].y, 6);
+    }
+  });
+
   it('anchors a branch event on the smooth-curve midpoint, not the elbow corner', () => {
     const project = createSampleProject();
     project.defaults.branch.shape = 'curved';

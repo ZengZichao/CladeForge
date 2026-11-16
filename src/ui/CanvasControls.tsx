@@ -6,10 +6,10 @@
 // id="node-search-input" because the global ⌘F shortcut focuses it by id.
 
 import { useEffect, useMemo, useState } from 'react';
-import { MagnifyingGlassIcon, PlusIcon, MinusIcon } from '@radix-ui/react-icons';
+import { FrameIcon, MagnifyingGlassIcon, PlusIcon, MinusIcon, Crosshair2Icon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { isImeComposing } from './imeGuard';
-import { S } from './strings';
+import { S, tr } from './strings';
 
 function NodeSearch() {
   const nodes = useStore((s) => s.project.nodes);
@@ -51,7 +51,7 @@ function NodeSearch() {
       <input
         id="node-search-input"
         className="cc-search-input"
-        aria-label={S.toolbar.searchPlaceholder}
+        aria-label={S.canvasControls.searchAria}
         value={q}
         placeholder={S.toolbar.searchPlaceholder}
         onChange={(e) => {
@@ -80,6 +80,8 @@ export function CanvasControls() {
   const zoomBy = useStore((s) => s.zoomBy);
   const requestFit = useStore((s) => s.requestFit);
   const scale = useStore((s) => s.view.scale);
+  // S24: the zoom-to-selection entry only appears with something selected.
+  const selectionCount = useStore((s) => s.selection.length);
   const [searchOpen, setSearchOpen] = useState(false);
 
   // ⌘F dispatches a custom event so we open the search input (if closed)
@@ -99,51 +101,65 @@ export function CanvasControls() {
 
   return (
     <div className="canvas-controls" onPointerDown={(e) => e.stopPropagation()}>
-      <div className="cc-row">
-        {searchOpen && <NodeSearch />}
+      <button
+        className="cc-btn"
+        title={S.canvasControls.zoomOutTitle}
+        aria-label={S.canvasControls.zoomOutTitle}
+        onClick={() => zoomBy(1 / 1.2)}
+      >
+        <MinusIcon />
+      </button>
+      <button
+        className="cc-btn cc-zoom"
+        title={S.canvasControls.actualSizeTitle}
+        aria-label={S.canvasControls.actualSizeTitle}
+        onClick={() => zoomBy(1 / scale)}
+      >
+        {Math.round(scale * 100)}%
+      </button>
+      <button
+        className="cc-btn"
+        title={S.canvasControls.zoomInTitle}
+        aria-label={S.canvasControls.zoomInTitle}
+        onClick={() => zoomBy(1.2)}
+      >
+        <PlusIcon />
+      </button>
+      {/* Icon-only "fit" (mature canvas-tool convention); the word stays in the
+          tooltip and the accessible name, the glyph stays consistent with the
+          neighbouring +/-/search icons. */}
+      <button
+        className="cc-btn"
+        title={S.canvasControls.fitTitle}
+        aria-label={S.canvasControls.fitTitle}
+        onClick={requestFit}
+      >
+        <FrameIcon />
+      </button>
+      {/* S24 (Sonus): the overview→detail path must be discoverable ON the
+          canvas, not only in the palette. With a selection (a found node, a
+          picked clade) this zooms into it; dense trees navigate local↔global
+          through search → this button → ⌘0 back to the overview. */}
+      {selectionCount > 0 && (
         <button
           className="cc-btn"
-          title={S.toolbar.searchPlaceholder}
-          aria-label={S.toolbar.searchPlaceholder}
-          onClick={() => setSearchOpen((o) => !o)}
+          title={tr('缩放到选区（在密集树中定位局部）', 'Zoom to selection (locate a region in a dense tree)')}
+          aria-label={S.cmd.zoomSelection}
+          onClick={() => window.dispatchEvent(new CustomEvent('cladeforge:fit-selection'))}
         >
-          <MagnifyingGlassIcon />
+          <Crosshair2Icon />
         </button>
-      </div>
-      <div className="cc-row">
-        <button
-          className="cc-btn"
-          title={S.canvasControls.zoomInTitle}
-          aria-label={S.canvasControls.zoomInTitle}
-          onClick={() => zoomBy(1.2)}
-        >
-          <PlusIcon />
-        </button>
-        <button
-          className="cc-btn"
-          title={S.canvasControls.zoomOutTitle}
-          aria-label={S.canvasControls.zoomOutTitle}
-          onClick={() => zoomBy(1 / 1.2)}
-        >
-          <MinusIcon />
-        </button>
-        <button
-          className="cc-btn cc-zoom"
-          title={S.canvasControls.actualSizeTitle}
-          aria-label={S.canvasControls.actualSizeTitle}
-          onClick={() => zoomBy(1 / scale)}
-        >
-          {Math.round(scale * 100)}%
-        </button>
-        <button
-          className="cc-btn cc-wide"
-          title={S.canvasControls.fitTitle}
-          aria-label={S.canvasControls.fitTitle}
-          onClick={requestFit}
-        >
-          {S.canvasControls.fit}
-        </button>
-      </div>
+      )}
+      <span className="cc-sep" />
+      {searchOpen && <NodeSearch />}
+      <button
+        className="cc-btn"
+        title={S.toolbar.searchPlaceholder}
+        aria-label={S.canvasControls.searchAria}
+        onClick={() => setSearchOpen((o) => !o)}
+      >
+        <MagnifyingGlassIcon />
+      </button>
     </div>
   );
 }

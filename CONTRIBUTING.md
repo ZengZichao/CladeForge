@@ -69,18 +69,17 @@ code writing, modification and refactoring, and (2) language polishing of the do
 and of this repository's own text. Every generated patch was reviewed, executed against the
 test suite and is owned by the maintainers, who take full responsibility for the result.
 
-**Tool names, versions and per-file scope are recorded in
-[`docs/AI_PROVENANCE.md`](./docs/AI_PROVENANCE.md)**, one row per release — plus rows for
-unreleased working-tree batches (the rows labelled "Unreleased working tree …"). Where a file's
-history cannot be attributed, that record says so instead of guessing. Two rules follow from it:
+**The AI tools used, the underlying LLMs and what they were used for are recorded in
+[`docs/AI_PROVENANCE.md`](./docs/AI_PROVENANCE.md)** — a simple list, kept up to date as the
+toolset changes. Two rules follow from it:
 
-- A file listed there as AI-assisted carries a one-line marker in its module header
+- A file that received AI-assisted changes carries a one-line marker in its module header
   (`// AI-PROVENANCE: …` in TypeScript/Rust, `<!-- AI-PROVENANCE: … -->` in Markdown). Strict
   JSON such as `src-tauri/tauri.conf.json` takes no marker — it has no comment syntax, and adding
   one would break the desktop build, which parses that file at compile time (`tauri_build` and
-  `tauri::generate_context!`) — so its record lives in the table alone.
-- When a change is AI-assisted, add or update the corresponding row in `docs/AI_PROVENANCE.md`
-  in the same pull request, together with the tool name and version actually used.
+  `tauri::generate_context!`).
+- When a change is AI-assisted, make sure `docs/AI_PROVENANCE.md` still lists the tool and model
+  actually used, in the same pull request.
 
 No generative AI runs inside CladeForge. Every computation the application performs —
 Sankoff parsimony, Mk/ER ancestral-state reconstruction, DTL reconciliation, consensus
@@ -103,8 +102,8 @@ tagging a release, check all of the following on the commit that will carry the 
    match the release being tagged. `CITATION.cff` was added after `v0.1.0`, so the archived
    `v0.1.0` tree does not contain it; that must not be repeated for a new release, because the
    archive is a machine-generated snapshot of the tag.
-3. `docs/AI_PROVENANCE.md` gains a row for the release, with the tool name and version and the
-   list of AI-assisted files, and each listed file carries its module-header marker.
+3. `docs/AI_PROVENANCE.md` is up to date — it lists the AI tools, LLMs and purposes actually
+   used for the release, and each AI-assisted source file carries its module-header marker.
 4. `src-tauri/tauri.conf.json` `version`, `README.md` / `README_ZH.md` and
    `docs/MANUAL_EN.md` / `docs/MANUAL_ZH.md` state the same platform support floor and the same
    architectures as the artifacts actually produced for the release — a documented capability
@@ -115,11 +114,11 @@ tagging a release, check all of the following on the commit that will carry the 
 
 ## Scope note
 
-The **reconciliation** module is complete and shipped with this version, but it remains the part of CladeForge whose interaction design has not settled yet (see the "Reconciliation polish" item under Roadmap in [README.md](./README.md)). Please open an issue before changing that module, so that effort is not spent on a design that is still moving.
+The **reconciliation** module is complete and shipped with this version, but it remains the part of CladeForge whose interaction design has not settled yet. Please open an issue before changing that module, so that effort is not spent on a design that is still moving.
 
 ## User documentation
 
-The feature-by-feature reference lives in the [User Manual (English)](./docs/MANUAL_EN.md) and the [用户手册（中文）](./docs/MANUAL_ZH.md). The record of AI-assisted files per release is [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md). Security problems are handled outside the issue tracker — see [SECURITY.md](./SECURITY.md).
+The feature-by-feature reference lives in the [User Manual (English)](./docs/MANUAL_EN.md) and the [用户手册（中文）](./docs/MANUAL_ZH.md). The record of AI tools and models used is [docs/AI_PROVENANCE.md](./docs/AI_PROVENANCE.md). Security problems are handled outside the issue tracker — see [SECURITY.md](./SECURITY.md).
 
 ## Documentation language policy
 
@@ -138,11 +137,9 @@ single-language — Chinese-only or English-only.
 | `docs/MANUAL_ZH.md` | `docs/MANUAL_EN.md` | Two files, one per language | Paired — required |
 | `scripts/cross-check/README_ZH.md` | `scripts/cross-check/README.md` | Two files, one per language | Paired — required |
 | `docs/UI_GLOSSARY.md` | `docs/UI_GLOSSARY_EN.md` | Two files, one per language | Paired — required (English counterpart synced entry for entry against the Chinese glossary) |
-| `docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md` | `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` | Two files, one per language | Paired — required |
 | `docs/GLOSSARY.md` | — | Chinese only | Exempt — historical comparison table |
 | `docs/UI_STYLE_GUIDE.md` | — | Chinese only | Exempt — current normative guide, maintained in Chinese only |
-| `docs/UI_FIX_REPORT.md` | — | Chinese only | Exempt — dated acceptance report |
-| — | `docs/AI_PROVENANCE.md` | English only | Exempt — the per-release AI-use provenance record itself (a machine-readable table plus prose), maintained in English; no Chinese counterpart exists |
+| — | `docs/AI_PROVENANCE.md` | English only | Exempt — the AI-use provenance record itself (a short list of tools, LLMs and purposes), maintained in English; no Chinese counterpart exists |
 | — | `docs/FORMAT.md` | English only | Exempt — the `.cladeforge.json` file-format reference (see Rule 5); maintained in English; no Chinese counterpart exists |
 | `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/bug_report.md`, `.github/ISSUE_TEMPLATE/feature_request.md` | same file | Single file, English and 中文 side by side | Permitted form for templates |
 | — | `SECURITY.md` | English only | Exempt — English-only normative policy: it is the private-disclosure instruction itself (it names the one URL and the one email address a report must go to), and mixing languages in that text risks misrouting reports; no Chinese counterpart exists, and both README language versions link this same file |
@@ -154,12 +151,8 @@ single-language — Chinese-only or English-only.
 File names in this matrix are written as code, never as links, so the table cannot rot when a
 document is added, renamed or retired; the links a reader actually follows are the header
 cross-links inside each paired file (`> 中文版：…` / `> English version: …`). `docs/UI_GLOSSARY_EN.md`
-and `docs/EMBEDDED_RECON_LAYOUT_PLAN_EN.md` were introduced by this policy — the English counterpart
-of the normative UI glossary, and the English counterpart of the roughly 1,500-line embedded-layout
-algorithm contract that five source-header comments cite as their specification
-(`src/model/reconPlacements.ts`, `src/model/reconPlacements.test.ts`, `src/layout/embeddedRecon.ts`,
-`src/layout/embeddedRecon.test.ts`, `src/canvas/EmbeddedReconCanvas.tsx`). Both files are now in
-the repository and already carry their header cross-links; the matrix row above covers them.
+was introduced by this policy as the English counterpart of the normative UI glossary; it is in
+the repository and already carries its header cross-link, and the matrix row above covers it.
 
 ### Rules
 
@@ -177,8 +170,8 @@ the repository and already carry their header cross-links; the matrix row above 
    the same "avoid" column. If the two ever disagree, `docs/UI_GLOSSARY.md` governs and the English
    file is corrected in the same pull request. `src/ui/copyQuality.test.ts` encodes the glossary's
    rules for the UI string catalogue as tests; it does not replace the glossary.
-3. **`docs/GLOSSARY.md`, `docs/UI_STYLE_GUIDE.md` and `docs/UI_FIX_REPORT.md` are maintained in
-   Chinese only.** This is a decision, not an omission — but the three are exempt for different
+3. **`docs/GLOSSARY.md` and `docs/UI_STYLE_GUIDE.md` are maintained in
+   Chinese only.** This is a decision, not an omission — but the two are exempt for different
    reasons, and the reason matters when you edit them. `docs/GLOSSARY.md` is exempt **because it is
    a record**: it labels itself 历史对照（非规范性）at its top and hands the normative role for UI
    wording to `docs/UI_GLOSSARY.md`. `docs/UI_STYLE_GUIDE.md` is a **current normative document**
@@ -187,11 +180,9 @@ the repository and already carry their header cross-links; the matrix row above 
    its :37 and :44 state that where existing code disagrees with the guide, the code is corrected to
    match the guide and the rule must not be relaxed in the other direction; it is Chinese-only because the
    project maintains it in Chinese for the people who review UI copy, not because its content is
-   historical. `docs/UI_FIX_REPORT.md` is exempt **because it is a record**: a dated (2026-10-19)
-   point-in-time acceptance report that states what was true then, not what the project promises
-   now, and says so at its top. None of the three carries a translation obligation, and a reviewer
-   should not ask for English twins of them. When `docs/GLOSSARY.md` or `docs/UI_FIX_REPORT.md` is
-   edited, keep its "historical / non-normative" banner accurate; `docs/UI_STYLE_GUIDE.md` carries
+   historical. Neither carries a translation obligation, and a reviewer
+   should not ask for an English twin of either. When `docs/GLOSSARY.md`
+   is edited, keep its "historical / non-normative" banner accurate; `docs/UI_STYLE_GUIDE.md` carries
    no such banner and must not acquire one. The matrix's English-only rows are the same argument
    seen from the other side: `SECURITY.md`, `docs/AI_PROVENANCE.md`, `docs/FORMAT.md`,
    `CHANGELOG.md`, `CITATION.cff` and `LICENSE` carry no translation obligation either — each is

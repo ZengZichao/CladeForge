@@ -88,7 +88,7 @@ characters <- list(
     states = c("C0", "C1"),
     colors = c("#d55e00", "#0072b2"),
     cost = NULL,
-    rate = 65.7689000264245,
+    rate = 65.7689,
     tips = c("t1" = "C0", "t2" = "C1", "t3" = "C1", "t4" = "C0", "t5" = "C0", "t6" = "C1", "t7" = "C0", "t8" = "C0")
   )
 )

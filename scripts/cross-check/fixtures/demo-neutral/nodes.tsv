@@ -1,0 +1,12 @@
+node_key	label	parent_key	branch_length	rescaled_length	is_tip	tips_below
+N:Taxon_C+Taxon_E+Taxon_G+Taxon_H+Taxon_J+Taxon_K|11	Taxon_A		0	0	0	6
+N:Taxon_C+Taxon_E+Taxon_G+Taxon_H|7	Taxon_B	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H+Taxon_J+Taxon_K|11	3	0.14778325123152708	0	4
+N:Taxon_J+Taxon_K|3	Taxon_I	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H+Taxon_J+Taxon_K|11	5	0.24630541871921183	0	2
+T:Taxon_C	Taxon_C	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H|7	4	0.19704433497536944	1	1
+N:Taxon_E+Taxon_G+Taxon_H|5	Taxon_D	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H|7	12	0.5911330049261083	0	3
+T:Taxon_J	Taxon_J	N:Taxon_J+Taxon_K|3	50	2.4630541871921183	1	1
+T:Taxon_K	Taxon_K	N:Taxon_J+Taxon_K|3	50	2.4630541871921183	1	1
+T:Taxon_E	Taxon_E	N:Taxon_E+Taxon_G+Taxon_H|5	5	0.24630541871921183	1	1
+N:Taxon_G+Taxon_H|3	Taxon_F	N:Taxon_E+Taxon_G+Taxon_H|5	6	0.29556650246305416	0	2
+T:Taxon_G	Taxon_G	N:Taxon_G+Taxon_H|3	34	1.6748768472906403	1	1
+T:Taxon_H	Taxon_H	N:Taxon_G+Taxon_H|3	34	1.6748768472906403	1	1

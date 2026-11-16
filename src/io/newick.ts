@@ -245,6 +245,7 @@ export function escapeName(label: string): string {
   if (/^[A-Za-z0-9.\-+]+$/.test(label)) return label;
   // Control characters (newline / tab / etc.) are invalid inside a Newick label
   // even when quoted; collapse them to spaces before quoting.
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what must be stripped from a Newick label.
   const clean = label.replace(/[\u0000-\u001f]/g, ' ');
   // Double quotes are the Newick convention for a label containing spaces, and
   // this reader accepts both styles on input. Note the limit of that choice:

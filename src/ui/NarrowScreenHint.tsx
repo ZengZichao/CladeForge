@@ -1,12 +1,13 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Full-screen advisory for phone-width windows (BUG-9).
 //
-// CladeForge is a desktop-first tree editor: below 1024px the app already
+// CladeForge is a desktop-first tree editor: below 900px the app already
 // switches to its narrow mode (panels become overlays, a bottom tab bar replaces
 // the rail), but a 375px viewport still cannot show the canvas plus both panels
 // comfortably. Rather than pretend otherwise, the first visit at ≤640px says so
 // once; "Continue anyway" persists the acknowledgement so the hint never nags
-// again. The app stays fully usable after (and behind) it.
+// again. The app stays usable after (and behind) it, with the limits stated
+// out loud (ID-25: mobile = viewing/demonstration, not full editing).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tr } from './strings';
@@ -87,8 +88,8 @@ export function NarrowScreenHint() {
         </div>
         <div className="narrow-hint-desc">
           {tr(
-            '建议在 ≥1280px 宽的窗口中使用。窄屏下画布会自动让出空间，左右面板改以覆盖层打开，操作空间仍然有限。',
-            'A window at least 1280px wide is recommended. On narrow screens the canvas gives up space and the side panels open as overlays, so room is still limited.',
+            'CladeForge 以桌面端为设计目标：建议在 ≥1280px 宽的窗口中使用。窄屏下画布会自动让出空间，左右面板改以覆盖层打开；移动端可用于查看与演示，但编辑功能空间受限、触控目标未做专门优化。',
+            'CladeForge is designed for the desktop first: a window at least 1280px wide is recommended. On narrow screens the canvas gives up space and the side panels open as overlays; phones can be used for viewing and demonstration, but editing space is limited and touch targets are not optimised.',
           )}
         </div>
         <div className="narrow-hint-actions">

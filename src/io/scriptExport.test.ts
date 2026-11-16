@@ -10,7 +10,7 @@ describe('buildRScript', () => {
     const script = buildRScript(p);
     // Topology — assembled from vectors, not parsed back out of Newick; the
     // label-fidelity test below pins why that choice is load-bearing.
-    expect(script).toContain('class = \"phylo\"');
+    expect(script).toContain('class = "phylo"');
     expect(script).toContain('tip.label = c(');
     expect(script).toContain('Nnode = ');
     expect(script).not.toContain('read.tree');

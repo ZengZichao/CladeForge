@@ -41,6 +41,13 @@ export function hitTargetFor(target: EventTarget | null): HitTarget {
   if (toggle) {
     return { role: 'collapse-toggle', nodeId: toggle.getAttribute('data-node-id'), edgeId: null };
   }
+  // M34: a press on the branch's invisible hit path acts on the branch's CHILD
+  // node — select / context menu / nudge all operate where the pointer is, so
+  // branch-level actions (insert-parent, reroot) are reachable on the branch.
+  const branch = el.closest('[data-role="branch"]');
+  if (branch) {
+    return { role: 'node', nodeId: branch.getAttribute('data-node-id'), edgeId: null };
+  }
   const node = el.closest('[data-role="node"], [data-node-id]');
   if (node) {
     const role = node.getAttribute('data-role');

@@ -25,12 +25,9 @@ import {
   setEdgeLabel,
   setEdgeStyle,
   setNodeAge,
-  setNodeCharMeta,
   setHypothesisNote,
-  setNodeState,
   setNodeStyle,
   setSubtreeBranchColor,
-  toggleCollapse,
   unpinNode,
 } from '../model/treeOps';
 import {
@@ -39,16 +36,10 @@ import {
   resolveNodeStyle,
   type BranchShape,
   type BranchStyle,
-  type CalibrationPoint,
-  type Character,
-  type Confidence,
   type CustomEdge,
-  type DashStyle,
-  type HypothesisMeta,
   type LabelPosition,
   type NodeId,
   type NodeShape,
-  type NodeStyle,
   type Project,
   type TreeNode,
 } from '../model/types';
@@ -64,13 +55,13 @@ import {
 } from './fields';
 import { SliderNumberField } from './SliderNumberField';
 import { Section } from './Section';
-import { stateLabel } from '../model/characters';
-import { parsimony, type ParsimonyResult } from '../model/parsimony';
 import { EventEditor } from './EventEditor';
 import { requestDeletion } from './deleteGuard';
+import { requestConfirm } from './confirmDialog';
 import { S, tr, selectedCount } from './strings';
 import { timeUnitLabel, timeUnitSymbol } from './units';
 import { notify } from './toast';
+import * as file from '../io/fileActions';
 
 
 type Apply = (recipe: (d: Project) => void) => void;
@@ -101,119 +92,10 @@ const NODE_SECTION_KEYWORDS: Record<NodeSectionKey, string[]> = {
   branchSection: ['分支', '颜色', '线宽', '线型', '粗细', '形状', 'branch', 'colour', 'color', 'width', 'dash', 'shape'],
 };
 
-// One character's row in a node's "character state" section.
-function NodeCharRow({
-  character,
-  node,
-  apply,
-  suggestion,
-}: {
-  character: Character;
-  node: TreeNode;
-  apply: Apply;
-  suggestion?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const id = node.id;
-  const val = node.charStates?.[character.id];
-  const meta = node.charMeta?.[character.id];
-  const assigned = val !== undefined && val !== '';
-  const cm = (patch: Partial<HypothesisMeta>) =>
-    apply((d) => setNodeCharMeta(d, id, character.id, patch));
-  return (
-    <>
-      <div className="field">
-        <label>{character.name}</label>
-        <div className="char-value">
-          {character.type === 'discrete' ? (
-            <select
-              value={typeof val === 'string' ? val : ''}
-              onChange={(e) => apply((d) => setNodeState(d, id, character.id, e.target.value))}
-            >
-              <option value="">{S.nodeChar.unassigned}</option>
-              {character.states.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <NumberField
-              value={typeof val === 'number' ? val : undefined}
-              allowEmpty
-              onCommit={(v) => apply((d) => setNodeState(d, id, character.id, v))}
-            />
-          )}
-          <button
-            className="btn icon"
-            title={S.nodeChar.evidence}
-            disabled={!assigned}
-            onClick={() => setOpen((o) => !o)}
-          >
-            ▾
-            {meta && (
-              <span
-                style={{
-                  width: 4,
-                  height: 4,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  display: 'inline-block',
-                  marginLeft: 2,
-                  flexShrink: 0,
-                }}
-              />
-            )}
-          </button>
-        </div>
-      </div>
-      {suggestion && suggestion !== (typeof val === 'string' ? val : '') && (
-        <div className="char-suggest">
-          <span>
-            {S.nodeChar.suggest}: {stateLabel(character, suggestion)}
-          </span>
-          <button
-            className="btn"
-            onClick={() => apply((d) => setNodeState(d, node.id, character.id, suggestion))}
-          >
-            {S.nodeChar.accept}
-          </button>
-        </div>
-      )}
-      {open && assigned && (
-        <div className="char-meta">
-          <Field label={S.confidence.label}>
-            <select
-              value={meta?.confidence ?? ''}
-              onChange={(e) =>
-                cm({ confidence: (e.target.value || undefined) as Confidence | undefined })
-              }
-            >
-              <option value="">{S.confidence.none}</option>
-              <option value="high">{S.confidence.high}</option>
-              <option value="medium">{S.confidence.medium}</option>
-              <option value="low">{S.confidence.low}</option>
-            </select>
-          </Field>
-          <Field label={S.confidence.support}>
-            <TextField value={meta?.support ?? ''} onCommit={(v) => cm({ support: v })} />
-          </Field>
-          <Field label={S.confidence.against}>
-            <TextField value={meta?.against ?? ''} onCommit={(v) => cm({ against: v })} />
-          </Field>
-          {/* Evidence pointers (I7): an accession / DOI beside the claim is what
-              turns "the posteriors say X" into something a reviewer can check. */}
-          <Field label={tr('凭证 accession', 'Evidence accession')}>
-            <TextField value={meta?.accession ?? ''} onCommit={(v) => cm({ accession: v })} />
-          </Field>
-          <Field label={tr('凭证 DOI/URL', 'Evidence DOI/URL')}>
-            <TextField value={meta?.doi ?? ''} onCommit={(v) => cm({ doi: v })} />
-          </Field>
-        </div>
-      )}
-    </>
-  );
-}
+// 用户反馈: the per-node 性状状态 editor (NodeCharRow) was removed from the
+// inspector; the parsimony-suggestion machinery that fed it went with it.
+// Character data still lives on the document and drives the canvas change
+// flags, ASR and exports — only the inspector editing surface is gone.
 
 // --- Tip annotations (structured metadata) -----------------------------------
 
@@ -261,19 +143,19 @@ function AnnotationRows({
 // (`tr(p.zh, p.en)` below): a module-level `title: tr(...)` would freeze
 // whichever language was active at import, so after a language switch every
 // tooltip would keep saying 左上/Top-left in the wrong language.
-const LABEL_POSITIONS: { value: LabelPosition; icon: string; zh: string; en: string }[] = [
-  { value: 'top-left', icon: '↖', zh: '左上', en: 'Top-left' },
-  { value: 'top', icon: '↑', zh: '上', en: 'Top' },
-  { value: 'top-right', icon: '↗', zh: '右上', en: 'Top-right' },
-  { value: 'left', icon: '←', zh: '左', en: 'Left' },
-  { value: 'auto', icon: '⊙', zh: '自动', en: 'Auto' },
-  { value: 'right', icon: '→', zh: '右', en: 'Right' },
-  { value: 'bottom-left', icon: '↙', zh: '左下', en: 'Bottom-left' },
-  { value: 'bottom', icon: '↓', zh: '下', en: 'Bottom' },
-  { value: 'bottom-right', icon: '↘', zh: '右下', en: 'Bottom-right' },
+const LABEL_POSITIONS: { value: LabelPosition; zh: string; en: string }[] = [
+  { value: 'top-left', zh: '左上', en: 'Top-left' },
+  { value: 'top', zh: '上', en: 'Top' },
+  { value: 'top-right', zh: '右上', en: 'Top-right' },
+  { value: 'left', zh: '左', en: 'Left' },
+  { value: 'auto', zh: '自动', en: 'Auto' },
+  { value: 'right', zh: '右', en: 'Right' },
+  { value: 'bottom-left', zh: '左下', en: 'Bottom-left' },
+  { value: 'bottom', zh: '下', en: 'Bottom' },
+  { value: 'bottom-right', zh: '右下', en: 'Bottom-right' },
 ];
 
-function LabelPositionController({
+export function LabelPositionController({
   value,
   onChange,
 }: {
@@ -281,15 +163,21 @@ function LabelPositionController({
   onChange: (v: LabelPosition) => void;
 }) {
   return (
+    // Pure-geometry 3×3 indicator (mature-product polish pass): each cell draws
+    // a small dot at its own position — no unicode arrows, identical across
+    // platforms and fonts, and the pad reads as one widget rather than nine
+    // loose glyphs. "auto" is the hollow centre dot. The words live in the
+    // tooltip + accessible name, where text is necessary.
     <div className="label-position-pad">
       {LABEL_POSITIONS.map((p) => (
         <button
           key={p.value}
           className={`label-position-btn${value === p.value ? ' active' : ''}`}
           title={tr(p.zh, p.en)}
+          aria-label={tr(p.zh, p.en)}
           onClick={() => onChange(p.value)}
         >
-          {p.icon}
+          <span className={`lp-dot lp-${p.value}`} aria-hidden="true" />
         </button>
       ))}
     </div>
@@ -305,132 +193,26 @@ function LabelPositionController({
 // is translated/formatted at render time: a module-level `tr(...)` would freeze
 // the language at import time (see localeFreeze.test.ts).
 
-/** Small filled swatch for a colour-valued summary. */
-function SummaryDot({ color }: { color: string }) {
-  return <span className="summary-dot" style={{ background: color }} aria-hidden="true" />;
-}
-
-/** Short line sample carrying colour + thickness + dash pattern of a branch. */
-function SummaryLine({
-  color,
-  width,
-  dash,
-}: {
-  color: string;
-  width: number;
-  dash: DashStyle;
-}) {
-  return (
-    <span
-      className="summary-line"
-      aria-hidden="true"
-      style={{
-        borderTopColor: color,
-        // 1–3px so a 0.5px hairline stays visible and a 12px bar does not bloat
-        // the 2-line collapsed header.
-        borderTopWidth: Math.max(1, Math.min(3, width)),
-        borderTopStyle: dash === 'dashed' ? 'dashed' : dash === 'dotted' ? 'dotted' : 'solid',
-      }}
-    />
-  );
-}
-
-function dashLabel(dash: DashStyle): string {
-  if (dash === 'dashed') return S.dash.dashed;
-  if (dash === 'dotted') return S.dash.dotted;
-  return S.dash.solid;
-}
-
-function shapeLabel(shape: NodeShape): string {
-  switch (shape) {
-    case 'square':
-      return S.node.shapeSquare;
-    case 'diamond':
-      return S.node.shapeDiamond;
-    case 'none':
-      return S.node.shapeNone;
-    default:
-      return S.node.shapeCircle;
-  }
-}
-
-/** NODE STYLE preview: fill swatch + shape + size + stroke width. */
-function NodeStyleSummary({ style }: { style: NodeStyle }) {
-  return (
-    <>
-      <SummaryDot color={style.fill} />
-      <span className="summary-em">{shapeLabel(style.shape)}</span>
-      <span className="summary-sep">·</span>
-      <span>{style.size}px</span>
-      <span className="summary-sep">·</span>
-      <span>{style.strokeWidth}px</span>
-    </>
-  );
-}
-
-/** LABEL preview: label-colour swatch + font size + bold/italic/hidden flags. */
-function LabelSummary({ style, weight }: { style: NodeStyle; weight: number }) {
-  return (
-    <>
-      <SummaryDot color={style.labelColor} />
-      <span className="summary-em">{style.fontSize}px</span>
-      {weight >= 600 && <span className="summary-chip">{tr('粗', 'B')}</span>}
-      {style.fontStyle === 'italic' && <span className="summary-chip">I</span>}
-      {!style.showLabel && <span className="summary-em">{tr('已隐藏', 'Hidden')}</span>}
-    </>
-  );
-}
-
-/** INCOMING BRANCH STYLE preview: colour/width/dash line sample + values. */
-function BranchStyleSummary({ branch }: { branch: BranchStyle }) {
-  return (
-    <>
-      <SummaryLine color={branch.color} width={branch.width} dash={branch.dash} />
-      <span className="summary-em">{branch.width}px</span>
-      <span className="summary-sep">·</span>
-      <span>{dashLabel(branch.dash)}</span>
-    </>
-  );
-}
-
-/** TIME CONSTRAINT preview: the calibrated range, or the inherited state. */
-function TimeConstraintSummary({
-  calibration,
-  unit,
-}: {
-  calibration: CalibrationPoint | undefined;
-  unit: string;
-}) {
-  if (!calibration) return <span>{S.inspector.inherited}</span>;
-  return (
-    <>
-      <span className="summary-em">
-        {calibration.minAge}–{calibration.maxAge}
-      </span>
-      <span>{unit}</span>
-    </>
-  );
-}
 
 function NodePanel({
   node,
   project,
   apply,
   search,
-  parsimonyResults,
 }: {
   node: TreeNode;
   project: Project;
   apply: Apply;
   search: string;
-  /** Per-character parsimony results, computed ONCE per project (shared by every node). */
-  parsimonyResults: Map<string, ParsimonyResult>;
 }) {
   const clearSelection = useStore((s) => s.clearSelection);
+  // ID-11: copy/paste style between nodes — cloning a carefully styled node
+  // used to mean re-dialing every field by hand.
+  const styleClipboard = useStore((s) => s.styleClipboard);
+  const copyStyle = useStore((s) => s.copyStyle);
   const style = resolveNodeStyle(node, project);
   const branch = resolveBranchStyle(node, project);
   const id = node.id;
-  const isLeaf = node.childrenIds.length === 0;
 
   // Unified data model: the calibration point for this node
   // (if any) is the SAME data source shown in the left "时间" panel's
@@ -446,21 +228,6 @@ function NodePanel({
   // per-node style, this node "overrides" the global default.
   const overridden = Boolean(node.style) || Boolean(node.branchStyle);
 
-  const suggestions = useMemo(() => {
-    const map = new Map<string, string>();
-    if (node.childrenIds.length === 0) return map;
-    for (const [cid, result] of parsimonyResults) {
-      // The tie-broken state, not `states[0]`. `states` is ordered by state
-      // declaration, so its first element can be a different state from the one
-      // the reported cost and the canvas change-flags were computed on — the
-      // panel would then suggest "B" next to a branch the drawing marks as
-      // "unchanged from the parent's A". `fillParsimony` reports on the same
-      // tie-broken state, so the suggestion and the drawing agree.
-      const s = result.chosen.get(id) ?? result.states.get(id)?.[0];
-      if (s) map.set(cid, s);
-    }
-    return map;
-  }, [parsimonyResults, id, node.childrenIds.length]);
   const ns = (patch: Parameters<typeof setNodeStyle>[2]) => apply((d) => setNodeStyle(d, id, patch));
   const bs = (patch: Parameters<typeof setBranchStyle>[2]) =>
     apply((d) => setBranchStyle(d, id, patch));
@@ -508,72 +275,30 @@ function NodePanel({
             onCommit={(v) => apply((d) => setHypothesisNote(d, id, v))}
           />
         </Field>
-        <div className="hint">{S.node.hypothesisNoteHint}</div>
         <Field label={S.node.branchLength}>
+          {/* 用户反馈：no unit chip — the number is the branch itself. Editing
+              the branch length recomputes the node's age from its parent
+              (node.age = parent.age − length) when both ages are known, so the
+              two fields follow each other instead of drifting apart. */}
           <NumberField
             value={node.branchLength}
             allowEmpty
             min={0}
             step={0.1}
-            unit="subst./site"
-            unitTitle={tr(
-              '每位点替换数（substitutions per site，subst./site）',
-              'substitutions per site (subst./site)',
-            )}
-            onCommit={(v) => apply((d) => setBranchLength(d, id, v))}
-          />
-        </Field>
-        <Field label={S.node.support}>
-          <NumberField
-            value={node.support}
-            allowEmpty
-            min={0}
-            // Support is commonly 0–1 OR 0–100. A permanent "%" would mislabel
-            // a 0.95 value; show it only once the value is clearly a percentage.
-            unit={node.support !== undefined && node.support > 1 ? '%' : undefined}
-            unitTitle={tr(
-              '支持度：可填 0–1 或 0–100；数值 >1 按百分制、≤1 按比例保存；选择支持度类型会相应设定刻度',
-              'Support: enter 0–1 or 0–100; values >1 are stored as percent and ≤1 as a fraction; choosing a support kind sets the scale accordingly',
-            )}
-            hint={tr('0–1 或 0–100（>1 视为百分制）', '0–1 or 0–100 (>1 is read as percent)')}
             onCommit={(v) =>
               apply((d) => {
+                setBranchLength(d, id, v);
+                // 随动: age ← parent.age − branchLength.
                 const n = d.nodes[id];
-                if (n) {
-                  n.support = v;
-                  // A hand-set value keeps its scale; when the number makes the
-                  // stored scale impossible (0–1 declared percent), correct it.
-                  if (v !== undefined) {
-                    if (v > 1) n.supportScale = 'percent';
-                    else if (!n.supportScale) n.supportScale = 'fraction';
-                  }
+                if (!n || v === undefined) return;
+                const parent = n.parentId ? d.nodes[n.parentId] : undefined;
+                if (parent?.age !== undefined && v >= 0) {
+                  const derived = parent.age - v;
+                  if (derived >= 0) n.age = derived;
                 }
               })
             }
           />
-        </Field>
-        {/* The metadata that makes the number interpretable: what it measures
-            and on which scale. Defaulted heuristically at import, editable here. */}
-        <Field label={tr('支持度类型', 'Support kind')}>
-          <select
-            value={node.supportKind ?? 'other'}
-            onChange={(e) =>
-              apply((d) => {
-                const n = d.nodes[id];
-                if (n) {
-                  n.supportKind = e.target.value as 'bootstrap' | 'posterior' | 'sh-alrt' | 'consensus-frequency' | 'other';
-                  if (n.supportKind === 'posterior') n.supportScale = 'fraction';
-                  if (n.supportKind === 'bootstrap' || n.supportKind === 'sh-alrt' || n.supportKind === 'consensus-frequency') n.supportScale = 'percent';
-                }
-              })
-            }
-          >
-            <option value="bootstrap">{tr('Bootstrap（0–100）', 'Bootstrap (0–100)')}</option>
-            <option value="posterior">{tr('后验概率（0–1）', 'Posterior probability (0–1)')}</option>
-            <option value="sh-alrt">SH-aLRT（0–100）</option>
-            <option value="consensus-frequency">{tr('共识频率（0–100）', 'Consensus frequency (0–100)')}</option>
-            <option value="other">{tr('其他 / 未声明', 'Other / not declared')}</option>
-          </select>
         </Field>
         <Field label={S.node.age}>
           <NumberField
@@ -587,10 +312,93 @@ function NodePanel({
               `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
               `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
             )}
-            onCommit={(v) => apply((d) => setNodeAge(d, id, v))}
+            onCommit={(v) =>
+              apply((d) => {
+                setNodeAge(d, id, v);
+                // 随动: branchLength ← parent.age − node.age.
+                const n = d.nodes[id];
+                if (!n || v === undefined) return;
+                const parent = n.parentId ? d.nodes[n.parentId] : undefined;
+                if (parent?.age !== undefined) {
+                  const derived = parent.age - v;
+                  if (derived >= 0) n.branchLength = derived;
+                }
+              })
+            }
           />
         </Field>
       </Section>
+
+      {/* 用户反馈：该节点的枝样式 sits directly under 节点. */}
+      <Section
+        title={S.node.branchSection}
+        defaultOpen={false}
+        searchQuery={search}
+        favoritable
+        keywords={NODE_SECTION_KEYWORDS.branchSection}
+      >
+        <Field label={S.node.branchShape}>
+          <BranchShapeSelect value={branch.shape} onChange={setNodeBranchShape} />
+        </Field>
+        <Field label={S.node.color}>
+          <ColorField value={branch.color} onChange={(v) => bs({ color: v })} />
+        </Field>
+        {/* 用户反馈: a 范围 dropdown instead of the one-shot 应用到整个子树
+            button — 单个节点 is the resting state (the 颜色 field above already
+            colours this branch), 整个子树 applies the colour downstream in one
+            undoable step and the select then resets to 单个节点. */}
+        <Field label={tr('范围', 'Scope')}>
+          <select
+            value="node"
+            onChange={(e) => {
+              if (e.target.value !== 'subtree') return;
+              let changed = 0;
+              apply((d) => {
+                changed = setSubtreeBranchColor(d, id, branch.color);
+              });
+              if (changed > 0) {
+                notify.success(S.node.applyBranchColorDone(changed));
+              }
+            }}
+          >
+            <option value="node">{tr('单个节点', 'This node')}</option>
+            <option value="subtree">{tr('整个子树', 'Whole subtree')}</option>
+          </select>
+        </Field>
+        <Field label={S.node.width}>
+          <SliderNumberField
+            value={branch.width}
+            min={0.5}
+            max={40}
+            step={0.5}
+            unit="px"
+            recipe={(v) => (d) => setBranchStyle(d, id, { width: v })}
+          />
+        </Field>
+        <Field label={S.node.dash}>
+          <DashSelect value={branch.dash} onChange={(v) => bs({ dash: v })} />
+        </Field>
+      </Section>
+
+      {/* M6 (UI_UX_REVIEW): the science sections come right after identity —
+          a tool whose pitch is hypothesis scaffolding had 性状状态/事件 buried
+          behind three appearance sections. New order: identity → science
+          (traits/events/time) → appearance (style/label/branch) → actions. */}
+      {/* 用户反馈: the per-node 性状状态 editor is gone from the inspector. */}
+      {project.characters.length > 0 && (
+        <EventEditor node={node} project={project} apply={apply} />
+      )}
+      {project.characters.length === 0 && (
+        /* M31: the event editor used to vanish silently when no character
+           existed — the dependency (events key off character states) was
+           never stated. Say it, and name the fix. */
+        <div className="hint" title={tr('演化事件引用性状状态，故需先定义性状', 'Evolutionary events reference character states, so define a character first')}>
+          {tr(
+            '演化事件需引用性状状态：先在左侧「性状」模块新建至少一个性状，此处即可添加事件。',
+            'Evolutionary events reference character states: create at least one character in the Traits module first, then events become available here.',
+          )}
+        </div>
+      )}
 
       {/* Time Constraint section: mirrors the left panel's
           calibration data for this node, ensuring two-way binding. */}
@@ -600,18 +408,6 @@ function NodePanel({
         favoritable
         defaultOpen={false}
         keywords={NODE_SECTION_KEYWORDS.timeConstraintSection}
-        summary={<TimeConstraintSummary calibration={calibration} unit={timeUnit} />}
-        summaryTitle={
-          calibration
-            ? tr(
-                `校准区间：${calibration.minAge}–${calibration.maxAge} ${timeUnit}`,
-                `Calibrated range: ${calibration.minAge}–${calibration.maxAge} ${timeUnit}`,
-              )
-            : tr(
-                '此节点未绑定校准区间，沿用全局时间设置',
-                'No node time constraint — the global time setting applies',
-              )
-        }
       >
         {calibration ? (
           <>
@@ -696,9 +492,9 @@ function NodePanel({
         )}
       </Section>
 
-      <div className={`override-badge${overridden ? ' active' : ''}`} title={S.inspector.restoreDefaultTitle}>
-        <span>{overridden ? S.inspector.overridden : S.inspector.inherited}</span>
-        {overridden && (
+      {overridden && (
+        <div className="override-badge active" title={S.inspector.restoreDefaultTitle}>
+          <span>{S.inspector.overridden}</span>
           <button
             className="override-restore"
             onClick={() => apply((d) => {
@@ -708,8 +504,8 @@ function NodePanel({
           >
             {S.inspector.restoreDefault}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <Section
         title={S.node.styleSection}
@@ -717,8 +513,6 @@ function NodePanel({
         searchQuery={search}
         favoritable
         keywords={NODE_SECTION_KEYWORDS.styleSection}
-        summary={<NodeStyleSummary style={style} />}
-        summaryTitle={`${S.node.fill} ${style.fill} · ${S.node.shape} ${shapeLabel(style.shape)} · ${S.node.size} ${style.size}px · ${S.node.strokeWidth} ${style.strokeWidth}px`}
       >
         <Field label={S.node.shape}>
           <select value={style.shape} onChange={(e) => ns({ shape: e.target.value as NodeShape })}>
@@ -761,12 +555,6 @@ function NodePanel({
         searchQuery={search}
         favoritable
         keywords={NODE_SECTION_KEYWORDS.labelSection}
-        summary={<LabelSummary style={style} weight={weight} />}
-        summaryTitle={`${S.node.fontSize} ${style.fontSize}px · ${S.node.labelColor} ${style.labelColor}${
-          weight >= 600 ? ` · ${S.node.bold}` : ''
-        }${style.fontStyle === 'italic' ? ` · ${S.node.italic}` : ''}${
-          !style.showLabel ? ` · ${tr('已隐藏', 'Hidden')}` : ''
-        }`}
       >
         <CheckboxField
           label={S.node.showLabel}
@@ -836,92 +624,47 @@ function NodePanel({
         </Field>
       </Section>
 
-      <Section
-        title={S.node.branchSection}
-        defaultOpen={false}
-        searchQuery={search}
-        favoritable
-        keywords={NODE_SECTION_KEYWORDS.branchSection}
-        summary={<BranchStyleSummary branch={branch} />}
-        summaryTitle={`${S.node.color} ${branch.color} · ${S.node.width} ${branch.width}px · ${S.node.dash} ${dashLabel(branch.dash)}`}
-      >
-        <Field label={S.node.branchShape}>
-          <BranchShapeSelect value={branch.shape} onChange={setNodeBranchShape} />
-        </Field>
-        <Field label={S.node.color}>
-          <ColorField value={branch.color} onChange={(v) => bs({ color: v })} />
-        </Field>
-        <div className="field row-actions">
-          <button
-            className="btn"
-            title={S.node.applyBranchColorHint}
-            onClick={() => {
-              // Must run through apply(): the live project is Immer-frozen, and
-              // a direct mutation would throw (and bypass undo).
-              let changed = 0;
-              apply((d) => {
-                changed = setSubtreeBranchColor(d, id, branch.color);
-              });
-              if (changed > 0) {
-                notify.success(S.node.applyBranchColorDone(changed));
-              }
-            }}
-          >
-            {S.node.applyBranchColor}
-          </button>
-        </div>
-        <Field label={S.node.width}>
-          <SliderNumberField
-            value={branch.width}
-            min={0.5}
-            max={40}
-            step={0.5}
-            unit="px"
-            recipe={(v) => (d) => setBranchStyle(d, id, { width: v })}
-          />
-        </Field>
-        <Field label={S.node.dash}>
-          <DashSelect value={branch.dash} onChange={(v) => bs({ dash: v })} />
-        </Field>
-      </Section>
 
-      {project.characters.length > 0 && (
-        <Section
-          title={S.nodeChar.section}
-          count={project.characters.length}
-          defaultOpen={false}
-          searchQuery={search}
-          favoritable
-          keywords={['性状', '状态', '祖先状态', '证据', 'character', 'state', 'ancestral', 'evidence']}
-        >
-          <div className="hint">{isLeaf ? S.nodeChar.tipHint : S.nodeChar.internalHint}</div>
-          {project.characters.map((c) => (
-            <NodeCharRow
-              key={c.id}
-              character={c}
-              node={node}
-              apply={apply}
-              suggestion={suggestions.get(c.id)}
-            />
-          ))}
-        </Section>
-      )}
-
-      {project.characters.length > 0 && (
-        <EventEditor node={node} project={project} apply={apply} />
-      )}
-
-      <Section title={S.node.delete} defaultOpen={true} searchQuery={search} keywords={['删除', '移除', '重置位置', '展开', '折叠', 'delete', 'remove', 'reset', 'expand', 'collapse']}>
+      <Section title={S.node.nodeActions} defaultOpen={true} searchQuery={search} keywords={['删除', '移除', '重置位置', '展开', '折叠', 'delete', 'remove', 'reset', 'expand', 'collapse']}>
+        {/* 用户反馈: the row keeps the SAME shape whether or not the node was
+            hand-placed — 清除手动位置 stays put and is simply disabled until a
+            manual position exists, instead of popping in mid-row. */}
         <div className="field row-actions-spread">
           <div className="actions-group">
-            {node.childrenIds.length > 0 && (
-              <button className="btn" onClick={() => apply((d) => toggleCollapse(d, id))}>
-                {node.collapsed ? S.node.expand : S.node.collapse}
-              </button>
-            )}
-            {node.pinned && (
-              <button className="btn" onClick={() => apply((d) => unpinNode(d, id))}>
-                {S.node.resetPosition}
+            <button
+              className="btn"
+              disabled={!node.pinned}
+              title={node.pinned ? undefined : tr('该节点尚未手动调整位置', 'This node has no manual position yet')}
+              onClick={() => apply((d) => unpinNode(d, id))}
+            >
+              {S.node.resetPosition}
+            </button>
+          </div>
+          <div className="actions-group">
+            {/* Copy/paste style (ID-11): the resolved node + incoming-branch
+                styles, applied as overrides on the target. */}
+            <button
+              className="btn"
+              title={tr('复制该节点的节点与枝样式', 'Copy this node’s node and branch styles')}
+              onClick={() => {
+                copyStyle({ node: style, branch });
+                notify.success(tr('已复制样式', 'Style copied'));
+              }}
+            >
+              {tr('复制样式', 'Copy style')}
+            </button>
+            {styleClipboard && (
+              <button
+                className="btn"
+                title={tr('粘贴先前复制的样式（覆盖当前值）', 'Paste the previously copied styles (overrides current values)')}
+                onClick={() =>
+                  apply((d) => {
+                    if (styleClipboard.node) setNodeStyle(d, id, styleClipboard.node);
+                    if (styleClipboard.branch) setBranchStyle(d, id, styleClipboard.branch);
+                  })
+                }
+              >
+                {tr('粘贴样式', 'Paste style')}
               </button>
             )}
           </div>
@@ -948,6 +691,10 @@ function MultiPanel({
   search: string;
 }) {
   const clearSelection = useStore((s) => s.clearSelection);
+  // ID-11 (batch half): copy the FIRST selected node's resolved style, then
+  // paste it onto the whole selection in one undoable step.
+  const styleClipboard = useStore((s) => s.styleClipboard);
+  const copyStyle = useStore((s) => s.copyStyle);
   const first = project.nodes[selection[0]];
   const style = first ? resolveNodeStyle(first, project) : project.defaults.node;
   const branch = first ? resolveBranchStyle(first, project) : project.defaults.branch;
@@ -1002,7 +749,99 @@ function MultiPanel({
         <Field label={S.multi.branchColor}>
           <ColorField value={branch.color} onChange={(v) => bsAll({ color: v })} />
         </Field>
+        {/* ID-10: the batch panel used to cover only colours and font size;
+            shape / weight / label placement / branch width & dash are the
+            same per-node properties and now batch too, so a multi-selection
+            is no longer a second-class styling citizen. */}
+        <Field label={S.node.shape}>
+          <select value={style.shape} onChange={(e) => nsAll({ shape: e.target.value as NodeShape })}>
+            <option value="circle">{S.node.shapeCircle}</option>
+            <option value="square">{S.node.shapeSquare}</option>
+            <option value="diamond">{S.node.shapeDiamond}</option>
+            <option value="none">{S.node.shapeNone}</option>
+          </select>
+        </Field>
+        <Field label={S.node.fontWeight}>
+          <FontWeightSelect
+            value={fontWeightValue(style.fontWeight)}
+            onChange={(v) => nsAll({ fontWeight: v })}
+          />
+        </Field>
+        <Field label={S.node.labelPosition}>
+          <LabelPositionController
+            value={style.labelPosition ?? 'auto'}
+            onChange={(v) => nsAll({ labelPosition: v })}
+          />
+        </Field>
+        <Field label={S.node.width}>
+          <SliderNumberField
+            value={branch.width}
+            min={0.5}
+            max={40}
+            step={0.5}
+            unit="px"
+            recipe={(v) => (d) => {
+              for (const nodeId of selection) setBranchStyle(d, nodeId, { width: v });
+            }}
+          />
+        </Field>
+        <Field label={S.node.dash}>
+          <DashSelect value={branch.dash} onChange={(v) => bsAll({ dash: v })} />
+        </Field>
+        <Field label={S.node.branchShape}>
+          <BranchShapeSelect
+            value={branch.shape}
+            onChange={(shape) =>
+              apply((d) => {
+                // Same width coupling as the single-node editor: switching to a
+                // thick bar shape needs a wide default, switching back to a
+                // thin line must not leave a 10 px hairline.
+                for (const nodeId of selection) {
+                  const current = resolveBranchStyle(d.nodes[nodeId], d);
+                  const patch: Partial<BranchStyle> = { shape };
+                  if (shape === 'line' || shape === 'curved') {
+                    if (current.width > 4) patch.width = 1.5;
+                  } else if (current.width < 4) {
+                    patch.width = 8;
+                  }
+                  setBranchStyle(d, nodeId, patch);
+                }
+              })
+            }
+          />
+        </Field>
+        <div className="field row-actions">
+          <button
+            className="btn"
+            title={tr('以首个选中节点的样式为来源复制', 'Copy the style of the first selected node')}
+            onClick={() => {
+              copyStyle({ node: style, branch });
+              notify.success(tr('已复制样式', 'Style copied'));
+            }}
+          >
+            {tr('复制样式', 'Copy style')}
+          </button>
+          {styleClipboard && (
+            <button
+              className="btn"
+              title={tr('把复制的样式粘贴到全部选中节点', 'Paste the copied style onto every selected node')}
+                onClick={() =>
+                  apply((d) => {
+                    for (const nodeId of selection) {
+                      if (styleClipboard.node) setNodeStyle(d, nodeId, styleClipboard.node);
+                      if (styleClipboard.branch) setBranchStyle(d, nodeId, styleClipboard.branch);
+                    }
+                  })
+                }
+            >
+              {tr('粘贴样式到全部', 'Paste style to all')}
+            </button>
+          )}
+        </div>
       </Section>
+
+      {/* 用户反馈: the batch 性状状态 editor is gone from the multi-select
+          panel too — character-state editing no longer lives in the inspector. */}
 
       <Section title={S.node.delete} searchQuery={search} keywords={['删除', '批量', '移除', 'delete', 'batch', 'remove']}>
         <div className="field row-actions-spread">
@@ -1077,10 +916,21 @@ function EdgePanel({ edge, apply, search }: { edge: CustomEdge; apply: Apply; se
       <div className="field row-actions-spread">
         <div />
         <button
-          className="btn danger"
+          className="btn ghost-danger"
           onClick={() => {
-            apply((d) => removeCustomEdge(d, id));
-            selectEdge(null);
+            // M25 (UI_UX_REVIEW): edge deletion had NO confirmation on the
+            // inspector path while node deletion did — one policy, guarded.
+            requestConfirm({
+              key: 'delete-custom-edge',
+              title: S.edge.delete,
+              message: tr('删除后可用撤销恢复（⌘Z）。', 'The deletion can be undone (⌘Z).'),
+              confirmLabel: S.edge.delete,
+              danger: true,
+              onConfirm: () => {
+                apply((d) => removeCustomEdge(d, id));
+                selectEdge(null);
+              },
+            });
           }}
         >
           {S.edge.delete}
@@ -1168,27 +1018,6 @@ export function PropertiesPanel() {
 
   const hasSelection = selection.length > 0 || Boolean(selectedEdgeId);
 
-  // PERF: run parsimony ONCE per (character data, character) and share the result
-  // across every node's suggestion row — the previous per-node recompute was
-  // O(n²) on large trees.
-  //
-  // Keyed on a fingerprint of the DATA parsimony actually reads, not on
-  // `[project]`. `live()` hands back a brand-new Project on every pointer-move
-  // during a drag, so a `[project]` key re-ran the full O(N·K²) down/up-pass for
-  // every discrete character on every frame — to recompute an answer that cannot
-  // have changed, because dragging moves coordinates and touches no state
-  // assignment.
-  const charData = useMemo(() => characterDataSignature(project), [project]);
-  const parsimonyResults = useMemo(() => {
-    void charData; // the memo's real dependency: recomputed only when it changes
-    const map = new Map<string, ParsimonyResult>();
-    for (const c of project.characters) {
-      if (c.type !== 'discrete' || c.states.length === 0) continue;
-      map.set(c.id, parsimony(project, c));
-    }
-    return map;
-  }, [charData]);
-
   const content = useMemo(() => {
     // NOTE: the reconciliation inspector does NOT live here any more — the
     // reconciliation workspace renders its own four-state `ReconInspector`.
@@ -1215,7 +1044,6 @@ export function PropertiesPanel() {
             project={project}
             apply={apply}
             search={search}
-            parsimonyResults={parsimonyResults}
           />
         );
     }
@@ -1225,12 +1053,22 @@ export function PropertiesPanel() {
     }
 
     return (
-      <div className="panel-section">
-        <h3>{S.inspector.empty}</h3>
-        <div className="hint">{S.inspector.emptyHint}</div>
+      <div className="inspector-empty">
+        <div className="inspector-empty-title">{S.inspector.empty}</div>
+        <div className="inspector-empty-hint">{S.inspector.emptyHint}</div>
+        {/* 用户反馈: the counts line and the ⌘K tip are gone, and the two lines
+            above are centred. The sample-library action stays. */}
+        <div className="inspector-empty-actions">
+          <button
+            className="btn"
+            onClick={() => file.openAppDialog('sampleLibrary')}
+          >
+            {tr('打开示例库…', 'Open sample library…')}
+          </button>
+        </div>
       </div>
     );
-  }, [project, apply, selection, selectedEdgeId, search, parsimonyResults]);
+  }, [project, apply, selection, selectedEdgeId, search]);
 
   // After rendering, detect whether any Section survived the keyword filter;
   // if not, show a "no matching property" hint with a pointer to the global
@@ -1260,20 +1098,10 @@ export function PropertiesPanel() {
 
   return (
     <>
-      {/* Save semantics, stated where the confusion happens. Every inspector
-          edit commits immediately (and the app auto-saves); the toolbar Save
-          writes the project FILE. A first-time user should not have to wonder
-          whether an edited Age needs a Save click. (The reconciliation view has
-          its own inspector and never mounts this panel.) */}
-      <div className="inspector-autosave-hint" role="note">
-        {tr(
-          '属性修改即时生效并自动保存；工具栏 Save 按钮用于保存/导出项目文件。',
-          'Edits apply instantly and are auto-saved. The toolbar Save button saves/exports the project file.',
-        )}
-      </div>
-
-      {/* Inspector search: live-filters sections by title AND field keywords. */}
-      <div className="inspector-search">
+      {/* Inspector search: live-filters sections by title AND field keywords.
+          It only exists once there is something to search. */}
+      {hasSelection && (
+        <div className="inspector-search">
           <MagnifyingGlassIcon />
           <input
             id="inspector-search"
@@ -1283,7 +1111,8 @@ export function PropertiesPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-      </div>
+        </div>
+      )}
 
       {/* Panel content */}
       <div ref={contentRef}>{content}</div>

@@ -40,7 +40,7 @@ export function ReconStatusBar({
     <div className="status recon-status" role="status">
       <button
         className="status-link"
-        title={S.recon.assumptionList}
+        title={S.recon.nodeMapping}
         onClick={() => setReconSection('scenario')}
       >
         {S.recon.sbTipsMapped(row.mappedTips, row.tips)}
@@ -59,22 +59,21 @@ export function ReconStatusBar({
           {S.recon.sbUnresolved(unresolved)}
         </button>
       )}
-      <button
-        className={`status-link${row.errors > 0 ? ' status-bad' : ''}`}
-        onClick={() => setReconSection('validation')}
-      >
+      {/* 用户反馈: the error/note tally no longer jumps to a removed 校验
+          section — it is a readout only. */}
+      <span className={`status-plain${row.errors > 0 ? ' status-bad' : ''}`}>
         {S.recon.sbIssues(row.errors, row.warnings)}
-      </button>
-      <span className="recon-chip chip-sigma">σ {row.summary.speciation}</span>
-      <span className="recon-chip chip-dup">δ {row.summary.duplication}</span>
-      <span className="recon-chip chip-transfer">τ {row.summary.transfer}</span>
-      <span className="recon-chip chip-loss">λ {row.summary.losses}</span>
+      </span>
+      <span className="recon-chip chip-sigma">S {row.summary.speciation}</span>
+      <span className="recon-chip chip-dup">D {row.summary.duplication}</span>
+      <span className="recon-chip chip-transfer">T {row.summary.transfer}</span>
+      <span className="recon-chip chip-loss">L {row.summary.losses}</span>
       <span className="spacer" />
       <span>
         {embedded
           ? S.recon.sbZoomEmbedded(Math.round((embeddedZoom ?? 1) * 100))
           : S.recon.sbZoom(Math.round(speciesZoom * 100), Math.round(geneZoom * 100))}
-        {!embedded && options.syncZoom ? ' · ⇔' : ''}
+        {!embedded && options.syncZoom ? ' ⇔' : ''}
       </span>
     </div>
   );

@@ -29,7 +29,8 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 - **推断助手（建议性）** — Sankoff 简约法建议、Mk 模型概率性 ASR（对数空间数值稳定）、一致性检查、性状相关性提示（Jaccard 共变化）。
 - **DTL 协调重建** — 基因树/物种树分析，含动态规划求解器、手动细化、验证，以及两种画布布局：并排对照视图与嵌套视图（物种枝管道 + 基因谱系嵌套其中，支持 Alt + 单击构建演化路径并导出嵌套协调图 SVG）。
 - **时间校准** — 化石校准点、地质年代条带和环境事件叠加。
-- **导入/导出** — Newick 和 NEXUS 导入（NEXUS 读取 `TREES` **与** `DATA`/`CHARACTERS`/`ASSUMPTIONS` 块；Newick 原样保留方括号注释，并解析 `&support`、`&R/&U`、BEAST 的 `height`/`height_95%_HPD`/`posterior` 与 NHX 标签——其余注释文本仅按原文保存，不作解析）；CSV/TSV 性状矩阵与注释表导入，矩阵/注释/模板 CSV 导出；NeXML 导出；`.cladeforge.json` 项目文件（格式见 `docs/FORMAT.md`）；SVG/PNG/PDF 图像导出（带导出设置对话框：DPI 控制、支持度可选打印、比例尺、图例开关与自动图例）；假说 JSON、Markdown 叙述与自包含 R 分析脚本。
+- **导入/导出** — Newick 和 NEXUS 导入（NEXUS 读取 `TREES` **与** `DATA`/`CHARACTERS`/`ASSUMPTIONS` 块；Newick 原样保留方括号注释，并解析 `&support`、`&R/&U`、BEAST 的 `height`/`height_95%_HPD`/`posterior` 与 NHX 标签——其余注释文本仅按原文保存，不作解析）；CSV/TSV 性状矩阵与注释表导入，矩阵/注释/模板 CSV 导出；NeXML 导入 / 导出（树 + 性状 + cladeforge: 语义注记）；`.cladeforge.json` 项目文件（格式见 `docs/FORMAT.md`）；SVG/PNG/PDF 图像导出（带导出设置对话框：DPI 控制、支持度可选打印、比例尺、图例开关与自动图例，设置与命名预设持久化）；假说 JSON、Markdown 叙述与自包含 R 分析脚本。
+- **编辑与治理** — 全局查找与替换（可跨标签页、带预览）；文档重命名与作者 / 描述 / 来源等出处元数据；可跳转的撤销历史面板；随时可用的示例库；树距离比较表；集中可查的操作日志。
 
 **边界声明。** CladeForge 是假说编辑与论证工作台：不建树、不比对序列、
 不做贝叶斯定年、不搜索拓扑；界面上的一切推断都以文档中那棵由你编辑的
@@ -117,15 +118,6 @@ CladeForge 项目以 JSON 格式存储（`.cladeforge.json`），架构版本 `0
 - [User Manual (English)](./docs/MANUAL_EN.md) — 完整的功能详解手册（英文版）
 - [贡献指南（中文）](./CONTRIBUTING_ZH.md) · [Contributing Guide](./CONTRIBUTING.md)
 - [安全政策](./SECURITY.md) — 受支持的版本与漏洞私下报送渠道
-
-## 路线图
-
-- [x] 基因树–物种树协调（DTL 风格）
-- [ ] 协调优化：并排对照视图中的拖拽映射、多基因聚合叠加
-- [x] 嵌套视图协调布局（将基因树投影到物种树画布上）：物种枝管道 + 基因谱系嵌套、Alt + 单击路径构建与 SVG 导出
-- [ ] 前向模拟引擎用于假说检验
-- [ ] 第三方推断工具的插件架构
-- [ ] 协作工作区
 
 ## 许可证
 

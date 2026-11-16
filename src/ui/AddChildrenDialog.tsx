@@ -123,18 +123,18 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
           {!targetNode ? (
             <span style={{ color: 'var(--danger)' }}>{S.addDialog.targetMissing}</span>
           ) : rootFallback ? (
-            <span style={{ color: 'var(--muted)' }}>
+            <span style={{ color: 'var(--muted-foreground)' }}>
               {S.addDialog.rootFallback(rootNode?.label || unnamed)}
             </span>
           ) : (
             <>
-              <span style={{ color: 'var(--muted)' }}>{S.addDialog.targetLabel}</span>
+              <span style={{ color: 'var(--muted-foreground)' }}>{S.addDialog.targetLabel}</span>
               <span
                 className="dialog-target-chip"
                 style={{
                   background: 'var(--surface-2, var(--bg))',
-                  border: '1px solid var(--border)',
-                  borderRadius: 999,
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 0,
                   padding: '1px 10px',
                   fontWeight: 600,
                   maxWidth: '100%',
@@ -149,10 +149,13 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
           )}
         </div>
         <div className="field">
-          <label>{S.addDialog.countLabel}</label>
+          {/* S09 (Sonus): the count input had no associated label — programmatic
+              name via htmlFor/id. */}
+          <label htmlFor="add-children-count">{S.addDialog.countLabel}</label>
         </div>
         <input
           ref={inputRef}
+          id="add-children-count"
           type="number"
           min={1}
           max={50}
@@ -177,8 +180,9 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
         />
         {count >= 3 && (
           <div className="field" style={{ marginTop: 12 }}>
-            <label>{S.addDialog.polytomyType}</label>
+            <label htmlFor="add-children-polytomy-type">{S.addDialog.polytomyType}</label>
             <select
+              id="add-children-polytomy-type"
               value={polytomyType}
               onChange={(e) => setPolytomyType(e.target.value as 'hard' | 'soft')}
             >

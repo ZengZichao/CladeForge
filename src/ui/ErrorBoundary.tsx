@@ -100,9 +100,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             margin: 0,
             fontSize: 12,
             whiteSpace: 'pre-wrap',
-            background: 'var(--surface-2, rgba(128,128,128,0.12))',
+            background: 'var(--surface-2, var(--gray-3, #f0f0f0))',
             padding: 10,
-            borderRadius: 6,
+            borderRadius: 0,
             maxHeight: 200,
             overflow: 'auto',
           }}
@@ -152,7 +152,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <pre
               style={{
                 margin: 0,
-                fontSize: 11,
+                fontSize: 12,
                 whiteSpace: 'pre-wrap',
                 maxHeight: 260,
                 overflow: 'auto',

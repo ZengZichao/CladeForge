@@ -35,36 +35,36 @@ export interface EmbeddedExportResult {
 /** The theme palettes, mirrored from src/styles/app.css (light + dark). */
 const PALETTES = {
   light: {
-    background: '#ffffff',
-    text: '#18181b',
-    tube: '#e4e4e7',
-    tubeBorder: '#a1a1aa',
-    nodeFill: '#ffffff',
-    nodeStroke: '#18181b',
-    tip: '#0d9488',
-    sigma: '#0e9f6e',
-    dup: '#2563eb',
-    transfer: '#ec4899',
-    unresolved: '#71717a',
-    loss: '#78716c',
-    select: '#18181b',
-    unmapped: '#71717a',
+    background: '#fcfcfc',
+    text: '#202020',
+    tube: '#e0e0e0',
+    tubeBorder: '#bbbbbb',
+    nodeFill: '#fcfcfc',
+    nodeStroke: '#202020',
+    tip: '#12a594',
+    sigma: '#30a46c',
+    dup: '#0090ff',
+    transfer: '#d6409f',
+    unresolved: '#8d8d8d',
+    loss: '#646464',
+    select: '#202020',
+    unmapped: '#8d8d8d',
   },
   dark: {
-    background: '#1c1c1f',
-    text: '#e4e4e7',
-    tube: '#3f3f46',
-    tubeBorder: '#71717a',
-    nodeFill: '#1c1c1f',
-    nodeStroke: '#e4e4e7',
-    tip: '#2dd4bf',
-    sigma: '#34d399',
-    dup: '#60a5fa',
-    transfer: '#f472b6',
-    unresolved: '#a1a1aa',
-    loss: '#a1a1aa',
-    select: '#f4f4f5',
-    unmapped: '#a1a1aa',
+    background: '#111111',
+    text: '#eeeeee',
+    tube: '#313131',
+    tubeBorder: '#606060',
+    nodeFill: '#191919',
+    nodeStroke: '#eeeeee',
+    tip: '#0bd8b6',
+    sigma: '#3dd68c',
+    dup: '#70b8ff',
+    transfer: '#ff8dcc',
+    unresolved: '#b4b4b4',
+    loss: '#b4b4b4',
+    select: '#eeeeee',
+    unmapped: '#b4b4b4',
   },
 } as const;
 
@@ -139,7 +139,7 @@ export function buildEmbeddedReconSVG(
   );
   if (exportOptions.includeMetadata !== false) {
     out.push(
-      `<metadata>CladeForge ${APP_VERSION} · embedded reconciliation · ${escXml(entry.name)} · ${new Date().toISOString()}</metadata>`,
+      `<metadata>CladeForge ${APP_VERSION}; embedded reconciliation; ${escXml(entry.name)}; ${new Date().toISOString()}</metadata>`,
     );
   }
   out.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="${exportOptions.background ?? palette.background}" />`);

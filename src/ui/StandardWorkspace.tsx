@@ -12,18 +12,17 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { Cross1Icon, PinLeftIcon, PinRightIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, ChevronLeftIcon, ChevronRightIcon, HamburgerMenuIcon, ViewVerticalIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import * as file from '../io/fileActions';
 import { getLastAutosave, subscribeAutosave, type AutosaveState } from '../io/autosave';
 import { shouldReselectOnRightClick } from './selectionGuard';
 import { MAX_COLLISION_PLAN_NODES } from '../canvas/eventBadgeLayout';
+import { MAX_DOCUMENT_NODES, MAX_PARSED_NODES } from '../io/limits';
+import { mrcaOf } from '../model/treeOps';
+import { computeLayout } from '../layout/autoLayout';
 import { LayoutPanel } from './LayoutPanel';
-import { LayerPanel } from './LayerPanel';
-import { CharacterPanel } from './CharacterPanel';
-import { AnalysisPanel } from './AnalysisPanel';
 import { TimePanel } from './TimePanel';
 import { PropertiesPanel } from './PropertiesPanel';
 import { CanvasControls } from './CanvasControls';
@@ -33,8 +32,10 @@ import { TreeCanvas } from '../canvas/TreeCanvas';
 import { ContextMenu, type ContextTarget } from './ContextMenu';
 import { WINDOW_BREAKPOINTS } from '../canvas/ReconWorkspace';
 import { S, tr } from './strings';
-import { NavigationRail, type NavModule } from './NavigationRail';
-import { LS_NAV_MODULE, readNavModule } from './navModule';
+// OP-17: one shared splitter implementation for BOTH workspaces (see the
+// component's own header for the performance contract).
+import { ResizeHandle } from './ResizeHandle';
+import { documentHasTree } from './documentContent';
 
 // --- side-panel resizing -----------------------------------------------------
 const LS_LEFT_WIDTH = 'cladeforge:leftWidth';
@@ -71,114 +72,9 @@ function readPanelWidth(key: string, fallback: number): number {
   }
 }
 
-/**
- * Vertical splitter that resizes an adjacent side panel by dragging.
- *
- * Performance strategy:
- * 1. During the drag, panel width is mutated DIRECTLY on the DOM node so no
- *    React re-render fires per frame.
- * 2. CSS transitions on the panel are temporarily disabled (a `dragging` class
- *    is toggled on <body>) so the browser doesn't animate every width change.
- * 3. pointermove is throttled to one update per animation frame via
- *    requestAnimationFrame — pointermove can fire faster than the display
- *    refresh, so coalescing avoids redundant layout work.
- * 4. React state is only updated once, on pointerup, to persist the final width.
- */
-function ResizeHandle({
-  side,
-  width,
-  panelRef,
-  onCommit,
-}: {
-  side: 'left' | 'right';
-  width: number;
-  panelRef: React.RefObject<HTMLDivElement | null>;
-  onCommit: (w: number) => void;
-}) {
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const panel = panelRef.current;
-    const startX = e.clientX;
-    const startW = width;
-    let last = startW;
-    let raf = 0;
-    let pending = false;
-
-    // Disable transitions globally during drag so width changes are instant.
-    document.body.classList.add('panel-resizing');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const applyWidth = () => {
-      raf = 0;
-      pending = false;
-      if (panel) panel.style.width = `${last}px`;
-    };
-
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - startX;
-      last = clampPanel(side === 'left' ? startW + dx : startW - dx);
-      // Coalesce multiple pointermove events into one rAF callback.
-      if (!pending) {
-        pending = true;
-        raf = requestAnimationFrame(applyWidth);
-      }
-    };
-
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      if (raf) cancelAnimationFrame(raf);
-      // Final write in case the last rAF hasn't fired yet.
-      if (panel) panel.style.width = `${last}px`;
-      document.body.classList.remove('panel-resizing');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      onCommit(last);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-  return (
-    <div
-      className="resizer"
-      role="separator"
-      aria-orientation="vertical"
-      title={S.panel.resizeTitle}
-      onPointerDown={onPointerDown}
-    />
-  );
-}
-
 // Narrow-screen bottom tab bar: the navigation modules stay
 // reachable as a persistent bar instead of being dropped or hidden behind
 // overlays. Tapping a module opens the left panel overlay on that module.
-function BottomTabBar({ active, onSelect }: { active: NavModule; onSelect: (m: NavModule) => void }) {
-  const items: { id: NavModule; label: string }[] = [
-    { id: 'style', label: S.nav.style },
-    { id: 'traits', label: S.nav.traits },
-    { id: 'layers', label: S.nav.layers },
-    { id: 'time', label: S.nav.time },
-    { id: 'analysis', label: S.nav.analysis },
-    { id: 'export', label: S.nav.export },
-  ];
-  return (
-    <nav className="bottom-tab-bar" aria-label={tr("模块导航","Module navigation")}>
-      {items.map((it) => (
-        <button
-          key={it.id}
-          className={`bottom-tab${active === it.id ? ' active' : ''}`}
-          onClick={() => onSelect(it.id)}
-          aria-current={active === it.id ? 'page' : undefined}
-          data-nav={it.id}
-        >
-          {it.label}
-        </button>
-      ))}
-    </nav>
-  );
-}
-
 // Auto-save status tracker.
 //
 // A "已保存" driven off the debounce timer alone would lie whenever localStorage
@@ -220,71 +116,151 @@ function StatusBar() {
   const nodeCount = useStore((s) => Object.keys(s.project.nodes).length);
   const edgeCount = useStore((s) => s.project.customEdges.length);
   const scale = useStore((s) => s.view.scale);
+  const selection = useStore((s) => s.selection);
   const selectionCount = useStore((s) => s.selection.length);
+  // M20: the active hypothesis layer is invisible outside the 假说 module —
+  // undo after silently switching layers there gave no cue. One authoritative
+  // chip lives here.
+  const activeLayerName = useStore(
+    (s) => s.project.layers.find((l) => l.id === s.project.activeLayerId)?.name ?? null,
+  );
+  // M22: an edge selection clears the node selection and was otherwise
+  // invisible in the status bar.
+  const selectedEdge = useStore((s) => s.selectedEdgeId);
+  // ID-03: the MRCA / degradation notices used to be static text. The MRCA chip
+  // now LOCATES its clade (the reason it exists), and the degradation chips open
+  // the in-app manual where the behaviour is explained.
+  const focusNode = useStore((s) => s.focusNode);
   const { status: saveStatus, detail: saveDetail } = useAutoSaveStatus();
   const minScaleReached = useStore((s) => s.view.scale <= MIN_VIEW_SCALE + 1e-9);
 
   // Dirty flag + capacity/LOD disclosures: the status bar is where a user looks
   // to answer "is my work saved?" and "why does this big tree look different".
-  const dirty = useStore((s) => s.revision !== s.lastSavedRevision);
   const collisionDegraded = nodeCount > MAX_COLLISION_PLAN_NODES;
   const capacityWarned = nodeCount > 5000;
+  // OP-11: "已自动保存" on its own read as "saved to my project file". The
+  // indicator now names the LOCAL RECOVERY AREA explicitly, and a second chip
+  // states the DISK state — the two are different stores and must not be
+  // conflated by one ambiguous word.
+  const activeDirty = useStore((s) => s.revision !== s.lastSavedRevision);
+  const diskSavedAt = useStore((s) => s.project.savedAt);
+  const diskText = activeDirty
+    ? S.review.diskUnsaved
+    : diskSavedAt
+      // m12 (UI_UX_REVIEW): the UI locale — not a hardcoded zh-CN — formats the
+      // disk timestamp (English users read "11/15/2026, 14:03").
+      ? S.review.diskSavedAt(new Date(diskSavedAt).toLocaleString(undefined, { hour12: false }))
+      : S.review.diskUnsaved;
   return (
     // The selection count is announced to assistive tech (the canvas tree has
     // no aria-live region of its own).
     <div className="status" aria-live="polite">
-      {dirty && (
-        <span
-          className="status-dirty"
-          role="status"
-          title={S.review.unsavedDot}
-          style={{ color: 'var(--accent, #2563eb)' }}
-        >
-          ● {S.review.unsavedDot}
-        </span>
-      )}
       <span>
         {S.status.nodes} {nodeCount}
       </span>
-      <span>
+      {/* 发现9: on narrow windows the status bar already carries 8 entries and
+          wraps; the edge count (usually `nodes − 1`) is the most redundant one
+          and hides below the narrow breakpoint via CSS (.status-edges). The
+          title keeps its meaning one hover away on wide screens. */}
+      <span className="status-edges" title={tr('自定义连线数', 'Custom link count')}>
         {S.status.edges} {edgeCount}
       </span>
       {/* "Fit" clamps at MIN_SCALE, so a very tall tree can stay partly
           off-screen; the zoom readout says explicitly when that limit is hit. */}
       <span title={minScaleReached ? S.canvasControls.fitClampedTitle : undefined}>
         {S.status.zoom} {Math.round(scale * 100)}%
-        {minScaleReached ? ` · ${S.canvasControls.fitClamped}` : ''}
+        {minScaleReached ? tr(`（${S.canvasControls.fitClamped}）`, ` (${S.canvasControls.fitClamped})`) : ''}
       </span>
       {selectionCount > 0 && (
         <span>
           {S.status.selected} {selectionCount}
         </span>
       )}
-      {/* MRCA is highlighted whenever exactly two nodes are selected — surface
-          this otherwise invisible capability explicitly. */}
-      {selectionCount === 2 && <span className="status-mrca">{S.status.mrcaHint}</span>}
-      {collisionDegraded && (
-        <span className="status-failed" title={S.review.collisionDegradedNotice(MAX_COLLISION_PLAN_NODES)}>
-          {S.review.collisionDegradedNotice(MAX_COLLISION_PLAN_NODES)}
+      {/* M22: an edge selection clears the node selection — without this chip
+          the status bar looked like "nothing selected" while an edge was. */}
+      {selectedEdge && (
+        <span title={tr('选中的自定义连线', 'Selected custom link')}>
+          {tr('连线已选', 'Edge selected')}
         </span>
+      )}
+      {/* M20: the active hypothesis layer is one authoritative chip — outside
+          the 假说 module nothing else showed which layer undo would edit. */}
+      {activeLayerName && (
+        <span title={tr('当前假说层：编辑目标', 'Active hypothesis layer: undo target')}>
+          {tr('层', 'Layer')}：{activeLayerName}
+        </span>
+      )}
+      {/* MRCA is highlighted whenever exactly two nodes are selected — surface
+          this otherwise invisible capability explicitly, and make the hint do
+          something: click to centre that ancestor (ID-03). */}
+      {selectionCount === 2 && (
+        <button
+          className="status-mrca"
+          onClick={() => {
+            const [a, b] = selection;
+            if (!a || !b) return;
+            const m = mrcaOf(useStore.getState().project, a, b);
+            if (m) focusNode(m);
+          }}
+          title={tr('点击定位最近共同祖先', 'Click to centre the most recent common ancestor')}
+        >
+          {S.status.mrcaHint}
+        </button>
+      )}
+      {collisionDegraded && (
+        <button
+          className="status-failed"
+          title={S.review.collisionDegradedNotice(MAX_COLLISION_PLAN_NODES)}
+          onClick={() => file.openAppDialog('manual')}
+        >
+          {S.review.collisionDegradedNotice(MAX_COLLISION_PLAN_NODES)}
+        </button>
       )}
       {capacityWarned && !collisionDegraded && (
-        <span title={S.review.capacityNotice(nodeCount)}>
+        <button
+          className="status-capacity"
+          title={tr(
+            `当前文档 ${nodeCount} 个节点。解析层上限：单树 ${MAX_PARSED_NODES.toLocaleString()} 节点、单文档合计 ${MAX_DOCUMENT_NODES.toLocaleString()} 节点；超过上限的文件会在打开时被拒绝并说明原因。点击查看手册。`,
+            `This document has ${nodeCount} nodes. Parse-layer limits: ${MAX_PARSED_NODES.toLocaleString()} per tree and ${MAX_DOCUMENT_NODES.toLocaleString()} per document; larger files are refused at open with the reason stated. Open the manual.`,
+          )}
+          onClick={() => file.openAppDialog('manual')}
+        >
           {S.review.capacityNotice(nodeCount)}
+        </button>
+      )}
+      {/* Auto-save status: 'saved' only ever follows a write that returned ok,
+          and it names the local recovery area rather than implying the project
+          FILE is written. */}
+      {saveStatus === 'saving' && (
+        <span className="status-saving" title={S.status.savingTitle}>
+          {S.review.autoSaveState(S.status.saving)}
         </span>
       )}
-      {/* Auto-save status: 'saved' only ever follows a write that returned ok. */}
-      {saveStatus === 'saving' && (
-        <span className="status-saving" title={S.status.savingTitle}>{S.status.saving}</span>
-      )}
       {saveStatus === 'saved' && (
-        <span className="status-saved" title={S.status.savedTitle}>{S.status.saved}</span>
+        <span className="status-saved" title={S.status.savedTitle}>
+          {S.review.autoSaveState(S.status.saved)}
+        </span>
       )}
       {saveStatus === 'failed' && (
         <span className="status-failed" role="alert" title={saveDetail ?? S.status.saveFailedTitle}>
           {S.status.saveFailed}
         </span>
       )}
+      <span
+        className={`status-disk${activeDirty ? ' status-disk-dirty' : ''}`}
+        title={
+          activeDirty
+            ? tr('当前文档有尚未写入项目文件的更改', 'This document has changes not yet written to its project file')
+            : diskSavedAt
+              ? S.status.savedTitle
+              : tr(
+                  '尚未写入过项目文件：当前内容只在本地恢复区（自动保存），重启后仍可恢复；执行「保存项目」写入磁盘。',
+                  'No project file yet: the content lives in the local recovery area (autosave) and survives a restart; “Save project” writes it to disk.',
+                )
+        }
+      >
+        {diskText}
+       </span>
       <span className="spacer" />
       {/* Gesture hints live in the ⌘? shortcuts dialog; the status bar stays
           data-only (counts / zoom / autosave). */}
@@ -292,144 +268,26 @@ function StatusBar() {
   );
 }
 
-/** Left panel content for a given navigation module (single-responsibility
- *  modules — see NavigationRail for the grouping rationale). */
-function LeftPanelContent({
-  module,
-  onOpenMatrix,
-  onOpenAnalysis,
-  onNexusExport,
-}: {
-  module: NavModule;
-  onOpenMatrix: () => void;
-  onOpenAnalysis: () => void;
-  onNexusExport: () => void;
-  onBuildGeneTree: () => void;
-  onCopySpeciesTree: () => void;
-  onEditGeneTree: (id: string) => void;
-}) {
-  // One-shot guard for the removed standard-rail reconciliation entry is gone:
-  // the workspace switch in the toolbar is the only way in now.
-  switch (module) {
-    case 'traits':
-      return (
-        <>
-          <div className="panel-header">
-            <span className="panel-header-title">{S.nav.traits}</span>
-            <span className="panel-header-subtitle">{S.character.section}</span>
-          </div>
-          <CharacterPanel onOpenMatrix={onOpenMatrix} />
-        </>
-      );
-    case 'layers':
-      return (
-        <>
-          <div className="panel-header">
-            <span className="panel-header-title">{S.nav.layers}</span>
-            <span className="panel-header-subtitle">{S.layer.section}</span>
-          </div>
-          <LayerPanel />
-        </>
-      );
-    case 'time':
-      // TimePanel renders its own header.
-      return <TimePanel />;
-    case 'style':
-      return (
-        <>
-          <div className="panel-header">
-            <span className="panel-header-title">{S.nav.style}</span>
-          </div>
-          <LayoutPanel />
-        </>
-      );
-    case 'analysis':
-      return <AnalysisPanel onOpenAnalysis={onOpenAnalysis} />;
-    case 'export':
-      return <ExportPanel onNexusExport={onNexusExport} />;
-  }
-}
-
-/** Export module panel for the navigation rail, grouped by format family. */
-function ExportPanel({ onNexusExport }: { onNexusExport: () => void }) {
-  // One equal-width column: format labels differ wildly in length, and a row of
-  // ragged buttons read as an accident rather than a menu.
-  const row = (label: string, fn: () => void) => (
-    <button className="btn export-btn" onClick={fn} key={label}>
-      {label}
-    </button>
-  );
-  // A-05: the mode the figure buttons will use is always stated — a user who
-  // thinks "导出 SVG" means "the preset figure" must not discover otherwise
-  // from the file itself.
-  const followView = useStore((s) => s.exportSettings.followView);
+/** Left panel content for the single merged 时间+样式 module (用户反馈:
+ *  性状 / 假说 removed, 时间 and 样式 merged into one big panel, and 导出
+ *  moved to the top menu bar). */
+function LeftPanelContent() {
   return (
     <>
+      <TimePanel />
       <div className="panel-header">
-        <span className="panel-header-title">{S.nav.export}</span>
+        <span className="panel-header-title">{S.nav.style}</span>
       </div>
-      <div className="panel-section export-panel-section">
-        <div className="hint" role="note">
-          {followView
-            ? tr(
-                '当前模式：跟随视图——下列图件按钮按画布当前状态导出（含正在显示的着色与图层）。DPI、图例等发表设置请用「导出选项…」。',
-                'Mode: follow view — the figure buttons below export the canvas as currently shown (including active colouring and layers). DPI, legend and other publication settings live in "Export options…".',
-              )
-            : tr(
-                '当前模式：导出预设——图件按导出选项中的设置生成，不随屏幕状态变化。',
-                'Mode: export preset — figures follow the export-options settings and do not vary with the screen state.',
-              )}
-        </div>
-        {/* Publication controls (preset mode, DPI, support values, legend,
-            scale bar, grayscale, background). The dialog existed but had no
-            entry point — every figure button exported directly with the live
-            settings. The ellipsis marks that this opens another dialog. */}
-        <div className="export-actions export-options">
-          {row(S.exportItems.options, () => file.actionOpenExportSettings())}
-        </div>
-        <h3>{S.exportGroup.vector}</h3>
-        <div className="export-actions">
-          {row(S.exportItems.svg, () => void file.actionExportSVG())}
-          {row(S.exportItems.pdf, () => void file.actionExportPDF())}
-        </div>
-        <h3>{S.exportGroup.raster}</h3>
-        <div className="export-actions">
-          {row(S.exportItems.png, () => void file.actionExportPNG())}
-        </div>
-        <h3>{S.exportGroup.data}</h3>
-        <div className="export-actions">
-          {row(S.exportItems.newick, () => void file.actionExportNewick())}
-          {row(S.exportItems.nexus, onNexusExport)}
-          {row(S.exportItems.hypothesisJSON, () => void file.actionExportHypothesisJSON())}
-          {row(S.exportItems.rScript, () => void file.actionExportRScript())}
-          {row(S.exportItems.reconReport, () => void file.actionExportReconciliationReport())}
-        </div>
-        <h3>{S.exportGroup.report}</h3>
-        <div className="export-actions">
-          {row(S.exportItems.narrative, () => void file.actionExportNarrative())}
-        </div>
-      </div>
+      <LayoutPanel />
     </>
   );
 }
 
 export function StandardWorkspace({
   panelsHidden,
-  onOpenMatrix,
-  onOpenAnalysis,
-  onNexusExport,
-  onBuildGeneTree,
-  onCopySpeciesTree,
-  onEditGeneTree,
   onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
-  onOpenMatrix: () => void;
-  onOpenAnalysis: () => void;
-  onNexusExport: () => void;
-  onBuildGeneTree: () => void;
-  onCopySpeciesTree: () => void;
-  onEditGeneTree: (id: string) => void;
   /** Opens the shared add-children dialog (owned by App, toolbar shares it). */
   onAddChildrenDialog: (parentId: string) => void;
 }) {
@@ -437,7 +295,7 @@ export function StandardWorkspace({
 
   // Slightly wider defaults + the denser section rhythm (app.css) fit the
   // common controls without wrapping or a scroll trip; both remain resizable.
-  const [leftWidth, setLeftWidth] = useState(() => readPanelWidth(LS_LEFT_WIDTH, 260));
+  const [leftWidth, setLeftWidth] = useState(() => readPanelWidth(LS_LEFT_WIDTH, 280));
   const [rightWidth, setRightWidth] = useState(() => readPanelWidth(LS_RIGHT_WIDTH, 292));
   // Clamp on EVERY render, not only when the handle is released: `clampPanel`
   // bounds the ceiling by the current window width, so a width committed while
@@ -447,21 +305,42 @@ export function StandardWorkspace({
   const panelRight = clampPanel(rightWidth);
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
-  const [navModule, setNavModule] = useState<NavModule>(() => readNavModule());
+  const project = useStore((s) => s.project);
+  const canvasIsEmpty = !documentHasTree(project);
+  // A blank document (a fresh tab before any sample / file / added node) owns
+  // the whole canvas: both side panels are hidden until the document actually
+  // has a tree. The empty state is then the front page, not a card squeezed
+  // between two panels full of controls for a tree that does not exist.
+  const showPanels = !canvasIsEmpty;
 
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [leftOverlayOpen, setLeftOverlayOpen] = useState(false);
   const [rightOverlayOpen, setRightOverlayOpen] = useState(false);
+  // 用户反馈: each side panel has its OWN show/hide control (independent of
+  // the ⌘. global toggle).
+  const [leftHidden, setLeftHidden] = useState(false);
+  const [rightHidden, setRightHidden] = useState(false);
   const isNarrow = windowWidth < NARROW_THRESHOLD;
+  // V16/M43 (UI_UX_REVIEW): 1024 px is the common laptop-window width, and the
+  // fixed rails + two panels used to leave the canvas ~350px with every label
+  // clipped. Between the narrow overlay mode and a roomy desktop, the RIGHT
+  // panel folds automatically (its toggle button appears in its place); the
+  // user can re-open it, and a resize back restores it.
+  const [midFold, setMidFold] = useState(false);
+  const [userReopenedRight, setUserReopenedRight] = useState(false);
+  useEffect(() => {
+    const fold = windowWidth >= NARROW_THRESHOLD && windowWidth < 1200;
+    setMidFold(fold);
+    if (!fold) setUserReopenedRight(false);
+  }, [windowWidth]);
 
   /**
-   * Workflow tour navigation: each step presents one left-panel module, so the
-   * spotlight has to follow the module switch. On narrow screens the left panel
-   * is an overlay (display:none until opened), so the tour opens it too —
-   * otherwise the step would spotlight nothing at all.
+   * 用户反馈: the left rail is gone — there is ONE plain left panel. The
+   * tour-navigate event now only makes sure the left panel is actually visible
+   * when a tour step spotlights it (on narrow screens it is an overlay that
+   * starts closed, so the step would spotlight nothing at all).
    */
-  const navigateForTour = useCallback((module: NavModule) => {
-    setNavModule(module);
+  const navigateForTour = useCallback((_module: 'edit') => {
     if (window.innerWidth < NARROW_THRESHOLD) {
       setLeftOverlayOpen(true);
       setRightOverlayOpen(false);
@@ -510,21 +389,42 @@ export function StandardWorkspace({
       const id = st.selection[0] ?? null;
       if (!id || !st.project.nodes[id]) return;
       e.preventDefault();
-      // Anchor at the node's on-screen position when available, else centre.
+      // M14 (UI_UX_REVIEW): the comment promised the node's on-screen position
+      // but the code always took the canvas centre. Compute the node's screen
+      // position from the live view transform so keyboard users keep the
+      // spatial node↔menu association; fall back to centre only when the node
+      // is culled off-screen.
       const host = canvasHostRef.current;
       const cx = host ? host.clientWidth / 2 : 200;
       const cy = host ? host.clientHeight / 2 : 200;
-      setMenu({ x: cx, y: cy, nodeId: id, edgeId: null });
+      const layout = computeLayout(useStore.getState().project, {
+        showEras: useStore.getState().showEras,
+        eraLevel: useStore.getState().eraLevel,
+      });
+      const pos = layout.positions.get(id);
+      const view = useStore.getState().view;
+      let x = cx;
+      let y = cy;
+      if (pos && host) {
+        const sx = pos.x * view.scale + view.tx;
+        const sy = pos.y * view.scale + view.ty;
+        if (sx >= 0 && sx <= host.clientWidth && sy >= 0 && sy <= host.clientHeight) {
+          x = sx;
+          y = sy;
+        }
+      }
+      setMenu({ x, y, nodeId: id, edgeId: null });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // The tour (opened from App) navigates modules through a custom event so the
-  // spotlight follows without App owning the module state.
+  // spotlight follows without App owning any module state — there is only the
+  // one merged panel, so the event just ensures it is visible.
   useEffect(() => {
     const onTourNav = (e: Event) => {
-      const m = (e as CustomEvent<NavModule>).detail;
+      const m = (e as CustomEvent<'edit'>).detail;
       if (m) navigateForTour(m);
     };
     window.addEventListener('cladeforge:tour-navigate', onTourNav);
@@ -539,30 +439,28 @@ export function StandardWorkspace({
     try { localStorage.setItem(LS_RIGHT_WIDTH, String(rightWidth)); } catch { /* ignore */ }
   }, [rightWidth]);
 
-  // Persist nav module selection.
-  useEffect(() => {
-    try { localStorage.setItem(LS_NAV_MODULE, navModule); } catch { /* ignore */ }
-  }, [navModule]);
-
   return (
     <>
       <div className="body">
-        {/* NavigationRail: icon + label module switcher (hidden when panels
-            are collapsed via ⌘. or on narrow screens — a bottom tab bar takes
-            over there). */}
-        {!isNarrow && !panelsHidden && <NavigationRail active={navModule} onSelect={setNavModule} />}
+        {/* 用户反馈: no module rail — the left panel is ONE plain panel (时间 +
+            样式 merged), always visible while a document has a tree. */}
 
-        {/* Overlay buttons for narrow screens */}
-        {isNarrow && (
+        {/* Left-panel toggle: on narrow screens it opens the overlay; on desktop
+            it re-shows the panel after its own hide button collapsed it. */}
+        {(isNarrow || leftHidden) && showPanels && (
           <button
             className="panel-toggle-btn left"
             onClick={() => {
-              setLeftOverlayOpen(true);
-              setRightOverlayOpen(false);
+              if (isNarrow) {
+                setLeftOverlayOpen(true);
+                setRightOverlayOpen(false);
+              } else {
+                setLeftHidden(false);
+              }
             }}
             title={tr("打开左侧面板","Open left panel")}
           >
-            <PinLeftIcon />
+            <HamburgerMenuIcon />
           </button>
         )}
         <div
@@ -572,6 +470,8 @@ export function StandardWorkspace({
             width: isNarrow ? 280 : panelLeft,
             ...(isNarrow && !leftOverlayOpen && { display: 'none' }),
             ...(!isNarrow && panelsHidden && { display: 'none' }),
+            ...(!isNarrow && leftHidden && { display: 'none' }),
+            ...(!showPanels && { display: 'none' }),
           }}
         >
           {isNarrow && (
@@ -584,36 +484,50 @@ export function StandardWorkspace({
               <Cross1Icon />
             </button>
           )}
-          <LeftPanelContent
-            module={navModule}
-            onOpenMatrix={onOpenMatrix}
-            onOpenAnalysis={onOpenAnalysis}
-            onNexusExport={onNexusExport}
-            onBuildGeneTree={onBuildGeneTree}
-            onCopySpeciesTree={onCopySpeciesTree}
-            onEditGeneTree={onEditGeneTree}
-          />
+          {/* 用户反馈: the panel carries its own hide button (desktop). */}
+          {!isNarrow && showPanels && (
+            <button
+              className="overlay-close"
+              onClick={() => setLeftHidden(true)}
+              title={tr('隐藏左侧面板', 'Hide left panel')}
+              aria-label={tr('隐藏左侧面板', 'Hide left panel')}
+            >
+              <ChevronLeftIcon />
+            </button>
+          )}
+          {showPanels && <LeftPanelContent />}
         </div>
-        {!isNarrow && !panelsHidden && (
+        {!isNarrow && showPanels && !panelsHidden && !leftHidden && (
           <ResizeHandle side="left" width={panelLeft} panelRef={leftPanelRef} onCommit={setLeftWidth} />
         )}
         <div className="canvas-host" ref={canvasHostRef} onContextMenu={handleContextMenu}>
           <TreeCanvas />
-          <CanvasControls />
+          {/* Zoom/search aids do nothing on a blank document; the empty state
+              owns the whole surface until the first tree exists. */}
+          {!canvasIsEmpty && <CanvasControls />}
         </div>
-        {isNarrow && (
+        {/* V16: between the narrow overlay mode and a roomy desktop the right
+            panel folds; its toggle re-opens it (inline, user decides). The same
+            button re-shows the panel after its own hide button collapsed it. */}
+        {(isNarrow || rightHidden || (midFold && !userReopenedRight)) && showPanels && (
           <button
             className="panel-toggle-btn right"
             onClick={() => {
-              setRightOverlayOpen(true);
-              setLeftOverlayOpen(false);
+              if (isNarrow) {
+                setRightOverlayOpen(true);
+                setLeftOverlayOpen(false);
+              } else if (rightHidden) {
+                setRightHidden(false);
+              } else {
+                setUserReopenedRight(true);
+              }
             }}
             title={tr("打开右侧面板","Open right panel")}
           >
-            <PinRightIcon />
+            <ViewVerticalIcon />
           </button>
         )}
-        {!isNarrow && !panelsHidden && (
+        {!isNarrow && showPanels && !panelsHidden && !rightHidden && !(midFold && !userReopenedRight) && (
           <ResizeHandle side="right" width={panelRight} panelRef={rightPanelRef} onCommit={setRightWidth} />
         )}
         <div
@@ -623,6 +537,9 @@ export function StandardWorkspace({
             width: isNarrow ? 300 : panelRight,
             ...(isNarrow && !rightOverlayOpen && { display: 'none' }),
             ...(!isNarrow && panelsHidden && { display: 'none' }),
+            ...(!isNarrow && rightHidden && { display: 'none' }),
+            ...(!isNarrow && midFold && !userReopenedRight && { display: 'none' }),
+            ...(!showPanels && { display: 'none' }),
           }}
         >
           {isNarrow && (
@@ -635,26 +552,30 @@ export function StandardWorkspace({
               <Cross1Icon />
             </button>
           )}
+          {/* 用户反馈: the panel carries its own hide button (desktop). */}
+          {!isNarrow && showPanels && (
+            <button
+              className="overlay-close"
+              onClick={() => setRightHidden(true)}
+              title={tr('隐藏右侧面板', 'Hide right panel')}
+              aria-label={tr('隐藏右侧面板', 'Hide right panel')}
+            >
+              <ChevronRightIcon />
+            </button>
+          )}
           {/* Mount the inspector only while it can actually be seen: `display:
               none` still renders its subtree on every store change, so with the
               panels hidden the user would pay full price for an invisible panel.
               Trade-off, deliberately accepted: unmounting resets the panel's
               local UI state (which sections are expanded, the search text), so
               re-opening with ⌘. starts from the defaults. */}
-          {!panelsHidden && !(isNarrow && !rightOverlayOpen) && <PropertiesPanel />}
+          {showPanels &&
+            !panelsHidden &&
+            !(isNarrow && !rightOverlayOpen) &&
+            !(!isNarrow && rightHidden) &&
+            !(midFold && !userReopenedRight) && <PropertiesPanel />}
         </div>
       </div>
-      {/* Narrow screens: a persistent bottom tab bar replaces the hidden rail,
-          so the navigation modules stay reachable without overlays. */}
-      {isNarrow && (
-        <BottomTabBar
-          active={navModule}
-          onSelect={(m) => {
-            setNavModule(m);
-            setLeftOverlayOpen(true);
-          }}
-        />
-      )}
       <StatusBar />
       {menu && (
         <ContextMenu

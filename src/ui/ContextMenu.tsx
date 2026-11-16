@@ -8,15 +8,12 @@ import {
   addSiblingSpaced,
   deleteNode,
   insertParent,
-  rerootAtNode,
   toggleCollapse,
   unpinNode,
   outgroupReroot,
   checkOutgroupReroot,
   applyMidpointReroot,
   hasBranchLengths,
-  countAnnotatedInternals,
-  ladderize,
   type MidpointResult,
 } from '../model/treeOps';
 import { notify } from './toast';
@@ -25,6 +22,7 @@ import { requestConfirm } from './confirmDialog';
 import { requestDeletion } from './deleteGuard';
 import { midpointText, outgroupFailureText } from './treeEditNotices';
 import { S, tr } from './strings';
+import { actionExportSubtreeNewick, actionRerootAtNode, actionLadderize } from '../io/fileActions';
 
 export interface ContextTarget {
   x: number;
@@ -41,6 +39,9 @@ interface Item {
   disabled?: boolean;
   /** Hover explanation — also how a disabled item's refusal reason is shown. */
   title?: string;
+  /** M15 (UI_UX_REVIEW): the chord that triggers the same action elsewhere
+   *  (Delete → 删除节点, F2 → 重命名), right-aligned like the menubar's. */
+  kbd?: string;
 }
 
 export function ContextMenu({
@@ -89,7 +90,7 @@ export function ContextMenu({
     onClose();
   };
 
-  let items: Item[] = [];
+  let items: Item[];
 
   if (target.edgeId) {
     const edgeId = target.edgeId;
@@ -127,6 +128,8 @@ export function ContextMenu({
   } else if (target.nodeId) {
     const id = target.nodeId;
     const node = project.nodes[id];
+    // M15 (UI_UX_REVIEW): one group per intent — 添加 / 身份与结构 / 视图 /
+    // 导出 / 删除 — with the chord column on items that have one.
     items = [
       { label: S.context.addBinary, onClick: run(() => apply((d) => addChildrenSpaced(d, id, 2))) },
       { label: S.context.addTernary, onClick: run(() => apply((d) => addChildrenSpaced(d, id, 3))) },
@@ -137,51 +140,21 @@ export function ContextMenu({
         ? [{ label: S.context.addSibling, onClick: run(() => apply((d) => addSiblingSpaced(d, id))) }]
         : []),
       { sep: true },
+      // M15: 重命名 was context-menu-only-by-absence — the F2 chord existed
+      // (canvas / App relay) but the menu never listed it.
+      {
+        label: tr('重命名…', 'Rename…'),
+        kbd: 'F2',
+        onClick: run(() => useStore.getState().requestRename(id)),
+      },
       { label: S.context.insertParent, onClick: run(() => apply((d) => insertParent(d, id))) },
     ];
-    if (node && node.childrenIds.length > 0) {
-      items.push({
-        label: node.collapsed ? S.context.expandSubtree : S.context.collapseSubtree,
-        onClick: run(() => apply((d) => toggleCollapse(d, id))),
-      });
-    }
-    // Ladderize (ascending / descending) — also in the context menu so users
-    // who don't use ⌘K can discover the feature.
-    if (node && node.childrenIds.length > 0) {
-      items.push({
-        label: S.cmd.ladderizeAsc,
-        onClick: run(() => { apply((d) => ladderize(d, true)); requestFit(); }),
-      });
-      items.push({
-        label: S.cmd.ladderizeDesc,
-        onClick: run(() => { apply((d) => ladderize(d, false)); requestFit(); }),
-      });
-    }
-    if (node?.pinned) {
-      items.push({ label: S.context.resetPosition, onClick: run(() => apply((d) => unpinNode(d, id))) });
-    }
     if (node && node.parentId !== null) {
-      // Enhanced reroot confirmation (1.2)
+      // M17: the shared action carries the SAME confirm + refit for every
+      // entry point (palette / file menu used to apply silently).
       items.push({
         label: S.context.reroot,
-        onClick: run(() => {
-          const hasBL = hasBranchLengths(project);
-          const annotatedCount = countAnnotatedInternals(project);
-          let message = S.confirm.rerootMessage;
-          if (hasBL) message += '\n' + S.confirm.rerootHasBranchLength;
-          else message += '\n' + S.confirm.rerootNoBranchLength;
-          if (annotatedCount > 0) message += '\n' + S.confirm.rerootAffectsChars(annotatedCount);
-          requestConfirm({
-            key: 'reroot',
-            title: S.confirm.rerootTitle,
-            message,
-            confirmLabel: S.confirm.rerootConfirm,
-            onConfirm: () => {
-              apply((d) => rerootAtNode(d, id));
-              requestFit();
-            },
-          });
-        }),
+        onClick: run(() => actionRerootAtNode(id)),
       });
       // Midpoint reroot — also accessible from the context menu so users
       // who don't use ⌘K can discover it.
@@ -243,6 +216,38 @@ export function ContextMenu({
           }),
         });
       }
+      // M15: ladderize joins the structure group (it sat between 折叠 and
+      // 导出 before).
+      if (node && node.childrenIds.length > 0) {
+        items.push({
+          label: S.cmd.ladderizeAsc,
+          onClick: run(() => actionLadderize(true)),
+        });
+        items.push({
+          label: S.cmd.ladderizeDesc,
+          onClick: run(() => actionLadderize(false)),
+        });
+      }
+    }
+    // M15: the VIEW group after a separator — 折叠/展开 and 重置位置 are
+    // display state, not topology.
+    if (node && node.childrenIds.length > 0) {
+      items.push({ sep: true });
+      items.push({
+        label: node.collapsed ? S.context.expandSubtree : S.context.collapseSubtree,
+        onClick: run(() => apply((d) => toggleCollapse(d, id))),
+      });
+    }
+    if (node?.pinned) {
+      items.push({ label: S.context.resetPosition, onClick: run(() => apply((d) => unpinNode(d, id))) });
+    }
+    // M15: the EXPORT group — the subtree Newick entry, on its own.
+    if (node && node.childrenIds.length > 0) {
+      items.push({ sep: true });
+      items.push({
+        label: tr('导出子树为 Newick…', 'Export subtree as Newick…'),
+        onClick: run(() => void actionExportSubtreeNewick(project, id)),
+      });
     }
     if (node && node.parentId !== null) {
       items.push({ sep: true });
@@ -251,6 +256,7 @@ export function ContextMenu({
       // toast is bound to THIS delete, not to the stack top at click time.
       items.push({
         label: S.context.deleteNode,
+        kbd: 'Delete',
         danger: true,
         onClick: run(() => {
           requestDeletion(project, [id], 'context-menu', () => {
@@ -313,7 +319,7 @@ export function ContextMenu({
         ) : (
           <button
             key={it.label}
-            className="menu-item"
+            className={`menu-item${actionableIndex(it.label) === cursor && !it.disabled ? ' cursor' : ''}`}
             role="menuitem"
             aria-disabled={it.disabled || undefined}
             style={{
@@ -328,10 +334,11 @@ export function ContextMenu({
               if (idx >= 0) setCursor(idx);
             }}
           >
-            <span>
-              {actionableIndex(it.label) === cursor && !it.disabled ? '▸ ' : ''}
-              {it.label}
-            </span>
+            {/* The keyboard cursor is a background style (`.menu-item.cursor`),
+                not a '▸' text prefix — one glyph fewer, and the affordance
+                renders identically across fonts and platforms. */}
+            <span>{it.label}</span>
+            {it.kbd && <span className="kbd">{it.kbd}</span>}
           </button>
         ),
       )}

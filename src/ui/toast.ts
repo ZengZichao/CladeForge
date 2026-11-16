@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
+import { logOperation } from './operationLog';
 
 export type ToastKind = 'info' | 'success' | 'error';
 
@@ -29,8 +30,14 @@ interface ToastState {
 export const useToasts = create<ToastState>((set, get) => ({
   toasts: [],
   push: (kind, message, action, ttl) => {
+    if (get().toasts.some((t) => t.kind === kind && t.message === message)) return;
+    // Every announcement becomes part of the reviewable operation log (OP-22).
+    logOperation(kind, message);
     const id = nanoid(6);
-    const timeout = ttl ?? (action ? 6000 : kind === 'error' ? 7000 : 3500);
+    // M40: errors linger 30s (the old 7s raced against reading a long message);
+    // info/success still auto-dismiss quickly, and every toast now has an
+    // explicit close button in Toaster.tsx.
+    const timeout = ttl ?? (action ? 6000 : kind === 'error' ? 30000 : 3500);
     set((s) => ({ toasts: [...s.toasts, { id, kind, message, action }] }));
     if (timeout > 0) {
       setTimeout(() => get().dismiss(id), timeout);

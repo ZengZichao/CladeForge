@@ -7,6 +7,116 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
 
+### Fixed — 2026-11-15 dual-review remediation: token semantics, modal ownership, scientific readability
+- **设计令牌语义修复（B1–B4）**：TSX 中 28 处把表面色令牌当墨色用的 `var(--muted)` / `var(--accent)` 全部改为 `--muted-foreground` / `--primary`——时间轴刻度、地质年代名、假说标注、事件引导线在浅色主题下是白字压白底、深色主题下是深灰压深灰的问题根除；迁移中丢失的 `--radius-inner`（41 处引用）与 `--shadow-float/panel/card`（17 处）按主题补回定义，弹层/对话框/命令面板恢复圆角与阴影；`--border-strong` 提到 ≥3:1、`--ring` 改不透明墨色、`color-scheme` 与 `@custom-variant dark` 就位。新增 `designTokenGuard.test.ts` 守卫（app.css 每个 `var(--x)` 必须有定义；TSX 禁用表面色作 fill/stroke/color）。
+- **框选矩形（B1）**：`<rect>` 移出世界变换组——此前 126% 缩放下虚线框偏离指针 63/257px 且颜色不可见；颜色改用 `--primary`；`marqueeContract.test.ts` 锁定结构。
+- **模态所有权（S03/M11/M27/m20）**：全局 ⌘ 快捷键在任一模态打开时全部停止（此前导出弹窗开着也能 ⌘N 新建后台文档）；嵌套对话框的 Escape 由模块级"对话框栈"仲裁——分析窗口内的确认框按一次 Escape 只关确认框；confirm 单例被替换时显式取消挂起请求（fileActions 的 await 不再永久悬挂）；协调视图 Escape 变为作用域栈（先清选区，干净时才退出工作区，输入框内永不退出）。
+- **导出承诺（S04/m15）**：点击导出不再强制 `followView:false`——勾选"按当前屏幕导出"就按当前屏幕导出；导出对话框新增文档／内容模式／范围／DPI 摘要行，并补 TIFF 格式；弹窗宽度按内容类型（S13，预设保存行不再溢出 113px）。
+- **科学信息可读（S05/S06/S07/S12）**：校准点最小/最大年龄改为带标签的两列布局（此前 8 个输入框被压到 14px 宽）；假说层对比解析离散性状的状态名称而非内部随机 ID；协调映射列表与摘要共用同一"有效映射"口径（显式假设 → 名称自动匹配 → 未匹配），自动匹配行带"自动"标记；小型协调树（≤30 末端）适配后保留末端名称（屏幕字号下限），不再 43% 缩放后整屏无名。
+- **键盘与菜单（S08/M10/M12/m10/m11）**：标签页栏成为真正的 `tablist`（roving tabindex + ←/→/Home/End，关闭走 click 且带对象名）；文件/最近下拉实现 APG 菜单契约（Escape 关闭并还焦、↑↓/Home/End/typeahead/Enter 激活、Tab 消费）；面板分隔条可聚焦、←/→ 调宽、双击复位。
+- **破坏性操作与状态可见（M20/M21/M22/M24/M25/M26/V7/S20）**：保存不再进撤销栈（`stampSaved`，⌘S 后 ⌘Z 不再立即变脏）；状态栏新增活动假说层芯片与"连线已选"芯片；自定义连线删除（检视器与悬浮 ×）统一走确认；列表行删除改次级危险样式（`.ghost-danger`），实心红留给最终确认；假说层按钮文案写明对象（"删除假说层"）；缩放读数按钮加虚线下缀表明可点击。
+- **其它**：窗口 `zoom` 下偏好菜单坐标换算并随缩放重锚（S02，130% 不再飞出屏幕）；首次自动适配等容器静止 120ms（M38，首屏不再裁切末端名）；每个 toast 有具名关闭按钮、错误常驻 30s（M40）；自定义事件类型的两个 `window.prompt` 换成真实对话框（M28）；手册渲染为安全 Markdown（React 元素、无 HTML 注入面）并可点击目录跳转（S18）；查找替换的互斥范围改原生 radio（S22）；"计算最优解"方法说明移出按钮标签（S16）；空状态提示指向 ⌘K 导入而非语义错误的 ⌘O（M42）；样式预设显示当前项（m1）；时间树示例默认时间校准布局打开（m4）；17 个零引用 shadcn 组件与 `src/lib` 移除（V1）；深色年代带降不透明度 + 标签描边 halo（V13）；时间轴旁冗余比例尺移除（V14）；图例 MRCA 色与画布常量同源（V12）；平移显示 grab/grabbing 光标（M36）；命令面板协调模式下禁用拓扑命令并给出原因（M18）。
+- **第二轮补遗**：节点检视器按"身份 → 科学（性状/事件/时间约束）→ 外观 → 操作"重排且搜索框吸顶（M6）；历史面板为未命名编辑自动生成改动摘要标签（"修改：事件、节点（新增 2）"，m6/S23）；树的根节点成为永久 Tab 停靠点，无选择也能键盘进入（S10）；Shift+F10 右键菜单锚定焦点节点屏幕位置（M14）；快捷键参考补 Alt+Enter 重命名与 ContextMenu 键并经一致性测试守卫（M13）；协调画布统一主画布滚轮契约——Ctrl/⌘+滚轮（触控板捏合）缩放、普通双指滚动平移（M32）；协调窗格背景静止点击清空选区、拖拽阈值 4px（M33）；枝条获得 12px 透明命中路径，分支级操作可直接在枝上完成（M34）；映射线可悬停并联动双端高亮（M35）；Alt 按住时协调画布显示 copy 光标（M37）；嵌套视图 1:1 同名末端不再双重标签（m17）；1024–1200px 宽度自动折叠右面板并保留开关（V16/M43）；偏好设置从 896px 滚动下拉改为真正的居中对话框（焦点陷阱、Escape、遮罩关闭；M2）。
+- **第三轮补遗（收尾批）**：关闭脏标签页改为桌面惯例三按钮——保存并关闭（主）/ 不保存（红）/ 取消，且仅在保存确实清除了脏标记后才关闭（B4）；重新定根 / 阶梯化 / 重新排布收敛为共享动作 `actionRerootAtNode` / `actionLadderize` / `actionRelayout`——三个入口（右键/面板/文件菜单）从此同一确认、同一适配（M17/M16）；「添加子节点」三处名称统一、新建统一为「新建标签页」（M16/M19）；简约法采纳文案与行为对齐（"覆盖到全部内部节点…" + 方法说明折叠，S15/m5）；导出面板改列表行样式 + 唯一主按钮（M8）；文件菜单的 13 个导出项折叠为单个「导出…」（菜单 30→约 20 项，生命周期行补 ⌘ 快捷键列；M1）；画布控件在选中时显示"缩放到选区"入口（S24）；命令面板补「导出嵌套协调图…」（m18）；最近打开的文档补绑 `sourcePath`（m16）；「方向」字段与同区「布局类型」统一为标签在上全宽（m2）；toast 移到画布底部居中，不再盖住检视器操作区（V15）。
+- **第四轮补遗（终审批）**：右键菜单补快捷键列（删除=Delete、重命名=F2）并新增「重命名…」项，按 添加 / 身份与结构 / 视图 / 导出 / 删除 五组重排（M15）；「二叉/三歧」混用统一为「二叉/三叉」（M15）；app.css 全部 21 处裸 `z-index` 迁移到扩充后的 `--z-*` 令牌（新增 --z-local/--z-canvas-overlay/--z-canvas-notice/--z-panel-toggle/--z-panel-overlay/--z-recon-overlay/--z-busy 七档），网格对齐的单值 padding 迁移到 `--space-*`，并新增守卫测试禁止裸 z-index（V5）；单文档时标签栏收起为文档标题条（保留拖拽区与脏点标识，第二份文档打开即恢复完整 tablist；V9）；导出选项对话框摘要补像素尺寸预估（视口 × dpi/96）与背景/图例/比例尺开关状态，各导出入口共享同一 `exportSettings` 的契约已有 `exportOptions()` 单点实现（S21）。
+- **Fixed — 用户验收反馈（2026-11-15 下午）**：①单标签页时也始终显示完整标签栏（撤回 V9 的收起行为——用户验收要求保留标签可见）；②移除时间轴刻度/年代/环境事件标签的反色描边底（此前为压在年代带上的背景色 halo，深色主题呈亮框、浅色主题呈暗框——B2 的墨色令牌修复本身已提供足够对比度）；③冷启动默认打开空白「未命名」文档，示例不再自动加载（空状态画布即首页）；④空白文档时工具栏不再显示「添加子节点」（无节点可加；`documentHasTree` 门控），空状态页新增「新建树文件」按钮（`actionNewTreeFile`：当前页播种根+二叉骨架并适配，已有树则开新标签页）；⑤首页示例改为 2×2 圆角卡片，仅保留大标题（灰色说明文字移入悬停提示）。
+- **Fixed — 用户验收反馈二（2026-11-15 傍晚）**：「打开树文件」去掉省略号；⌘K 提示从按钮行移到两按钮下方独立一行；「示例」标题居中；「帮助」按钮改回与「文件/最近」一致的盒状尺寸；「标准视图 / 协调视图」从下划线 tab 改为真正的圆角分段控件（容器描边、选中项主色填充）；示例按工作区归属拆分——标准首页显示三张标准示例卡，协调视图空状态显示「基因家族协调」示例卡并加上软件文字 logo；协调视图无基因树时不再渲染左侧栏（创建入口都在空状态画布上）；标签页关闭按钮始终显示（不再 hover 才出现）；偏好设置的语言 / 主题 / 界面缩放 / 撤销步数上限四组全部改为等宽圆角按钮行（`.prefs-seg`，选中项主色填充，等高同权，长文案进悬停提示）。
+- **Fixed — 用户验收反馈三（2026-11-15 晚）**：①协调空状态不再渲染右侧「场景概览」面板；②协调空状态四个创建入口改为 2×2 网格——构建基因树 / 构建物种树 / 导入物种树 / 导入基因树（构建物种树=把物种树打开到标准编辑器，导入物种树走标准导入通道）；③标准首页示例收敛为两张并居中——「时间树示例」与「非时间树示例」（原「大树与深时」改名，校准演示示例保留在示例库对话框）；④协调视图唯一示例卡改名「物种树-基因树协调」并居中摆放；⑤协调事件字母改为国际惯例单字母——物种形成 S、重复 D、转移 T、丢失 L（事件徽标、图例、统计 chip、代价标签、多歧枝解析汇总、嵌入视图与映射线全部同步），相关文案测试重新钉住新字母；⑥左面板「映射与事件」拆分为「节点映射」（基因节点 → 物种节点 + 来源标记）与「演化事件」（事件字母 + 节点 + L 丢失数）两个独立分区；⑦「映射校验」更名为「校验」（面板分区、侧栏项、检视器徽章三处同步）；⑧物种树 / 基因树窗格头部新增缩放控件组——可直接输入百分比（Enter 或失焦提交）、预设档位下拉（50/75/100/150/200/300%）+ 原有滚轮与适应/1:1 按钮，三种方式并存；⑨删除物种树与基因树连接桥上的「映射 N 条」文字胶囊（计数保留在状态栏）。
+
+### Changed — 2026-11-15 polish pass: icons over glyphs, words where words matter
+- **One icon set everywhere** (review directive: avoid text where an icon carries the
+  meaning, keep text where the text IS the meaning, nothing that renders differently per
+  platform font): the preferences menu's selected-state ticks are the shared SVG check icon;
+  the environmental-event rows, the event-type picker caret, the evidence expander and the
+  gene-tree outline bullets use chevron/dot SVG icons instead of `▾ ▸ •`; the reconciliation
+  rows use the arrow/check SVG icons instead of `→ ✓`; the context menu's keyboard cursor is
+  a background style instead of a `▸` text prefix; the canvas control cluster's "Fit" is the
+  frame icon (its word stays in the tooltip and the accessible name). Text survives exactly
+  where it must: menu items, field labels, format names, mode switches, status-bar data —
+  none of those were iconified.
+- **The label-position pad is a pure-geometry 3×3 dot widget** (Blender-style): each of the
+  nine cells draws a small dot at its own position inside a 12px box and "auto" is the hollow
+  centre dot — no unicode arrows (`↖ ↑ ⊙ →`), identical across fonts, and the words live in
+  the tooltip + accessible name.
+- One dead string key removed (`canvasControls.fit` — the word now lives only in the
+  tooltip); no glyph buttons lost their `title`/`aria-label` in the swap.
+
+### Added — 2026-11-15 interface review: batch data editing, TIFF, calibration bars, demo sample
+- **Batch character-state assignment in the multi-selection inspector** (review finding 22, the
+  review's top gap): the multi-selection panel's styling-only batching gains a 性状状态 group —
+  a discrete select (or continuous number field) per character whose change writes to EVERY
+  selected node in ONE undoable step, with a dedicated "mixed in selection" display when the
+  selection disagrees (`PropertiesPanel.tsx`). The strong selection model (marquee / ⌘A /
+  shift-click) finally has a data-side counterpart.
+- **TIFF export** (review A6): a small hand-written uncompressed baseline TIFF encoder
+  (`encodeTiff`, RGBA + ExtraSamples, DPI in the X/YResolution tags) fed by the SAME
+  SVG-raster path as PNG (extracted as `rasteriseToCanvas`, one clamp budget for both). The
+  button sits in the raster group of the export panel and the palette (59 commands now); the
+  manuals' export tables and command count updated.
+- **Calibration intervals draw on the time axis** (review A14): each calibration point can now
+  render as a node-anchored error bar on the chronogram (时间 module toggle, off by default,
+  `CalibrationBars` over the shared `ageToCoord` mapping) — the intervals were export-only data
+  before. The built-in whale demo sample below opens straight onto this.
+- **A fourth sample: 演示：鲸类水生适应 / Demo: whale land-to-water transition** (review A18) —
+  the one deliberate exception to the `Taxon_*` fictional-taxon policy, clearly marked 演示:
+  real, well-known groups on a textbook topology (Pakicetus → Basilosaurus → Neoceti), a
+  habitat character, a key-innovation + radiation event pair, calibration points and an
+  environmental marker, opening in the time-calibrated layout; the document's own provenance
+  record states that every value is illustrative and not citable.
+- **Inspector empty state now carries content** (review finding 7): document summary counts
+  (tips / internal / characters / layers / events), an "Open sample library…" action and the
+  ⌘K pointer replace the bare "Nothing selected" column.
+- **Reconciliation empty stage carries all four creation actions** (review finding 8; this
+  reverses the earlier "actions in the panel only" policy — in narrow mode the stage is the
+  only reachable surface): build / copy / import / load-sample, plus the same no-gene-tree
+  guard on the palette's reconciliation-report command.
+- **Command palette: FILE category split into 导入 / 导出 sub-headings** (review finding 15),
+  **whitespace-separated multi-token matching** ("svg 导出", "export newick") (A9), and a TIFF
+  command. **Event-type picker** matches the catalogue's English fields plus a 27-entry pinyin
+  alias table (A15). **Tree summary copies as a Markdown table** (A13). **Collapsed subtrees
+  show their hidden tip count** as a label suffix shared by canvas, collision planner and
+  exporter (A2). **Subtree export as Newick** straight from the context menu (A7).
+
+### Changed — 2026-11-15 interface review: one navigation order, honest guards, calmer panels
+- **One module order for both navigations** (review finding 1): the narrow-screen bottom bar
+  now derives from `NAV_MODULE_ORDER` (shared with the desktop rail) instead of its own
+  drifted array (样式 first → last in the content group).
+- **ASR results travel with their tab** (review finding 14): switching documents no longer
+  silently discards the Mk reconstruction — `asr` + `asrOptions` ride the TabSnapshot.
+- **Disable-with-reason replaces clickable no-ops**: the export panel's reconciliation report
+  (and the palette twin) is disabled with a title when the document has no gene trees (finding
+  10). The recon toolbar already rendered nothing there.
+- **Delete-guard scope note** (finding 13): the confirmation now states that "don't ask again"
+  applies to THIS entry point only. **⌘? marquee row** spells out that Alt replaces the
+  selection (A12), matching the updated manual §13. **Web ⌘W** no longer pretends to close a
+  window the browser owns (R9/M7), manual §13 notes it.
+- **Panels calmer**: hypothesis Claim / Prediction are multi-line text areas (finding 5,
+  `TextAreaField`); environmental-event rows collapse to a colour + label + one-line range
+  summary with an expandable numeric editor (finding 6); 间距 and 分支 style groups are hoisted
+  out of the collapsed advanced group to top level (finding 4); the trait module's "next step"
+  hint hides once the document has any assignment (R6); the status bar hides the derivable
+  edge count below the narrow breakpoint and the disk chip explains the never-saved case
+  (findings 9 / 17); the overview minimap hides on small trees (< 60 nodes, finding 3). Fit
+  centring was re-checked and needs no change (finding 2 — the earlier impression was a small
+  tree on a large canvas).
+- Three never-shipped string keys (`recon.emptyBuild/emptyCopy/emptyImport`) removed; the
+  stray duplicated file-header comment in `PreferencesMenu.tsx` cleaned (R7). Manual: NeXML
+  row added to the import table (R8).
+
+### Changed — a blank tab owns the canvas; clearer sidebar hierarchy
+- **A fresh tab is now the front page.** The module rail and both side panels are hidden
+  while the document has no tree (a new tab before any sample / file / added node), so the
+  empty state gets the full canvas instead of a card squeezed between two panels of
+  controls for a tree that does not exist. Opening a sample, opening a file or adding the
+  first child brings the rail and panels back; the explicit ⌘. collapse still wins.
+- **Sidebar hierarchy.** Section and group headings (`性状与状态`, `矢量图`, …) carry a
+  filled band with dark bold text instead of bare grey uppercase text that read at the
+  same level as field labels; the panel title stays the larger top level.
+- **Row alignment.** Side-panel field rows are a two-column grid (label column + control
+  column), so labels of different lengths no longer leave every control starting at a
+  different x. Dialogs keep the previous flex row.
+- New guards: `src/ui/documentContent.ts` + `src/ui/emptyDocLayout.test.ts`.
+
 ### Added — embedded (nested) reconciliation layout
 - **A second reconciliation canvas mode, side-by-side vs nested view** (toolbar labels
   `并排对照`/`嵌套视图` in zh, `Side-by-side`/`Embedded` in EN): the nested view draws the

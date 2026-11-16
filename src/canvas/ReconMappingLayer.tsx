@@ -12,6 +12,7 @@
 
 import { memo, useMemo } from 'react';
 import { bridgeLine, type ReconMappingLine } from './reconMapping';
+import type { NodeId } from '../model/types';
 import { S } from '../ui/strings';
 
 export function tokenLabel(token: ReconMappingLine['token']): string {
@@ -30,11 +31,11 @@ export function tokenLabel(token: ReconMappingLine['token']): string {
 export function tokenGlyph(event: ReconMappingLine['event']): string {
   switch (event) {
     case 'speciation':
-      return 'σ';
+      return 'S';
     case 'duplication':
-      return 'δ';
+      return 'D';
     case 'transfer':
-      return 'τ';
+      return 'T';
     default:
       return '?';
   }
@@ -46,6 +47,10 @@ interface ReconMappingLayerProps {
   height: number;
   /** Mid-line labels only for emphasised lines (never a wall of text). */
   showSelectedLabels: boolean;
+  /** M35 (UI_UX_REVIEW): hovering a mapping line highlights both endpoints —
+   *  the pane highlights already follow the gene hover state, so the line
+   *  reports its gene node id through this callback. */
+  onLineHover?: (geneNodeId: NodeId | null) => void;
 }
 
 /** Does this path paint exactly the same thing? The projection pass builds
@@ -62,20 +67,37 @@ function samePath(a: ReconMappingLine, b: ReconMappingLine): boolean {
 }
 
 const BridgePath = memo(
-  function BridgePath({ l }: { l: ReconMappingLine }) {
+  function BridgePath({ l, onHover }: { l: ReconMappingLine; onHover?: (geneNodeId: NodeId | null) => void }) {
     return (
-      <path
-        d={bridgeLine(l.from, l.to)}
-        fill="none"
-        stroke={`var(--recon-map-${l.token})`}
-        strokeWidth={l.state === 'selected' ? 2.4 : l.state === 'hovered' ? 2 : 1.3}
-        strokeOpacity={
-          l.state === 'muted' ? 0.18 : l.state === 'normal' ? 0.75 : 0.95
-        }
-        strokeDasharray={l.token === 'unresolved' ? '5 4' : undefined}
-        strokeLinecap="round"
-        className={`recon-map-line recon-map-${l.state}`}
-      />
+      <>
+        {/* M35 (UI_UX_REVIEW): the 1px line was not hoverable (aria-hidden, no
+            pointer events). An invisible 10px stroke over the visible line
+            gives it a real hit target; hover reports the gene node id so BOTH
+            pane endpoints highlight through the existing hover pipeline. */}
+        <path
+          d={bridgeLine(l.from, l.to)}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={10}
+          strokeLinecap="round"
+          pointerEvents="stroke"
+          onPointerEnter={() => onHover?.(l.geneNodeId)}
+          onPointerLeave={() => onHover?.(null)}
+        />
+        <path
+          d={bridgeLine(l.from, l.to)}
+          fill="none"
+          stroke={`var(--recon-map-${l.token})`}
+          strokeWidth={l.state === 'selected' ? 2.4 : l.state === 'hovered' ? 2 : 1.3}
+          strokeOpacity={
+            l.state === 'muted' ? 0.18 : l.state === 'normal' ? 0.75 : 0.95
+          }
+          strokeDasharray={l.token === 'unresolved' ? '5 4' : undefined}
+          strokeLinecap="round"
+          className={`recon-map-line recon-map-${l.state}`}
+          pointerEvents="none"
+        />
+      </>
     );
   },
   (a, b) => samePath(a.l, b.l),
@@ -99,6 +121,7 @@ export const ReconMappingLayer = memo(function ReconMappingLayer({
   width,
   height,
   showSelectedLabels,
+  onLineHover,
 }: ReconMappingLayerProps) {
   // Bridge lines whose endpoints are both far outside the host are invisible:
   // skip their DOM cost during vertical pans of large trees (one viewport of
@@ -118,10 +141,12 @@ export const ReconMappingLayer = memo(function ReconMappingLayer({
   );
   if (width <= 0 || height <= 0) return null;
   return (
+    // The bridge layer keeps aria-hidden (the assumption list is the accessible
+    // surface); only the POINTER side became interactive (M35).
     <div className="recon-bridge-layer" aria-hidden="true">
       <svg width={width} height={height}>
         {visibleLines.map((l) => (
-          <BridgePath key={l.id} l={l} />
+          <BridgePath key={l.id} l={l} onHover={onLineHover} />
         ))}
         {labelLines.map((l) => (
           <BridgeLabel key={`t${l.id}`} line={l} />

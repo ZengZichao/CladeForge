@@ -17,13 +17,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout } from '../layout/autoLayout';
 import type { GeneNodeAssumption, NodeId, Project } from '../model/types';
-import { SAMPLE_PROJECTS } from '../model/sampleTree';
-import { openSample } from '../ui/sampleOpener';
-import * as file from '../io/fileActions';
-import { S } from '../ui/strings';
+import { S, tr } from '../ui/strings';
 import { notify } from '../ui/toast';
 import { isImeComposing } from '../ui/imeGuard';
+import { modalIsOpen } from '../ui/useDialogFocus';
 import { geneTreeRows } from '../ui/reconStats';
+import * as file from '../io/fileActions';
+import { SAMPLE_PROJECTS } from '../model/sampleTree';
+import { openSample } from '../ui/sampleOpener';
 import {
   ReconPane,
   RECON_HEADER_H,
@@ -41,9 +42,9 @@ import { Cross1Icon } from '@radix-ui/react-icons';
 
 /** Visual language for DTL event classes — colours are THEME variables. */
 export const DTL_STYLE = {
-  speciation: { color: 'var(--recon-map-sigma)', glyph: 'σ' },
-  duplication: { color: 'var(--recon-map-dup)', glyph: 'δ' },
-  transfer: { color: 'var(--recon-map-transfer)', glyph: 'τ' },
+  speciation: { color: 'var(--recon-map-sigma)', glyph: 'S' },
+  duplication: { color: 'var(--recon-map-dup)', glyph: 'D' },
+  transfer: { color: 'var(--recon-map-transfer)', glyph: 'T' },
 } as const;
 
 const IDENTITY: PaneTransform = { tx: 40, ty: 40, scale: 1 };
@@ -55,23 +56,28 @@ function horizontalCladogram(doc: Project, orientation: 'LR' | 'RL'): Project {
 }
 
 export function ReconciliationView({
-  onBuildGeneTree,
-  onCopySpeciesTree,
   onZoomChange,
   onEmbeddedZoomChange,
+  onBuildGeneTree,
+  onCopySpeciesTree,
 }: {
-  onBuildGeneTree: () => void;
-  onCopySpeciesTree: () => void;
   /** Reported when a pane's zoom scale changes (status-bar readouts). */
   onZoomChange?: (species: number, gene: number) => void;
   /** Embedded mode: the single viewport's zoom readout. */
   onEmbeddedZoomChange?: (zoom: number) => void;
+  /** Empty state: starts the first gene tree from the species tree. */
+  onBuildGeneTree?: () => void;
+  /** Empty state (M9): one-click copy of the species topology as a gene tree. */
+  onCopySpeciesTree?: () => void;
 }) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
   const geneSelection = useStore((s) => s.geneSelection);
   const speciesSelection = useStore((s) => s.selection);
   const options = useStore((s) => s.reconViewOptions);
+  // 用户反馈: the edit-mode toggle in the recon toolbar decides which pane
+  // carries the 编辑中 badge.
+  const reconEditTarget = useStore((s) => s.reconEditTarget);
   const hoveredGeneId = useStore((s) => s.reconHoverGeneId);
   const focusTarget = useStore((s) => s.reconFocusTarget);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
@@ -160,7 +166,6 @@ export function ReconciliationView({
     if (!speciesLayout) return;
     const sb = reconPaneBounds(project, speciesLayout, options, 'species');
     const s1 = fitTransformFor(sb, Math.max(1, speciesBox.w), Math.max(1, speciesBox.h));
-    let sScale = s1.scale;
     let sT = s1;
     let gT: PaneTransform | null = null;
     if (geneLayout && entry) {
@@ -168,7 +173,7 @@ export function ReconciliationView({
       const f2 = fitTransformFor(gb, Math.max(1, geneBox.w), Math.max(1, geneBox.h));
       if (options.syncZoom) {
         // Shared scale = the SMALLER of the two fits, so neither side overflows.
-        sScale = Math.min(s1.scale, f2.scale);
+        const sScale = Math.min(s1.scale, f2.scale);
         sT = { ...s1, scale: sScale };
         gT = { ...f2, scale: sScale };
       } else {
@@ -265,11 +270,58 @@ export function ReconciliationView({
     return () => window.removeEventListener('cladeforge:recon-fit', onFitEvt);
   }, [fitBoth, embedded]);
 
-  // Escape leaves the reconciliation workspace.
+  // S11 (Sonus): ⌘0 / ⌘+ / ⌘− must operate on the ACTIVE workspace. In recon
+  // mode the standard store's zoomBy touched the hidden standard canvas while
+  // the visible panes stayed put. Both panes zoom in sync around the pane
+  // centre, honouring syncZoom like a manual zoom does.
+  useEffect(() => {
+    if (embedded) return;
+    const zoom = (factor: number) => {
+      const zoomOne = (
+        t: PaneTransform,
+        setT: (t: PaneTransform) => void,
+        box: { w: number; h: number },
+      ) => {
+        const scale = Math.max(0.15, Math.min(4, t.scale * factor));
+        const k = scale / t.scale;
+        const cx = box.w / 2;
+        const cy = box.h / 2;
+        setT({ scale, tx: cx - (cx - t.tx) * k, ty: cy - (cy - t.ty) * k });
+      };
+      zoomOne(speciesT, setSpeciesTState, speciesBox);
+      if (entry && geneLayout) zoomOne(geneT, setGeneTState, geneBox);
+    };
+    const onZoomIn = () => zoom(1.2);
+    const onZoomOut = () => zoom(1 / 1.2);
+    window.addEventListener('cladeforge:recon-zoom-in', onZoomIn);
+    window.addEventListener('cladeforge:recon-zoom-out', onZoomOut);
+    return () => {
+      window.removeEventListener('cladeforge:recon-zoom-in', onZoomIn);
+      window.removeEventListener('cladeforge:recon-zoom-out', onZoomOut);
+    };
+  }, [speciesT, geneT, speciesBox, geneBox, entry, geneLayout, embedded]);
+
+  // M12 (UI_UX_REVIEW): Escape is a scope stack — first press clears the
+  // selection/hover, and only a clean, non-editing context exits the workspace.
+  // Previously any Escape — including from inside a text field whose draft was
+  // uncommitted — tore down the whole reconciliation workspace.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isImeComposing(e)) return;
-      if (e.key === 'Escape') setReconMode(false);
+      if (e.key !== 'Escape') return;
+      const st = useStore.getState();
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const editing =
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement | null)?.isContentEditable;
+      if (editing) return; // drafts must survive Escape; blur commits (fields.tsx)
+      if (modalIsOpen()) return; // a modal owns Escape (S03 scope stack)
+      const anySelection = st.selection.length > 0 || st.geneSelection.length > 0;
+      if (anySelection) {
+        st.clearSelection();
+        st.clearGeneSelection();
+        return;
+      }
+      setReconMode(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -513,29 +565,57 @@ export function ReconciliationView({
   }, [geneSelection, entry, project]);
 
   // --- empty state (no gene tree) ---------------------------------------------
+  // M9 (review finding 8): the canvas used to state the condition and offer ONE
+  // action while the other three lived only in the left panel — a large blank
+  // stage was the first thing a new user saw in the reconciliation workspace.
+  // All four creation paths now sit on the empty stage itself (the panel keeps
+  // them too); in narrow mode, where the panel is a closed drawer, the stage is
+  // the ONLY reachable entry, so this is also a reachability fix.
   if (!entry || (!embedded && !geneLayout)) {
     return (
       <div className="recon-empty-stage">
-        <div className="recon-empty-card">
-          <div className="recon-empty-title">{S.recon.emptyReconTitle}</div>
-          <div className="hint">{S.recon.emptyReconHint}</div>
-          <div className="recon-empty-actions">
+        {/* 用户反馈：the reconciliation front page carries the SAME wordmark
+            as the standard empty state, plus the reconciliation sample as a
+            rounded card (the standard samples live on the standard page). */}
+        <div className="empty-masthead">
+          <div className="empty-wordmark">{S.app.name}</div>
+        </div>
+        <div className="recon-empty-note">{S.recon.emptyReconTitle}</div>
+        {/* 用户反馈：four entries in a 2×2 grid — 构建基因树 / 构建物种树 /
+            导入物种树 / 导入基因树. 构建物种树 opens the species tree in the
+            standard editor (the copy-species-tree action). */}
+        <div className="recon-empty-actions">
+          {onBuildGeneTree && (
             <button className="btn primary" onClick={onBuildGeneTree}>
-              {S.recon.emptyBuild}
+              {tr('构建基因树', 'Build gene tree')}
             </button>
+          )}
+          {onCopySpeciesTree && (
             <button className="btn" onClick={onCopySpeciesTree}>
-              {S.recon.emptyCopy}
+              {tr('构建物种树', 'Build species tree')}
             </button>
-            <button className="btn" onClick={() => void file.actionImportGeneTree()}>
-              {S.recon.emptyImport}
-            </button>
-            <button
-              className="btn"
-              title={S.recon.loadReconSampleTitle}
-              onClick={() => openSample(SAMPLE_PROJECTS.find((d) => d.id === 'recon-family')!)}
-            >
-              {S.recon.loadReconSample}
-            </button>
+          )}
+          <button className="btn" onClick={() => void file.actionImportTree()}>
+            {tr('导入物种树', 'Import species tree')}
+          </button>
+          <button className="btn" onClick={() => void file.actionImportGeneTree()}>
+            {tr('导入基因树', 'Import gene tree')}
+          </button>
+        </div>
+        <div className="sample-picker">
+          <div className="sample-picker-title">{S.empty.samplePickerTitle}</div>
+          {/* 用户反馈：ONE reconciliation sample, centered. */}
+          <div className="sample-card-grid single">
+            {SAMPLE_PROJECTS.filter((d) => d.id === 'recon-family').map((d) => (
+              <button
+                key={d.id}
+                className="sample-card"
+                title={tr(d.desc, d.descEn)}
+                onClick={() => openSample(d)}
+              >
+                {tr(d.label, d.labelEn)}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -578,13 +658,13 @@ export function ReconciliationView({
               language (thick tubes vs thin gene lines) must be readable without
               guessing (§6.5). */}
           <div className="recon-legend" aria-label={S.recon.legendTitle}>
-            <span className="legend-item"><span className="legend-swatch sw-tube" />{S.recon.legendTube}</span>
-            <span className="legend-item"><span className="legend-swatch sw-gene" />{S.recon.legendGene}</span>
-            <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
-            <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
-            <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
-            <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
-            <span className="legend-item"><span className="legend-swatch sw-inferred" />{S.recon.legendInferred}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-tube" />{S.recon.legendTube}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-gene" />{S.recon.legendGene}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-dup" />{S.recon.legendDup}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-loss" />{S.recon.legendLoss}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-inferred" />{S.recon.legendInferred}</span>
           </div>
         </>
       ) : (
@@ -603,19 +683,19 @@ export function ReconciliationView({
               title={S.recon.paneSpecies}
               subtitle={S.recon.analysisCladogram}
               nodeCount={speciesNodeCount}
-              zoomPercent={Math.round(speciesT.scale * 100)}
               nodeMeta={speciesMeta}
               stubs={speciesStubs}
               side="species"
               ariaLabel={S.recon.ariaSpeciesPane}
               options={options}
               onNodeClick={onSpeciesNodeClick}
+              badge={reconEditTarget === 'species' ? S.recon.editingBadge : undefined}
+              badgeTone={reconEditTarget === 'species' ? 'editing' : 'neutral'}
             />
-            <div className="recon-bridge" aria-hidden="true">
-              <span className="recon-bridge-count">
-                {S.recon.mapCount(mappingLines.reduce((n, l) => n + l.bundleCount, 0))}
-              </span>
-            </div>
+            {/* 用户反馈：the bridge carries no "映射 N 条" caption pill — the
+                count lives in the status bar and the lines speak for
+                themselves. */}
+            <div className="recon-bridge" aria-hidden="true" />
             <ReconPane
               doc={entry.doc}
               layout={geneLayout!}
@@ -625,11 +705,10 @@ export function ReconciliationView({
               onFit={fitBoth}
               onResetZoom={resetBoth}
               title={S.recon.paneGene}
-              subtitle={`${entry.name} · ${summary ? `${summary.mappedInternal}/${summary.totalInternal}` : ''}`}
-              badge={S.recon.readonlyPane}
-              badgeTone="readonly"
+              subtitle={`${entry.name}${summary ? ` (${summary.mappedInternal}/${summary.totalInternal})` : ''}`}
+              badge={reconEditTarget === 'gene' ? S.recon.editingBadge : S.recon.readonlyPane}
+              badgeTone={reconEditTarget === 'gene' ? 'editing' : 'readonly'}
               nodeCount={geneNodeCount}
-              zoomPercent={Math.round(geneT.scale * 100)}
               nodeMeta={geneMeta}
               stubs={geneStubs}
               side="gene"
@@ -643,18 +722,23 @@ export function ReconciliationView({
               width={hostSize.w}
               height={hostSize.h}
               showSelectedLabels
+              onLineHover={(gid) => {
+                // M35: line hover drives the same gene-hover pipeline the pane
+                // nodes use, so both endpoints light up together.
+                setReconHoverGene(gid);
+              }}
             />
           </div>
           {/* Legend: a layout row, never an overlay — the colour language of the
               mapping lines must be readable without guessing (§5.6.2). */}
           <div className="recon-legend" aria-label={S.recon.legendTitle}>
-            <span className="legend-item"><span className="legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
-            <span className="legend-item"><span className="legend-swatch sw-dup" />{S.recon.legendDup}</span>
-            <span className="legend-item"><span className="legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
-            <span className="legend-item"><span className="legend-swatch sw-unresolved" />{S.recon.legendUnresolved}</span>
-            <span className="legend-item"><span className="legend-swatch sw-tip" />{S.recon.legendTipLine}</span>
-            <span className="legend-item"><span className="legend-swatch sw-internal" />{S.recon.legendInternalLine}</span>
-            <span className="legend-item"><span className="legend-swatch sw-loss" />{S.recon.legendLoss}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-sigma" />{S.recon.legendSigma}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-dup" />{S.recon.legendDup}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-transfer" />{S.recon.legendTransfer}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-unresolved" />{S.recon.legendUnresolved}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-tip" />{S.recon.legendTipLine}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-internal" />{S.recon.legendInternalLine}</span>
+            <span className="recon-legend-item"><span className="recon-legend-swatch sw-loss" />{S.recon.legendLoss}</span>
           </div>
         </>
       )}

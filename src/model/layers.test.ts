@@ -221,8 +221,13 @@ describe('layer switching after a character deletion', () => {
     const diff = layerDiff(p, layer1, layer2);
     expect(diff.stateDiffs.length).toBe(1);
     expect(diff.stateDiffs[0].nodeId).toBe(p.rootId);
-    expect(diff.stateDiffs[0].a).toBe(s0);
-    expect(diff.stateDiffs[0].b).toBe(s1);
+    // S06 (Sonus): the diff must speak in state LABELS, never raw state ids —
+    // the compare view used to print `主假说=XEf45Gclxe ↔ …` random ids.
+    const labels = char.states.map((s) => s.label);
+    expect(diff.stateDiffs[0].a).toBe(labels[0]);
+    expect(diff.stateDiffs[0].b).toBe(labels[1]);
+    expect(diff.stateDiffs[0].a).not.toBe(s0);
+    expect(diff.stateDiffs[0].b).not.toBe(s1);
     expect(diff.eventsOnlyB.length).toBe(1);
     expect(diff.eventsOnlyA.length).toBe(0);
 

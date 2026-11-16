@@ -235,12 +235,16 @@ export function useCanvasGestures(
     gestureRef.current = { kind: 'none' };
     // A pan has already been painted frame by frame; "cancel" must not leave
     // the store behind the visible transform.
-    if (wasPanning) viewControls.end();
+    if (wasPanning) {
+      viewControls.end();
+      // M36: restore the resting cursor when a pan is interrupted.
+      svgRef.current?.style.setProperty('cursor', '');
+    }
     setConnect(null);
     setDropTargetId(null);
     setSnapGuide(null);
     setMarquee(null);
-  }, [viewControls]);
+  }, [viewControls, svgRef]);
 
   // A gesture can end without ever delivering `pointerup`: the window losing
   // focus or being hidden (Alt-Tab, OS dialog, mobile backgrounding), or the
@@ -275,7 +279,8 @@ export function useCanvasGestures(
     // attributed group (custom edges draw a fat transparent hit path), so
     // reading e.target's own attributes misses and broke edge re-selection.
     const hit = hitTargetFor(e.target);
-    let { role, nodeId, edgeId } = hit;
+    const { edgeId } = hit;
+    let { role, nodeId } = hit;
     // Node hit circles are world-space (and no longer grow at low zoom). Fall
     // back to the same screen-space nearest-node search the drop targets use,
     // so a press near a node still selects it when the tree is zoomed out.
@@ -298,6 +303,10 @@ export function useCanvasGestures(
     // button pans, anywhere") silently broke over every node.
     if (spaceHeld.current || e.button === 1) {
       viewControls.begin();
+      // M36 (UI_UX_REVIEW): panning never told the user — the cursor stayed
+      // default/crosshair. grab → grabbing while the gesture lives, restored
+      // imperatively (no React re-render mid-pan).
+      svgRef.current?.style.setProperty('cursor', 'grabbing');
       gestureRef.current = { kind: 'pan', startScreen: screen, startView: view };
       return;
     }
@@ -447,6 +456,8 @@ export function useCanvasGestures(
     }
     if (g.kind === 'none' || !svg) return;
     const screen = eventScreenPoint(svg, e);
+    // M36: any gesture end restores the resting cursor (the pan set grabbing).
+    svg.style.setProperty('cursor', '');
 
     switch (g.kind) {
       case 'pan':

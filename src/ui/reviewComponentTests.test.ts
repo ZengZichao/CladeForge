@@ -75,14 +75,26 @@ describe('Toaster', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  it('dismisses a toast when clicked (error toasts are not click-through traps)', () => {
+  it('dismisses via the explicit close button, not a whole-strip click (M40)', () => {
     mount(createElement(Toaster));
     act(() => notify.error('Something failed'));
     expect(text()).toContain('Something failed');
+    // The close button carries an accessible name (a11ySource guards icon-only
+    // buttons) and is the ONE dismissal control.
+    const closeBtn = host!.querySelector<HTMLButtonElement>('.toast-close');
+    expect(closeBtn).not.toBeNull();
+    expect(closeBtn!.getAttribute('aria-label')).toBeTruthy();
+    act(() => closeBtn!.click());
+    expect(text()).not.toContain('Something failed');
+  });
+
+  it('clicking the toast body alone does NOT dismiss it (M40)', () => {
+    mount(createElement(Toaster));
+    act(() => notify.error('Something failed'));
     const toastEl = host!.querySelector('.toast-error');
     expect(toastEl).not.toBeNull();
     act(() => toastEl!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(text()).not.toContain('Something failed');
+    expect(text()).toContain('Something failed');
   });
 });
 

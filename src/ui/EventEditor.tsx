@@ -10,11 +10,9 @@ import { useState } from 'react';
 import {
   addEvent,
   removeEvent,
-  toggleEventTrigger,
   updateEvent,
 } from '../model/treeOps';
 import {
-  EVENT_BADGE_TEXT_MAX,
   EVENT_MARKER_SHAPES,
   EVENT_MARKER_SIZE_MAX,
   EVENT_MARKER_SIZE_MIN,
@@ -22,88 +20,45 @@ import {
   eventBadgeExtent,
   eventBadgeFontSize,
   eventBadgeText,
-  eventCatalogue,
   eventMarkerColor,
   eventMarkerShape,
   eventMarkerSize,
-  eventMarkerTextVisible,
   eventDisplayLabel,
-  eventTypeGroup,
   eventTypeLabel,
   eventsForNode,
   findEventType,
   newEvent,
 } from '../model/events';
-import type { Confidence, EvolutionaryEvent, Project, TreeNode } from '../model/types';
+import type { EvolutionaryEvent, Project, TreeNode } from '../model/types';
 import { eventMarkerPath } from '../canvas/markerGeometry';
-import { CheckboxField, ColorField, Field, TextField } from './fields';
+import { ColorField, Field, TextField } from './fields';
 import { SliderNumberField } from './SliderNumberField';
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { requestConfirm } from './confirmDialog';
-import { notify } from './toast';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
-function TypeOptions({ project }: { project: Project }) {
-  // The catalogue is PROJECT-EXTENSIBLE: user-defined types ride
-  // project.customEventTypes (an importable/exportable ontology file), so a
-  // microbial figure can make "genome reduction" a first-class badge instead
-  // of forcing everything through the grey CU catch-all.
-  const catalogue = eventCatalogue(project);
-  const groups = Array.from(new Set(catalogue.map((t) => t.group)));
-  return (
-    <>
-      {groups.map((g) => (
-        <optgroup key={g} label={eventTypeGroup(catalogue.find((t) => t.group === g)!)}>
-          {catalogue.filter((t) => t.group === g).map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.code} · {eventTypeLabel(t)}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </>
-  );
-}
+/**
+ * Searchable event-type picker (2026-11-15 FN-2).
+ *
+ * The catalogue has 27 built-in types across nine groups; a plain `<select>`
+ * made finding one a scroll-through-the-list chore. This keeps the same
+ * catalogue and groups but adds a live filter, and collapses into a compact
+ * closed button when idle. It renders INLINE (not a floating popup): the
+ * inspector is a scroll container, and an absolutely positioned panel would be
+ * clipped by it — the exact bug the toolbar dropdowns had to escape with a
+ * portal.
+ */
+/**
+ * A15: pinyin search aliases for the 27 built-in event types, keyed by type
+ * id. Search-only data (never displayed); full syllables + close variants so
+ * a query like "kuosan" or "mianjue" finds the type the way the command
+ * palette's pinyin aliases do.
+ */
 
-/** Prompt for a new custom event type and append it to the project ontology. */
-function addCustomEventType(apply: Apply, project: Project): void {
-  const label = window.prompt(tr('新事件类型名称', 'New event type name'));
-  if (!label?.trim()) return;
-  const clean = label.trim().slice(0, 24);
-  const meta = window.prompt(
-    tr(
-      '英文标签与两位代号（用逗号分隔，如“Gene loss, GL”；可留空自动生成）',
-      'English label and two-letter code, comma-separated (e.g. “Gene loss, GL”; leave blank to auto-generate)',
-    ),
-  );
-  const [rawLabelEn, rawCode] = (meta ?? '').split(',').map((part) => part.trim());
-  const labelEn = rawLabelEn || clean;
-  const code =
-    (rawCode ?? '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() ||
-    clean.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() ||
-    'CU';
-  const id = `user-${clean.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
-  apply((d) => {
-    d.customEventTypes = [
-      ...(d.customEventTypes ?? []),
-      {
-        id,
-        label: clean,
-        labelEn,
-        group: tr('自定义', 'Custom'),
-        groupEn: 'Custom',
-        code,
-        color: '#64748b',
-        target: 'both',
-      },
-    ];
-  });
-  notify.success(tr(`已添加自定义事件类型「${clean}」`, `Added custom event type "${clean}"`));
-  void project;
-}
-
+/** M28: a real dialog for defining a custom event type — named fields with
+ *  labels, IME-safe commit, Escape close, no window.prompt. */
 function OneEvent({
   event,
   project,
@@ -118,7 +73,6 @@ function OneEvent({
   const [open, setOpen] = useState(false);
   const id = event.id;
   const up = (patch: Partial<EvolutionaryEvent>) => apply((d) => updateEvent(d, id, patch));
-  const others = project.events.filter((e) => e.id !== id);
   const badgeText = eventBadgeText(event, project);
   const badgeExtent = eventBadgeExtent(event);
 
@@ -167,11 +121,10 @@ function OneEvent({
 
       {open && (
         <div className="event-editor">
-          <Field label={S.event.type}>
-            <select value={event.typeId} onChange={(e) => up({ typeId: e.target.value })}>
-              <TypeOptions project={project} />
-            </select>
-          </Field>
+          {/* 用户反馈：no predefined event types — the user specifies shape,
+              fill, size, stroke colour, stroke width, title and the position
+              along the branch. Confidence / evidence / against / triggers are
+              gone from the UI. */}
           <Field label={S.event.target}>
             <select
               value={event.target}
@@ -183,24 +136,15 @@ function OneEvent({
               </option>
             </select>
           </Field>
-          <Field label={S.event.label}>
+          <Field label={tr('事件标题', 'Event title')}>
             <TextField
               value={event.label ?? ''}
               placeholder={S.event.labelPlaceholder}
               onCommit={(v) => up({ label: v })}
             />
           </Field>
-          <Field label={S.event.note}>
-            <TextField value={event.note ?? ''} onCommit={(v) => up({ note: v })} />
-          </Field>
-
-          {/* Marker-style subsection. It must NOT be wrapped in `.field` — that
-              class is a horizontal label+control ROW, so wrapping the whole
-              block in it crushed the title into a vertical one-character
-              column and squeezed every nested control unreadably narrow. */}
           <div className="event-marker-style">
             <div className="event-marker-style-title">{S.event.markerSection}</div>
-            <div className="hint event-marker-hint">{S.event.markerHint}</div>
             <Field label={S.event.markerShape}>
               <select
                 value={eventMarkerShape(event)}
@@ -223,6 +167,13 @@ function OneEvent({
                 recipe={(v) => (d) => updateEvent(d, id, { markerSize: clampEventMarkerSize(v) })}
               />
             </Field>
+            <Field label={tr('填充颜色', 'Fill colour')}>
+              <ColorField
+                value={event.markerFill ?? 'var(--surface)'}
+                ariaLabel={tr('填充颜色', 'Fill colour')}
+                onChange={(v) => up({ markerFill: v })}
+              />
+            </Field>
             <Field label={S.event.markerColor}>
               <ColorField
                 value={eventMarkerColor(event, project)}
@@ -230,89 +181,28 @@ function OneEvent({
                 onChange={(v) => up({ markerColor: v })}
               />
             </Field>
-            <CheckboxField
-              label={S.event.markerShowText}
-              checked={eventMarkerTextVisible(event)}
-              onChange={(v) => up({ markerShowText: v })}
-            />
-            <Field label={S.event.markerText}>
-              <TextField
-                value={event.markerText ?? ''}
-                placeholder={S.event.markerTextPlaceholder}
-                onCommit={(v) => {
-                  const text = v.slice(0, EVENT_BADGE_TEXT_MAX);
-                  // Typing custom text is an explicit request to see it.
-                  up(text.trim() ? { markerText: text, markerShowText: true } : { markerText: text });
-                }}
+            <Field label={tr('描边粗细', 'Stroke width')}>
+              <SliderNumberField
+                value={event.markerStrokeWidth ?? 2}
+                min={0.5}
+                max={8}
+                step={0.5}
+                unit="px"
+                recipe={(v) => (d) => updateEvent(d, id, { markerStrokeWidth: v })}
               />
             </Field>
-            {(event.markerShape ||
-              event.markerSize !== undefined ||
-              event.markerColor ||
-              event.markerText ||
-              event.markerShowText !== undefined) && (
-              <div className="row-actions">
-                <button
-                  className="btn"
-                  onClick={() =>
-                    up({
-                      markerShape: undefined,
-                      markerSize: undefined,
-                      markerColor: undefined,
-                      markerText: undefined,
-                      markerShowText: undefined,
-                    })
-                  }
-                >
-                  {S.event.markerReset}
-                </button>
-              </div>
+            {event.target === 'branch' && (
+              <Field label={tr('在分支上的相对位置', 'Position along the branch')}>
+                <SliderNumberField
+                  value={event.position ?? 0.5}
+                  min={0.05}
+                  max={0.95}
+                  step={0.05}
+                  recipe={(v) => (d) => updateEvent(d, id, { position: v })}
+                />
+              </Field>
             )}
           </div>
-
-          <Field label={S.confidence.label}>
-            <select
-              value={event.confidence ?? ''}
-              onChange={(e) => up({ confidence: (e.target.value || undefined) as Confidence | undefined })}
-            >
-              <option value="">{S.confidence.none}</option>
-              <option value="high">{S.confidence.high}</option>
-              <option value="medium">{S.confidence.medium}</option>
-              <option value="low">{S.confidence.low}</option>
-            </select>
-          </Field>
-          <Field label={S.confidence.support}>
-            <TextField value={event.support ?? ''} onCommit={(v) => up({ support: v })} />
-          </Field>
-          <Field label={S.confidence.against}>
-            <TextField value={event.against ?? ''} onCommit={(v) => up({ against: v })} />
-          </Field>
-
-          <div className="event-triggers">
-            <label className="event-triggers-label">{S.event.triggers}</label>
-            {others.length === 0 ? (
-              <div className="hint">{S.event.triggersNone}</div>
-            ) : (
-              others.map((o) => {
-                const code = eventBadgeText(o, project);
-                return (
-                  <label key={o.id} className="event-trigger-row">
-                    <input
-                      type="checkbox"
-                      checked={event.triggers.includes(o.id)}
-                      onChange={() => apply((d) => toggleEventTrigger(d, id, o.id))}
-                    />
-                    <span>
-                      {code ? `${code} · ` : ''}
-                      {eventDisplayLabel(o, project)}
-                      {project.nodes[o.nodeId]?.label ? ` (${project.nodes[o.nodeId].label})` : ''}
-                    </span>
-                  </label>
-                );
-              })
-            )}
-          </div>
-
           <div className="field row-actions">
             <button
               className="btn danger"
@@ -353,12 +243,6 @@ export function EventEditor({
   const events = eventsForNode(project, node.id);
   const isRoot = node.parentId === null;
 
-  const addTyped = (typeId: string) => {
-    const def = findEventType(typeId, project);
-    const target: 'node' | 'branch' = def?.target === 'branch' && !isRoot ? 'branch' : 'node';
-    apply((d) => addEvent(d, newEvent(typeId, target, node.id)));
-  };
-
   return (
     <Section
       title={S.event.section}
@@ -372,19 +256,14 @@ export function EventEditor({
         <OneEvent key={e.id} event={e} project={project} apply={apply} isRoot={isRoot} />
       ))}
       <Field label={S.event.add}>
-        <select
-          value=""
-          onChange={(e) => {
-            if (e.target.value) addTyped(e.target.value);
+        <button
+          className="btn"
+          onClick={() => {
+            const target: 'node' | 'branch' = isRoot ? 'node' : 'branch';
+            apply((d) => addEvent(d, newEvent('custom', target, node.id)));
           }}
         >
-          <option value="">…</option>
-          <TypeOptions project={project} />
-        </select>
-      </Field>
-      <Field label={tr('新建自定义事件类型', 'New custom event type')}>
-        <button className="btn" onClick={() => addCustomEventType(apply, project)}>
-          ＋ {tr('定义新类型…', 'Define a new type…')}
+          ＋ {tr('添加事件', 'Add event')}
         </button>
       </Field>
     </Section>

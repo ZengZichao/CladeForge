@@ -237,6 +237,15 @@ export interface EvolutionaryEvent {
    * shown with no custom text.
    */
   markerText?: string;
+  /** 用户反馈: badge FILL colour override (default = the pane surface). */
+  markerFill?: string;
+  /** 用户反馈: badge outline WIDTH override in world px (default 2). */
+  markerStrokeWidth?: number;
+  /**
+   * 用户反馈: position along the incoming branch for target='branch' events,
+   * 0 = parent end, 1 = child end (default 0.5 = midpoint).
+   */
+  position?: number;
 }
 
 /** Lifecycle of a named hypothesis layer. */
@@ -636,6 +645,10 @@ export interface StyleDefaults {
  * the branch lengths / ages / traits were derived from, and by whom.
  */
 export interface ProjectProvenance {
+  /** Who made this document (person or team). Shown in exports' footer. */
+  author?: string;
+  /** One-line description of what the document asserts. */
+  description?: string;
   topologySource?: string;
   lengthSource?: string;
   dateSource?: string;
@@ -786,10 +799,10 @@ export const APP_VERSION: string =
 export const DEFAULT_NODE_STYLE: NodeStyle = {
   shape: 'circle',
   size: 6,
-  fill: '#ffffff',
-  stroke: '#222222',
+  fill: '#fcfcfc',
+  stroke: '#202020',
   strokeWidth: 1.5,
-  labelColor: '#111111',
+  labelColor: '#202020',
   fontSize: 14,
   fontStyle: 'normal',
   fontWeight: 400,

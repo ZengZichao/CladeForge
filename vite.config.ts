@@ -27,6 +27,11 @@ const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': new URL('./src', import.meta.url).pathname,
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

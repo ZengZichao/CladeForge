@@ -14,44 +14,72 @@ const source = (file: string): string =>
 const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
 
 describe('requested layout fixes', () => {
-  it('replaces the recon empty-state rows with one 2x2 grid and no exit button', () => {
+  it('keeps the recon empty state to a single status line, with creation actions in the panel', () => {
+    // M9 (2026-11-15 review) put ALL FOUR creation paths on the empty stage;
+    // the 用户反馈 round re-shaped the stage further: the app wordmark, the
+    // three action buttons, and the reconciliation sample as a rounded CARD
+    // (the standard samples live on the standard front page). The stage still
+    // must not offer an exit (leaving lives in the header switch and the rail).
     const view = source('../canvas/ReconciliationView.tsx');
-    expect(view).toContain('className="recon-empty-actions"');
-    expect(view).toContain('S.recon.emptyBuild');
-    expect(view).toContain('S.recon.emptyCopy');
-    expect(view).toContain('S.recon.emptyImport');
-    expect(view).toContain('S.recon.loadReconSample');
+    expect(view).toContain('className="recon-empty-note"');
+    expect(view).toContain('S.recon.emptyReconTitle');
+    // 用户反馈: FOUR entries on the empty stage — 构建基因树 / 构建物种树 /
+    // 导入物种树 / 导入基因树 — as a 2×2 grid.
+    expect(view).toContain("tr('构建基因树', 'Build gene tree')");
+    expect(view).toContain("tr('构建物种树', 'Build species tree')");
+    expect(view).toContain("tr('导入物种树', 'Import species tree')");
+    expect(view).toContain("tr('导入基因树', 'Import gene tree')");
+    expect(view).toContain("d.id === 'recon-family'");
+    expect(view).toContain('empty-wordmark');
+    expect(view).toContain('sample-card');
     expect(view).not.toContain('S.recon.exitView');
-    expect(css).toMatch(
-      /\.recon-empty-card \.recon-empty-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
-    );
+    expect(css).toMatch(/\.recon-empty-note\s*\{/);
+    expect(css).toMatch(/\.recon-empty-actions\s*\{/);
+    expect(css).toMatch(/grid-template-columns: 1fr 1fr/);
   });
 
-  it('places add-children immediately after the view-mode switch', () => {
+  it('keeps the editing toolbar free of the view-mode switch (it lives in HeaderActions)', () => {
+    // 2026-11-15: the 标准/协调 switch is a document-level mode change, so it
+    // moved out of the editing row into HeaderActions, ahead of Save project.
     const toolbar = source('Toolbar.tsx');
-    const viewSwitch = toolbar.indexOf('<ViewModeSegment />');
-    const addChildren = toolbar.indexOf('{!reconMode && (');
-    expect(viewSwitch).toBeGreaterThanOrEqual(0);
-    expect(addChildren).toBeGreaterThan(viewSwitch);
-    expect(toolbar.indexOf('S.toolbar.addChildren')).toBeGreaterThan(viewSwitch);
+    const editing = toolbar.indexOf('export function Toolbar');
+    const actions = toolbar.indexOf('export function HeaderActions');
+    expect(editing).toBeGreaterThan(0);
+    expect(actions).toBeGreaterThan(editing);
+    // The editing row between the two definitions carries no switch.
+    expect(toolbar.slice(editing, actions)).not.toContain('<ViewModeSegment />');
+    const viewSwitch = toolbar.indexOf('<ViewModeSegment />', actions);
+    const save = toolbar.indexOf('className="btn primary header-save"', actions);
+    expect(viewSwitch).toBeGreaterThan(actions);
+    expect(save).toBeGreaterThan(viewSwitch);
+    // The editing row keeps undo/redo first and add-children after. The
+    // 用户反馈 round added the blank-document gate (hasTree) to the guard.
+    const addChildren = toolbar.indexOf('{!reconMode && hasTree && (', editing);
+    expect(addChildren).toBeGreaterThan(toolbar.indexOf('<UndoRedo />', editing));
+    expect(toolbar.slice(editing, actions)).toContain('documentHasTree');
   });
 
-  it('removes reconciliation from both standard navigation rails', () => {
-    expect(source('NavigationRail.tsx')).not.toContain("id: 'recon'");
+  it('removes reconciliation from the standard navigation surfaces', () => {
     const workspace = source('StandardWorkspace.tsx');
     expect(workspace).not.toContain("id: 'recon'");
     expect(workspace).not.toContain("case 'recon'");
   });
 
-  it('updates module counts and shortcuts after removing the recon rail entry', () => {
-    expect(ZH_STRINGS.tour.step3Desc).toContain('六个模块');
-    expect(ZH_STRINGS.tour.step3Desc).not.toContain('协调（基因树 DTL）');
-    expect(EN_STRINGS.tour.step3Desc).toContain('Six modules');
-    expect(EN_STRINGS.tour.step3Desc).not.toContain('Reconciliation');
+  it('drops the module rail entirely — one plain merged left panel', () => {
+    const workspace = source('StandardWorkspace.tsx');
+    expect(workspace).not.toContain('NavigationRail');
+    expect(workspace).not.toContain('BottomTabBar');
+  });
+
+  it('updates module counts and shortcuts after the rail collapsed to one module', () => {
+    expect(ZH_STRINGS.tour.step3Desc).toContain('合并面板');
+    expect(ZH_STRINGS.tour.step3Desc).not.toContain('五个模块');
+    expect(EN_STRINGS.tour.step3Desc).toContain('merged panel');
+    expect(EN_STRINGS.tour.step3Desc).not.toContain('Five modules');
     const rows = SHORTCUT_GROUPS().flatMap((group) => group.rows);
-    expect(rows.some((row) => row.keys === '⌘1 … ⌘6')).toBe(true);
-    expect(rows.some((row) => row.keys === '⌘1 … ⌘7')).toBe(false);
-    expect(source('../App.tsx')).toContain('k <= \'6\'');
+    expect(rows.some((row) => row.keys === '⌘1')).toBe(true);
+    expect(rows.some((row) => row.keys === '⌘1 … ⌘5')).toBe(false);
+    expect(source('../App.tsx')).toContain("detail: 'edit'");
     expect(source('../App.tsx')).not.toContain("'recon', 'time'");
   });
 

@@ -12,6 +12,7 @@
 
 import { tr } from '../ui/strings';
 import type {
+  Character,
   EvolutionaryEvent,
   HypothesisMeta,
   NodeId,
@@ -266,10 +267,20 @@ export interface LayerDiff {
   eventsOnlyB: EvolutionaryEvent[];
 }
 
-/** Format one assignment for a diff table cell. */
-function formatAssignment(v: string | number | string[] | undefined): string | undefined {
+/** Format one assignment for a diff table cell.
+ *  S06 (Sonus): a discrete assignment stores the STATE ID — the compare view
+ *  used to print `主假说=XEf45Gclxe ↔ 备选假说=W5aVb7-l-N`, leaving the user to
+ *  decode random ids. Resolve through the character definition; polymorphic
+ *  sets resolve member-wise, and unresolved ids fall back to the raw value
+ *  (diagnostics only) instead of ever showing a naked id as a primary readout. */
+function formatAssignment(v: string | number | string[] | undefined, ch?: Character): string | undefined {
   if (v === undefined) return undefined;
-  if (Array.isArray(v)) return v.join('/');
+  if (Array.isArray(v)) {
+    return v.map((s) => ch?.states.find((st) => st.id === s)?.label ?? s).join('/');
+  }
+  if (typeof v === 'string' && ch?.type === 'discrete') {
+    return ch.states.find((st) => st.id === v)?.label ?? v;
+  }
   return String(v);
 }
 
@@ -314,8 +325,8 @@ export function layerDiff(project: Project, aId: string, bId: string): LayerDiff
         nodeId: nid,
         characterId: cid,
         characterName: characterName.get(cid) ?? cid,
-        a: formatAssignment(va),
-        b: formatAssignment(vb),
+        a: formatAssignment(va, project.characters.find((c) => c.id === cid)),
+        b: formatAssignment(vb, project.characters.find((c) => c.id === cid)),
       });
     }
   }

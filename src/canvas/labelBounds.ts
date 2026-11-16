@@ -10,6 +10,7 @@ import {
   hypothesisNoteFontSize,
   hypothesisNotePlacement,
   hypothesisNoteText,
+  collapsedLabelSuffix,
   labelAngleOf,
   labelPlacement,
 } from './labels';
@@ -35,6 +36,13 @@ export interface LabelBoxOptions {
   widthFactor?: number;
   /** Half line-height as a multiple of font-size. Default 1 (fit safety). */
   heightFactor?: number;
+  /**
+   * 用户反馈: treat the label as sitting at its BASE placement (offsets
+   * zeroed). The event-badge planner passes this so dragging 标签 X/Y 偏移
+   * keeps the event graphics where they are instead of re-planning around the
+   * moving label.
+   */
+  ignoreLabelOffsets?: boolean;
 }
 
 /**
@@ -60,8 +68,8 @@ export function labelBoxForNode(
     node.childrenIds.length === 0,
     style.size,
     style.labelPosition,
-    style.labelOffsetX,
-    style.labelOffsetY,
+    options.ignoreLabelOffsets ? 0 : style.labelOffsetX,
+    options.ignoreLabelOffsets ? 0 : style.labelOffsetY,
     labelAngleFor(project, positions, node),
   );
   // Italic / bold are wider than the average advance, hence the 1.05 factor.
@@ -81,7 +89,11 @@ export function labelBoxForNode(
     }
   };
   if (showLabel) {
-    const w = estimateLabelWidth(node.label, style.fontSize) * widthFactor;
+    // A2: a collapsed node's label carries the hidden-tip count suffix; the
+    // box must reserve room for it or the collision planner under-estimates
+    // the label and lets siblings overlap the count.
+    const labelText = node.label + collapsedLabelSuffix(project, node);
+    const w = estimateLabelWidth(labelText, style.fontSize) * widthFactor;
     const x = pos.x + place.dx;
     const y = pos.y + place.dy;
     let x0 = x;

@@ -150,6 +150,17 @@ function apeTree(
 }
 
 /**
+ * Render a per-character Mk rate as an R numeric literal. Rounded to 6
+ * significant digits so the exported script (and the committed cross-check
+ * fixtures) are byte-identical across CPU architectures: the x86_64 CI runner
+ * and an arm64 local build disagree by ~3e-7 in the last bits, which would make
+ * the fixtures drift on every run.
+ */
+function rateLiteral(rate: number | null | undefined): string {
+  return rate === undefined || rate === null ? 'NULL' : rate.toPrecision(6);
+}
+
+/**
  * Generate a standalone R script re-running the project's inference and drawing
  * a figure from the same data. Discrete characters with ≥2 states are analysed;
  * continuous characters are exported as data only.
@@ -246,7 +257,7 @@ export function buildRScript(project: Project): string {
             ]
           : []),
         `    cost = ${cost},`,
-        `    rate = ${charRates.get(c.id) === undefined || charRates.get(c.id) === null ? 'NULL' : String(charRates.get(c.id))},`,
+        `    rate = ${rateLiteral(charRates.get(c.id))},`,
         `    tips = c(${tips.join(', ')})`,
         '  )',
       ].join('\n'),

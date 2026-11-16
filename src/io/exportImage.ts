@@ -21,6 +21,7 @@ import {
   hypothesisNoteFontSize,
   hypothesisNotePlacement,
   hypothesisNoteText,
+  collapsedLabelSuffix,
   labelPlacement,
 } from '../canvas/labels';
 import { labelAngleFor, labelBoxForNode, estimateLabelWidth, type Box } from '../canvas/labelBounds';
@@ -77,7 +78,7 @@ import {
 } from '../canvas/colors';
 
 const FONT_FAMILY =
-  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif";
 /** Exported for the drift guard in `exportImage.test.ts`, which compares this
  *  literal with `--font` in `styles/app.css`. Not for use in the UI. */
 export const FONT_FAMILY_FOR_TEST = FONT_FAMILY;
@@ -653,7 +654,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         const ly = pos.y + place.dy + nudge;
         const rot = style.labelRotation ? ` transform="rotate(${num(style.labelRotation, 0)} ${lx} ${ly})"` : '';
         parts.push(
-          `<text x="${lx}" y="${ly}" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" font-size="${num(style.fontSize, 12)}" font-style="${style.fontStyle === 'italic' ? 'italic' : 'normal'}" font-weight="${num(Number(style.fontWeight), 400)}"${rot} font-family="${FONT_FAMILY}" fill="${safeColour(style.labelColor)}">${escXml(node.label)}</text>`,
+          `<text x="${lx}" y="${ly}" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" font-size="${num(style.fontSize, 12)}" font-style="${style.fontStyle === 'italic' ? 'italic' : 'normal'}" font-weight="${num(Number(style.fontWeight), 400)}"${rot} font-family="${FONT_FAMILY}" fill="${safeColour(style.labelColor)}">${escXml(node.label + collapsedLabelSuffix(project, node))}</text>`,
         );
       }
       if (note) {
@@ -888,7 +889,7 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX} ${minY} ${width} ${height}">`,
     metaBits.length
-      ? `  <metadata>${escXml(metaBits.join(' · '))}</metadata>`
+      ? `  <metadata>${escXml(metaBits.join('; '))}</metadata>`
       : '',
     defs.length || grayscaleFilter ? `<defs>${grayscaleFilter}${defs.join('')}</defs>` : '',
     opts.grayscale ? `<g${grayscaleAttr}>\n${parts.join('\n')}\n</g>` : parts.join('\n'),
@@ -919,21 +920,48 @@ export async function toPngBlob(
   opts: ExportOptions = {},
   onClamp?: (requested: number, effective: number) => void,
 ): Promise<Blob> {
+  const { canvas, s } = await rasteriseToCanvas(project, scale, opts, onClamp);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(tr('PNG 编码失败', 'PNG encoding failed')))), 'image/png');
+  });
+  const dpi = Math.round(s * 96);
+  if (dpi !== 96) {
+    try {
+      return await withPngDpi(blob, dpi);
+    } catch {
+      return blob; // metadata is best-effort; the pixels are already correct
+    }
+  }
+  return blob;
+}
+
+/**
+ * Shared raster path for the bitmap exports (PNG, TIFF): build the WYSIWYG
+ * SVG, render it into a canvas at the requested pixel scale, clamping the
+ * scale to the browser's canvas budgets (side length AND total area). A6 (review
+ * §4.2): extracted from `toPngBlob` so the TIFF path inherits the exact same
+ * budgets and the DPI-honest clamp message instead of a second copy drifting.
+ *
+ * The original comment stands: browsers cap canvas dimensions (~16k px per
+ * side) AND total bitmap area; a very large tree at the requested scale would
+ * silently fail in toBlob. Clamp the scale to the largest value that still
+ * fits both budgets, keeping aspect ratio and never upscaling.
+ */
+async function rasteriseToCanvas(
+  project: Project,
+  scale: number,
+  opts: ExportOptions,
+  onClamp?: (requested: number, effective: number) => void,
+): Promise<{ canvas: HTMLCanvasElement; s: number }> {
   const { svg, width, height } = buildSVG(project, opts);
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   const img = new Image();
   img.decoding = 'sync';
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
-    img.onerror = () => reject(new Error(tr('渲染 SVG 为位图失败，无法导出 PNG', 'Failed to render the SVG for PNG export')));
+    img.onerror = () => reject(new Error(tr('渲染 SVG 为位图失败，无法导出位图', 'Failed to render the SVG for the bitmap export')));
     img.src = url;
   });
-  // Browsers cap canvas dimensions (~16k px per side) AND total bitmap area; a
-  // very large tree at the requested scale would silently fail in toBlob. Clamp
-  // the scale to the largest value that still fits both budgets, keeping aspect
-  // ratio and never upscaling. The area budget matters as much as the side
-  // length: 16384² px is ~1 GB of RGBA, well past what WKWebView allocates,
-  // while 67 Mpx ≈ 268 MB still allows an 8192² figure at full scale.
   const MAX_CANVAS = 16384;
   const MAX_CANVAS_PIXELS = 67_108_864; // 8192 × 8192
   let s = scale;
@@ -955,18 +983,97 @@ export async function toPngBlob(
   if (!ctx) throw new Error(tr('画布 2D 上下文不可用，无法导出位图', 'Canvas 2D context unavailable; cannot export a bitmap'));
   ctx.scale(s, s);
   ctx.drawImage(img, 0, 0, width, height);
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(tr('PNG 编码失败', 'PNG encoding failed')))), 'image/png');
-  });
+  return { canvas, s };
+}
+
+/**
+ * TIFF (baseline, uncompressed) — A6 (review §4.2): several journals require
+ * TIFF figures and the browser cannot encode one natively, so the shared
+ * raster path feeds a small hand-written encoder. Uncompressed RGBA with an
+ * ExtraSamples tag keeps the transparent-background option meaningful, and the
+ * X/YResolution tags carry the DPI exactly the way the PNG's pHYs chunk does.
+ */
+export async function toTiffBlob(
+  project: Project,
+  scale = 2,
+  opts: ExportOptions = {},
+  onClamp?: (requested: number, effective: number) => void,
+): Promise<Blob> {
+  const { canvas, s } = await rasteriseToCanvas(project, scale, opts, onClamp);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error(tr('画布 2D 上下文不可用，无法导出 TIFF', 'Canvas 2D context unavailable; cannot export TIFF'));
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const dpi = Math.round(s * 96);
-  if (dpi !== 96) {
-    try {
-      return await withPngDpi(blob, dpi);
-    } catch {
-      return blob; // metadata is best-effort; the pixels are already correct
-    }
-  }
-  return blob;
+  // The encoder's declared `Uint8Array` return widens to ArrayBufferLike under
+  // TS 5.7's generic typed arrays; the backing buffer is always a fresh
+  // ArrayBuffer, so the cast is sound.
+  return new Blob([encodeTiff(data, dpi).buffer as ArrayBuffer], { type: 'image/tiff' });
+}
+
+/** A minimal `{ width, height, data }` view of the pixels to encode. */
+export interface TiffPixels {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray | Uint8Array;
+}
+
+/**
+ * Encode baseline little-endian ("II") uncompressed RGBA TIFF. Pure and
+ * DOM-free so the byte layout is unit-testable: header → IFD → external
+ * arrays (BitsPerSample, X/YResolution) → strip data, all offsets hand-computed.
+ */
+export function encodeTiff(pixels: TiffPixels, dpi = 96): Uint8Array {
+  const { width: w, height: h } = pixels;
+  const nEntries = 13;
+  const ifdAt = 8;
+  const ifdSize = 2 + nEntries * 12 + 4;
+  const bitsAt = ifdAt + ifdSize; // 4 × SHORT
+  const xresAt = bitsAt + 8; // RATIONAL
+  const yresAt = xresAt + 8; // RATIONAL
+  const stripAt = yresAt + 8;
+  const stripBytes = w * h * 4;
+  const out = new Uint8Array(stripAt + stripBytes);
+  const dv = new DataView(out.buffer);
+  // Header
+  out[0] = 0x49; out[1] = 0x49; // "II"
+  dv.setUint16(2, 42, true);
+  dv.setUint32(4, ifdAt, true);
+  // IFD
+  dv.setUint16(ifdAt, nEntries, true);
+  let e = ifdAt + 2; // first entry cursor
+  const tag = (t: number, type: number, count: number, value: number) => {
+    dv.setUint16(e, t, true);
+    dv.setUint16(e + 2, type, true);
+    dv.setUint32(e + 4, count, true);
+    // Types SHORT (3) with count 1 pack the value inline in the low half.
+    if (type === 3 && count === 1) dv.setUint16(e + 8, value, true);
+    else dv.setUint32(e + 8, value, true);
+    e += 12;
+  };
+  const dpiN = Math.max(1, Math.round(dpi));
+  tag(256, 4, 1, w); // ImageWidth LONG
+  tag(257, 4, 1, h); // ImageLength LONG
+  tag(258, 3, 4, bitsAt); // BitsPerSample SHORT[4] → external
+  tag(259, 3, 1, 1); // Compression = none
+  tag(262, 3, 1, 2); // Photometric = RGB
+  tag(273, 4, 1, stripAt); // StripOffsets
+  tag(277, 3, 1, 4); // SamplesPerPixel = RGBA
+  tag(278, 4, 1, h); // RowsPerStrip = height (single strip)
+  tag(279, 4, 1, stripBytes); // StripByteCounts
+  tag(282, 5, 1, xresAt); // XResolution RATIONAL
+  tag(283, 5, 1, yresAt); // YResolution RATIONAL
+  tag(296, 3, 1, 2); // ResolutionUnit = inch
+  tag(338, 3, 1, 2); // ExtraSamples = unassociated alpha
+  dv.setUint32(ifdAt + 2 + nEntries * 12, 0, true); // next IFD = none
+  // External arrays
+  for (let i = 0; i < 4; i += 1) dv.setUint16(bitsAt + i * 2, 8, true);
+  dv.setUint32(xresAt, dpiN, true);
+  dv.setUint32(xresAt + 4, 1, true);
+  dv.setUint32(yresAt, dpiN, true);
+  dv.setUint32(yresAt + 4, 1, true);
+  // Strip data: RGBA, top-left first, straight from the canvas.
+  out.set(pixels.data.subarray(0, stripBytes), stripAt);
+  return out;
 }
 
 /**
@@ -1024,7 +1131,7 @@ function toGrayscaleColor(color: string): string {
   }
   const fn = /^rgba?\(([^)]+)\)$/i.exec(t);
   if (fn) {
-    const parts = fn[1].split(/[\s,\/]+/).filter(Boolean);
+    const parts = fn[1].split(/[\s,/]+/).filter(Boolean);
     if (parts.length >= 3) {
       const r = parseFloat(parts[0]);
       const g = parseFloat(parts[1]);
@@ -1132,7 +1239,9 @@ async function rasteriseExoticText(svg: string): Promise<string> {
 
 /** Produce a vector PDF blob using jsPDF + svg2pdf.js (lazy-loaded). */
 export async function toPdfBlob(project: Project, opts: ExportOptions = {}): Promise<Blob> {
-  let { svg, width, height } = buildSVG(project, opts);
+  const built = buildSVG(project, opts);
+  let { svg } = built;
+  const { width, height } = built;
   // The PDF cannot lean on the SVG saturate filter (svg2pdf ignores filters):
   // the grey is computed into every colour explicitly.
   if (opts.grayscale) svg = grayscaleSvg(svg);

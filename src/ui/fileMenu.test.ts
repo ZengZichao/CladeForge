@@ -24,6 +24,9 @@ vi.mock('../io/fileActions', () => ({
   // see fileMenu.ts; the mock has to cover them.
   actionSaveProject: recorder.noop('actionSaveProject'),
   actionSaveProjectAs: recorder.noop('actionSaveProjectAs'),
+  // OP-10 added the multi-tab save entry; openAppDialog covers the Tools group.
+  actionSaveAllProjects: recorder.noop('actionSaveAllProjects'),
+  openAppDialog: recorder.noop('openAppDialog'),
   actionRevertProject: recorder.noop('actionRevertProject'),
   actionImportTree: recorder.noop('actionImportTree'),
   actionImportTable: recorder.noop('actionImportTable'),
@@ -42,9 +45,13 @@ vi.mock('../io/fileActions', () => ({
   actionExportRScript: recorder.noop('actionExportRScript'),
   // The export-settings dialog entry (导出选项…) is synchronous, not a promise.
   actionOpenExportSettings: recorder.noop('actionOpenExportSettings'),
+  // M17: the shared tree-op actions (same confirm/refit for every entry).
+  actionRerootAtNode: recorder.noop('actionRerootAtNode'),
+  actionLadderize: recorder.noop('actionLadderize'),
+  actionRelayout: recorder.noop('actionRelayout'),
 }));
 
-import { buildFileMenuItems, buildRecentItems, itemByLabel } from './fileMenu';
+import { buildFileMenuItems, buildRecentItems } from './fileMenu';
 import { S } from './strings';
 import { DEFAULT_NEXUS_OPTIONS } from '../io/nexus';
 import type { DropdownItem } from './Dropdown';
@@ -73,31 +80,36 @@ const recent: RecentEntry = { name: 'cetacea.cladeforge.json', kind: 'project' }
 
 describe('buildFileMenuItems', () => {
   it('no menu handler forwards its arguments to a file action', () => {
-    const items = buildFileMenuItems(recent, () => undefined);
+    const items = buildFileMenuItems();
     calls.length = 0;
     invokeAsClick(items);
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
       // 导入表格 intentionally passes its documented target ('matrix'), never
-      // the event — the invariant under test is "no handler forwards the click
-      // event / an options bag", so the one string literal is allowed.
+      // the event; the app-dialog entries pass their documented dialog id.
+      // The invariant under test is "no handler forwards the click event / an
+      // options bag", so these string literals are allowed.
       if (call.name === 'actionImportTable') {
         expect(call.args, 'actionImportTable passes the documented mode').toEqual(['matrix']);
+        continue;
+      }
+      if (call.name === 'actionLadderize') {
+        // M17: the shared ladderize action carries the documented direction.
+        expect(call.args, 'actionLadderize passes the documented order').toEqual([false]);
+        continue;
+      }
+      if (call.name === 'openAppDialog') {
+        expect(call.args, 'openAppDialog passes a known dialog id').toHaveLength(1);
+        expect(['projectInfo', 'findReplace', 'history', 'sampleLibrary', 'manual', 'operationLog', 'layerCompare']).toContain(call.args[0]);
         continue;
       }
       expect(call.args, `${call.name} received ${call.args.length} argument(s)`).toEqual([]);
     }
   });
 
-  it('the NEXUS entry exports with the documented defaults, not with the event', () => {
-    const items = buildFileMenuItems(recent, () => undefined);
-    const nexus = itemByLabel(items, S.exportItems.nexus);
-    expect(nexus, 'the NEXUS item exists').toBeDefined();
-    calls.length = 0;
-    (nexus!.onClick as (e?: unknown) => void)(clickEvent);
-    expect(calls).toEqual([{ name: 'actionExportNexus', args: [] }]);
-    // And those defaults are the ones the dialog starts from, so both entry
-    // points describe the same document.
+  it('the NEXUS dialog entry keeps its documented defaults (M1: menu entry folded into Export…)', () => {
+    // The menu no longer carries a direct NEXUS entry (M1 folded exports into
+    // one "导出…" row); the documented defaults still hold for the dialog.
     expect(DEFAULT_NEXUS_OPTIONS).toEqual({
       includeCharacters: false,
       includeHypothesis: false,
@@ -107,48 +119,30 @@ describe('buildFileMenuItems', () => {
   });
 
   it('keeps the full item list (labels, order, separators)', () => {
-    const labels = buildFileMenuItems(recent, () => undefined).map((it) =>
+    const labels = buildFileMenuItems().map((it) =>
       it.sep ? '|' : (it.heading ?? it.label),
     );
-    // 3d03bdc grew the menu; the review round added group headings so the
-    // fifteen export entries are scannable. Order here mirrors fileMenu.ts.
+    // 用户反馈: the menu lost 项目详情 / 树操作 (now in the left panel) /
+    // 导入表格 / 查找与替换 / 历史记录 (now toolbar buttons). Order mirrors
+    // fileMenu.ts.
     expect(labels).toEqual([
       S.menu.new,
       S.menu.open,
       S.review.saveMenu,
       S.review.saveAsMenu,
+      S.review.saveAllTabs,
       S.review.revertMenu,
       '|',
-      S.review.recentProjects,
-      '|',
-      'Tree operations',
-      'Reroot at the selected node',
-      'Ladderize the tree',
       S.review.importGroup,
       S.menu.importTree,
-      S.review.importTable,
       S.review.pasteTree,
       '|',
       S.review.exportFigures,
-      S.exportItems.options,
-      S.exportItems.svg,
-      S.exportItems.png,
-      S.exportItems.pdf,
+      'Export…',
       '|',
-      S.review.exportData,
-      S.exportItems.newick,
-      S.exportItems.nexus,
-      S.review.exportNexml,
-      '|',
-      S.review.exportTables,
-      S.review.exportMatrixCsv,
-      S.review.exportAnnotationsCsv,
-      S.review.exportMatrixTemplate,
-      '|',
-      S.review.exportReports,
-      S.exportItems.narrative,
-      S.exportItems.hypothesisJSON,
-      S.exportItems.rScript,
+      'Tools',
+      'Sample library…',
+      'Operation log…',
     ]);
   });
 

@@ -41,16 +41,18 @@ describe('hypothesisExport', () => {
     expect(md.startsWith('# ')).toBe(true);
     expect(md).toContain('性状 1'); // demo character
     expect(md).toContain('演化事件'); // demo events section
-    // Badge text is ON by default now (eventMarkerTextVisible): with 15+ event
-    // types and four near-identical greens, the two-letter code is the
-    // redundant channel, so the report repeats it. Opting a badge out removes
-    // the code from the report too — the two stay in lockstep.
-    expect(md).toContain('`KI`');
-    expect(md.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{FE0F}]/gu)).toBeNull();
+    // Badge text is OFF by default (2026-11-15): the symbols stay text-free, so
+    // the report names events by their localized type name. Opting a badge IN
+    // (markerShowText: true) puts the code back into the report too — the two
+    // stay in lockstep with what the figure actually draws.
+    expect(md).not.toContain('`KI`');
+    expect(md).toContain('关键创新'); // localized type name in the report
+    expect(md.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}]/gu)).toBeNull();
+    expect(md.match(/\u{FE0F}/u)).toBeNull();
 
     const p = createSampleProject();
-    p.events[0].markerShowText = false;
-    expect(buildNarrative(p)).not.toContain('`KI`');
+    p.events[0].markerShowText = true;
+    expect(buildNarrative(p)).toContain('`KI`');
   });
 
   it('hypothesis JSON is valid and carries the taxon matrix', () => {

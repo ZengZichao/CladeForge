@@ -18,7 +18,13 @@ import type {
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
 import { newId, rerootAtNode } from './treeOps';
-import { solveDtl, type DtlOptions, type DtlScenario, type DtlSolveResult } from './dtl';
+import {
+  dtlScenarioToAssumptions,
+  solveDtl,
+  type DtlOptions,
+  type DtlScenario,
+  type DtlSolveResult,
+} from './dtl';
 import type { TipMapping } from './reconciliation';
 
 /**
@@ -96,6 +102,31 @@ export function setAssumption(
 export function clearAssumptions(project: Project, geneTreeId: string): void {
   const g = findGeneTree(project, geneTreeId);
   if (g) g.assumptions = {};
+}
+
+/**
+ * Apply a solved DTL scenario to one gene tree's assumptions.
+ *
+ * ONE shared entry point for every "apply the optimum" button (2026-11-15
+ * OP-19). The panel and the overview used to duplicate this mutation, and the
+ * overview's copy dropped the `previousAssumptions` argument — so applying the
+ * same optimum there silently discarded hand-set within-branch positions and
+ * transfer donors that the panel's copy preserved. Both now call this.
+ *
+ * Returns false when the gene tree no longer exists, so the caller can report
+ * "nothing was applied" instead of toasting success.
+ */
+export function applyDtlScenario(
+  project: Project,
+  geneTreeId: string,
+  scenario: DtlScenario,
+): boolean {
+  const g = findGeneTree(project, geneTreeId);
+  if (!g) return false;
+  // Keep the visual path fields (branchFraction / transferDonor) of nodes whose
+  // target is unchanged — those are user-authored placements the DP cannot see.
+  g.assumptions = dtlScenarioToAssumptions(project, g.doc, scenario, g.assumptions);
+  return true;
 }
 
 /**

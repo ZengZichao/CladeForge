@@ -39,3 +39,6 @@ src-tauri/gen/
 
 # Test coverage report (npm run test:coverage)
 coverage
+
+# Local agent/tooling state (machine-specific, not part of the project)
+.mimosa/

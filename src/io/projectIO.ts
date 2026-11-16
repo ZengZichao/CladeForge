@@ -458,7 +458,7 @@ const AUTOSAVE_KEY = 'cladeforge:autosave';
 
 /** Load the most recent autosave snapshot, or null when absent / corrupt. */
 export function readAutoSave(): Project | null {
-  let text: string | null = null;
+  let text: string | null;
   try {
     text = localStorage.getItem(AUTOSAVE_KEY);
   } catch (e) {
@@ -556,7 +556,7 @@ export interface WorkspaceRestore {
  * evidence that a previous session existed.
  */
 export function readWorkspace(): WorkspaceRestore | null {
-  let text: string | null = null;
+  let text: string | null;
   try {
     text = localStorage.getItem(WORKSPACE_KEY);
   } catch (e) {

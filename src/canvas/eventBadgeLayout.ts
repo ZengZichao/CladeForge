@@ -43,7 +43,7 @@ import {
   type Project,
   type TreeNode,
 } from '../model/types';
-import { branchMidpointOn } from './paths';
+import { branchMidpointOn, branchPointAt } from './paths';
 import { labelBoxForNode, type Box } from './labelBounds';
 import { tr } from '../ui/strings';
 
@@ -456,7 +456,13 @@ export function naturalBadgeAnchor(
   const curved =
     layoutType !== 'circular' && !!pp && !!child && resolveBranchStyle(child, project).shape === 'curved';
   if (event.target === 'branch') {
-    const b = pp ? branchMidpointOn(pp, p, orientation, layoutType, curved) : p;
+    // 用户反馈: an explicit 在分支上的相对位置 (0 = parent, 1 = child)
+    // overrides the midpoint — measured ALONG the drawn branch path (elbow /
+    // curve / circular arc), so the marker stays on the branch at any fraction.
+    const t = Math.min(1, Math.max(0, event.position ?? 0.5));
+    const b = pp
+      ? branchPointAt(pp, p, t, orientation, layoutType, curved)
+      : p;
     if (layoutType === 'circular' && pp) {
       const rc = Math.hypot(p.x, p.y) || 1;
       const ux = p.x / rc;
@@ -514,7 +520,9 @@ export function planEventAnchors(input: EventAnchorInput): EventAnchorPlan {
   for (const id of culled) {
     const node = project.nodes[id];
     if (!node) continue;
-    const label = labelBoxForNode(project, positions, node);
+    // 用户反馈: the obstacle box uses the BASE placement — label offsets
+    // move the label only, never the event badges.
+    const label = labelBoxForNode(project, positions, node, { ignoreLabelOffsets: true });
     if (label) grid.insert(translateBox(label, 0, labelNudges.get(id) ?? 0));
     const marker = nodeMarkerBox(project, positions, node);
     if (marker) grid.insert(marker);

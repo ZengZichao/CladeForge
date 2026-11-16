@@ -19,6 +19,7 @@ import {
   eventMarkerShape,
 } from '../model/events';
 import { eventMarkerPath } from '../canvas/markerGeometry';
+import { C_UNKNOWN, C_TRANSITION_TO, C_MRCA } from '../canvas/colors';
 import type { EventMarkerShape } from '../model/types';
 import { S, tr } from './strings';
 
@@ -58,9 +59,6 @@ interface LegendItem {
   };
 }
 
-const C_UNKNOWN = '#9ca3af';
-const C_TRANSITION_TO = 'var(--c-transition-to, #3f3f46)';
-
 /** Renders a legend swatch using the exact same SVG primitives as the canvas. */
 function LegendSwatch({
   kind,
@@ -83,33 +81,37 @@ function LegendSwatch({
   } as const;
   switch (kind) {
     case 'select':
-      // Double ring (halo + focus ring) in the selection colour.
+      // Double ring (halo + focus ring) in the selection colour. CSS variables
+      // must go through `style`, not presentation attributes — `stroke="var(…)"`
+      // as an attribute is dropped by Chromium and the swatch drew nothing.
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="7" fill="none" stroke="var(--c-select)" strokeWidth="3.5" opacity="0.18" />
-          <circle cx="8" cy="8" r="5" fill="none" stroke="var(--c-select)" strokeWidth="1.5" opacity="0.85" />
+          <circle cx="8" cy="8" r="7" fill="none" style={{ stroke: 'var(--c-select)' }} strokeWidth="3.5" opacity="0.18" />
+          <circle cx="8" cy="8" r="5" fill="none" style={{ stroke: 'var(--c-select)' }} strokeWidth="1.5" opacity="0.85" />
         </svg>
       );
     case 'mrca':
-      // Hollow amber ring (matches the MRCA highlight on the canvas).
+      // Hollow amber ring — V12 (UI_UX_REVIEW): the legend swatch read
+      // `--c-mrca` (#ffc53d) while the canvas ring used C_MRCA (#ab6400) — two
+      // different ambers for one concept. One source: the canvas constant.
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--c-mrca)" strokeWidth="2.5" />
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke={C_MRCA} strokeWidth="2.5" />
         </svg>
       );
     case 'drop':
       // Dashed double ring (matches the reparent drop-target highlight).
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="7" fill="none" stroke="var(--c-drop)" strokeWidth="3.5" opacity="0.18" strokeDasharray="3 2" />
-          <circle cx="8" cy="8" r="5" fill="none" stroke="var(--c-drop)" strokeWidth="1.5" opacity="0.85" strokeDasharray="3 2" />
+          <circle cx="8" cy="8" r="7" fill="none" style={{ stroke: 'var(--c-drop)' }} strokeWidth="3.5" opacity="0.18" strokeDasharray="3 2" />
+          <circle cx="8" cy="8" r="5" fill="none" style={{ stroke: 'var(--c-drop)' }} strokeWidth="1.5" opacity="0.85" strokeDasharray="3 2" />
         </svg>
       );
     case 'connect':
       // Solid clay ring (matches the connect-source highlight).
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--c-connect)" strokeWidth="2" opacity="0.6" />
+          <circle cx="8" cy="8" r="6.5" fill="none" style={{ stroke: 'var(--c-connect)' }} strokeWidth="2" opacity="0.6" />
         </svg>
       );
     case 'state':
@@ -120,8 +122,7 @@ function LegendSwatch({
             cx="8"
             cy="8"
             r="5.5"
-            fill={color ?? 'var(--surface)'}
-            stroke={color ? 'rgba(0,0,0,0.25)' : C_UNKNOWN}
+            style={{ fill: color ?? 'var(--surface)', stroke: color ? 'var(--border-strong)' : C_UNKNOWN }}
             strokeWidth="1"
           />
         </svg>
@@ -143,7 +144,7 @@ function LegendSwatch({
       // Two-colour dot: outer ring of the "from" state, inner "to" dot.
       return (
         <svg {...svgProps}>
-          <circle cx="8" cy="8" r="6" fill="var(--surface)" stroke={color ?? C_UNKNOWN} strokeWidth="2" />
+          <circle cx="8" cy="8" r="6" style={{ fill: 'var(--surface)' }} stroke={color ?? C_UNKNOWN} strokeWidth="2" />
           <circle cx="8" cy="8" r="3.2" fill={color2 ?? C_TRANSITION_TO} />
         </svg>
       );
@@ -157,7 +158,7 @@ function LegendSwatch({
             cx="8"
             cy="8"
             r="6"
-            fill="var(--surface)"
+            style={{ fill: 'var(--surface)' }}
             stroke={C_UNKNOWN}
             strokeWidth="1.6"
             strokeDasharray="2.6 2"
@@ -197,7 +198,7 @@ function LegendSwatch({
         <svg {...svgProps}>
           <path
             d={eventMarkerPath(shape ?? 'circle', 8, 8, 6.6)}
-            fill="var(--surface)"
+            style={{ fill: 'var(--surface)' }}
             stroke={color}
             strokeWidth="2"
             strokeLinejoin="round"
@@ -221,7 +222,7 @@ function LegendSwatch({
       // Geological era band.
       return (
         <svg {...svgProps}>
-          <rect x="1.5" y="4" width="13" height="8" rx="1.5" fill="var(--c-warn)" opacity="0.25" stroke="var(--c-warn)" strokeWidth="1" />
+          <rect x="1.5" y="4" width="13" height="8" rx="1.5" style={{ fill: 'var(--c-warn)', stroke: 'var(--c-warn)' }} opacity="0.25" strokeWidth="1" />
         </svg>
       );
   }
@@ -237,6 +238,9 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   const characterColorTarget = useStore((s) => s.characterColorTarget);
   const layoutType = useStore((s) => s.project.layout.type);
   const projectEvents = useStore((s) => s.project.events);
+  // 用户反馈: legend placement + item arrangement come from 样式 › 图例设置.
+  const legendPosition = useStore((s) => s.legendPosition);
+  const legendLayout = useStore((s) => s.legendLayout);
   // Subscribe to the project itself (PM-33): reading `getState()` here handed
   // the legend a snapshot that could lag one store update behind the nodes'
   // own subscription, so the legend swatches could be one edit stale.
@@ -244,7 +248,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   const activeCharacter = findCharacter(legendProject, activeCharacterId ?? '');
   // The state-colouring swatch mirrors the first state colour so the legend
   // matches the actual coloured dots on the canvas.
-  const stateColor = activeCharacter?.states[0]?.color ?? 'var(--accent)';
+  const stateColor = activeCharacter?.states[0]?.color ?? 'var(--primary)';
 
   const items: LegendItem[] = [
     { kind: 'select', label: S.legend.selection },
@@ -325,7 +329,11 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
 
   if (!open) {
     return (
-      <button className="legend-toggle" onClick={() => setOpen(true)} title={S.legend.toggleTitle}>
+      <button
+        className={`legend-toggle legend-pos-${legendPosition}`}
+        onClick={() => setOpen(true)}
+        title={S.legend.toggleTitle}
+      >
         <ListBulletIcon />
         <span>{S.legend.toggle}</span>
       </button>
@@ -333,7 +341,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
   }
 
   return (
-    <div className="legend-card">
+    <div className={`legend-card legend-pos-${legendPosition}`}>
       <div className="legend-header">
         <span>{S.legend.title}</span>
         <button
@@ -345,7 +353,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
           ×
         </button>
       </div>
-      <div className="legend-body">
+      <div className={`legend-body legend-layout-${legendLayout}`}>
         {visibleItems.map((it) => (
           <div className="legend-item" key={it.label}>
             <LegendSwatch kind={it.kind} color={it.color} color2={it.color2} />
