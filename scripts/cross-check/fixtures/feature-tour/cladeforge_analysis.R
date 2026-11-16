@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # CladeForge reproducible-analysis script
-# Project : 功能导览
+# Project : 时间树示例
 # Format  : CladeForge project v0.2.0
 # Software: CladeForge 0.3.0 (this header is the provenance stamp a
 #           reproducibility checklist asks for: software version, generation
@@ -31,8 +31,8 @@
 #       the posterior probabilities the app reports.
 #   APPROXIMATED:
 #     * a PDF figure drawn from the same data — character-coloured tips,
-#       posterior pies, legend — in the project's cladogram layout
-#       (equal branch spacing, like the CladeForge cladogram (branch lengths ignored)). It is NOT a pixel copy of the on-screen figure: manual
+#       posterior pies, legend — in the project's phylogram layout
+#       (CladeForge places this layout by node AGE; ape has no age axis, so equal inter-node spacing is used and the geological scale is not reproduced). It is NOT a pixel copy of the on-screen figure: manual
 #       node positions, collapsed clades, custom reticulation edges, era bands
 #       and the interactive ladderising order are GUI state that ape does not
 #       consume. The topology, tip labels, states and posteriors are identical;
@@ -88,7 +88,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#9ca3af", "#3b82f6", "#1e3a5f"),
     cost = matrix(c(0, 2, 3, 2, 0, 1, 3, 1, 0), nrow = 3, byrow = TRUE),
-    rate = 2.1398980273528574,
+    rate = 2.1398977146670197,
     tips = c("Taxon_C" = "状态 B", "Taxon_E" = "状态 C", "Taxon_F" = "状态 C", "Taxon_G" = "状态 A")
   ),
   list(
@@ -97,7 +97,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#b45309", "#0ea5e9", "#1e3a8a"),
     cost = matrix(c(0, 2, 3, 5, 0, 1, 5, 5, 0), nrow = 3, byrow = TRUE),
-    rate = 2.1398980273528574,
+    rate = 2.1398977146670197,
     tips = c("Taxon_C" = "状态 B", "Taxon_E" = "状态 C", "Taxon_F" = "状态 C", "Taxon_G" = "状态 A")
   )
 )
@@ -261,13 +261,13 @@ discrete <- Filter(function(ch) ch$type == "discrete" && length(ch$states) >= 2,
 # cairo_pdf renders unicode labels reliably; use pdf() if cairo is unavailable.
 cairo_pdf("cladeforge_reconstruction.pdf", width = 9, height = 7)
 par(mar = c(2, 1, 2, 2), xpd = NA)
-cat("Figure layout: type = cladogram, use.edge.length = FALSE",
-    "(equal branch spacing, like the CladeForge cladogram (branch lengths ignored))\n")
-plot(tree, type = "cladogram", use.edge.length = FALSE,
+cat("Figure layout: type = phylogram, use.edge.length = FALSE",
+    "(CladeForge places this layout by node AGE; ape has no age axis, so equal inter-node spacing is used and the geological scale is not reproduced)\n")
+plot(tree, type = "phylogram", use.edge.length = FALSE,
      show.tip.label = TRUE,
      label.offset = 0.3,
      edge.color = "#374151", edge.width = 1.4)
-title(main = "功能导览", cex.main = 1.0)
+title(main = "时间树示例", cex.main = 1.0)
 
 if (length(discrete) > 0) {
   main <- discrete[[1]]

@@ -1,5 +1,6 @@
 project	id	name
-feature-tour	feature-tour	功能导览
-large-tree	large-tree	大树与深时
-recon-family	recon-family	基因家族协调
+feature-tour	feature-tour	时间树示例
+large-tree	large-tree	非时间树示例
+recon-family	recon-family	物种树-基因树协调
+demo-neutral	demo-neutral	校准与事件示例
 er-control	er-control	ER control (no stem lineages)

@@ -1,0 +1,12 @@
+character	node_key	chosen_state_index	tie_state_indexes	mp_state_indexes	change_on_branch
+sample-char:demo-neutral-c1	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H+Taxon_J+Taxon_K|11	0	0,1,2	0,1,2	0
+sample-char:demo-neutral-c1	N:Taxon_C+Taxon_E+Taxon_G+Taxon_H|7	0	0	0,1,2	0
+sample-char:demo-neutral-c1	N:Taxon_J+Taxon_K|3	0	0,1	0,1,2	0
+sample-char:demo-neutral-c1	T:Taxon_C	0	0	0	0
+sample-char:demo-neutral-c1	N:Taxon_E+Taxon_G+Taxon_H|5	0	0,2	0,1,2	0
+sample-char:demo-neutral-c1	T:Taxon_J	1	1	1	1
+sample-char:demo-neutral-c1	T:Taxon_K	0	0	0,1,2	0
+sample-char:demo-neutral-c1	T:Taxon_E	2	2	2	1
+sample-char:demo-neutral-c1	N:Taxon_G+Taxon_H|3	0	0	0,1,2	0
+sample-char:demo-neutral-c1	T:Taxon_G	0	0	0,1,2	0
+sample-char:demo-neutral-c1	T:Taxon_H	0	0	0,1,2	0
