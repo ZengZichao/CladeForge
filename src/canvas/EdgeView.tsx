@@ -79,7 +79,7 @@ export const EdgeView = memo(function EdgeView({
         strokeDasharray={dashArray(style.dash, style.width)}
         strokeLinejoin={caps.linejoin}
         strokeLinecap={caps.linecap}
-        opacity={dimmed ? 0.45 : undefined}
+        opacity={(style.opacity ?? 1) * (dimmed ? 0.45 : 1)}
       />
       {mark && (
         <path

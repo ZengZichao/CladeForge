@@ -30,6 +30,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -40,7 +41,8 @@ import type { LayoutResult } from '../layout/autoLayout';
 import type { NodeId, Project, ReconViewOptions } from '../model/types';
 import { useStore } from '../model/store';
 import { isImeComposing } from '../ui/imeGuard';
-import { elbowPath } from './paths';
+import { elbowPath, curvedBranchPath } from './paths';
+import { PR_TUBE_FILL, prFamilyVar } from './phyloTheme';
 import { estimateLabelWidth, type Box } from './labelBounds';
 import { cullPaneNodes } from './reconViewport';
 import type { MappingColorToken, PaneTransform } from './reconMapping';
@@ -224,22 +226,80 @@ export function clampTransform(t: PaneTransform, bounds: Box, w: number, h: numb
 // over the same values and these children bail out, so React only touches the
 // nodes (and lines) whose emphasis actually changed.
 
+/** How one pane edge is drawn — the PhyloRecViewer look (用户反馈 2026-11-16)
+ *  renders the species side as thick rounded slate TUBES and the gene side as
+ *  smooth curved family-coloured lines with a white halo; the legacy look is
+ *  a thin elbow hairline. */
+export type PaneEdgeVariant =
+  | { kind: 'thin' }
+  | { kind: 'tube'; width: number; opacity: number; gradientId: string | null }
+  | { kind: 'curve'; width: number; familyIndex: number; halo: boolean };
+
 const PaneEdge = memo(function PaneEdge({
   x1,
   y1,
   x2,
   y2,
   orientation,
+  variant,
 }: {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
   orientation: 'LR' | 'RL';
+  variant: PaneEdgeVariant;
 }) {
+  // Tubes and gene curves use the smooth PhyloRec spine; the legacy hairline
+  // keeps the rectangular elbow.
+  const d =
+    variant.kind === 'thin'
+      ? elbowPath({ x: x1, y: y1 }, { x: x2, y: y2 }, orientation)
+      : curvedBranchPath({ x: x1, y: y1 }, { x: x2, y: y2 }, orientation);
+  if (variant.kind === 'tube') {
+    return (
+      <path
+        d={d}
+        fill="none"
+        stroke={variant.gradientId ? `url(#${variant.gradientId})` : PR_TUBE_FILL}
+        strokeWidth={variant.width}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={variant.opacity}
+      />
+    );
+  }
+  if (variant.kind === 'curve') {
+    const color = prFamilyVar(variant.familyIndex);
+    return (
+      <>
+        {/* Halo: a wider background-coloured under-stroke so the lineage reads
+            where it crosses species tubes and mapping lines. */}
+        {variant.halo && (
+          <path
+            d={d}
+            fill="none"
+            stroke="var(--recon-pane-bg)"
+            strokeWidth={variant.width + 3.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.85}
+          />
+        )}
+        <path
+          d={d}
+          fill="none"
+          stroke={color}
+          strokeWidth={variant.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    );
+  }
   return (
     <path
-      d={elbowPath({ x: x1, y: y1 }, { x: x2, y: y2 }, orientation)}
+      d={d}
       fill="none"
       stroke="var(--recon-branch)"
       strokeWidth={1.4}
@@ -480,6 +540,38 @@ export const ReconPane = memo(function ReconPane({
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved?: boolean } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
+
+  // --- PhyloRecViewer-style edge presentation (用户反馈 2026-11-16) ------------
+  // Species side: thick rounded slate tubes (optional fill→stroke gradient);
+  // gene side: smooth curved family-coloured lines with a white halo. A single
+  // gradient definition per pane serves every tube (objectBoundingBox vector
+  // aligned with the growth axis, like PhyloRecViewer).
+  const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const tubeGradId = `recon-tube-grad-${rawId}`;
+  const familyIndex = useStore((s) => {
+    const trees = s.project.geneTrees ?? [];
+    const i = trees.findIndex((g) => g.id === s.activeGeneTreeId);
+    return i < 0 ? 0 : i;
+  });
+  const edgeVariant: PaneEdgeVariant = useMemo(() => {
+    if (side === 'species' && options.speciesTubeStyle) {
+      return {
+        kind: 'tube',
+        width: options.speciesTubeWidth,
+        opacity: options.speciesTubeOpacity,
+        gradientId: options.speciesTubeGradient ? tubeGradId : null,
+      };
+    }
+    if (side === 'gene' && options.geneCurveStyle) {
+      return {
+        kind: 'curve',
+        width: options.geneLineThickness,
+        familyIndex,
+        halo: options.geneLineHalo,
+      };
+    }
+    return { kind: 'thin' };
+  }, [side, options, familyIndex, tubeGradId]);
 
   // --- imperative transform fast path -----------------------------------------
   // A wheel burst or pointer pan accumulates into `transformRef` and commits
@@ -811,6 +903,20 @@ export const ReconPane = memo(function ReconPane({
         style={{ cursor: altHeld ? 'copy' : undefined }}
       >
         <svg>
+          {/* PhyloRec species-tube gradient: fill at the root end → stroke at
+              the tip end, along the pane's growth axis. */}
+          <defs>
+            <linearGradient
+              id={tubeGradId}
+              x1={mirrored ? 1 : 0}
+              y1={0}
+              x2={mirrored ? 0 : 1}
+              y2={0}
+            >
+              <stop offset="0" style={{ stopColor: 'var(--pr-tube-fill)' }} />
+              <stop offset="1" style={{ stopColor: 'var(--pr-tube-stroke)' }} />
+            </linearGradient>
+          </defs>
           <g transform={`translate(${transform.tx},${transform.ty}) scale(${transform.scale})`}>
             {/* edges */}
             {visibleIds.map((id) => {
@@ -828,6 +934,7 @@ export const ReconPane = memo(function ReconPane({
                   x2={to.x}
                   y2={to.y}
                   orientation={branchOrientation}
+                  variant={edgeVariant}
                 />
               );
             })}

@@ -44,6 +44,8 @@ import {
 } from '../layout/embeddedRecon';
 import { S, tr } from '../ui/strings';
 import { useAltHeld } from './ReconPane';
+import { prFamilyVar } from './phyloTheme';
+import { useStore } from '../model/store';
 
 const IDENTITY: { tx: number; ty: number; scale: number } = { tx: 40, ty: 40, scale: 1 };
 type Transform = { tx: number; ty: number; scale: number };
@@ -137,6 +139,19 @@ export function EmbeddedReconCanvas({
   // Mask id: useId() can contain ':', which breaks url(#…) references.
   const rawId = useId();
   const maskId = useMemo(() => `er-mask-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`, [rawId]);
+  const tubeGradId = useMemo(() => `er-tubegrad-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`, [rawId]);
+
+  // PhyloRecViewer family colour for the active gene tree (用户反馈
+  // 2026-11-16): lineages are painted per family, event glyphs stay
+  // event-coloured. The swap guard matches ReconPane (index -1 → 0).
+  const familyIndex = useStore((s) => {
+    const trees = s.project.geneTrees ?? [];
+    const i = trees.findIndex((g) => g.id === s.activeGeneTreeId);
+    return i < 0 ? 0 : i;
+  });
+  const familyColor = prFamilyVar(familyIndex);
+  const lineageColor = (event: string | null, kind: 'tip' | 'internal'): string =>
+    options.embeddedFamilyColors ? familyColor : eventColor(event, kind);
 
   // --- pan/zoom (coalesced commit, same pattern as ReconPane) ----------------------
   const transformRef = useRef(transform);
@@ -533,6 +548,12 @@ export function EmbeddedReconCanvas({
                 />
               ))}
             </mask>
+            {/* PhyloRec species-tube gradient: fill (root side) → stroke
+                (tip side) along the horizontal growth axis. */}
+            <linearGradient id={tubeGradId} x1={0} y1={0} x2={1} y2={0}>
+              <stop offset="0" style={{ stopColor: 'var(--pr-tube-fill)' }} />
+              <stop offset="1" style={{ stopColor: 'var(--pr-tube-stroke)' }} />
+            </linearGradient>
           </defs>
           <g transform={`translate(${transform.tx},${transform.ty}) scale(${transform.scale})`}>
             {/* layers 1+2: species tubes (border + fill) and hub bars */}
@@ -541,6 +562,8 @@ export function EmbeddedReconCanvas({
                 key={`t${t.branchId}`}
                 tube={t}
                 highlighted={selectedSpecies.has(t.branchId)}
+                gradientId={options.embeddedTubeGradient ? tubeGradId : null}
+                opacity={options.embeddedTubeOpacity}
                 onClick={tubeClickable ? handleTubeClick : undefined}
               />
             ))}
@@ -602,7 +625,8 @@ export function EmbeddedReconCanvas({
                   <EmbeddedSegment
                     key={s.id}
                     d={s.d}
-                    color={eventColor(s.event, s.kind)}
+                    color={lineageColor(s.event, s.kind)}
+                    halo={options.embeddedGeneHalo}
                     dashed={s.dashed}
                     muted={muted}
                     emphasized={emphasized}
@@ -620,6 +644,7 @@ export function EmbeddedReconCanvas({
                   <EmbeddedTransferArcShape
                     key={`ta${arc.geneNodeId}`}
                     arc={arc}
+                    color={options.embeddedFamilyColors ? familyColor : 'var(--recon-map-transfer)'}
                     muted={muted}
                     emphasized={emphasized}
                     titleTopo={tr(
@@ -640,7 +665,7 @@ export function EmbeddedReconCanvas({
               const r = p.kind === 'tip' ? 2.6 : 3.2;
               const fill = p.inferred || p.unresolved
                 ? 'var(--surface)'
-                : eventColor(p.event, p.kind);
+                : lineageColor(p.event, p.kind);
               const stroke = emphasized
                 ? 'var(--recon-select)'
                 : p.inferred || p.unresolved
@@ -796,10 +821,15 @@ export function EmbeddedReconCanvas({
 const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
   tube,
   highlighted,
+  gradientId,
+  opacity,
   onClick,
 }: {
   tube: EmbeddedTube;
   highlighted: boolean;
+  /** PhyloRec fill→stroke gradient pass; null = flat fill. */
+  gradientId: string | null;
+  opacity: number;
   /** Undefined = the 点选目标 toggle points at the gene tree — render inert. */
   onClick?: (branchId: NodeId, e: React.MouseEvent) => void;
 }) {
@@ -809,7 +839,7 @@ const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-label={`${S.recon.legendTube} ${tube.branchId}`}
-      style={onClick ? { cursor: 'pointer', outline: 'none' } : undefined}
+      style={onClick ? { cursor: 'pointer', outline: 'none', opacity } : { opacity }}
       onClick={onClick ? (e) => onClick(tube.branchId, e) : undefined}
       onKeyDown={(e) => {
         if (!onClick) return;
@@ -831,7 +861,7 @@ const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
       <path
         d={tube.path}
         fill="none"
-        stroke="var(--recon-tube-border)"
+        stroke="var(--pr-tube-stroke)"
         strokeWidth={tube.width + 2}
         strokeLinecap="round"
         style={{ pointerEvents: 'none' }}
@@ -839,7 +869,13 @@ const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
       <path
         d={tube.path}
         fill="none"
-        stroke={highlighted ? 'var(--recon-select)' : 'var(--recon-tube)'}
+        stroke={
+          highlighted
+            ? 'var(--recon-select)'
+            : gradientId
+              ? `url(#${gradientId})`
+              : 'var(--pr-tube-fill)'
+        }
         strokeWidth={tube.width}
         strokeLinecap="round"
         opacity={highlighted ? 0.55 : 1}
@@ -865,17 +901,32 @@ const EmbeddedHubShape = memo(function EmbeddedHubShape({ hub }: { hub: Embedded
 const EmbeddedSegment = memo(function EmbeddedSegment({
   d,
   color,
+  halo,
   dashed,
   muted,
   emphasized,
 }: {
   d: string;
   color: string;
+  /** Wider background-coloured under-stroke so the lineage reads over tubes. */
+  halo: boolean;
   dashed: boolean;
   muted: boolean;
   emphasized: boolean;
 }) {
   return (
+    <>
+    {halo && !muted && (
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--bg)"
+        strokeWidth={emphasized ? 4.6 : 3.8}
+        strokeLinecap="round"
+        opacity={emphasized ? 1 : 0.9}
+        style={{ pointerEvents: 'none' }}
+      />
+    )}
     <path
       d={d}
       fill="none"
@@ -885,17 +936,20 @@ const EmbeddedSegment = memo(function EmbeddedSegment({
       strokeLinecap="round"
       opacity={muted ? 0.18 : emphasized ? 1 : 0.92}
     />
+    </>
   );
 });
 
 const EmbeddedTransferArcShape = memo(function EmbeddedTransferArcShape({
   arc,
+  color,
   muted,
   emphasized,
   titleTopo,
   titleInfeasible,
 }: {
   arc: EmbeddedTransferArc;
+  color: string;
   muted: boolean;
   emphasized: boolean;
   /** Hover titles are translated per render in the parent (locale freeze). */
@@ -918,14 +972,14 @@ const EmbeddedTransferArcShape = memo(function EmbeddedTransferArcShape({
       <path
         d={arc.d}
         fill="none"
-        stroke="var(--recon-map-transfer)"
+        stroke={color}
         strokeWidth={emphasized ? 2 : 1.5}
         strokeDasharray={arc.timeFeasible === false ? '5 4' : undefined}
         strokeLinecap="round"
       />
       <polygon
         points={`${tipX},${tipY} ${b1x},${b1y} ${b2x},${b2y}`}
-        fill="var(--recon-map-transfer)"
+        fill={color}
       />
       {arc.timeFeasible === null && <title>{titleTopo}</title>}
       {arc.timeFeasible === false && <title>{titleInfeasible}</title>}

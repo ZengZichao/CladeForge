@@ -41,6 +41,32 @@ one-line `AI-PROVENANCE` marker in their header.
 
 ## Change log (AI-assisted)
 
+### 2026-11-16 (3) — Kimi Code: PhyloRecViewer visual parity (用户反馈)
+
+- `src/canvas/phyloTheme.ts`, `src/styles/app.css` — PhyloRec theme tokens:
+  slate tube fill/stroke + the 16-colour Radix gene-family palette, with dark
+  theme overrides; consumed via inline `style={var()}` so SVG picks them up.
+- `src/model/types.ts` — `ReconViewOptions` gains the PhyloRec presentation
+  knobs (tube style/width/opacity/gradient, gene curves/thickness/halo,
+  embedded gradient/opacity/family colours/halo); `BranchStyle.opacity` and
+  `NodeStyle.labelHalo` for the standard canvas.
+- `src/canvas/ReconPane.tsx` — pane edges render in three modes: species
+  tubes (smooth spine, round caps, gradient, opacity), gene curves (family
+  colour + background halo), or the legacy thin elbow.
+- `src/canvas/EmbeddedReconCanvas.tsx` — tube gradient/opacity, family
+  colours for lineages (event glyphs stay), lineage halo, family-coloured
+  transfer arcs.
+- `src/ui/ReconPanel.tsx` — 视图 section exposes every new knob; the reset
+  button restores them.
+- `src/model/presets.ts`, `src/canvas/EdgeView.tsx`, `src/canvas/NodeView.tsx`,
+  `src/canvas/TreeCanvas.tsx`, `src/ui/LayoutPanel.tsx` — new 「PhyloRec 管道」
+  style preset (curved 12px slate tubes + fill→stroke depth gradient + paper
+  background), a branch-opacity slider and a label-halo checkbox.
+- `src/styles/app.css` — the embedded canvas grid collapses to ONE row now
+  that its header/hint are gone (the stale three-row track squeezed the svg
+  into the auto row at the default 150px and left the canvas blank below —
+  the "only the top third shows" report).
+
 ### 2026-11-16 (2) — Kimi Code: coordination-canvas polish round (用户反馈 ×12)
 
 - `src/canvas/ReconWorkspace.tsx` — the recon toolbar is a FULL-WIDTH top row;
