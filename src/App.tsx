@@ -11,7 +11,7 @@
 // half-standard, half-reconciled chimera.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useStore } from './model/store';
+import { useStore, persistedProject } from './model/store';
 import type { Project } from './model/types';
 import { confirmCloseTab } from './ui/tabs';
 import * as file from './io/fileActions';
@@ -367,8 +367,10 @@ export function App() {
       } else if (k === '0') {
         e.preventDefault();
         // S11: route by ACTIVE workspace — recon mode must not zoom the
-        // hidden standard canvas.
-        if (s.reconMode) {
+        // hidden standard canvas. The tree-edit surfaces (物种树编辑 /
+        // 基因树编辑) render the standard canvas, so only the coordination
+        // canvas answers the recon events.
+        if (s.reconMode && s.reconEditTarget === 'recon') {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
         } else {
           s.requestFit();
@@ -396,8 +398,9 @@ export function App() {
         e.preventDefault();
         if (e.shiftKey) {
           // ⌘⇧F fits the ACTIVE workspace: the standard canvas listens for
-          // `requestFit`, the reconciliation canvas for its own event.
-          if (s.reconMode) {
+          // `requestFit`, the reconciliation canvas for its own event. The
+          // tree-edit surfaces render the standard canvas.
+          if (s.reconMode && s.reconEditTarget === 'recon') {
             window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
           } else {
             s.requestFit();
@@ -406,10 +409,11 @@ export function App() {
           // Read the LIVE store, not a render-scope value: this handler is
           // registered once with `[]` deps, so a closed-over boolean would be
           // frozen at its initial value and the branch could never be taken.
-          if (s.reconMode) {
+          if (s.reconMode && s.reconEditTarget === 'recon') {
             // The reconciliation canvas has no node-search field; the left
             // panel's assumption list is the locator here. Say so instead of
-            // silently swallowing the chord.
+            // silently swallowing the chord. (Tree-edit surfaces render the
+            // standard canvas, which opens its own search field below.)
             notify.info(S.recon.searchUnavailable);
           } else {
             // Dispatch a custom event so CanvasControls opens the search input
@@ -432,14 +436,14 @@ export function App() {
       } else if (k === '=' || k === '+') {
         e.preventDefault();
         // S11: zoom keys route to the active workspace.
-        if (s.reconMode) {
+        if (s.reconMode && s.reconEditTarget === 'recon') {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-in'));
         } else {
           s.zoomBy(1.2);
         }
       } else if (k === '-' || k === '_') {
         e.preventDefault();
-        if (s.reconMode) {
+        if (s.reconMode && s.reconEditTarget === 'recon') {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-out'));
         } else {
           s.zoomBy(1 / 1.2);
@@ -513,7 +517,13 @@ export function App() {
     const t = setTimeout(() => {
       const s = useStore.getState();
       const projects = s.tabs
-        .map((id) => (id === s.activeTabId ? s.project : s.tabStore[id]?.project))
+        .map((id) =>
+          id === s.activeTabId
+            ? // While 「基因树编辑」 is swapped, persist the species project
+              // with the edited gene doc merged back — never the bare gene doc.
+              persistedProject(s)
+            : s.tabStore[id]?.project,
+        )
         .filter((p): p is Project => Boolean(p));
       writeWorkspace(projects, Math.max(0, s.tabs.indexOf(s.activeTabId)));
     }, 800);
@@ -581,6 +591,7 @@ export function App() {
             onBuildGeneTree={() => openGeneBuilder(null)}
             onCopySpeciesTree={copySpeciesTreeToGene}
             onEditGeneTree={(id) => openGeneBuilder(id)}
+            onAddChildrenDialog={openAddForNode}
           />
         </ErrorBoundary>
       ) : (

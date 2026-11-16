@@ -233,7 +233,6 @@ const zh = {
     viewRecon: '协调视图',
     // --- reconciliation workspace (mode-specific rail / panel / inspector) ---
     railTrees: '基因树',
-    railScenario: '场景',
     railView: '视图',
     railLabel: '协调导航',
     paneSpecies: '物种树',
@@ -250,10 +249,10 @@ const zh = {
     legendSigma: '物种形成 S',
     legendDup: '基因重复 D',
     legendTransfer: '水平转移 T',
-    legendUnresolved: '未映射',
+    legendUnresolved: '没有映射',
     legendLoss: '基因丢失 L',
-    legendTipLine: '末端映射（标签匹配）',
-    legendInternalLine: '内部映射（推断 / 编辑）',
+    legendTipLine: '末端映射',
+    legendInternalLine: '内部映射',
     scopeTips: '仅末端映射',
     scopeInternal: '仅内部映射',
     scopeAll: '全部映射',
@@ -302,12 +301,23 @@ const zh = {
     // prepared for a canvas empty state that never shipped; the live state
     // reuses buildGeneTree / copySpeciesTree / importFile instead.
     emptyReconTitle: '还没有基因树',
+    // 用户反馈（2026-11-16）：the empty stage carries TWO entries — 新建协调视图
+    // seeds a reconciliation from the current species tree; 导入协调视图 opens a
+    // saved CladeForge project (species tree + gene trees + mappings).
+    newReconView: '新建协调视图',
+    newReconViewTitle: '以当前物种树为起点创建基因树，进入协调视图后可建立节点映射',
+    importReconView: '导入协调视图',
+    importReconViewTitle: '打开包含物种树、基因树与映射假设的 CladeForge 项目文件',
+    // Edit-target modes of the reconciliation toolbar (物种 / 基因 / 协调树).
+    editTargetSpecies: '物种树编辑',
+    editTargetGene: '基因树编辑',
+    editTargetRecon: '协调树编辑',
     ariaSpeciesPane: '物种树窗格',
     ariaGenePane: '基因树窗格',
     ariaGeneNode: (label: string, mapped: string, event: string, losses: number) =>
       `基因节点 ${label}，映射到 ${mapped}${event ? `，事件 ${event}` : '，未映射'}${losses > 0 ? `，丢失 ${losses} 次` : ''}`,
     ariaSpeciesNode: (label: string) => `物种节点 ${label}`,
-    searchUnavailable: '协调视图暂不支持画布搜索；请使用左栏「场景 › 映射与事件」定位节点。',
+    searchUnavailable: '协调视图暂不支持画布搜索；请使用左栏「节点映射」列表定位节点。',
     hoverLineHint: '悬停映射行可临时高亮对应映射线',
     tipUnmapped: '未映射',
     // --- embedded (nested) layout mode ---------------------------------------
@@ -1287,7 +1297,6 @@ const en: Strings = {
     viewRecon: 'Reconciliation view',
     // --- reconciliation workspace (mode-specific rail / panel / inspector) ---
     railTrees: 'Gene trees',
-    railScenario: 'Scenario',
     railView: 'View',
     railLabel: 'Reconciliation navigation',
     paneSpecies: 'Species tree',
@@ -1304,10 +1313,10 @@ const en: Strings = {
     legendSigma: 'Speciation events S',
     legendDup: 'Gene duplication D',
     legendTransfer: 'Horizontal transfer T',
-    legendUnresolved: 'Unmapped',
+    legendUnresolved: 'No mapping',
     legendLoss: 'Gene losses L',
-    legendTipLine: 'Tip mapping (label match)',
-    legendInternalLine: 'Internal mapping (inferred / edited)',
+    legendTipLine: 'Tip mapping',
+    legendInternalLine: 'Internal mapping',
     scopeTips: 'Tip mappings only',
     scopeInternal: 'Internal mappings only',
     scopeAll: 'All mappings',
@@ -1354,12 +1363,21 @@ const en: Strings = {
     nextUnresolved: 'Next unmapped node',
     // Removed with their zh twins (2026-11-15) — see the zh note.
     emptyReconTitle: 'No gene tree yet',
+    // The empty stage carries TWO entries — 新建协调视图 seeds a reconciliation
+    // from the current species tree; 导入协调视图 opens a saved project.
+    newReconView: 'New reconciliation view',
+    newReconViewTitle: 'Create a gene tree from the current species tree, then map nodes in the reconciliation view',
+    importReconView: 'Import reconciliation view',
+    importReconViewTitle: 'Open a saved CladeForge project (species tree + gene trees + mappings)',
+    editTargetSpecies: 'Edit species tree',
+    editTargetGene: 'Edit gene tree',
+    editTargetRecon: 'Edit reconciliation',
     ariaSpeciesPane: 'Species tree pane',
     ariaGenePane: 'Gene tree pane',
     ariaGeneNode: (label: string, mapped: string, event: string, losses: number) =>
       `Gene node ${label}, mapped to ${mapped}${event ? `, event ${event}` : ', unmapped'}${losses > 0 ? `, ${losses} loss${losses === 1 ? '' : 'es'}` : ''}`,
     ariaSpeciesNode: (label: string) => `Species node ${label}`,
-    searchUnavailable: 'Canvas search is not available in the reconciliation view; use “Scenario › Mappings & events” in the left panel to locate nodes.',
+    searchUnavailable: 'Canvas search is not available in the reconciliation view; use the “Node mappings” list in the left panel to locate nodes.',
     hoverLineHint: 'Hover a mapping row to highlight its mapping line',
     tipUnmapped: 'Unmapped',
     // --- embedded (nested) layout mode ---------------------------------------

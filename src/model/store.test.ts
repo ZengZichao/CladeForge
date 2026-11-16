@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { useStore, isReconActive, hasActiveGeneTree } from './store';
+import { useStore, isReconActive, hasActiveGeneTree, persistedProject } from './store';
 import { makeGeneTreeEntry } from './geneTrees';
 import { IDENTITY_VIEW } from './types';
 import { createEmptyProject, createLargeTreeSample } from './sampleTree';
@@ -437,5 +437,124 @@ describe('recon workspace state', () => {
     // Parked snapshots restore with healed pointers.
     useStore.getState().switchTab(s().tabs[0]);
     expect(s().activeGeneTreeId).toBe(first);
+  });
+});
+
+// 用户反馈 (2026-11-16): 物种树编辑 / 基因树编辑 hand the tree to the STANDARD
+// editor. The gene tree gets there through a document swap: entering the mode
+// puts the gene doc into `project` (so every standard gesture edits it), and
+// leaving writes it back into the reconciliation. These tests pin that
+// round-trip — including the tab-switch guard that must merge BEFORE parking.
+describe('gene document edit swap (基因树编辑)', () => {
+  beforeEach(() => {
+    useStore.getState().loadProject(createEmptyProject('species'));
+  });
+
+  function seedGeneTree(name = 'g'): string {
+    let id = '';
+    useStore.getState().apply((d) => {
+      const entry = makeGeneTreeEntry(createEmptyProject(name), name);
+      entry.doc.nodes[entry.doc.rootId].label = 'root';
+      const [child] = addChildren(entry.doc, entry.doc.rootId, 2);
+      void child;
+      d.geneTrees = [...(d.geneTrees ?? []), entry];
+      id = entry.id;
+    });
+    return id;
+  }
+
+  it('entering swaps the gene doc into project; exiting writes edits back', () => {
+    const id = seedGeneTree();
+    const speciesBefore = s().project;
+    const pastBefore = s().past.length;
+    const geneTipCount = Object.keys(speciesBefore.geneTrees![0].doc.nodes).length;
+
+    s().setReconEditTarget('gene');
+    expect(s().reconEditTarget).toBe('gene');
+    expect(s().geneEditBackup).not.toBeNull();
+    expect(s().past).toHaveLength(0); // species history parked on the backup
+    // The editable document IS the gene doc now.
+    expect(Object.keys(s().project.nodes)).toHaveLength(geneTipCount);
+    expect(s().project).toBe(speciesBefore.geneTrees![0].doc);
+
+    // A standard-canvas style edit targets the gene doc…
+    s().apply((d) => {
+      addChildren(d, d.rootId, 1);
+    });
+    expect(s().past).toHaveLength(1); // fresh gene-mode undo stack
+
+    // …and exiting the mode lands it back inside the species project.
+    s().setReconEditTarget('recon');
+    expect(s().geneEditBackup).toBeNull();
+    expect(s().project).not.toBe(speciesBefore); // merged write-back
+    const entry = s().project.geneTrees!.find((g) => g.id === id)!;
+    expect(Object.keys(entry.doc.nodes)).toHaveLength(geneTipCount + 1);
+    // The species tree itself is untouched…
+    expect(Object.keys(s().project.nodes)).toHaveLength(1);
+    // …and the parked species undo history resumes where it was.
+    expect(s().past).toHaveLength(pastBefore);
+    expect(s().activeGeneTreeId).toBe(id);
+  });
+
+  it('exiting without edits restores the exact species project (no dirty noise)', () => {
+    seedGeneTree();
+    const speciesBefore = s().project; // AFTER seeding
+    const revisionBefore = s().revision;
+
+    s().setReconEditTarget('gene');
+    s().setReconEditTarget('recon');
+    expect(s().project).toBe(speciesBefore);
+    expect(s().revision).toBe(revisionBefore);
+  });
+
+  it('gene-mode undo cannot resurrect a species snapshot', () => {
+    seedGeneTree();
+    const pastBefore = s().past.length;
+    s().apply((d) => {
+      addChildren(d, d.rootId, 1); // species edit → history
+    });
+    expect(s().past).toHaveLength(pastBefore + 1);
+
+    s().setReconEditTarget('gene');
+    expect(s().past).toHaveLength(0); // history parked on the backup
+    s().apply((d) => {
+      addChildren(d, d.rootId, 1); // gene edit
+    });
+    s().undo();
+    // The undo stays inside the gene doc — never the species snapshot.
+    expect(s().geneEditBackup).not.toBeNull();
+    s().setReconEditTarget('recon');
+    expect(Object.keys(s().project.nodes)).toHaveLength(2); // 1 root + 1 species child
+    expect(s().past).toHaveLength(pastBefore + 1);
+  });
+
+  it('switching tabs merges the gene doc back BEFORE parking the snapshot', () => {
+    const id = seedGeneTree();
+    const geneTipCount = Object.keys(s().project.geneTrees![0].doc.nodes).length;
+
+    s().setReconEditTarget('gene');
+    s().apply((d) => {
+      addChildren(d, d.rootId, 1);
+    });
+    // Two tabs: the current (species + gene) one and a fresh one.
+    useStore.getState().newTab();
+    // The parked snapshot must hold the MERGED project, not the swapped doc.
+    const parked = s().tabStore[s().tabs[0]];
+    const entry = parked.project.geneTrees!.find((g) => g.id === id)!;
+    expect(Object.keys(entry.doc.nodes)).toHaveLength(geneTipCount + 1);
+    expect(Object.keys(parked.project.nodes)).toHaveLength(1);
+    expect(s().geneEditBackup).toBeNull();
+  });
+
+  it('persistedProject merges the edited gene doc while swapped', () => {
+    seedGeneTree();
+    s().setReconEditTarget('gene');
+    s().apply((d) => {
+      addChildren(d, d.rootId, 1);
+    });
+    const persisted = persistedProject(s());
+    expect(Object.keys(persisted.nodes)).toHaveLength(1); // species tree
+    expect(Object.keys(persisted.geneTrees![0].doc.nodes)).toHaveLength(4);
+    s().setReconEditTarget('recon');
   });
 });
