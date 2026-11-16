@@ -215,7 +215,9 @@ export function ReconPanel({
 
   const showTrees = !section || section === 'trees';
   const showScenario = !section || section === 'scenario';
-  const showView = section === 'view';
+  // 用户反馈: the single plain left panel shows EVERY section stacked —
+  // including the view options that used to live behind the 视图 rail item.
+  const showView = !section || section === 'view';
 
   const eventGlyph = (ev: ReconEventType | null) =>
     ev === 'speciation' ? 'S' : ev === 'duplication' ? 'D' : ev === 'transfer' ? 'T' : '–';

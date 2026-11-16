@@ -4220,6 +4220,20 @@ input.has-error {
   background: var(--bg);
   flex: 1;
 }
+/* 用户反馈: 物种树编辑 / 基因树编辑 render the STANDARD workspace (same side
+   panels, same mouse gestures) under the recon toolbar — stack the toolbar row
+   and the standard body vertically inside the recon workspace. */
+.recon-editing .recon-edit-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.recon-editing .recon-edit-column > .body {
+  flex: 1;
+  min-height: 0;
+}
 .recon-left.recon-left {
   width: 260px;
 }

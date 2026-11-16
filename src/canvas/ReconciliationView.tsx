@@ -58,16 +58,13 @@ function horizontalCladogram(doc: Project, orientation: 'LR' | 'RL'): Project {
 export function ReconciliationView({
   onZoomChange,
   onEmbeddedZoomChange,
-  onBuildGeneTree,
   onCopySpeciesTree,
 }: {
   /** Reported when a pane's zoom scale changes (status-bar readouts). */
   onZoomChange?: (species: number, gene: number) => void;
   /** Embedded mode: the single viewport's zoom readout. */
   onEmbeddedZoomChange?: (zoom: number) => void;
-  /** Empty state: starts the first gene tree from the species tree. */
-  onBuildGeneTree?: () => void;
-  /** Empty state (M9): one-click copy of the species topology as a gene tree. */
+  /** Empty state: 新建协调视图 — seeds the reconciliation from the species tree. */
   onCopySpeciesTree?: () => void;
 }) {
   const project = useStore((s) => s.project);
@@ -568,12 +565,11 @@ export function ReconciliationView({
   }, [geneSelection, entry, project]);
 
   // --- empty state (no gene tree) ---------------------------------------------
-  // M9 (review finding 8): the canvas used to state the condition and offer ONE
-  // action while the other three lived only in the left panel — a large blank
-  // stage was the first thing a new user saw in the reconciliation workspace.
-  // All four creation paths now sit on the empty stage itself (the panel keeps
-  // them too); in narrow mode, where the panel is a closed drawer, the stage is
-  // the ONLY reachable entry, so this is also a reachability fix.
+  // 用户反馈 (2026-11-16): the blank stage carries TWO entries — 新建协调视图
+  // seeds the reconciliation from the current species tree (a gene-tree copy
+  // whose identical tip labels map instantly); 导入协调视图 opens a saved
+  // CladeForge project holding the full reconciliation. The old four separate
+  // tree-build/import entries are retired.
   if (!entry || (!embedded && !geneLayout)) {
     return (
       <div className="recon-empty-stage">
@@ -584,25 +580,22 @@ export function ReconciliationView({
           <div className="empty-wordmark">{S.app.name}</div>
         </div>
         <div className="recon-empty-note">{S.recon.emptyReconTitle}</div>
-        {/* 用户反馈：four entries in a 2×2 grid — 构建基因树 / 构建物种树 /
-            导入物种树 / 导入基因树. 构建物种树 opens the species tree in the
-            standard editor (the copy-species-tree action). */}
         <div className="recon-empty-actions">
-          {onBuildGeneTree && (
-            <button className="btn primary" onClick={onBuildGeneTree}>
-              {tr('构建基因树', 'Build gene tree')}
-            </button>
-          )}
           {onCopySpeciesTree && (
-            <button className="btn" onClick={onCopySpeciesTree}>
-              {tr('构建物种树', 'Build species tree')}
+            <button
+              className="btn primary"
+              onClick={onCopySpeciesTree}
+              title={S.recon.newReconViewTitle}
+            >
+              {S.recon.newReconView}
             </button>
           )}
-          <button className="btn" onClick={() => void file.actionImportTree()}>
-            {tr('导入物种树', 'Import species tree')}
-          </button>
-          <button className="btn" onClick={() => void file.actionImportGeneTree()}>
-            {tr('导入基因树', 'Import gene tree')}
+          <button
+            className="btn"
+            onClick={() => void file.actionOpenProject()}
+            title={S.recon.importReconViewTitle}
+          >
+            {S.recon.importReconView}
           </button>
         </div>
         <div className="sample-picker">

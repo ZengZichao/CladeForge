@@ -16,19 +16,21 @@ const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
 describe('requested layout fixes', () => {
   it('keeps the recon empty state to a single status line, with creation actions in the panel', () => {
     // M9 (2026-11-15 review) put ALL FOUR creation paths on the empty stage;
-    // the 用户反馈 round re-shaped the stage further: the app wordmark, the
-    // three action buttons, and the reconciliation sample as a rounded CARD
-    // (the standard samples live on the standard front page). The stage still
-    // must not offer an exit (leaving lives in the header switch and the rail).
+    // 2026-11-16 用户反馈 replaced them with TWO entries — 新建协调视图 (seeds
+    // the reconciliation from the species tree) and 导入协调视图 (opens a saved
+    // project). The stage still must not offer an exit (leaving lives in the
+    // header switch).
     const view = source('../canvas/ReconciliationView.tsx');
     expect(view).toContain('className="recon-empty-note"');
     expect(view).toContain('S.recon.emptyReconTitle');
-    // 用户反馈: FOUR entries on the empty stage — 构建基因树 / 构建物种树 /
-    // 导入物种树 / 导入基因树 — as a 2×2 grid.
-    expect(view).toContain("tr('构建基因树', 'Build gene tree')");
-    expect(view).toContain("tr('构建物种树', 'Build species tree')");
-    expect(view).toContain("tr('导入物种树', 'Import species tree')");
-    expect(view).toContain("tr('导入基因树', 'Import gene tree')");
+    expect(view).toContain('S.recon.newReconView');
+    expect(view).toContain('S.recon.importReconView');
+    expect(view).toContain("void file.actionOpenProject()");
+    // The retired four entries must not come back.
+    expect(view).not.toContain("tr('构建基因树', 'Build gene tree')");
+    expect(view).not.toContain("tr('构建物种树', 'Build species tree')");
+    expect(view).not.toContain("tr('导入物种树', 'Import species tree')");
+    expect(view).not.toContain("tr('导入基因树', 'Import gene tree')");
     expect(view).toContain("d.id === 'recon-family'");
     expect(view).toContain('empty-wordmark');
     expect(view).toContain('sample-card');

@@ -31,7 +31,13 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
     { id: 'embedded', label: S.recon.layoutEmbedded, title: S.recon.embeddedAria },
   ];
   const embedded = options.layoutMode === 'embedded';
-  const hasGeneTrees = (project.geneTrees ?? []).length > 0;
+  // While 「基因树编辑」 is swapped the gene trees live on the backup — the
+  // toolbar must stay visible in the edit modes or the user could not switch
+  // back to the coordination canvas.
+  const geneEditBackup = useStore((s) => s.geneEditBackup);
+  const hasGeneTrees = geneEditBackup
+    ? (geneEditBackup.project.geneTrees?.length ?? 0) > 0
+    : (project.geneTrees ?? []).length > 0;
 
   // With no gene tree there is nothing for this row to control: the layout
   // switch, fit, sync zoom and mapping scope all act on a gene pane that does
@@ -41,10 +47,13 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
   return (
     <div className="recon-toolbar" role="toolbar" aria-label={S.recon.section}>
       {/* 用户反馈: a rounded button look for the family picker, sitting left of
-          the layout switch. */}
+          the layout switch. During the 「基因树编辑」 swap the trees live on the
+          backup — show the edited tree's name and freeze the picker (switching
+          families mid-edit would orphan the swapped document). */}
       <select
         className="recon-gene-select btn"
-        value={activeGeneTreeId ?? ''}
+        value={geneEditBackup ? geneEditBackup.geneId : (activeGeneTreeId ?? '')}
+        disabled={!!geneEditBackup}
         onChange={(e) => {
           setActiveGeneTree(e.target.value || null);
           clearGeneSelection();
@@ -52,19 +61,21 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
         title={S.recon.activeGene}
         aria-label={S.recon.activeGene}
       >
-        {(project.geneTrees ?? []).map((g) => (
+        {(geneEditBackup ? (geneEditBackup.project.geneTrees ?? []) : (project.geneTrees ?? [])).map((g) => (
           <option key={g.id} value={g.id}>
             {g.name}
           </option>
         ))}
       </select>
 
-      {/* 用户反馈: both layouts support two edit modes — the toggle declares
-          which tree edit gestures target (物种树编辑 / 基因树编辑). */}
+      {/* 用户反馈: three edit surfaces — 物种树编辑 and 基因树编辑 hand the
+          tree to the STANDARD editor (same panels and mouse gestures); 协调树编辑
+          is the coordination canvas where the node mappings live. */}
       <div className="seg recon-edit-seg" role="tablist" aria-label={tr('编辑目标', 'Edit target')}>
         {([
-          ['species', tr('物种树编辑', 'Edit species tree')],
-          ['gene', tr('基因树编辑', 'Edit gene tree')],
+          ['species', S.recon.editTargetSpecies],
+          ['gene', S.recon.editTargetGene],
+          ['recon', S.recon.editTargetRecon],
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -79,7 +90,11 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
       </div>
 
       {/* Canvas layout mode: the two-pane comparison or the nested embedded
-          figure. Switching never touches selections or mappings. */}
+          figure. Switching never touches selections or mappings. Only the
+          coordination canvas consumes these — the tree-edit surfaces render
+          the standard workspace instead. */}
+      {reconEditTarget === 'recon' && (
+      <>
       <div className="seg recon-layout-seg" role="tablist" aria-label={S.recon.layoutLabel}>
         {layouts.map((ly) => (
           <button
@@ -139,6 +154,8 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
         >
           <DownloadIcon /> {tr('导出嵌套图', 'Export figure')}
         </button>
+      )}
+      </>
       )}
 
       <div className="spacer" />

@@ -159,7 +159,52 @@ export type LegendPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-
 /** 用户反馈: how legend items flow — one/two vertical columns or one/two horizontal rows. */
 export type LegendLayout = 'one-column' | 'two-columns' | 'one-row' | 'two-rows';
 /** 用户反馈: which tree the reconciliation edit gestures target. */
-export type ReconEditTarget = 'species' | 'gene';
+/** 用户反馈: which editing surface the reconciliation workspace shows.
+ *  'species' / 'gene' hand the respective tree to the STANDARD editor (same
+ *  side panels, same click / drag / right-click gestures); 'recon' is the
+ *  coordination canvas where the species↔gene node mappings are defined. */
+export type ReconEditTarget = 'species' | 'gene' | 'recon';
+
+/**
+ * While 「基因树编辑」 is active, the gene tree's standalone document is
+ * swapped INTO `project`, so the standard canvas, panels and context menu edit
+ * it with no duplicated interaction code. The backup holds everything that
+ * displacement pushed aside; leaving the mode writes the edited doc back into
+ * the reconciliation and restores the species project untouched.
+ */
+export interface GeneEditBackup {
+  /** The species project the reconciliation belongs to. */
+  project: Project;
+  /** The edited gene-tree entry inside `project.geneTrees`. */
+  geneId: string;
+  /** Gene pointer / selection to restore (healed against the project). */
+  activeGeneTreeId: string | null;
+  geneSelection: NodeId[];
+  /** Species-doc undo history, parked for the duration of the mode. */
+  past: HistoryEntry[];
+  future: HistoryEntry[];
+  view: ViewTransform;
+  selection: NodeId[];
+  selectedEdgeId: EdgeId | null;
+  savedProject: Project | null;
+  lastSavedRevision: number;
+  /** ⌘S succeeded while swapped: exit then pins the merged project as saved. */
+  savedInMode: boolean;
+}
+
+/**
+ * The project the session should PERSIST: while 「基因树编辑」 is swapped, the
+ * species project with the edited gene doc merged back in — never the bare
+ * gene doc, or a crash would resurrect it as a standalone document.
+ */
+export function persistedProject(s: Pick<AppState, 'project' | 'geneEditBackup'>): Project {
+  const b = s.geneEditBackup;
+  if (!b) return s.project;
+  return produce(b.project, (d) => {
+    const g = d.geneTrees?.find((x) => x.id === b.geneId);
+    if (g) g.doc = s.project;
+  });
+}
 
 const LS_LEGEND_POSITION = 'cladeforge:legendPosition';
 const LS_LEGEND_LAYOUT = 'cladeforge:legendLayout';
@@ -416,6 +461,8 @@ function docStateFor(project: Project): Partial<AppState> {
     activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
     geneSelection: [] as NodeId[],
     reconSection: 'trees' as ReconSection,
+    reconEditTarget: 'recon' as ReconEditTarget,
+    geneEditBackup: null as GeneEditBackup | null,
     reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
     reconHoverGeneId: null as NodeId | null,
     reconFocusTarget: null,
@@ -632,6 +679,8 @@ export interface UISlice {
   reconSection: ReconSection;
   /** 用户反馈: which tree edit gestures target in the reconciliation workspace. */
   reconEditTarget: ReconEditTarget;
+  /** Non-null exactly while 「基因树编辑」 has the gene doc swapped into `project`. */
+  geneEditBackup: GeneEditBackup | null;
   /** Transient reconciliation canvas display options (UI state only). */
   reconViewOptions: ReconViewOptions;
   /** Gene node currently hovered (mapping-line highlight); null = none. */
@@ -691,6 +740,10 @@ export interface UISlice {
   clearGeneSelection: () => void;
   setReconSection: (s: ReconSection) => void;
   setReconEditTarget: (t: ReconEditTarget) => void;
+  /** Swap the active gene tree's doc into `project` for standard-style editing. */
+  enterGeneDocEdit: () => void;
+  /** Write the edited gene doc back into the reconciliation and restore the species project. */
+  exitGeneDocEdit: () => void;
   setReconViewOptions: (patch: Partial<ReconViewOptions>) => void;
   setReconHoverGene: (id: NodeId | null) => void;
   focusGeneNode: (id: NodeId) => void;
@@ -1090,7 +1143,14 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
   canRedo: () => get().future.length > 0,
 
   markSaved: () =>
-    set((s) => ({ lastSavedRevision: s.revision, savedProject: s.project })),
+    set((s) =>
+      // While 「基因树编辑」 is swapped, the on-disk document is the MERGED
+      // project (saved through `persistedProject`); pin that fact on the
+      // backup so `exitGeneDocEdit` can restore a clean dirty flag.
+      s.geneEditBackup
+        ? { geneEditBackup: { ...s.geneEditBackup, savedInMode: true } }
+        : { lastSavedRevision: s.revision, savedProject: s.project },
+    ),
 
   // M21: implemented with set+produce like markTabSaved — same no-history
   // contract, one undo-step-shaped mutation fewer per save.
@@ -1164,7 +1224,9 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
     return applied;
   },
 
-  loadProject: (project) =>
+  loadProject: (project) => {
+    // Merge a pending gene-doc edit back before the document is replaced.
+    get().exitGeneDocEdit();
     set((s) => ({
       // Reuse the one canonical per-document reset (`docStateFor`) rather than a
       // second, shorter copy that omits reconMode / activeGeneTreeId /
@@ -1182,7 +1244,8 @@ const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> = (set,
       future: [],
       loadCounter: s.loadCounter + 1,
       fitRequests: s.fitRequests + 1,
-    })),
+    }));
+  },
 
   newProject: () =>
     // Same single reset set as `loadProject` (`docStateFor`), so a new empty
@@ -1227,7 +1290,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   activeGeneTreeId: null,
   geneSelection: [],
   reconSection: 'trees',
-  reconEditTarget: 'species',
+  reconEditTarget: 'recon',
+  geneEditBackup: null,
   reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
   reconHoverGeneId: null,
   reconFocusTarget: null,
@@ -1415,7 +1479,13 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   setHistoryLimit: (n) =>
     set({ historyLimit: Math.max(10, Math.min(5000, Math.round(n))) }),
 
-  setReconMode: (v) => set({ reconMode: v }),
+  setReconMode: (v) => {
+    // Leaving the workspace from 「基因树编辑」 must write the gene doc back
+    // before the mode flag drops, and the next visit starts on the
+    // coordination canvas (the mapping surface).
+    if (!v && get().geneEditBackup) get().exitGeneDocEdit();
+    set({ reconMode: v, ...(!v ? { reconEditTarget: 'recon' as ReconEditTarget } : {}) });
+  },
 
   setActiveGeneTree: (id) => set({ activeGeneTreeId: id, geneSelection: [] }),
 
@@ -1432,7 +1502,85 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   clearGeneSelection: () => set({ geneSelection: [] }),
 
   setReconSection: (section) => set({ reconSection: section }),
-  setReconEditTarget: (t) => set({ reconEditTarget: t }),
+
+  setReconEditTarget: (t) => {
+    const s = get();
+    if (s.reconEditTarget === t) return;
+    // The gene edit surface is a real document swap: leave it before anything
+    // else renders, enter it when the mode demands.
+    if (s.reconEditTarget === 'gene' && t !== 'gene') get().exitGeneDocEdit();
+    if (t === 'gene' && s.reconEditTarget !== 'gene') get().enterGeneDocEdit();
+    set({ reconEditTarget: t });
+  },
+
+  enterGeneDocEdit: () =>
+    set((s) => {
+      if (s.geneEditBackup) return {};
+      const entry = s.project.geneTrees?.find((g) => g.id === s.activeGeneTreeId);
+      if (!entry) return {};
+      return {
+        geneEditBackup: {
+          project: s.project,
+          geneId: entry.id,
+          activeGeneTreeId: s.activeGeneTreeId,
+          geneSelection: s.geneSelection,
+          past: s.past,
+          future: s.future,
+          view: s.view,
+          selection: s.selection,
+          selectedEdgeId: s.selectedEdgeId,
+          savedProject: s.savedProject,
+          lastSavedRevision: s.lastSavedRevision,
+          savedInMode: false,
+        },
+        // The gene doc becomes the editable document. The species undo history
+        // is parked on the backup and the gene doc starts a FRESH stack, so a
+        // gene-mode ⌘Z can never resurrect a species snapshot (or vice versa).
+        project: entry.doc,
+        past: [],
+        future: [],
+        selection: [],
+        selectedEdgeId: null,
+        savedProject: null,
+      };
+    }),
+
+  exitGeneDocEdit: () =>
+    set((s) => {
+      const b = s.geneEditBackup;
+      if (!b) return {};
+      const originalDoc = b.project.geneTrees?.find((x) => x.id === b.geneId)?.doc;
+      // Identity tells whether the mode actually edited anything: with zero
+      // net edits the live project is still the very doc object we swapped in.
+      const changed = originalDoc !== undefined && s.project !== originalDoc;
+      const restored = changed
+        ? produce(b.project, (d) => {
+            const g = d.geneTrees?.find((x) => x.id === b.geneId);
+            if (g) g.doc = s.project;
+          })
+        : b.project;
+      const pointers = reconciledGenePointers(restored, b.activeGeneTreeId, b.geneSelection);
+      return {
+        project: restored,
+        geneEditBackup: null,
+        past: b.past,
+        future: b.future,
+        view: b.view,
+        selection: pruneSelection(restored, b.selection),
+        selectedEdgeId: b.selectedEdgeId && restored.nodes[b.selectedEdgeId] ? b.selectedEdgeId : null,
+        activeGeneTreeId: pointers.activeGeneTreeId,
+        geneSelection: pointers.geneSelection,
+        savedProject: b.savedInMode ? restored : b.savedProject,
+        lastSavedRevision: b.savedInMode
+          ? s.revision + (changed ? 1 : 0)
+          : b.lastSavedRevision,
+        ...(changed
+          ? { revision: s.revision + 1, modifiedAt: new Date().toISOString() }
+          : {}),
+        focusTarget: null,
+        renameRequest: null,
+      };
+    }),
 
   setReconViewOptions: (patch) =>
     set((s) => ({ reconViewOptions: { ...s.reconViewOptions, ...patch } })),
@@ -1467,12 +1615,16 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   exitReconWorkspace: () => set({ reconMode: false }),
 });
 
-const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
+const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   tabs: [INITIAL_TAB_ID],
   activeTabId: INITIAL_TAB_ID,
   tabStore: {},
 
-  newTab: () =>
+  newTab: () => {
+    // A tab switch parks `project` in the tab store — the swapped gene doc
+    // must be merged back FIRST, or the species tree would be replaced by its
+    // own gene tree in the snapshot.
+    get().exitGeneDocEdit();
     set((s) => {
       const id = newTabId();
       return {
@@ -1483,9 +1635,11 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
       };
-    }),
+    });
+  },
 
-  openInNewTab: (project) =>
+  openInNewTab: (project) => {
+    get().exitGeneDocEdit();
     set((s) => {
       const id = newTabId();
       return {
@@ -1496,9 +1650,11 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
       };
-    }),
+    });
+  },
 
-  switchTab: (id) =>
+  switchTab: (id) => {
+    get().exitGeneDocEdit();
     set((s) => {
       if (id === s.activeTabId) return {};
       const snap = s.tabStore[id];
@@ -1508,9 +1664,11 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
       // Preserve the tab's saved view (no auto-fit); the layout recomputes from
       // the swapped-in project reference.
       return { tabStore, activeTabId: id, ...restoreState(snap), loadCounter: s.loadCounter + 1 };
-    }),
+    });
+  },
 
-  closeTab: (id) =>
+  closeTab: (id) => {
+    get().exitGeneDocEdit();
     set((s) => {
       if (s.tabs.length <= 1) return {};
       const idx = s.tabs.indexOf(id);
@@ -1533,9 +1691,11 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
         ...(snap ? restoreState(snap) : {}),
         loadCounter: s.loadCounter + 1,
       };
-    }),
+    });
+  },
 
-  loadWorkspace: (projects, activeIndex) =>
+  loadWorkspace: (projects, activeIndex) => {
+    get().exitGeneDocEdit();
     set((s) => {
       if (!projects.length) return {};
       const clamped = Math.max(0, Math.min(projects.length - 1, activeIndex));
@@ -1552,7 +1712,8 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set) => ({
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
       };
-    }),
+    });
+  },
 
   markTabSaved: (tabId) =>
     set((s) => {

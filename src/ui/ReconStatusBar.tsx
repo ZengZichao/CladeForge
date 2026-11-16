@@ -24,7 +24,6 @@ export function ReconStatusBar({
 }) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
-  const setReconSection = useStore((s) => s.setReconSection);
   const options = useStore((s) => s.reconViewOptions);
 
   const row = useMemo(() => {
@@ -38,26 +37,18 @@ export function ReconStatusBar({
 
   return (
     <div className="status recon-status" role="status">
-      <button
-        className="status-link"
-        title={S.recon.nodeMapping}
-        onClick={() => setReconSection('scenario')}
-      >
+      {/* 用户反馈: the single left panel stacks every section, so these
+          readouts no longer JUMP anywhere — plain figures like the tally. */}
+      <span className="status-plain" title={S.recon.nodeMapping}>
         {S.recon.sbTipsMapped(row.mappedTips, row.tips)}
-      </button>
-      <button
-        className="status-link"
-        onClick={() => setReconSection('scenario')}
-      >
+      </span>
+      <span className="status-plain">
         {S.recon.sbInternal(row.summary.mappedInternal, row.summary.totalInternal)}
-      </button>
+      </span>
       {unresolved > 0 && (
-        <button
-          className="status-link status-warn"
-          onClick={() => setReconSection('scenario')}
-        >
+        <span className="status-plain status-warn">
           {S.recon.sbUnresolved(unresolved)}
-        </button>
+        </span>
       )}
       {/* 用户反馈: the error/note tally no longer jumps to a removed 校验
           section — it is a readout only. */}

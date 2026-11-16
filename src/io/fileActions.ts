@@ -4,7 +4,7 @@
 // delivered through non-blocking toasts (see ui/toast) and all copy comes from
 // the string catalogue (see ui/strings).
 
-import { useStore } from '../model/store';
+import { useStore, persistedProject } from '../model/store';
 import { parseNewickTrees, serializeNewick, type NewickParseResult } from './newick';
 import {
   extractSubtree,
@@ -505,7 +505,9 @@ export async function openPathFromShell(path: string): Promise<void> {
  */
 export async function actionSaveProject(): Promise<void> {
   const st = useStore.getState();
-  const project = st.project;
+  // While 「基因树编辑」 is swapped, the file on disk is the species project
+  // with the edited gene doc merged back — never the bare gene doc.
+  const project = persistedProject(st);
   try {
     const target = project.sourcePath;
     if (target && isTauri()) {
@@ -579,7 +581,7 @@ export async function actionSaveProject(): Promise<void> {
 /** ⌘⇧S — always ask where to put the file (and adopt that path). */
 export async function actionSaveProjectAs(): Promise<void> {
   const st = useStore.getState();
-  const project = st.project;
+  const project = persistedProject(st);
   try {
     const saved = await saveTextWithResult(
       outName(project.name, 'cladeforge.json'),

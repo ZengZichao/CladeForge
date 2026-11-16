@@ -1,9 +1,17 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// The reconciliation WORKSPACE: the recon rail + recon panel on the left, the
-// recon inspector on the right, and the canvas column (toolbar / panes /
-// status bar) between them. It replaces the standard shell entirely while
-// `reconMode` is on — one mode, one workspace (§5.1) — so no standard module
-// rail, no PropertiesPanel and no standard context menu can appear here.
+// The reconciliation WORKSPACE: ONE plain left panel (all reconciliation
+// sections stacked — no 基因树/场景/视图 rail), the recon inspector on the
+// right, and the canvas column (toolbar / panes / status bar) between them.
+// It replaces the standard shell entirely while `reconMode` is on — one mode,
+// one workspace (§5.1).
+//
+// 用户反馈 (2026-11-16): the toolbar's edit-target switch now offers THREE
+// surfaces. 协调树编辑 ('recon') is the coordination canvas above. 物种树编辑 /
+// 基因树编辑 hand the tree to the STANDARD workspace — identical left/right
+// panels and identical mouse gestures (select / drag / right-click) — so a tree
+// is edited exactly the same way everywhere. The gene tree gets there through
+// a document swap (see store.enterGeneDocEdit), the species tree is already
+// the project document.
 //
 // Panel widths / visibility use their OWN localStorage keys (§5.7), never the
 // standard workspace's, and the responsive tiers follow §5.7:
@@ -16,12 +24,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Cross1Icon, HamburgerMenuIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { S, tr } from '../ui/strings';
-import { ReconRail } from '../ui/ReconRail';
 import { ReconPanel } from '../ui/ReconPanel';
 import { ReconInspector } from '../ui/ReconInspector';
 import { ReconToolbar } from '../ui/ReconToolbar';
 import { ReconStatusBar } from '../ui/ReconStatusBar';
 import { ReconciliationView } from './ReconciliationView';
+import { StandardWorkspace } from '../ui/StandardWorkspace';
 // OP-17: the drag interaction now lives in ONE place, shared with the standard
 // workspace; only the remembered width bounds differ between the two.
 import { ResizeHandle } from '../ui/ResizeHandle';
@@ -63,20 +71,33 @@ export function ReconWorkspace({
   onBuildGeneTree,
   onCopySpeciesTree,
   onEditGeneTree,
+  onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
   onBuildGeneTree: () => void;
   onCopySpeciesTree: () => void;
   onEditGeneTree: (id: string) => void;
+  /** Opens the shared add-children dialog (owned by App) — the tree-edit
+      surfaces reuse it exactly like the standard workspace does. */
+  onAddChildrenDialog: (parentId: string) => void;
 }) {
   const [leftWidth, setLeftWidth] = useState(() => readReconWidth(LS_RECON_LEFT_WIDTH, 260));
   const [rightWidth, setRightWidth] = useState(() => readReconWidth(LS_RECON_RIGHT_WIDTH, 300));
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
-  const reconSection = useStore((s) => s.reconSection);
   const geneSelection = useStore((s) => s.geneSelection);
   const speciesSelection = useStore((s) => s.selection);
   const geneTreeCount = useStore((s) => s.project.geneTrees?.length ?? 0);
+  // While 「基因树编辑」 is swapped, `project` IS the gene doc — the count that
+  // matters for workspace chrome comes from the backed-up species project.
+  const geneEditBackup = useStore((s) => s.geneEditBackup);
+  const effectiveGeneTreeCount = geneEditBackup
+    ? (geneEditBackup.project.geneTrees?.length ?? 0)
+    : geneTreeCount;
+  // 用户反馈: 物种树编辑 / 基因树编辑 render the STANDARD workspace — same
+  // side panels, same mouse gestures as 标准视图. 协调树编辑 is the mapping
+  // canvas below.
+  const reconEditTarget = useStore((s) => s.reconEditTarget);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -106,31 +127,54 @@ export function ReconWorkspace({
   const mid = windowWidth < MID;
   const wide = windowWidth >= WIDE;
   const fullNarrow = windowWidth < FULL_NARROW;
-  // 用户反馈：with NO gene tree there is nothing for the left rail/panel to
-  // list or edit — the empty stage carries the creation entries itself, so
-  // the sidebar stays out of the way until a gene tree exists.
-  const reconEmpty = geneTreeCount === 0;
-  // Right panel: inline on wide screens, overlay drawer below.
-  // §5.7 tiers — drawers start CLOSED: at 1280 the two panes need the room far
-  // more than a permanently mounted inspector does.
-  const rightInline = wide && !panelsHidden && !reconEmpty;
-  const leftInline = !fullNarrow && !panelsHidden && !reconEmpty;
+  // 用户反馈：with NO gene tree there is nothing for the left panel to list or
+  // edit — the empty stage carries the creation entries itself, so the sidebar
+  // stays out of the way until a gene tree exists. While 「基因树编辑」 is
+  // swapped, the gene trees live on the backup, not on `project`.
+  const reconEmpty = effectiveGeneTreeCount === 0;
 
   const openGenePanel = useCallback(() => {
     setLeftDrawerOpen(true);
     setRightDrawerOpen(false);
   }, []);
 
+  // --- tree-edit surfaces (物种树编辑 / 基因树编辑) -----------------------------
+  // The full standard workspace, toolbar row on top so the edit-target switch
+  // stays reachable. Species needs no swap (the project IS the species tree);
+  // the gene tree was swapped into `project` by setReconEditTarget before this
+  // branch rendered.
+  if (reconEditTarget !== 'recon' && !reconEmpty) {
+    return (
+      <div className="body recon-workspace recon-editing">
+        <div className="recon-edit-column">
+          <ReconToolbar />
+          <StandardWorkspace
+            panelsHidden={panelsHidden}
+            onAddChildrenDialog={onAddChildrenDialog}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Right panel: inline on wide screens, overlay drawer below.
+  // §5.7 tiers — drawers start CLOSED: at 1280 the two panes need the room far
+  // more than a permanently mounted inspector does.
+  const rightInline = wide && !panelsHidden && !reconEmpty;
+  const leftInline = !fullNarrow && !panelsHidden && !reconEmpty;
+
   return (
     <div className="body recon-workspace">
-      {/* Rail: always visible inline; on the narrowest tier it collapses and a
-          toggle button opens the panel as a full overlay (§5.7). */}
-      {!fullNarrow && !panelsHidden && !reconEmpty && <ReconRail />}
+      {/* 用户反馈: the rail is gone — ONE plain left panel stacks every
+          reconciliation section (树库 / 场景 / 视图), like the standard
+          workspace's merged panel. On the narrowest tier a toggle button opens
+          the panel as a full overlay. */}
       {fullNarrow && (
         <button
           className="panel-toggle-btn left"
           onClick={openGenePanel}
           title={tr('打开协调面板', 'Open reconciliation panel')}
+          aria-label={S.recon.railLabel}
         >
           <HamburgerMenuIcon />
         </button>
@@ -154,8 +198,8 @@ export function ReconWorkspace({
             <Cross1Icon />
           </button>
         )}
+        {/* No `section` prop: the single panel shows ALL sections stacked. */}
         <ReconPanel
-          section={reconSection}
           onBuildGeneTree={onBuildGeneTree}
           onCopySpeciesTree={onCopySpeciesTree}
           onEditGeneTree={onEditGeneTree}
@@ -167,17 +211,10 @@ export function ReconWorkspace({
 
       <div className="recon-main">
         <ReconToolbar onToggleRightPanel={mid && !reconEmpty ? () => { setRightDrawerOpen((o) => !o); setLeftDrawerOpen(false); } : undefined} />
-        {/* At desktop the left panel is already showing the creation actions;
-            only hand the empty canvas its own entry when that panel is out of
-            sight, so the same primary never appears twice at once. */}
-        {/* M9 (review finding 8): the empty canvas carries all four creation
-            actions itself — it is the primary surface for a first-time user,
-            and in narrow mode it is the only reachable one. The left panel
-            keeps its copies; the old "never twice at once" gating is retired
-            because the empty stage is a different surface, not a duplicate
-            primary. */}
+        {/* M9 (review finding 8): the empty canvas carries the creation actions
+            itself — it is the primary surface for a first-time user, and in
+            narrow mode it is the only reachable one. */}
         <ReconWorkspacePanel
-          onBuildGeneTree={onBuildGeneTree}
           onCopySpeciesTree={onCopySpeciesTree}
         />
       </div>
@@ -220,10 +257,8 @@ export function ReconWorkspace({
  * so the workspace never re-renders during a pan.
  */
 function ReconWorkspacePanel({
-  onBuildGeneTree,
   onCopySpeciesTree,
 }: {
-  onBuildGeneTree?: () => void;
   onCopySpeciesTree?: () => void;
 }) {
   const [zoom, setZoom] = useState({ species: 1, gene: 1 });
@@ -241,7 +276,6 @@ function ReconWorkspacePanel({
       <ReconciliationView
         onZoomChange={onZoomChange}
         onEmbeddedZoomChange={onEmbeddedZoomChange}
-        onBuildGeneTree={onBuildGeneTree}
         onCopySpeciesTree={onCopySpeciesTree}
       />
       <ReconStatusBar

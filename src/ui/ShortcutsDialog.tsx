@@ -43,7 +43,7 @@ export function SHORTCUT_GROUPS(): { title: string; rows: ShortcutRow[] }[] {
       { keys: '⌘T / ⌘N', label: tr('新建标签页', 'New tab') },
       { keys: '⌘W', label: S.review.shortcutCmdW },
       { keys: '⌘A', label: S.review.shortcutCmdA },
-      { keys: '⌘F / Ctrl + F', label: tr('搜索节点', 'Search nodes'), mode: tr('协调视图下仅提示：请用「场景 › 映射与事件」定位', 'in the reconciliation view this only points to Scene › Mappings & events') },
+      { keys: '⌘F / Ctrl + F', label: tr('搜索节点', 'Search nodes'), mode: tr('协调视图下仅提示：请用左栏「节点映射」列表定位', 'in the reconciliation view this only points to the “Node mappings” list') },
       { keys: '⌘⇧F / ⌘0', label: S.review.shortcutCmd0 },
       { keys: '⌘K', label: tr('命令面板', 'Command palette') },
       { keys: 'Alt + Enter', label: S.review.shortcutF2, mode: tr('与 F2 等效', 'equivalent to F2') },
