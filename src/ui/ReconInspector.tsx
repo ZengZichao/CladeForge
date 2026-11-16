@@ -19,6 +19,7 @@ import { setAssumption } from '../model/geneTrees';
 import { GeneAssumptionInspector } from './GeneAssumptionInspector';
 import { Section } from './Section';
 import { requestConfirm } from './confirmDialog';
+import { notify } from './toast';
 import { S, tr } from './strings';
 
 const DTL_GLYPH: Record<string, string> = {
@@ -127,6 +128,7 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
   const geneSelection = useStore((s) => s.geneSelection);
   const selectGeneNode = useStore((s) => s.selectGeneNode);
   const focusGeneNode = useStore((s) => s.focusGeneNode);
+  const setReconClickTarget = useStore((s) => s.setReconClickTarget);
 
   const node = project.nodes[nodeId];
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
@@ -187,12 +189,18 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
           </ul>
         )}
         <div className="field row-actions">
+          {/* 用户反馈: never a disabled button with a cryptic refusal — with
+              no gene node selected, ONE click switches the canvas to
+              gene-clicking and says exactly what to do next. */}
           <button
             className="btn"
-            disabled={!geneSelected}
-            title={geneSelected ? S.recon.mapSelectedHere : S.recon.mapSelectedHereNeedGene}
+            title={S.recon.mapSelectedHere}
             onClick={() => {
-              if (!geneSelected || !entry) return;
+              if (!geneSelected || !entry) {
+                setReconClickTarget('gene');
+                notify.info(S.recon.mapHereSwitchHint);
+                return;
+              }
               const gid = geneSelection[0];
               apply((d) => {
                 setAssumption(d, entry.id, gid, {}, nodeId);
@@ -203,7 +211,6 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
             {S.recon.mapSelectedHere}
           </button>
         </div>
-        {!geneSelected && <div className="hint">{S.recon.mapSelectedHereNeedGene}</div>}
       </Section>
     </>
   );

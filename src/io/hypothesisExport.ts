@@ -23,7 +23,12 @@ import { S, tr } from '../ui/strings';
  * the interface spells it.
  */
 function confLabel(c: Confidence): string {
-  return S.confidence[c];
+  // Static member reads (not S.confidence[c]) — the string-usage guard counts
+  // only qualified references; resolving at call time keeps the live language
+  // binding (a module-level map would freeze it).
+  if (c === 'high') return S.confidence.high;
+  if (c === 'medium') return S.confidence.medium;
+  return S.confidence.low;
 }
 
 function nodeLabel(project: Project, id: string): string {

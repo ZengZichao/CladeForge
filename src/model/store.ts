@@ -681,6 +681,9 @@ export interface UISlice {
   reconEditTarget: ReconEditTarget;
   /** Non-null exactly while 「基因树编辑」 has the gene doc swapped into `project`. */
   geneEditBackup: GeneEditBackup | null;
+  /** 用户反馈: which tree plain clicks target in the coordination canvas — the
+   *  two panes overlap visually, so an explicit toggle beats missed clicks. */
+  reconClickTarget: 'species' | 'gene';
   /** Transient reconciliation canvas display options (UI state only). */
   reconViewOptions: ReconViewOptions;
   /** Gene node currently hovered (mapping-line highlight); null = none. */
@@ -746,6 +749,7 @@ export interface UISlice {
   exitGeneDocEdit: () => void;
   setReconViewOptions: (patch: Partial<ReconViewOptions>) => void;
   setReconHoverGene: (id: NodeId | null) => void;
+  setReconClickTarget: (t: 'species' | 'gene') => void;
   focusGeneNode: (id: NodeId) => void;
   /** Store / clear the shared DTL optimum for a gene tree. */
   setReconDp: (v: { geneId: string; scenario: DtlScenario } | null) => void;
@@ -1292,6 +1296,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   reconSection: 'trees',
   reconEditTarget: 'recon',
   geneEditBackup: null,
+  reconClickTarget: 'species',
   reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
   reconHoverGeneId: null,
   reconFocusTarget: null,
@@ -1587,6 +1592,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
 
   setReconHoverGene: (id) =>
     set((s) => (s.reconHoverGeneId === id ? {} : { reconHoverGeneId: id })),
+
+  setReconClickTarget: (t) => set({ reconClickTarget: t }),
 
   focusGeneNode: (id) =>
     set((s) => ({ reconFocusTarget: { id, seq: (s.reconFocusTarget?.seq ?? 0) + 1 } })),

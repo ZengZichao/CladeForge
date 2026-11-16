@@ -23,7 +23,6 @@ import { isImeComposing } from './ui/imeGuard';
 import { modalIsOpen } from './ui/useDialogFocus';
 import { MenuBar } from './ui/MenuBar';
 import { Toolbar, HeaderActions } from './ui/Toolbar';
-import { GeneTreeBuilderDialog } from './ui/GeneTreeBuilderDialog';
 import { CharacterMatrixDialog } from './ui/CharacterMatrixDialog';
 import { AnalysisDialog } from './ui/AnalysisDialog';
 import { NexusExportDialog } from './ui/NexusExportDialog';
@@ -228,13 +227,6 @@ export function App() {
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [nexusExportOpen, setNexusExportOpen] = useState(false);
-  const [geneBuilderOpen, setGeneBuilderOpen] = useState(false);
-  const [geneBuilderEditId, setGeneBuilderEditId] = useState<string | null>(null);
-
-  const openGeneBuilder = (editId: string | null = null) => {
-    setGeneBuilderEditId(editId);
-    setGeneBuilderOpen(true);
-  };
 
   /**
    * One-click "copy the species topology as a gene tree". This is the direct
@@ -588,9 +580,7 @@ export function App() {
         <ErrorBoundary scope={tr('协调工作区', 'Reconciliation workspace')}>
           <ReconWorkspace
             panelsHidden={panelsHidden}
-            onBuildGeneTree={() => openGeneBuilder(null)}
             onCopySpeciesTree={copySpeciesTreeToGene}
-            onEditGeneTree={(id) => openGeneBuilder(id)}
             onAddChildrenDialog={openAddForNode}
           />
         </ErrorBoundary>
@@ -614,11 +604,6 @@ export function App() {
         onOpenAbout={openAboutFromPalette}
       />
       <CharacterMatrixDialog open={matrixOpen} onClose={() => setMatrixOpen(false)} />
-      <GeneTreeBuilderDialog
-        open={geneBuilderOpen}
-        editId={geneBuilderEditId}
-        onClose={() => setGeneBuilderOpen(false)}
-      />
       <AnalysisDialog open={analysisOpen} onClose={() => setAnalysisOpen(false)} />
       <NexusExportDialog
         open={nexusExportOpen}

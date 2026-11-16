@@ -535,12 +535,8 @@ body {
   width: 12px;
   height: 12px;
 }
-@media (max-width: 1439px) {
-  .btn.menubar-help-btn .menubar-help-label,
-  .btn.menubar-help-btn .menubar-help-caret {
-    display: none;
-  }
-}
+/* 用户反馈: the help trigger keeps its word label at EVERY width — with the
+   icon gone, hiding the label below 1440px would render an empty button. */
 
 .brand {
   margin-right: 10px;
@@ -2005,10 +2001,20 @@ body.panel-resizing {
 }
 /* 用户反馈: the destructive row is wrapped in ONE long rounded rectangle. */
 .dialog.prefs-dialog .prefs-reset-btn {
-  border: 1px solid var(--border);
+  /* 用户反馈: the destructive action reads as one — red fill, white ink — and
+     stands apart from the rounded option rows above it. */
+  border: 1px solid var(--danger);
   border-radius: var(--radius-md);
   padding: 8px 12px;
-  margin-top: 4px;
+  margin-top: 14px;
+  background: var(--danger);
+  color: #fff;
+}
+.dialog.prefs-dialog .prefs-reset-btn:hover {
+  filter: brightness(1.08);
+}
+.dialog.prefs-dialog .prefs-reset-btn .prefs-item-label {
+  color: #fff;
 }
 /* 用户反馈：preference groups are rounded segmented BUTTON ROWS — every
    option the same width and height, labels of comparable length, the active
@@ -4212,7 +4218,10 @@ input.has-error {
    middle (species | bridge | gene), status/legend rows at the bottom. Nothing
    floats over the tree, so no pane title can be covered again. */
 .recon-workspace {
+  /* 用户反馈: column — the toolbar is a FULL-WIDTH row at the top (same left
+     edge in every mode), the side panels and canvas live in the row below. */
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   min-width: 0;
   min-height: 0;
@@ -4220,9 +4229,16 @@ input.has-error {
   background: var(--bg);
   flex: 1;
 }
-/* 用户反馈: 物种树编辑 / 基因树编辑 render the STANDARD workspace (same side
-   panels, same mouse gestures) under the recon toolbar — stack the toolbar row
-   and the standard body vertically inside the recon workspace. */
+/* The row below the toolbar: left panel / canvas / right panel. */
+.recon-workspace-row {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+/* 用户反馈: 物种树编辑 / 基因树编辑 render the standard workspace under the
+   same full-width toolbar. */
 .recon-editing .recon-edit-column {
   display: flex;
   flex-direction: column;
@@ -5724,4 +5740,15 @@ details.hint-details[open] > summary.hint {
   display: inline-flex;
   align-items: center;
   color: var(--muted-foreground);
+}
+
+/* 用户反馈: the embedded zoom slider rides the status-bar readout. */
+.recon-status-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.recon-status-zoom input[type='range'] {
+  width: 90px;
+  accent-color: var(--primary);
 }

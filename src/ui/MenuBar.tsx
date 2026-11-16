@@ -1,19 +1,16 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Top menu bar: document lifecycle (File / Recent) on the left and ONE Help
-// menu on the right.
+// Top menu bar: document lifecycle (File / Recent / Export) on the left and
+// ONE Help menu on the right.
 //
 // BUG-10 capped the header at ten clickable targets, so Keyboard Shortcuts,
-// the Beginner Tour, the new Workflow Tour and About are consolidated behind a
-// single "?" dropdown instead of three labelled buttons. Every item still opens
-// exactly the dialog it used to open.
-//
-// The Help trigger keeps its word label (帮助 / Help) above 1440px and collapses
-// to the bare "?" icon below that width — the same responsive rule the three
-// separate help buttons followed, now costing one header target instead of three.
+// the Beginner Tour, the Workflow Tour and About are consolidated behind a
+// single 帮助 dropdown instead of separate buttons. Every item still opens
+// exactly the dialog it used to open. 用户反馈: the trigger carries no icon —
+// all four top-level buttons share one identical boxed shape.
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDownIcon, QuestionMarkIcon } from '@radix-ui/react-icons';
+import { ChevronDownIcon } from '@radix-ui/react-icons';
 import * as file from '../io/fileActions';
 import { RECENTS_CHANGED_EVENT, readRecents, clearRecents, type RecentEntry } from '../io/recent';
 import { Dropdown, type DropdownItem } from './Dropdown';
@@ -95,8 +92,9 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
     <div className="dropdown menubar-help" ref={boxRef}>
       <button
         ref={btnRef}
-        /* 用户反馈：the SAME boxed shape as 文件 / 最近 — the ghost-icon
-           variant made 帮助 a different size in the same row. */
+        /* 用户反馈：the SAME boxed shape as 文件 / 最近 — and no leading
+           icon, so all four top-level triggers read as one identical row of
+           buttons. */
         className="btn menubar-help-btn"
         onClick={toggle}
         aria-haspopup="menu"
@@ -104,7 +102,6 @@ function HelpMenu({ items }: { items: DropdownItem[] }) {
         aria-label={S.menu.helpGroup}
         title={S.menu.helpGroup}
       >
-        <QuestionMarkIcon />
         <span className="menubar-help-label">{S.menu.helpGroup}</span>
         <ChevronDownIcon className="menubar-help-caret" />
       </button>

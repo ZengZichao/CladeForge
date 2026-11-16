@@ -60,12 +60,41 @@ export function ReconStatusBar({
       <span className="recon-chip chip-transfer">T {row.summary.transfer}</span>
       <span className="recon-chip chip-loss">L {row.summary.losses}</span>
       <span className="spacer" />
-      <span>
-        {embedded
-          ? S.recon.sbZoomEmbedded(Math.round((embeddedZoom ?? 1) * 100))
-          : S.recon.sbZoom(Math.round(speciesZoom * 100), Math.round(geneZoom * 100))}
-        {!embedded && options.syncZoom ? ' ⇔' : ''}
-      </span>
+      {/* 用户反馈: the embedded zoom CONTROL (was a bar on top of the canvas)
+          lives here, on the 嵌套视图缩放 readout at the bottom-right. */}
+      {embedded ? (
+        <span className="recon-status-zoom">
+          <input
+            type="range"
+            min={15}
+            max={400}
+            step={1}
+            value={Math.round((embeddedZoom ?? 1) * 100)}
+            onChange={(e) =>
+              window.dispatchEvent(
+                new CustomEvent('cladeforge:embedded-zoom', {
+                  detail: Number(e.target.value) / 100,
+                }),
+              )
+            }
+            aria-label={S.recon.sbZoomEmbedded(Math.round((embeddedZoom ?? 1) * 100))}
+          />
+          <span>{S.recon.sbZoomEmbedded(Math.round((embeddedZoom ?? 1) * 100))}</span>
+          <button
+            className="btn icon tiny"
+            title={S.recon.zoomReset}
+            aria-label={S.recon.zoomReset}
+            onClick={() => window.dispatchEvent(new CustomEvent('cladeforge:embedded-zoom-reset'))}
+          >
+            1:1
+          </button>
+        </span>
+      ) : (
+        <span>
+          {S.recon.sbZoom(Math.round(speciesZoom * 100), Math.round(geneZoom * 100))}
+          {options.syncZoom ? ' ⇔' : ''}
+        </span>
+      )}
     </div>
   );
 }
