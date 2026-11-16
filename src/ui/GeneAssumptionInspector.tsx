@@ -118,12 +118,12 @@ export function GeneAssumptionInspector({
         <span className="panel-header-title">{S.reconInspector.title}</span>
         <span className="panel-header-subtitle">
           {geneNode.label || geneNodeId.slice(0, 6)}
-          {isTip ? ` · ${S.reconInspector.tipLabel}` : ` · ${S.reconInspector.tipInternal}`}
+          {isTip ? `（${S.reconInspector.tipLabel}）` : `（${S.reconInspector.tipInternal}）`}
         </span>
       </div>
 
       <div className="hint recon-insp-meta" style={{ margin: '0 12px 8px' }}>
-        {S.reconInspector.geneTreeOf}: {entry.name} · <span className="recon-readonly-tag">{S.recon.readonlyBadge}</span>
+        {S.reconInspector.geneTreeOf}: {entry.name}{' '}<span className="recon-readonly-tag">{S.recon.readonlyBadge}</span>
       </div>
 
       {isTip && <div className="hint" style={{ margin: '0 12px' }}>{S.reconInspector.tipHint}</div>}

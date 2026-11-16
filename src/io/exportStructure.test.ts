@@ -62,7 +62,7 @@ describe('export ↔ canvas structure agreement', () => {
     expect(svg).toMatch(/\+\d/);
 
     // Event badges are drawn (path markers) and the legend exists.
-    expect(svg).toMatch(/<path[^>]*stroke="#ec4899"/); // hgt catalogue colour
+    expect(svg).toMatch(/<path[^>]*stroke="#d6409f"/); // hgt catalogue colour
     expect(svg).toMatch(/图例|Legend|事件|Events/);
 
     // Support numbers are OPT-IN: absent by default, printed when asked.

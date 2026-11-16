@@ -1,7 +1,7 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// The EMBEDDED reconciliation canvas (docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md §6):
-// a single viewport where the species tree is drawn as THICK branch tubes with
-// the gene tree's THIN lineages nested inside them.
+// The EMBEDDED reconciliation canvas: a single viewport where the species tree
+// is drawn as THICK branch tubes with the gene tree's THIN lineages nested
+// inside them.
 //
 // Rendering contract:
 //  - the species tree is the only skeleton: horizontal tubes + vertical hub
@@ -44,6 +44,7 @@ import {
   type EmbeddedTransferArc,
 } from '../layout/embeddedRecon';
 import { S, tr } from '../ui/strings';
+import { useAltHeld } from './ReconPane';
 
 const IDENTITY: { tx: number; ty: number; scale: number } = { tx: 40, ty: 40, scale: 1 };
 type Transform = { tx: number; ty: number; scale: number };
@@ -90,6 +91,26 @@ export function EmbeddedReconCanvas({
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [transform, setTransformState] = useState<Transform>(IDENTITY);
+  // One-time Alt+click affordance (2026-11-15 review ID-39 / OP-15): the nested
+  // view's core mapping gesture had no in-app hint even though the string was
+  // already in the catalogue. Shown until the user either performs an Alt+click
+  // mapping or dismisses it; the dismissal is remembered across sessions.
+  const ALT_HINT_KEY = 'cladeforge:embeddedAltHintSeen';
+  const [altHintVisible, setAltHintVisible] = useState(() => {
+    try {
+      return localStorage.getItem(ALT_HINT_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const dismissAltHint = useCallback(() => {
+    setAltHintVisible(false);
+    try {
+      localStorage.setItem(ALT_HINT_KEY, '1');
+    } catch {
+      /* storage blocked — the hint simply returns next session */
+    }
+  }, []);
   const fitMode = useRef(true);
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
 
@@ -201,16 +222,26 @@ export function EmbeddedReconCanvas({
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const live = transformRef.current;
-      const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const scale = Math.max(EMBEDDED_MIN_SCALE, Math.min(EMBEDDED_MAX_SCALE, live.scale * k));
-      const kk = scale / live.scale;
       gestureRef.current = true;
       fitMode.current = false;
-      transformRef.current = {
-        scale,
-        tx: mx - (mx - live.tx) * kk,
-        ty: my - (my - live.ty) * kk,
-      };
+      // M32: main-canvas wheel contract — Ctrl/⌘+wheel (trackpad pinch) zooms;
+      // a plain two-finger scroll pans. Every wheel used to zoom here too.
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const scale = Math.max(EMBEDDED_MIN_SCALE, Math.min(EMBEDDED_MAX_SCALE, live.scale * k));
+        const kk = scale / live.scale;
+        transformRef.current = {
+          scale,
+          tx: mx - (mx - live.tx) * kk,
+          ty: my - (my - live.ty) * kk,
+        };
+      } else {
+        transformRef.current = {
+          ...live,
+          tx: live.tx - e.deltaX,
+          ty: live.ty - e.deltaY,
+        };
+      }
       scheduleCommit();
       if (wheelIdleRef.current !== null) window.clearTimeout(wheelIdleRef.current);
       wheelIdleRef.current = window.setTimeout(finishGesture, 140);
@@ -322,17 +353,28 @@ export function EmbeddedReconCanvas({
   );
 
   const hideGeneTipLabels = options.showLabels && transform.scale * 9.5 < 7;
+  // M37: persistent Alt feedback — copy cursor while Alt is held anywhere.
+  const altHeld = useAltHeld();
   const geneLabelSet = useMemo(() => {
     // Gene labels: tips by default (LOD); internal only when selected/hovered.
+    // m17 (UI_UX_REVIEW): a 1:1-mapped tip with the SAME label as its species
+    // tube suppressed its own copy — "Taxon_A" used to print twice, stacked.
+    // Species-side and gene-side differ in label ⇒ both stay.
     const show = new Set<NodeId>();
     if (!options.showLabels) return show;
     for (const n of Object.values(geneEntry.doc.nodes)) {
       const isTip = n.childrenIds.length === 0;
-      if (isTip && !hideGeneTipLabels) show.add(n.id);
-      else if (!isTip && (selectedGene.has(n.id) || hoveredGeneId === n.id)) show.add(n.id);
+      if (isTip && !hideGeneTipLabels) {
+        const sn = geneEntry.assumptions[n.id]?.speciesNode;
+        const speciesLabel = sn ? speciesDoc.nodes[sn]?.label : undefined;
+        if (speciesLabel !== undefined && speciesLabel === n.label) continue;
+        show.add(n.id);
+      } else if (!isTip && (selectedGene.has(n.id) || hoveredGeneId === n.id)) {
+        show.add(n.id);
+      }
     }
     return show;
-  }, [geneEntry.doc.nodes, options.showLabels, hideGeneTipLabels, selectedGene, hoveredGeneId]);
+  }, [geneEntry.doc.nodes, geneEntry.assumptions, speciesDoc, options.showLabels, hideGeneTipLabels, selectedGene, hoveredGeneId]);
 
   // No ages and no usable lengths ⇒ the nested figure is a topological sketch.
   const sketchMode = !hasAges(speciesDoc) && !hasBranchLengths(speciesDoc);
@@ -367,11 +409,13 @@ export function EmbeddedReconCanvas({
         const w = eventToWorld(e);
         const hit = w ? hitTestTube(scene.tubes.values(), w, 2) : null;
         onTubeClick(branchId, hit?.tube.branchId === branchId ? hit.t : 1, e);
+        // Performing the gesture once retires the one-time hint.
+        dismissAltHint();
         return;
       }
       onSpeciesNodeClick(branchId, e);
     },
-    [eventToWorld, scene, onTubeClick, onSpeciesNodeClick],
+    [eventToWorld, scene, onTubeClick, onSpeciesNodeClick, dismissAltHint],
   );
 
   // --- viewport culling -----------------------------------------------------------------
@@ -422,7 +466,7 @@ export function EmbeddedReconCanvas({
           <span className="recon-pane-name">{S.recon.embeddedTitle}</span>
           <span className="recon-pane-sub">
             {S.recon.embeddedSubtitle(geneEntry.name)}
-            {sketchMode ? ` · ${S.recon.topologicalSketch}` : ''}
+            {sketchMode ? ` (${S.recon.topologicalSketch})` : ''}
           </span>
         </div>
         <span className="recon-pane-count">
@@ -449,6 +493,19 @@ export function EmbeddedReconCanvas({
           1:1
         </button>
       </div>
+      {altHintVisible && (
+        <div className="recon-embedded-hint" role="status">
+          <span className="recon-embedded-hint-text">{S.recon.altClickTubeHint}</span>
+          <button
+            className="btn icon tiny"
+            title={tr('知道了', 'Got it')}
+            aria-label={tr('知道了', 'Got it')}
+            onClick={dismissAltHint}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div
         className="recon-embedded-svg"
         ref={svgBoxRef}
@@ -457,6 +514,12 @@ export function EmbeddedReconCanvas({
         onPointerMove={bgMove}
         onPointerUp={bgUp}
         onPointerCancel={bgUp}
+        /* M37: the Alt+click mapping mode had a dismissable banner and then
+           nothing — after closing it, holding Alt gave no signal. While Alt is
+           down the whole pane answers with a copy cursor (persistent, invisible
+           when the mode's precondition isn't met because the click itself
+           explains). */
+        style={{ cursor: altHeld ? 'copy' : undefined }}
       >
         <svg>
           <defs>
@@ -681,7 +744,7 @@ export function EmbeddedReconCanvas({
                       opacity={muted ? 0.4 : 1}
                       style={{ pointerEvents: 'none' }}
                     >
-                      {p.event === 'speciation' ? 'σ' : p.event === 'duplication' ? 'δ' : 'τ'}
+                      {p.event === 'speciation' ? 'S' : p.event === 'duplication' ? 'D' : 'T'}
                     </text>
                   )}
                   {geneLabelSet.has(p.geneNodeId) && n?.label && (
@@ -777,7 +840,7 @@ const EmbeddedTubeShape = memo(function EmbeddedTubeShape({
       data-tube-id={tube.branchId}
       role="button"
       tabIndex={0}
-      aria-label={`${S.recon.legendTube} · ${tube.branchId}`}
+      aria-label={`${S.recon.legendTube} ${tube.branchId}`}
       style={{ cursor: 'pointer', outline: 'none' }}
       onClick={(e) => onClick(tube.branchId, e)}
       onKeyDown={(e) => {
@@ -937,7 +1000,7 @@ const EmbeddedLossShape = memo(function EmbeddedLossShape({
         fill="var(--recon-loss)"
         style={{ pointerEvents: 'none' }}
       >
-        {mark.shortfall ? 'λ!' : `λ${mark.count}`}
+        {mark.shortfall ? 'L!' : `L${mark.count}`}
       </text>
     </g>
   );

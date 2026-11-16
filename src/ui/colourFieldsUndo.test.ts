@@ -195,8 +195,11 @@ describe('every colour picker commits one undo step', () => {
     for (const input of colorInputs()) {
       expect(input.getAttribute('aria-label')).toBeTruthy();
     }
-    // The hex readout is part of the buffered field, so the live value is visible.
-    expect(host!.textContent).toMatch(/#[0-9a-f]{6}/i);
+    // The hex readout is an editable input now: the live value sits in its
+    // `value`, not in the node's text content.
+    const hexInputs = Array.from(host!.querySelectorAll('input.color-hex')) as HTMLInputElement[];
+    expect(hexInputs.length).toBeGreaterThan(0);
+    for (const h of hexInputs) expect(h.value).toMatch(/#[0-9a-f]{6}/i);
   });
 
   it('an environmental-event colour in the 时间 panel is one step', () => {
@@ -204,6 +207,14 @@ describe('every colour picker commits one undo step', () => {
     s().loadProject(project);
     const before = stepCount();
     mount(createElement(TimePanel));
+    // 用户反馈: submodules start collapsed — expand 环境事件 to reach its rows.
+    const toggle = Array.from(host!.querySelectorAll('button.section-toggle')).find((b) =>
+      b.textContent?.includes(S.layoutPanel.envSection),
+    ) as HTMLButtonElement | undefined;
+    if (!toggle) throw new Error('no 环境事件 section toggle');
+    act(() => {
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     const swatch = colorInputs()[0];
     expect(swatch.disabled, 'time data present, so the control is enabled').toBe(false);
 

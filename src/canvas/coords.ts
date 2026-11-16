@@ -46,10 +46,19 @@ export function fitView(
   bounds: Bounds,
   viewportW: number,
   viewportH: number,
-  padding = 60,
+  padding?: number,
 ): ViewTransform {
   const w = bounds.maxX - bounds.minX;
   const h = bounds.maxY - bounds.minY;
+  // A fixed 60 px margin eats a quarter of a phone-width canvas (400 px), so
+  // "fit" left the tree small with obvious empty bands on both sides
+  // (2026-11-15 ID-40). Scale the margin with the SHORTER viewport side and
+  // keep the 60 px cap for normal desktop windows. An EXPLICIT padding argument
+  // (tests, special callers) is honoured verbatim.
+  const pad =
+    padding !== undefined
+      ? padding
+      : Math.max(16, Math.min(60, Math.min(viewportW, viewportH) * 0.08));
   // A degenerate box (empty document, single node) has no extent to fit. The
   // old `Math.max(1, …)` turned it into a 1-unit subject and produced a scale
   // pinned at MAX_SCALE, so a brand-new tab displayed "zoom 800%" over an empty
@@ -60,7 +69,7 @@ export function fitView(
     return { scale: 1, tx: viewportW / 2 - cx, ty: viewportH / 2 - cy };
   }
   const scale = clamp(
-    Math.min((viewportW - padding * 2) / w, (viewportH - padding * 2) / h),
+    Math.min((viewportW - pad * 2) / w, (viewportH - pad * 2) / h),
     MIN_SCALE,
     MAX_SCALE,
   );

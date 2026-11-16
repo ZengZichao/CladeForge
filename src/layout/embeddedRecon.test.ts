@@ -1,6 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Contracts for the EMBEDDED reconciliation layout
-// (docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md §9.1):
+// Contracts for the EMBEDDED reconciliation layout:
 //   * every validly placed gene node sits INSIDE its host tube; unmapped nodes
 //     land in the orphan gutter instead of vanishing;
 //   * σ children enter different sub-tubes; δ children share a tube on

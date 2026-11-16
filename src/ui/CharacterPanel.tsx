@@ -30,6 +30,14 @@ import { requestConfirm } from './confirmDialog';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
+/** R6: true when ANY node in the document carries any character-state value. */
+function documentHasAnyTipAssignment(project: Project): boolean {
+  for (const n of Object.values(project.nodes)) {
+    if (n.charStates && Object.keys(n.charStates).length > 0) return true;
+  }
+  return false;
+}
+
 // Expandable Sankoff step-matrix editor: a k×k grid of from→to change costs.
 // Uncontrolled number inputs commit on blur; the grid remounts on reset so it
 // reflects the restored uniform matrix.
@@ -135,6 +143,15 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
               ))}
             </tbody>
           </table>
+          {/* ID-20: the ∞ notation is the only way to forbid a transition, so
+              it needs a legend where the grid is edited; a frozen header keeps
+              the state names visible while scrolling a large matrix. */}
+          <div className="hint">
+            {tr(
+              '∞ = 禁止该转变；留空 = 恢复默认代价（对角 0、其余 1）。',
+              '∞ forbids that transition; empty restores the default cost (0 on the diagonal, 1 elsewhere).',
+            )}
+          </div>
           <div className="field row-actions">
             <button
               className="btn"
@@ -163,7 +180,7 @@ function CharacterEditor({
   // Auto scroll-into-view when the editor opens so the user can
   // always see the expanded content, even in a long panel.
   useEffect(() => {
-    editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    editorRef.current?.scrollIntoView({ block: 'nearest' });
   }, []);
 
   const id = character.id;
@@ -234,8 +251,9 @@ function CharacterEditor({
                 onCommit={(v) => apply((d) => updateCharacterState(d, id, st.id, { label: v }))}
               />
               <button
-                className="btn icon danger"
+                className="btn icon ghost-danger"
                 title={S.character.deleteState}
+                aria-label={S.character.deleteState}
                 onClick={() => apply((d) => removeCharacterState(d, id, st.id))}
               >
                 <Cross1Icon />
@@ -273,7 +291,7 @@ function CharacterEditor({
           {/* Same picker-flood coalescing as the state swatches above — see ColorField. */}
           <Field label={S.character.lowColor}>
             <ColorField
-              value={character.lowColor ?? '#dbeafe'}
+              value={character.lowColor ?? '#e6f4fe'}
               onChange={(v) =>
                 apply((d) => {
                   const c = d.characters.find((x) => x.id === id);
@@ -284,7 +302,7 @@ function CharacterEditor({
           </Field>
           <Field label={S.character.highColor}>
             <ColorField
-              value={character.highColor ?? '#1e3a8a'}
+              value={character.highColor ?? '#113264'}
               onChange={(v) =>
                 apply((d) => {
                   const c = d.characters.find((x) => x.id === id);
@@ -298,15 +316,18 @@ function CharacterEditor({
 
       {character.type === 'discrete' && <StepMatrixEditor character={character} apply={apply} />}
 
-      {/* M2: the forward "what next" prompt the review asked for — the
-          reverse-direction guidance existed (analysis says "go define traits")
-          but nothing here pointed onward. */}
-      <div className="hint">
-        {tr(
-          '下一步：为末端赋值（选中节点后在右侧面板或矩阵中填写状态），然后到「分析」模块查看简约建议与祖先状态重建。',
-          'Next: score tips (select a node and fill its state in the inspector or the matrix), then open the Analysis module for parsimony suggestions and ancestral-state reconstruction.',
-        )}
-      </div>
+      {/* M2 forward prompt, R6 refinement: the hint only shows while THIS
+          document still has NO tip assignments at all — once any tip carries a
+          value the reader has demonstrably taken the next step, and the hint
+          just consumes editor height. */}
+      {!documentHasAnyTipAssignment(project) && (
+        <div className="hint">
+          {tr(
+            '下一步：为末端赋值（选中节点后在右侧面板或矩阵中填写状态），然后到「分析」模块查看简约建议与祖先状态重建。',
+            'Next: score tips (select a node and fill its state in the inspector or the matrix), then open the Analysis module for parsimony suggestions and ancestral-state reconstruction.',
+          )}
+        </div>
+      )}
       <div className="field row-actions-spread">
         <div className="actions-group">
           <button className="btn" onClick={onClose}>
@@ -357,19 +378,55 @@ export function CharacterPanel({
   const colorTarget = useStore((s) => s.characterColorTarget);
   const setColorTarget = useStore((s) => s.setCharacterColorTarget);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // ID-18: with many characters the list needed scrolling and reordering was
+  // impossible. A filter box plus HTML5 drag handles make both direct.
+  const [query, setQuery] = useState('');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   const active = characters.find((c) => c.id === activeCharacterId);
   const transitionsDisabled = !active;
 
+  const visible = characters
+    .map((c, index) => ({ c, index }))
+    .filter(({ c }) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.states.some((s) => s.label.toLowerCase().includes(q))
+      );
+    });
+
+  /** Move one character to another index (order drives colouring priority). */
+  const moveTo = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= characters.length || to >= characters.length) return;
+    apply((d) => {
+      const arr = d.characters;
+      if (!arr[from] || !arr[to]) return;
+      const [moved] = arr.splice(from, 1);
+      arr.splice(to, 0, moved);
+    });
+  };
+
   return (
     <Section title={S.character.section} pinable>
 
-      <Field label={S.character.colorBy}>
+      <Field
+        label={S.character.colorBy}
+        stacked
+        /* m3: the closed select clipped its own value ("None (node st…") in
+           both languages. Full-width row + a shorter option label; the long
+           explanation moves to the tooltip. */
+        title={tr(
+          '「无」表示不按性状着色，节点使用各自的样式颜色。',
+          '"None" colours nothing by character; nodes keep their own styles.',
+        )}
+      >
         <select
           value={activeCharacterId ?? ''}
           onChange={(e) => setActiveCharacter(e.target.value || null)}
         >
-          <option value="">{S.character.colorByNone}</option>
+          <option value="">{tr('无', 'None')}</option>
           {characters.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -379,16 +436,24 @@ export function CharacterPanel({
       </Field>
 
       <Field label={S.character.colorTarget}>
-        <button
-          type="button"
-          className="btn color-target-toggle"
-          disabled={!active}
-          aria-pressed={colorTarget === 'branch'}
-          onClick={() => setColorTarget(colorTarget === 'node' ? 'branch' : 'node')}
-          title={S.character.colorTargetHint}
-        >
-          ⇄ {colorTarget === 'node' ? S.character.colorTargetNode : S.character.colorTargetBranch}
-        </button>
+        <span className="mini-seg" role="group" aria-label={S.character.colorTarget}>
+          <button
+            type="button"
+            aria-pressed={colorTarget === 'node'}
+            disabled={!active}
+            onClick={() => setColorTarget('node')}
+          >
+            {S.character.colorTargetNode}
+          </button>
+          <button
+            type="button"
+            aria-pressed={colorTarget === 'branch'}
+            disabled={!active}
+            onClick={() => setColorTarget('branch')}
+          >
+            {S.character.colorTargetBranch}
+          </button>
+        </span>
       </Field>
 
       <CheckboxField
@@ -401,16 +466,40 @@ export function CharacterPanel({
 
       {/* (The event overlay toggle moved to the 假说 layers module.) */}
 
+      <input
+        className="char-search"
+        type="text"
+        value={query}
+        placeholder={tr('筛选性状 / 状态…', 'Filter characters / states…')}
+        aria-label={tr('筛选性状', 'Filter characters')}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
       <div className="char-list">
         {characters.length === 0 && <div className="hint">{S.character.empty}</div>}
-        {characters.map((c) => (
-          <div key={c.id}>
+        {visible.length === 0 && characters.length > 0 && (
+          <div className="hint">{tr('没有匹配的性状', 'No matching characters')}</div>
+        )}
+        {visible.map(({ c, index }) => (
+          <div
+            key={c.id}
+            draggable
+            onDragStart={() => setDragIndex(index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => {
+              if (dragIndex !== null) moveTo(dragIndex, index);
+              setDragIndex(null);
+            }}
+            onDragEnd={() => setDragIndex(null)}
+            className={`char-item${dragIndex === index ? ' dragging' : ''}`}
+            title={tr('拖动可调整着色顺序', 'Drag to change the colouring order')}
+          >
             <div className="char-row">
               <span className="char-name" title={c.name}>
                 {c.name}
               </span>
               <button
-                className="btn"
+                className="link-btn"
                 onClick={() => setEditingId(editingId === c.id ? null : c.id)}
               >
                 {S.character.edit}
@@ -437,11 +526,13 @@ export function CharacterPanel({
             <PlusIcon /> {S.character.add}
           </button>
           <button
-            className="btn"
+            className="link-btn"
             disabled={characters.length === 0}
             onClick={onOpenMatrix}
           >
-            {S.analysisMenu.matrix}
+            {/* ID-19: the key belongs to the character module, not the analysis
+                menu — same label, but the naming system stays honest. */}
+            {S.character.matrix}
           </button>
         </div>
       </div>

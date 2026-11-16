@@ -76,10 +76,7 @@ function mount(): { box: HTMLElement; tipId: string } {
   root = createRoot(host);
   act(() =>
     root!.render(
-      createElement(ReconciliationView, {
-        onBuildGeneTree: () => {},
-        onCopySpeciesTree: () => {},
-      }),
+      createElement(ReconciliationView),
     ),
   );
   return { box: host, tipId };
@@ -94,7 +91,11 @@ function hover(target: EventTarget, type: 'pointerover' | 'pointerout'): void {
   });
 }
 
-const bridgePaths = (box: HTMLElement) => [...box.querySelectorAll('.recon-bridge-layer path')];
+// M35 added an invisible 10px hit path per bridge line; the visible stroke is
+// the one carrying the state class.
+const bridgePaths = (box: HTMLElement) => [
+  ...box.querySelectorAll('.recon-bridge-layer path.recon-map-line'),
+];
 
 beforeEach(() => {
   useStore.getState().setReconMode(false);

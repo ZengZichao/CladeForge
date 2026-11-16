@@ -20,11 +20,15 @@ export function Field({
   label,
   title,
   children,
+  stacked,
 }: {
   label: string;
   /** Hover text for a label that had to be shortened for a narrow panel. */
   title?: string;
   children: ReactNode;
+  /** Put the label above the control when the control needs the full width
+   *  (a select whose longest option is wider than a two-column row). */
+  stacked?: boolean;
 }) {
   const id = useId();
   // `id` can only be attached to a host element. A component child (TextField,
@@ -51,7 +55,7 @@ export function Field({
     return React.cloneElement(child, props);
   });
   return (
-    <div className="field">
+    <div className={stacked ? 'field stacked' : 'field'}>
       <label {...(hostChild ? { htmlFor: id } : {})} title={title}>{label}</label>
       {childWithId}
     </div>
@@ -162,12 +166,16 @@ export function ColorField({
     [],
   );
 
+  const HEX_RE = /^#?([0-9a-fA-F]{6})$/;
+  const normalize = (v: string) => `#${v.replace('#', '').toLowerCase()}`;
+  const textInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <div className="color-field">
       <input
         type="color"
         aria-label={ariaLabel}
-        value={draft}
+        value={HEX_RE.test(draft) ? normalize(draft) : value}
         disabled={disabled}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -176,7 +184,31 @@ export function ColorField({
         onPointerUp={flush}
         onBlur={flush}
       />
-      <span className="color-hex">{draft}</span>
+      {/* 用户反馈：a rounded box that ACCEPTS a typed hex code, not just a
+          readout. Any 6-digit hex (with or without `#`) commits through the
+          same debounced path as the picker; anything else is left as an
+          unfinished draft and reverts on blur. */}
+      <input
+        ref={textInputRef}
+        type="text"
+        className="color-hex color-hex-input"
+        value={draft}
+        disabled={disabled}
+        spellCheck={false}
+        aria-label={ariaLabel ? `${ariaLabel} (hex)` : tr('颜色十六进制代码', 'Colour hex code')}
+        onChange={(e) => {
+          const v = e.target.value;
+          setDraft(v);
+          if (HEX_RE.test(v.trim())) schedule(normalize(v.trim()));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') textInputRef.current?.blur();
+        }}
+        onBlur={() => {
+          flush();
+          if (!HEX_RE.test(draft.trim())) setDraft(value);
+        }}
+      />
     </div>
   );
 }
@@ -244,6 +276,48 @@ export function TextField({
       onKeyDown={(e) => {
         // Enter belongs to the IME while a candidate list is open.
         if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
+/**
+ * Multi-line sibling of `TextField` (review finding 5 / M3): a hypothesis CLAIM
+ * or falsifiable PREDICTION is prose — a sentence or three — and a single-line
+ * input hid all but the head of it. Same buffered-commit contract as TextField
+ * (blur or Enter), same IME guard; Shift+Enter inserts a newline instead of
+ * committing, which is the multi-line convention.
+ */
+export function TextAreaField({
+  value,
+  onCommit,
+  placeholder,
+  ariaLabel,
+  rows = 3,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  rows?: number;
+}) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  return (
+    <textarea
+      className="textarea-field"
+      rows={rows}
+      value={v}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => v !== value && onCommit(v)}
+      onKeyDown={(e) => {
+        if (isImeComposing(e)) return;
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).blur();
+        }
       }}
     />
   );
@@ -390,7 +464,10 @@ export function RangeField({
   return (
     // A numeric readout next to the slider (M15): the ASR threshold's current
     // value used to be findable only by scanning a sentence of hint text.
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}>
+    // `width:100%` made this wrapper demand the row's full width even beside a
+    // label, so the readout was pushed past the dialog's right edge; as a
+    // shrinking flex item it shares the row instead.
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: '1 1 auto', minWidth: 0 }}>
       <input
         type="range"
         aria-label={ariaLabel}
@@ -403,7 +480,7 @@ export function RangeField({
         onBlur={() => onCommit(v)}
         style={{ flex: 1 }}
       />
-      <span className="field-value" style={{ minWidth: 44, textAlign: 'right', fontSize: 11 }}>
+      <span className="field-value" style={{ minWidth: 44, textAlign: 'right', fontSize: 12 }}>
         {Number.isInteger(step) ? v : v.toFixed(2)}
       </span>
     </span>

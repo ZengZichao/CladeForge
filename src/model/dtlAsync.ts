@@ -86,7 +86,7 @@ function getWorker(): Worker | null {
     };
     worker.onerror = (e) => drainToSync(e);
     worker.onmessageerror = (e) => drainToSync(e);
-  } catch (err) {
+  } catch {
     workerUnavailable = true;
     worker = null;
     return null;

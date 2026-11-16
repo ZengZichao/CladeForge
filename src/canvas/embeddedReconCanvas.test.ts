@@ -106,7 +106,7 @@ describe('EmbeddedReconCanvas (component)', () => {
     const geneButtons = el.querySelectorAll('[data-node-id][role="button"]');
     expect(geneButtons.length).toBeGreaterThan(0);
     const labelled = [...geneButtons].some((b) =>
-      (b.getAttribute('aria-label') ?? '').includes('σ'),
+      (b.getAttribute('aria-label') ?? '').includes('S'),
     );
     expect(labelled).toBe(true);
   });
@@ -154,10 +154,7 @@ describe('ReconciliationView layout-mode switch (component)', () => {
   it('mounts the embedded canvas in embedded mode and the two panes in side-by-side mode', () => {
     const { project, alpha } = reconProject();
     const el = mount(
-      createElement(ReconciliationView, {
-        onBuildGeneTree: () => {},
-        onCopySpeciesTree: () => {},
-      }),
+      createElement(ReconciliationView),
     );
     // Default is side-by-side: two ReconPane hosts + the bridge.
     expect(el.querySelector('.recon-panes')).toBeTruthy();
@@ -198,10 +195,7 @@ describe('ReconciliationView layout-mode switch (component)', () => {
       }));
     });
     const el = mount(
-      createElement(ReconciliationView, {
-        onBuildGeneTree: () => {},
-        onCopySpeciesTree: () => {},
-      }),
+      createElement(ReconciliationView),
     );
     // The side-by-side pane still renders its own fixed-width branches.
     expect(el.querySelectorAll('.recon-pane').length).toBe(2);

@@ -1,6 +1,13 @@
 // Renders the active toast stack in a corner overlay. Mounted once in App.
+//
+// M40 (UI_UX_REVIEW): a 500px error toast used to offer only "click the whole
+// strip to dismiss" — no visible control, and a pointer-down on the message
+// itself could be a failed copy attempt. Every toast now carries an explicit
+// close button (Cross2Icon, named), and error toasts linger 30s (persistent
+// enough to read, no longer a race against a 7s clock).
 
 import { useToasts } from './toast';
+import { Cross2Icon } from '@radix-ui/react-icons';
 import { tr } from './strings';
 
 export function Toaster() {
@@ -14,8 +21,6 @@ export function Toaster() {
           key={t.id}
           className={`toast toast-${t.kind}${t.action ? ' toast-with-action' : ''}`}
           role={t.kind === 'error' ? 'alert' : 'status'}
-          onClick={() => dismiss(t.id)}
-          title={tr("点击关闭","Click to dismiss")}
         >
           <span className="toast-msg">{t.message}</span>
           {t.action && (
@@ -31,25 +36,15 @@ export function Toaster() {
             </button>
           )}
           <button
-            type="button"
             className="toast-close"
-            aria-label={tr('关闭', 'Dismiss')}
+            aria-label={tr('关闭通知', 'Dismiss notification')}
             title={tr('关闭', 'Dismiss')}
             onClick={(e) => {
               e.stopPropagation();
               dismiss(t.id);
             }}
-            style={{
-              marginLeft: 8,
-              border: 'none',
-              background: 'transparent',
-              color: 'inherit',
-              cursor: 'pointer',
-              fontSize: 14,
-              lineHeight: 1,
-            }}
           >
-            ×
+            <Cross2Icon />
           </button>
         </div>
       ))}

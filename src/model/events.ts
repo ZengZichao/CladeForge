@@ -122,26 +122,45 @@ export function eventMarkerSize(event: EvolutionaryEvent): number {
 }
 
 /** The badge outline colour: the per-event override, else the type colour
- *  (resolved against the project's custom types when one is given). */
+ *  (resolved against the project's custom types when one is given).
+ *
+ *  用户反馈: the colour-vision-friendly mode and its Okabe–Ito remapping were
+ *  removed together with the Preferences toggle — an explicit per-event
+ *  `markerColor` override and the plain type colour are the only sources now. */
 export function eventMarkerColor(event: EvolutionaryEvent, project?: Project): string {
   return event.markerColor || eventColor(event, project);
 }
 
+/** 用户反馈: badge FILL override (default = the pane surface colour). */
+export function eventMarkerFill(event: EvolutionaryEvent): string {
+  return event.markerFill || 'var(--surface)';
+}
+
+/** 用户反馈: badge outline WIDTH override (default 2 world px). */
+export function eventMarkerStrokeWidth(event: EvolutionaryEvent): number {
+  return event.markerStrokeWidth ?? 2;
+}
+
 /**
- * Whether the badge draws inner text. Markers are text-free by default: the
- * event is carried by the ring colour and the shape, so a figure does not
- * become a field of two-letter acronyms. The user opts in per event; a custom
- * `markerText` written by an older document also counts as opting in.
+ * Whether the badge draws inner text. Markers are TEXT-FREE by default
+ * (2026-11-15, user request): a symbol carrying letter forms reads as noise
+ * inside a figure, so the event is carried by the shape, the ring colour and
+ * the legend / tooltip instead. The user opts in per event — an explicit
+ * `markerShowText: true`, or a custom `markerText` written by an older
+ * document, which also counts as opting in.
  */
 export function eventMarkerTextVisible(event: EvolutionaryEvent, project?: Project): boolean {
   if (event.markerShowText !== undefined) return event.markerShowText;
-  // Default ON: with 15+ event types and four near-identical greens in the
-  // catalogue, colour-only badges were not reliably distinguishable — the
-  // two-letter code is the redundant channel that survives greyscale printing
-  // and dichromat vision. Users can still switch a badge (or the whole figure)
-  // to text-free.
+  // A custom markerText from an older document counts as opting in — the
+  // author deliberately wrote badge text, so it keeps rendering.
+  if (event.markerText?.trim()) return true;
+  // Default OFF (2026-11-15, user request): letter text inside the marker
+  // symbols was rejected in review. Type distinction keeps its redundant
+  // channels — shape differs by catalogue group, colour by type, and the
+  // legend + tooltip carry the full type name — so no information is lost
+  // when the badge interior stays empty.
   void project;
-  return true;
+  return false;
 }
 
 /**
@@ -205,42 +224,42 @@ export function eventBadgeExtent(event: EvolutionaryEvent): number {
 
 export const EVENT_TYPES: EventTypeDef[] = [
   // 物种形成
-  { id: 'speciation-allopatric', label: '异域成种', labelEn: 'Allopatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'AL', color: '#0e9f6e', target: 'node' },
-  { id: 'speciation-sympatric', label: '同域成种', labelEn: 'Sympatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'SY', color: '#0ea5a3', target: 'node' },
-  { id: 'speciation-parapatric', label: '邻域成种', labelEn: 'Parapatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'PA', color: '#14b8a6', target: 'node' },
-  { id: 'speciation-polyploidy', label: '多倍化成种', labelEn: 'Polyploid speciation', group: '物种形成', groupEn: 'Speciation', code: 'PO', color: '#22c55e', target: 'node' },
+  { id: 'speciation-allopatric', label: '异域成种', labelEn: 'Allopatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'AL', color: '#30a46c', target: 'node' },
+  { id: 'speciation-sympatric', label: '同域成种', labelEn: 'Sympatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'SY', color: '#12a594', target: 'node' },
+  { id: 'speciation-parapatric', label: '邻域成种', labelEn: 'Parapatric speciation', group: '物种形成', groupEn: 'Speciation', code: 'PA', color: '#0e9888', target: 'node' },
+  { id: 'speciation-polyploidy', label: '多倍化成种', labelEn: 'Polyploid speciation', group: '物种形成', groupEn: 'Speciation', code: 'PO', color: '#46a758', target: 'node' },
   // 灭绝
-  { id: 'extinction-local', label: '局部灭绝', labelEn: 'Local extinction', group: '灭绝', groupEn: 'Extinction', code: 'LX', color: '#ef4444', target: 'both' },
-  { id: 'extinction-mass', label: '大灭绝', labelEn: 'Mass extinction', group: '灭绝', groupEn: 'Extinction', code: 'MX', color: '#b91c1c', target: 'node' },
+  { id: 'extinction-local', label: '局部灭绝', labelEn: 'Local extinction', group: '灭绝', groupEn: 'Extinction', code: 'LX', color: '#e5484d', target: 'both' },
+  { id: 'extinction-mass', label: '大灭绝', labelEn: 'Mass extinction', group: '灭绝', groupEn: 'Extinction', code: 'MX', color: '#ce2c31', target: 'node' },
   // 演化创新
-  { id: 'key-innovation', label: '关键创新', labelEn: 'Key innovation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'KI', color: '#8b5cf6', target: 'branch' },
-  { id: 'adaptive-radiation', label: '适应辐射', labelEn: 'Adaptive radiation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'AR', color: '#f59e0b', target: 'node' },
-  { id: 'bottleneck', label: '瓶颈效应', labelEn: 'Bottleneck', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'BN', color: '#6366f1', target: 'branch' },
+  { id: 'key-innovation', label: '关键创新', labelEn: 'Key innovation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'KI', color: '#6e56cf', target: 'branch' },
+  { id: 'adaptive-radiation', label: '适应辐射', labelEn: 'Adaptive radiation', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'AR', color: '#ab6400', target: 'node' },
+  { id: 'bottleneck', label: '瓶颈效应', labelEn: 'Bottleneck', group: '演化创新', groupEn: 'Evolutionary innovations', code: 'BN', color: '#5b5bd6', target: 'branch' },
   // 基因流
-  { id: 'hgt', label: '水平基因转移', labelEn: 'Horizontal gene transfer', group: '基因流', groupEn: 'Gene flow', code: 'HG', color: '#ec4899', target: 'both' },
-  { id: 'hybridization', label: '杂交', labelEn: 'Hybridization', group: '基因流', groupEn: 'Gene flow', code: 'HY', color: '#d946ef', target: 'node' },
+  { id: 'hgt', label: '水平基因转移', labelEn: 'Horizontal gene transfer', group: '基因流', groupEn: 'Gene flow', code: 'HG', color: '#d6409f', target: 'both' },
+  { id: 'hybridization', label: '杂交', labelEn: 'Hybridization', group: '基因流', groupEn: 'Gene flow', code: 'HY', color: '#8e4ec6', target: 'node' },
   // 生物地理
-  { id: 'biogeo-dispersal', label: '扩散', labelEn: 'Dispersal', group: '生物地理', groupEn: 'Biogeography', code: 'DI', color: '#0284c7', target: 'branch' },
-  { id: 'biogeo-vicariance', label: '隔离分化', labelEn: 'Vicariance', group: '生物地理', groupEn: 'Biogeography', code: 'VI', color: '#0d9488', target: 'node' },
-  { id: 'biogeo-extirpation', label: '区域灭绝', labelEn: 'Regional extirpation', group: '生物地理', groupEn: 'Biogeography', code: 'RE', color: '#dc2626', target: 'branch' },
+  { id: 'biogeo-dispersal', label: '扩散', labelEn: 'Dispersal', group: '生物地理', groupEn: 'Biogeography', code: 'DI', color: '#0d74ce', target: 'branch' },
+  { id: 'biogeo-vicariance', label: '隔离分化', labelEn: 'Vicariance', group: '生物地理', groupEn: 'Biogeography', code: 'VI', color: '#067a6f', target: 'node' },
+  { id: 'biogeo-extirpation', label: '区域灭绝', labelEn: 'Regional extirpation', group: '生物地理', groupEn: 'Biogeography', code: 'RE', color: '#dc3e42', target: 'branch' },
   // 微生物 / 基因组演化 — the macroevolution list said nothing about the
   // processes microbial datasets actually annotate (§领域专家 2.7 / §学生博后 4.7).
-  { id: 'symbiogenesis', label: '内共生起源', labelEn: 'Endosymbiotic origin', group: '微生物', groupEn: 'Microbial', code: 'SB', color: '#0ea5a3', target: 'node', shape: 'hexagon' },
-  { id: 'genome-reduction', label: '基因组缩减', labelEn: 'Genome reduction', group: '微生物', groupEn: 'Microbial', code: 'GR', color: '#8b5cf6', target: 'branch', shape: 'square' },
-  { id: 'plasmid-gain', label: '质粒获得', labelEn: 'Plasmid gain', group: '微生物', groupEn: 'Microbial', code: 'PG', color: '#0284c7', target: 'node', shape: 'diamond' },
-  { id: 'phage-reassortment', label: '病毒分段重组', labelEn: 'Viral reassortment', group: '微生物', groupEn: 'Microbial', code: 'PH', color: '#ec4899', target: 'branch', shape: 'diamond' },
-  { id: 'metabolic-gain', label: '代谢通路获得', labelEn: 'Metabolic pathway gain', group: '微生物', groupEn: 'Microbial', code: 'MG', color: '#0e9f6e', target: 'branch', shape: 'hexagon' },
-  { id: 'metabolic-loss', label: '代谢通路丢失', labelEn: 'Metabolic pathway loss', group: '微生物', groupEn: 'Microbial', code: 'ML', color: '#b91c1c', target: 'branch', shape: 'triangle' },
-  { id: 'crispr-acquisition', label: 'CRISPR 间隔序列获得', labelEn: 'CRISPR spacer acquisition', group: '微生物', groupEn: 'Microbial', code: 'CR', color: '#6366f1', target: 'node', shape: 'star' },
-  { id: 'transposon-integration', label: '转座子/整合性接合元件（ICE）整合', labelEn: 'Transposon / integrative conjugative element (ICE) integration', group: '微生物', groupEn: 'Microbial', code: 'TI', color: '#f59e0b', target: 'branch', shape: 'square' },
-  { id: 'hgt-unsampled', label: '来自未采样供体的 HGT', labelEn: 'HGT from unsampled donor', group: '微生物', groupEn: 'Microbial', code: 'HU', color: '#d97706', target: 'both', shape: 'diamond' },
+  { id: 'symbiogenesis', label: '内共生起源', labelEn: 'Endosymbiotic origin', group: '微生物', groupEn: 'Microbial', code: 'SB', color: '#12a594', target: 'node', shape: 'hexagon' },
+  { id: 'genome-reduction', label: '基因组缩减', labelEn: 'Genome reduction', group: '微生物', groupEn: 'Microbial', code: 'GR', color: '#6e56cf', target: 'branch', shape: 'square' },
+  { id: 'plasmid-gain', label: '质粒获得', labelEn: 'Plasmid gain', group: '微生物', groupEn: 'Microbial', code: 'PG', color: '#0d74ce', target: 'node', shape: 'diamond' },
+  { id: 'phage-reassortment', label: '病毒分段重组', labelEn: 'Viral reassortment', group: '微生物', groupEn: 'Microbial', code: 'PH', color: '#d6409f', target: 'branch', shape: 'diamond' },
+  { id: 'metabolic-gain', label: '代谢通路获得', labelEn: 'Metabolic pathway gain', group: '微生物', groupEn: 'Microbial', code: 'MG', color: '#30a46c', target: 'branch', shape: 'hexagon' },
+  { id: 'metabolic-loss', label: '代谢通路丢失', labelEn: 'Metabolic pathway loss', group: '微生物', groupEn: 'Microbial', code: 'ML', color: '#ce2c31', target: 'branch', shape: 'triangle' },
+  { id: 'crispr-acquisition', label: 'CRISPR 间隔序列获得', labelEn: 'CRISPR spacer acquisition', group: '微生物', groupEn: 'Microbial', code: 'CR', color: '#5b5bd6', target: 'node', shape: 'star' },
+  { id: 'transposon-integration', label: '转座子/整合性接合元件（ICE）整合', labelEn: 'Transposon / integrative conjugative element (ICE) integration', group: '微生物', groupEn: 'Microbial', code: 'TI', color: '#ab6400', target: 'branch', shape: 'square' },
+  { id: 'hgt-unsampled', label: '来自未采样供体的 HGT', labelEn: 'HGT from unsampled donor', group: '微生物', groupEn: 'Microbial', code: 'HU', color: '#cc4e00', target: 'both', shape: 'diamond' },
   // 基因家族演化
-  { id: 'gene-family-expansion', label: '基因家族扩张', labelEn: 'Gene family expansion', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FE', color: '#14b8a6', target: 'node', shape: 'hexagon' },
-  { id: 'gene-family-contraction', label: '基因家族收缩', labelEn: 'Gene family contraction', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FC', color: '#d946ef', target: 'node', shape: 'triangle' },
+  { id: 'gene-family-expansion', label: '基因家族扩张', labelEn: 'Gene family expansion', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FE', color: '#0e9888', target: 'node', shape: 'hexagon' },
+  { id: 'gene-family-contraction', label: '基因家族收缩', labelEn: 'Gene family contraction', group: '基因家族演化', groupEn: 'Gene family evolution', code: 'FC', color: '#8e4ec6', target: 'node', shape: 'triangle' },
   // 深时 / 环境驱动
-  { id: 'ocean-chemistry-shift', label: '海洋化学变化', labelEn: 'Ocean chemistry shift', group: '深时', groupEn: 'Deep time', code: 'OC', color: '#0d9488', target: 'branch', shape: 'square' },
+  { id: 'ocean-chemistry-shift', label: '海洋化学变化', labelEn: 'Ocean chemistry shift', group: '深时', groupEn: 'Deep time', code: 'OC', color: '#067a6f', target: 'branch', shape: 'square' },
   // 通用
-  { id: 'custom', label: '自定义事件', labelEn: 'Custom event', group: '通用', groupEn: 'General', code: 'CU', color: '#787774', target: 'both' },
+  { id: 'custom', label: '自定义事件', labelEn: 'Custom event', group: '通用', groupEn: 'General', code: 'CU', color: '#646464', target: 'both' },
 ];
 
 const EVENT_TYPE_MAP = new Map(EVENT_TYPES.map((t) => [t.id, t]));
@@ -281,7 +300,7 @@ export function findEventType(typeId: string, project?: Project): EventTypeDef |
 }
 
 export function eventColor(event: EvolutionaryEvent, project?: Project): string {
-  return findEventType(event.typeId, project)?.color ?? '#787774';
+  return findEventType(event.typeId, project)?.color ?? '#646464';
 }
 
 /** The code drawn inside an event badge; '?' for a type the catalogue lacks. */

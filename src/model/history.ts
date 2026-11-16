@@ -20,6 +20,14 @@ export interface HistoryEntry {
   view: ViewTransform;
   /** Character whose states were colouring the tree (null = style colours). */
   activeCharacterId: string | null;
+  /** Wall-clock time the step was committed, for the history panel. */
+  at: number;
+  /**
+   * Optional action name ("重命名节点", "应用最优解"…). When absent the panel
+   * falls back to a generic label, which is still honest — it says the step
+   * exists without inventing an action.
+   */
+  label?: string;
 }
 
 /**

@@ -18,6 +18,15 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { isImeComposing } from './imeGuard';
 
+/**
+ * S03-B (Sonus) / M27 (UI_UX_REVIEW): module-level stack of open modal dialogs.
+ * Every useDialogFocus instance registers its token while open; Escape and
+ * focus-trap events are consumed by the TOPMOST dialog only, so a nested
+ * confirm ("apply to all internal nodes?" inside the analysis dialog) closes
+ * itself and returns focus to the dialog below instead of collapsing both.
+ */
+const dialogStack: symbol[] = [];
+
 export const FOCUSABLE =
   'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -56,6 +65,11 @@ export function useDialogFocus(
     // Capture the previously focused element BEFORE focusing the dialog
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
+    // S03-B: register on the module-level dialog stack. Escape (and the
+    // focus trap below) are consumed by the topmost dialog only.
+    const token = Symbol('modal-dialog');
+    dialogStack.push(token);
+
     const el = ref.current;
     if (el) claimFocusInto(el);
 
@@ -66,6 +80,11 @@ export function useDialogFocus(
       // of the field mid-composition.
       if (isImeComposing(e)) return;
       if (e.key === 'Escape') {
+        // S03-B: nested modals share one document-level listener each; only
+        // the TOPMOST dialog may consume Escape, so one press closes the
+        // confirm inside the analysis dialog and leaves the analysis dialog
+        // itself open.
+        if (dialogStack[dialogStack.length - 1] !== token) return;
         e.preventDefault();
         // Escape inside a modal belongs to the modal. Otherwise the event
         // bubbles to the canvas handler, which clears the selection the user
@@ -95,6 +114,10 @@ export function useDialogFocus(
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
+      // S03-B: pop our token — removing only the LAST entry would break when
+      // an effect re-arms (locale remount) or siblings close out of order.
+      const i = dialogStack.indexOf(token);
+      if (i !== -1) dialogStack.splice(i, 1);
       previouslyFocused?.focus?.();
     };
   }, [open]);

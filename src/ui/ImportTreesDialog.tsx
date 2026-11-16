@@ -77,7 +77,7 @@ export function ImportTreesDialog({
               <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} />
               <span className="import-tree-name">{s.name || tr(`树 ${i + 1}`, `Tree ${i + 1}`)}</span>
               <span className="import-tree-meta">
-                {S.importMulti.tips} {s.tips} · {S.importMulti.depth} {s.depth}
+                {S.importMulti.tips} {s.tips}，{S.importMulti.depth} {s.depth}
               </span>
             </label>
           ))}

@@ -1,5 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// EMBEDDED reconciliation layout (docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md §5).
+// EMBEDDED reconciliation layout.
 //
 // One coordinate system, one viewport: the species tree is the only skeleton —
 // each species branch is drawn as a THICK horizontal "tube" (plus a vertical
@@ -902,8 +902,8 @@ function decomposeGeneEdges(
       const parentP = placements.get(draft.parentGeneNodeId);
       const childP = placements.get(draft.geneNodeId);
       if (!parentP || !childP) continue;
-      let d = '';
-      let lane = 0;
+      let d: string;
+      let lane: number;
       if (draft.style === 'straight' || draft.style === 'infeasible') {
         d = `M ${round2(parentP.x)} ${round2(parentP.y)} L ${round2(childP.x)} ${round2(childP.y)}`;
         lane = childP.lane;

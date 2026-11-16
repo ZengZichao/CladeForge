@@ -8,7 +8,7 @@
 // era overlay, environmental events, calibration points) lives in the
 // separate 时间 module — see TimePanel.
 
-import { useStore } from '../model/store';
+import { useStore, type LegendLayout, type LegendPosition } from '../model/store';
 import {
   fontWeightValue,
   type BranchShape,
@@ -19,18 +19,13 @@ import {
 import {
   unpinAll,
   hasBranchLengths,
-  hasAges,
   isTimeCalibrated,
   nodesMissingAges,
-  collapseAll,
-  expandAll,
-  sortTipsByCharacter,
 } from '../model/treeOps';
 import { STYLE_PRESETS, applyStylePreset } from '../model/presets';
 import { Section } from './Section';
 import {
   BranchShapeSelect,
-  CheckboxField,
   ColorField,
   DashSelect,
   DismissibleHint,
@@ -41,6 +36,7 @@ import { SliderNumberField } from './SliderNumberField';
 import { S, tr } from './strings';
 import { notify } from './toast';
 import { enterTimeChartLayout } from './timeChartEras';
+import { rerootAtSelection, ladderizeTree } from './fileMenu';
 
 type Apply = (recipe: (d: Project) => void) => void;
 
@@ -48,6 +44,13 @@ export function LayoutPanel() {
   const apply = useStore((s) => s.apply);
   const project = useStore((s) => s.project);
   const requestFit = useStore((s) => s.requestFit);
+  // m1: which style preset is currently applied (drives the row's selected state).
+  const stylePresetId = useStore((s) => s.stylePresetId);
+  // 用户反馈: legend placement + item arrangement (样式 › 图例设置).
+  const legendPosition = useStore((s) => s.legendPosition);
+  const setLegendPosition = useStore((s) => s.setLegendPosition);
+  const legendLayout = useStore((s) => s.legendLayout);
+  const setLegendLayout = useStore((s) => s.setLegendLayout);
 
   const layout = project.layout;
   const branch = project.defaults.branch;
@@ -75,18 +78,39 @@ export function LayoutPanel() {
 
   return (
     <>
-      <DismissibleHint id="layout-global-hint">{S.layoutPanel.applyHint}</DismissibleHint>
-      <Section title={S.layoutPanel.presetSection} pinable>
+      <Section title={S.layoutPanel.presetSection} defaultOpen={false} pinable>
         <div className="preset-row">
           {STYLE_PRESETS.map((p) => (
-            <button key={p.id} className="btn" onClick={() => set((d) => applyStylePreset(d, p))}>
+            <button
+              key={p.id}
+              /* m1: equal-size rounded buttons; aria-pressed shows WHICH one
+                 is applied. The 暗色 preset is canvas styling — distinct from
+                 the preferences' dark THEME (its title says so). */
+              className={`btn preset-btn${stylePresetId === p.id ? ' active' : ''}`}
+              aria-pressed={stylePresetId === p.id}
+              title={p.id === 'dark' ? tr('深色图面（仅画布配色；界面主题在「偏好」中设置）', 'Dark figure palette (canvas only; the UI theme lives in Preferences)') : undefined}
+              onClick={() => {
+                set((d) => applyStylePreset(d, p));
+                useStore.getState().setStylePresetId(p.id);
+              }}
+            >
               {tr(p.label, p.labelEn)}
             </button>
           ))}
         </div>
       </Section>
-      <Section title={S.layoutPanel.layoutSection} pinable>
-        <Field label={S.layoutPanel.type}>
+      <Section title={S.layoutPanel.layoutSection} defaultOpen={false} pinable>
+        <Field
+          label={S.layoutPanel.type}
+          stacked
+          /* M30: switching layout or orientation discards every hand-placed
+             position — the consequence is stated where the choice is made
+             (undo restores). */
+          title={tr(
+            '更改布局会清除手动拖放的位置（⌘Z 可撤销）；「重新排布」按钮同样如此。',
+            'Changing the layout discards hand-placed positions (⌘Z restores); the Re-layout button does the same.',
+          )}
+        >
           <select
             value={layout.type}
             onChange={(e) => {
@@ -125,24 +149,14 @@ export function LayoutPanel() {
               if (newType === 'time-calibrated') enterTimeChartLayout();
             }}
           >
+            {/* 用户反馈：only the two layouts the tool actually services. */}
             <option value="rectangular-cladogram">{S.layoutType.cladogram}</option>
-            <option value="rectangular-phylogram">{S.layoutType.phylogram}</option>
             <option value="time-calibrated">{S.layoutType.timeCalibrated}</option>
-            <option value="circular">{S.layoutType.circular}</option>
           </select>
         </Field>
-        {/* On a dated tree the circular layout is the time wheel: radii map
-            node age (root at the centre, extant taxa on the rim). Without
-            ages the radii fall back to topological depth and the time data is
-            simply not drawn. Say which case applies where the choice is made
-            (the canvas repeats it from `computeLayout`'s own issue list);
-            `hasAges` mirrors the positive-age gate `computeLayout` uses. */}
-        {layout.type === 'circular' && (
-          <div className="hint" style={{ marginBottom: 8 }}>
-            {hasAges(project) ? S.layoutPanel.circularTimeWheel : S.layoutPanel.circularIgnoresAges}
-          </div>
-        )}
-        <Field label={S.layoutPanel.orientation}>
+        {/* m2 (UI_UX_REVIEW): one field form per section — stacked, like
+            布局类型 above. */}
+        <Field label={S.layoutPanel.orientation} stacked>
           <select
             value={layout.orientation}
             disabled={layout.type === 'circular'}
@@ -174,109 +188,6 @@ export function LayoutPanel() {
             {S.toolbar.relayout}
           </button>
         </div>
-      </Section>
-
-      {/* Support threshold — FUNCTIONAL: the canvas dims/dashes branches whose
-          (scale-aware) support falls below the threshold, and the exporter
-          applies the same rule, so the control is honest on both sides. */}
-      <Section title={tr('支持度阈值', 'Support threshold')} defaultOpen={false} pinable>
-        <Field label={tr('阈值（0–100）', 'Threshold (0–100)')}>
-          <SliderNumberField
-            value={layout.supportThreshold ?? 70}
-            min={0}
-            max={100}
-            step={1}
-            ariaLabel={tr('支持度阈值', 'Support threshold')}
-            recipe={(v) => (d) => void (d.layout.supportThreshold = v)}
-          />
-        </Field>
-        <div className="hint">
-          {tr(
-            '低于阈值的枝以虚线、半透明显示。阈值按 0–100 比较：声明为后验概率（0–1）的值会先换算，bootstrap、SH-aLRT 与共识频率按 0–100 读取。',
-            'Branches below the threshold draw dashed and dimmed. The threshold is compared on a 0–100 scale: posterior probabilities (0–1) are converted first, while bootstrap, SH-aLRT and consensus-frequency values are read on 0–100.',
-          )}
-        </div>
-      </Section>
-
-      {/* Time-axis length + nonlinear mapping: the axis used to be derived from
-          the topological depth, which made deep-time figures mathematically
-          unreadable. An explicit length decouples pixels from topology; the
-          sqrt/log mappings open up the recent end of a 4 Ga axis. */}
-      {isTimeCalibrated(project) && (
-        <Section title={tr('时间轴', 'Time axis')} defaultOpen={false} pinable>
-          <Field label={tr('时间轴长度（px，0 = 按拓扑推导）', 'Axis length (px; 0 = derive from topology)')}>
-            <SliderNumberField
-              value={layout.timeAxisLength ?? 0}
-              min={0}
-              max={4000}
-              step={50}
-              recipe={(v) => (d) => void (d.layout.timeAxisLength = v > 0 ? v : undefined)}
-            />
-          </Field>
-          <Field label={tr('深度映射', 'Depth mapping')}>
-            <select
-              value={layout.timeScale ?? 'linear'}
-              onChange={(e) =>
-                apply((d) => {
-                  d.layout.timeScale = e.target.value as 'linear' | 'sqrt' | 'log';
-                })
-              }
-            >
-              <option value="linear">{tr('线性', 'Linear')}</option>
-              <option value="sqrt">{tr('平方根', 'Square root')}</option>
-              <option value="log">{tr('对数：log10(1 + t/t₀)', 'Logarithmic: log10(1 + t/t₀)')}</option>
-            </select>
-          </Field>
-          <div className="hint">
-            {tr(
-              '深时数据用 sqrt/log：线性 4 Ga 轴把整个新生代压进约 1.5% 的画幅。',
-              'Use sqrt/log for deep time: a linear 4 Ga axis squeezes the entire Cenozoic into about 1.5% of the figure.',
-            )}
-          </div>
-        </Section>
-      )}
-
-      {/* Bulk structure commands: collapse-all / expand-all / sort by state. */}
-      <Section title={tr('批量结构操作', 'Bulk structure operations')} defaultOpen={false} pinable>
-        <div className="field row-actions">
-          <button className="btn" onClick={() => set((d) => void collapseAll(d))}>
-            {S.review.cmdCollapseAll}
-          </button>
-          <button className="btn" onClick={() => set((d) => void expandAll(d))}>
-            {S.review.cmdExpandAll}
-          </button>
-        </div>
-        {project.characters.filter((c) => c.type === 'discrete').length > 0 && (
-          <Field label={tr('按性状状态排序末端', 'Sort tips by character state')}>
-            <select
-              value=""
-              onChange={(e) => {
-                const cid = e.target.value;
-                if (!cid) return;
-                // Sort ONCE, inside the draft: pre-counting on the live
-                // (frozen) project mutated `childrenIds` outside Immer and
-                // threw a read-only assignment error before the store ever
-                // saw the change — the control was simply unusable.
-                let n = 0;
-                set((d) => {
-                  n = sortTipsByCharacter(d, cid);
-                });
-                if (n > 0) {
-                  notify.info(tr(`已按状态重排 ${n} 组姊妹枝`, `Reordered ${n} sibling group${n === 1 ? '' : 's'} by state`));
-                }
-              }}
-            >
-              <option value="">{tr('选择性状…', 'Pick a character…')}</option>
-              {project.characters
-                .filter((c) => c.type === 'discrete')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
-        )}
       </Section>
 
       <Section title={S.layoutPanel.spacingSection} defaultOpen={false} pinable>
@@ -328,11 +239,16 @@ export function LayoutPanel() {
       </Section>
 
       <Section title={S.layoutPanel.gradientSection} defaultOpen={false} pinable>
-        <CheckboxField
-          label={S.layoutPanel.gradientEnable}
-          checked={gradient.enabled}
-          onChange={(v) => set((d) => void (d.defaults.branchGradient.enabled = v))}
-        />
+        {/* 用户反馈：rounded dropdown (启用 / 禁用) instead of a checkbox. */}
+        <Field label={S.layoutPanel.gradientSection}>
+          <select
+            value={gradient.enabled ? 'enable' : 'disable'}
+            onChange={(e) => set((d) => void (d.defaults.branchGradient.enabled = e.target.value === 'enable'))}
+          >
+            <option value="enable">{tr('启用', 'Enable')}</option>
+            <option value="disable">{tr('禁用', 'Disable')}</option>
+          </select>
+        </Field>
         <Field label={S.layoutPanel.gradientFrom}>
           <ColorField
             value={gradient.from}
@@ -394,27 +310,71 @@ export function LayoutPanel() {
             recipe={(v) => (d) => void (d.defaults.node.labelOffsetY = v)}
           />
         </Field>
-        <CheckboxField
-          label={S.layoutPanel.italic}
-          checked={node.fontStyle === 'italic'}
-          onChange={(v) => set((d) => void (d.defaults.node.fontStyle = v ? 'italic' : 'normal'))}
-        />
-        <CheckboxField
-          label={S.layoutPanel.bold}
-          checked={weight >= 600}
-          onChange={(v) => set((d) => void (d.defaults.node.fontWeight = v ? 700 : 400))}
-        />
+        {/* 用户反馈：rounded dropdown instead of a checkbox. */}
+        <Field label={S.layoutPanel.italic}>
+          <select
+            value={node.fontStyle === 'italic' ? 'italic' : 'normal'}
+            onChange={(e) => set((d) => void (d.defaults.node.fontStyle = e.target.value === 'italic' ? 'italic' : 'normal'))}
+          >
+            <option value="normal">{tr('正常', 'Normal')}</option>
+            <option value="italic">{tr('倾斜（斜体）', 'Italic')}</option>
+          </select>
+        </Field>
         <Field label={S.layoutPanel.labelColor}>
           <ColorField
             value={node.labelColor}
             onChange={(v) => set((d) => void (d.defaults.node.labelColor = v))}
           />
         </Field>
-        <CheckboxField
-          label={S.layoutPanel.showLabel}
-          checked={node.showLabel}
-          onChange={(v) => set((d) => void (d.defaults.node.showLabel = v))}
-        />
+        {/* 用户反馈：rounded dropdown instead of a checkbox. */}
+        <Field label={S.layoutPanel.showLabel}>
+          <select
+            value={node.showLabel ? 'show' : 'hide'}
+            onChange={(e) => set((d) => void (d.defaults.node.showLabel = e.target.value === 'show'))}
+          >
+            <option value="show">{tr('显示', 'Show')}</option>
+            <option value="hide">{tr('隐藏', 'Hide')}</option>
+          </select>
+        </Field>
+      </Section>
+
+      {/* 用户反馈: the tree-structure operations moved OUT of the 文件 menu into
+          the left panel. */}
+      <Section title={tr('树操作', 'Tree operations')} defaultOpen={false} pinable>
+        <div className="field row-actions">
+          <button className="btn" onClick={() => rerootAtSelection()}>
+            {tr('从选中节点重新定根', 'Reroot at the selected node')}
+          </button>
+          <button className="btn" onClick={() => ladderizeTree()}>
+            {tr('阶梯化整树', 'Ladderize the tree')}
+          </button>
+        </div>
+      </Section>
+
+      {/* 用户反馈: legend placement + item arrangement. */}
+      <Section title={tr('图例设置', 'Legend settings')} defaultOpen={false} pinable>
+        <Field label={tr('图例位置', 'Legend position')}>
+          <select
+            value={legendPosition}
+            onChange={(e) => setLegendPosition(e.target.value as LegendPosition)}
+          >
+            <option value="top-left">{tr('左上', 'Top-left')}</option>
+            <option value="top-right">{tr('右上', 'Top-right')}</option>
+            <option value="bottom-left">{tr('左下', 'Bottom-left')}</option>
+            <option value="bottom-right">{tr('右下', 'Bottom-right')}</option>
+          </select>
+        </Field>
+        <Field label={tr('项目排列', 'Item arrangement')}>
+          <select
+            value={legendLayout}
+            onChange={(e) => setLegendLayout(e.target.value as LegendLayout)}
+          >
+            <option value="one-column">{tr('垂直一列', 'One column')}</option>
+            <option value="two-columns">{tr('垂直两列', 'Two columns')}</option>
+            <option value="one-row">{tr('水平一行', 'One row')}</option>
+            <option value="two-rows">{tr('水平两行', 'Two rows')}</option>
+          </select>
+        </Field>
       </Section>
 
       <Section title={S.layoutPanel.canvasSection} defaultOpen={false} pinable>

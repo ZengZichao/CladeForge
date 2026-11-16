@@ -10,10 +10,13 @@ import { getLiveView } from './liveView';
 import type { LayoutResult } from '../layout/autoLayout';
 import type { Point, TreeNode, ViewTransform } from '../model/types';
 
-const W = 178;
-const H = 128;
 const M = 10;
 const PAD = 4; // CSS padding inside the card
+
+/** Default footprint; shrinks with the canvas so a phone-width view is not
+ *  dominated by its own overview (2026-11-15 ID-40). */
+const MINIMAP_W = 178;
+const MINIMAP_H = 128;
 
 /** Ceiling on rendered branch segments; above it the minimap is sub-pixel anyway. */
 const MAX_MINIMAP_SEGMENTS = 480;
@@ -35,6 +38,10 @@ export const Minimap = memo(function Minimap({
   // on every wheel tick — subscribing in this leaf keeps the cost out of the
   // tree canvas.
   const view = useStore((s) => s.view);
+  // Footprint follows the CANVAS width: a small window gets a smaller overview
+  // (the old fixed 178×128 was ~40% of a 375 px phone canvas).
+  const W = size.w > 0 && size.w < 480 ? 124 : size.w < 760 ? 152 : MINIMAP_W;
+  const H = Math.round((W * MINIMAP_H) / MINIMAP_W);
   const b = layout.bounds;
   const treeW = Math.max(1, b.maxX - b.minX);
   const treeH = Math.max(1, b.maxY - b.minY);
@@ -60,7 +67,7 @@ export const Minimap = memo(function Minimap({
       out.push({ x1: a.x, y1: a.y, x2: c.x, y2: c.y });
     }
     return out;
-  }, [layout, nodes]);
+  }, [layout, nodes, W, H]);
 
   // Teardown for an in-progress drag; invoked on unmount so the window
   // mousemove/mouseup listeners can't outlive the component (memory leak).
@@ -121,7 +128,7 @@ export const Minimap = memo(function Minimap({
 
   return (
     <svg className="minimap" width={W} height={H} onMouseDown={onDown}>
-      <rect className="minimap-bg" x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} rx={8} />
+      <rect className="minimap-bg" x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} rx={0} />
       {drawnSegs.map((s, i) => (
         <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} className="minimap-branch" />
       ))}

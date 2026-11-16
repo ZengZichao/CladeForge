@@ -10,7 +10,8 @@ import { memo } from 'react';
 import { useStore } from '../model/store';
 import { removeCustomEdge } from '../model/treeOps';
 import { curveMidpoint } from './paths';
-import { S } from '../ui/strings';
+import { S, tr } from '../ui/strings';
+import { requestConfirm } from '../ui/confirmDialog';
 import type { Bounds } from './coords';
 import type { EdgeId, Point } from '../model/types';
 
@@ -65,7 +66,16 @@ export const SelectedCustomEdgeDelete = memo(function SelectedCustomEdgeDelete({
       style={{ cursor: 'pointer' }}
       onPointerDown={(e) => {
         e.stopPropagation();
-        apply((d) => removeCustomEdge(d, edgeId));
+        // M25: the floating × deleted instantly on pointerdown — one policy,
+        // guarded (the undo toast from the inspector path applies here too).
+        requestConfirm({
+          key: 'delete-custom-edge',
+          title: S.edge.delete,
+          message: tr('删除后可用撤销恢复（⌘Z）。', 'The deletion can be undone (⌘Z).'),
+          confirmLabel: S.edge.delete,
+          danger: true,
+          onConfirm: () => apply((d) => removeCustomEdge(d, edgeId)),
+        });
       }}
     >
       <title>{S.edge.delete}</title>

@@ -35,6 +35,7 @@ import {
   StarIcon,
   StarFilledIcon,
   PinLeftIcon,
+  ChevronRightIcon,
 } from '@radix-ui/react-icons';
 import { S, titleKey } from './strings';
 
@@ -224,6 +225,13 @@ export function Section({
           aria-expanded={effectiveOpen}
           onClick={toggle}
         >
+          {/* Disclosure caret: a collapsed section and a static divider used to
+              look identical, so the panel read as a list of dead headings.
+              It rotates rather than swapping glyphs, and `aria-expanded` on the
+              button carries the state for assistive tech. */}
+          <span className="section-caret" aria-hidden="true">
+            <ChevronRightIcon />
+          </span>
           <span className="section-title">{title}</span>
           {count !== undefined && !effectiveOpen && (
             <span className="section-count">{count} {S.section.items}</span>
@@ -309,6 +317,9 @@ export function GroupSection({
           aria-expanded={effectiveOpen}
           onClick={toggle}
         >
+          <span className="section-caret" aria-hidden="true">
+            <ChevronRightIcon />
+          </span>
           {title}
         </button>
         {pinable && (

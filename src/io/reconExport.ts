@@ -157,7 +157,7 @@ export function buildReconciliationReport(project: Project): string {
   L.push('');
   L.push(
     tr(
-      `代价向量：基因重复 δ=${c.dup} · 水平转移 τ=${c.transfer} · 基因丢失 λ=${c.loss}（物种形成 σ 计为 0）`,
+      `代价向量：基因重复 δ=${c.dup}，水平转移 τ=${c.transfer}，基因丢失 λ=${c.loss}（物种形成 σ 计为 0）`,
       `Costs: duplication δ=${c.dup}, transfer τ=${c.transfer}, loss λ=${c.loss} (speciation σ = 0).`,
     ),
   );
@@ -236,7 +236,7 @@ export function buildReconciliationReport(project: Project): string {
     );
     L.push(
       tr(
-        `- 事件统计：σ ${counts.sigma} · δ ${counts.delta} · τ ${counts.tau} · λ ${counts.loss}`,
+        `- 事件统计：σ ${counts.sigma}，δ ${counts.delta}，τ ${counts.tau}，λ ${counts.loss}`,
         `- Events: σ ${counts.sigma}, δ ${counts.delta}, τ ${counts.tau}, λ ${counts.loss}.`,
       ),
     );

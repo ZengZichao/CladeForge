@@ -15,11 +15,8 @@ import {
   collectSubtree,
   constrainedMoveNode,
   deleteNode,
-  isTimeCalibrated,
-  nodesMissingAges,
   pathBetween,
   topologicalNeighbour,
-  unpinAll,
 } from '../model/treeOps';
 import {
   resolveBranchStyle,
@@ -46,19 +43,19 @@ import { hasScaleBar, unmeasuredNodeIds } from './branchFlags';
 import { CustomEdgeView } from './CustomEdgeView';
 import { NodeView } from './NodeView';
 import { EventLayer } from './EventLayer';
-import { TimeAxis } from './TimeAxis';
+import { TimeAxis, CalibrationBars } from './TimeAxis';
 import { Minimap } from './Minimap';
 import { AsrPieLayer } from './AsrPieLayer';
-import { ScaleBar, TimeScaleBar } from './ScaleBar';
+import { ScaleBar } from './ScaleBar';
 import { ConnectionLayer } from './ConnectionLayer';
 import { eventScreenPoint, useSpaceHeld, useWheel } from './usePanZoom';
 import { useCanvasGestures } from './useDrag';
 import { branchMidpointOn } from './paths';
 import { removeCustomEdge } from '../model/treeOps';
 import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO } from './colors';
-import { importTreeText } from '../io/fileActions';
+import { importTreeText, actionImportTree, actionNewTreeFile } from '../io/fileActions';
 import { MAX_PROJECT_CHARS, MAX_TREE_CHARS } from '../io/limits';
-import { createSampleProject, SAMPLE_PROJECTS } from '../model/sampleTree';
+import { SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from '../ui/sampleOpener';
 import { requestDeletion } from '../ui/deleteGuard';
 import { CanvasLegend } from '../ui/CanvasLegend';
@@ -67,25 +64,14 @@ import { modalIsOpen } from '../ui/useDialogFocus';
 import { notify } from '../ui/toast';
 import { requestConfirm } from '../ui/confirmDialog';
 import { S, tr } from '../ui/strings';
-// Shared, never-empty layout display name (BUG-5): the proposal below quotes
-// the current layout, and that name must never be an empty string even when a
-// loaded document carries a blank/unknown `layout.type`.
-import { layoutTypeName } from '../ui/layoutTypeName';
-// BUG-7: accepting this proposal is one of the explicit time-chart switch entry
-// points, so it gets the same first-entry era-band behaviour as the 样式
-// selector and the 时间 panel's switch button.
-import { enterTimeChartLayout } from '../ui/timeChartEras';
 
 /**
- * Documents for which the time-chart switch has already been PROPOSED.
- *
- * Keyed on the PROJECT ID and never on `layout.type`: an effect that depends on
- * the layout it is rewriting re-fires when that layout is undone, so the switch
- * would be re-applied right after the user reverted it. The layout is only ever
- * changed here from a click, so the guard exists purely to stop a proposal being
- * nagged out twice for the same document.
+ * Below this node count the overview minimap hides (review finding 3 / R4): on
+ * a small tree every tip is visible at a glance, so the minimap is decoration
+ * that costs canvas space. The threshold matches the smallest tree where the
+ * minimap has answered a real navigation question in testing (tens of tips).
  */
-const timeProposalShownFor = new Set<string>();
+const MINIMAP_MIN_NODES = 60;
 
 /**
  * The last `loadCounter` this canvas auto-fitted for. Module scope, NOT a
@@ -100,6 +86,16 @@ export function TreeCanvas() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const spaceHeld = useSpaceHeld();
+
+  // M36 (UI_UX_REVIEW): space-pan had no affordance — the cursor stayed
+  // default while space was held. grab announces "you can pan now"; the
+  // grabbing state during the actual drag is set imperatively in useDrag.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    if (spaceHeld.current) el.style.setProperty('cursor', 'grab');
+    else el.style.setProperty('cursor', '');
+  }, [spaceHeld.current]);
 
   const project = useStore((s) => s.project);
   // Deliberately NO `useStore((s) => s.view)` subscription: the view transform
@@ -121,13 +117,12 @@ export function TreeCanvas() {
   const showEvents = useStore((s) => s.showEvents);
   const showEras = useStore((s) => s.showEras);
   const eraLevel = useStore((s) => s.eraLevel);
+  // A14: the calibration-interval overlay (error bars on the time axis).
   const focusTarget = useStore((s) => s.focusTarget);
   const asr = useStore((s) => s.asr);
   const selection = useStore((s) => s.selection);
   const select = useStore((s) => s.select);
   const focusNode = useStore((s) => s.focusNode);
-  const openInNewTab = useStore((s) => s.openInNewTab);
-  const requestFit = useStore((s) => s.requestFit);
 
   // --- imperative view transform (wheel fast path) ---------------------------
   // The store holds the last COMMITTED transform (history / fit / undo); a wheel
@@ -263,55 +258,10 @@ export function TreeCanvas() {
     setCullView(liveViewRef.current);
   }, [applyViewToCanvas, commitLiveView]);
 
-  // STATE MACHINE — the time-data mismatch is a PROPOSAL, never an imposition.
-  //
-  // When the tree carries time data but the layout is neither the geological time
-  // chart nor the circular one, nothing here runs
-  // `apply(d => { d.layout.type = 'time-calibrated' })` out of an effect. That
-  // would overwrite an explicit layout choice without asking the user, and since
-  // such an effect depends on `project.layout.type`, undoing the switch would
-  // re-fire it — the change would survive Undo and the layout become
-  // unrecoverable.
-  //
-  // Instead the user gets an informative message with a one-click switch (and the
-  // 时间 panel keeps a dismissible banner with the same button for as long as
-  // the mismatch lasts), offered at most once per document, guarded on the project
-  // id above.
-  const timeReady = isTimeCalibrated(project);
-  const timeChartWouldHelp =
-    timeReady && project.layout.type !== 'time-calibrated' && project.layout.type !== 'circular';
-
-  // The one-click answer to the proposal: one undoable step, exactly as if the
-  // choice had been made in the 样式 selector or the 时间 panel.
-  const switchToTimeChart = useCallback(() => {
-    const missing = nodesMissingAges(useStore.getState().project).length;
-    apply((d) => {
-      d.layout.type = 'time-calibrated';
-      unpinAll(d);
-    });
-    if (missing > 0) notify.info(S.notify.missingAgesToast(missing));
-    requestFit();
-    // BUG-7: an explicit entry into the time chart — apply the first-entry era
-    // band rule (auto-enable once + one-time hint, honouring a remembered
-    // opt-out). UI-only, so it adds no undo step to the layout change above.
-    enterTimeChartLayout();
-    notify.success(tr('已切换到「地质时间图」布局', 'Switched to the geological time chart layout'));
-  }, [apply, requestFit]);
-
-  useEffect(() => {
-    if (!timeChartWouldHelp) return;
-    if (timeProposalShownFor.has(project.id)) return;
-    timeProposalShownFor.add(project.id);
-    notify.action(
-      S.layoutPanel.timeDataButWrongLayout(
-        layoutTypeName(useStore.getState().project.layout.type),
-      ),
-      S.layoutPanel.switchToTimeChart,
-      switchToTimeChart,
-    );
-    // Deliberately NOT keyed on `project.layout.type`: this effect must never be
-    // re-triggered by the state it is proposing a change to.
-  }, [timeChartWouldHelp, project.id, switchToTimeChart]);
+  // The time-data mismatch is surfaced only where the user is already working
+  // on time: the 时间 panel's inline note and its switch action. A global toast
+  // would follow the user into unrelated documents and could act on the wrong
+  // project after a tab switch, so the canvas keeps no proposal of its own.
 
   // An arrow-key nudge held down repeats at the OS rate, so applying every
   // keydown as its own edit would push dozens of undo steps for one visual
@@ -385,13 +335,20 @@ export function TreeCanvas() {
   const [dragActive, setDragActive] = useState(false);
 
   // --- viewport measurement ---
-  useEffect(() => {
+  // Measure once before paint, then track resizes. The explicit first read
+  // matters: a ResizeObserver's initial callback can be skipped when the canvas
+  // mounts inside a restored, still-hidden tab, leaving the SVG at 0×0.
+  useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+    const measure = (w: number, h: number) => {
+      setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+      setViewport(w, h);
+    };
+    measure(el.clientWidth, el.clientHeight);
     const ro = new ResizeObserver((entries) => {
       const r = entries[0].contentRect;
-      setSize({ w: r.width, h: r.height });
-      setViewport(r.width, r.height);
+      measure(r.width, r.height);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -422,12 +379,28 @@ export function TreeCanvas() {
     },
     [setView],
   );
+  // M38 (UI_UX_REVIEW): the first auto-fit ran on the FIRST nonzero size,
+  // which could predate the persisted panel widths being applied — the fit then
+  // used a wider container than the one the user actually gets, and clipped
+  // Taxon_E/F off the right edge (139% zoom). The fit now waits for the
+  // container to be QUIET (no resize callback for 120ms) before measuring.
+  const autoFitStableTimerRef = useRef<number | null>(null);
+  const autoFitPendingRef = useRef(false);
   useEffect(() => {
-    // Only auto-fit when loadCounter changes (new document loaded), not on remount
-    if (loadCounter !== lastAutoFitLoadCounter && size.w > 0 && size.h > 0) {
+    if (loadCounter !== lastAutoFitLoadCounter) {
       lastAutoFitLoadCounter = loadCounter;
-      fitNow(layoutRef.current);
+      autoFitPendingRef.current = true;
     }
+    if (autoFitPendingRef.current && size.w > 0 && size.h > 0) {
+      if (autoFitStableTimerRef.current !== null) window.clearTimeout(autoFitStableTimerRef.current);
+      autoFitStableTimerRef.current = window.setTimeout(() => {
+        autoFitPendingRef.current = false;
+        fitNow(layoutRef.current);
+      }, 120);
+    }
+    return () => {
+      if (autoFitStableTimerRef.current !== null) window.clearTimeout(autoFitStableTimerRef.current);
+    };
   }, [loadCounter, size.w, size.h, fitNow]);
   // Explicit fit requests: fire on a CHANGE of the counter only. The effect
   // used to run on mount as well, so any remount with fitRequests > 0 (i.e.
@@ -439,6 +412,45 @@ export function TreeCanvas() {
     prevFitRequests.current = fitRequests;
     if (fitRequests > 0) fitNow(layoutRef.current);
   }, [fitRequests, fitNow]);
+
+  // --- zoom to selection (2026-11-15 OP-04) ---
+  // Fit-to-window answers "show me the whole tree"; with a multi-selection the
+  // user's question is "show me THIS clade". The palette asks through an event,
+  // and the canvas owns the viewport, so the two never need shared state.
+  useEffect(() => {
+    const onFitSelection = () => {
+      const st = useStore.getState();
+      const layout = layoutRef.current;
+      const el = wrapRef.current;
+      if (!el) return;
+      const ids = st.selection.filter((id) => layout.visible.has(id));
+      if (ids.length === 0) {
+        fitNow(layout);
+        return;
+      }
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      for (const id of ids) {
+        const p = layout.positions.get(id);
+        if (!p) continue;
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+      if (!Number.isFinite(minX)) {
+        fitNow(layout);
+        return;
+      }
+      // A little breathing room around the nodes; labels are left out of the
+      // box deliberately — a tight clade still fits with the adaptive margin.
+      setView(fitView({ minX, minY, maxX: maxX + 1, maxY: maxY + 1 }, el.clientWidth, el.clientHeight));
+    };
+    window.addEventListener('cladeforge:fit-selection', onFitSelection);
+    return () => window.removeEventListener('cladeforge:fit-selection', onFitSelection);
+  }, [fitNow, setView]);
 
   // --- pan to a searched node, keeping the current zoom ---
   useEffect(() => {
@@ -912,10 +924,9 @@ export function TreeCanvas() {
   const isEmpty = (project.nodes[project.rootId]?.childrenIds.length ?? 0) === 0;
 
   // Canvas background follows the chrome theme unless the user has explicitly
-  // chosen a colour: a fixed white default would leave dark mode with a bright
-  // drawing panel. `var(--canvas-bg)` resolves to #f0f0f2 (light) or
-  // #141416 (dark). Exports read project.canvas.background directly, so they
-  // are unaffected by this render-time substitution.
+  // chosen a colour: `var(--canvas-bg)` is the same paper as the panels,
+  // separated by the pane hairlines. Exports read project.canvas.background
+  // directly, so they are unaffected by this render-time substitution.
   const canvasBg =
     project.canvas.background === DEFAULT_CANVAS.background
       ? 'var(--canvas-bg)'
@@ -998,7 +1009,9 @@ export function TreeCanvas() {
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
-            background: 'var(--accent, #2563eb)',
+            // B2 (UI_UX_REVIEW): a low-opacity wash tint needs the ink token;
+            // the surface-token --accent resolved to near-white and vanished.
+            background: 'var(--foreground)',
             opacity: 0.08,
             zIndex: 5,
           }}
@@ -1006,11 +1019,12 @@ export function TreeCanvas() {
           <span
             style={{
               pointerEvents: 'none',
-              fontSize: 13,
-              background: 'var(--surface, #fff)',
+              fontSize: 'var(--text-sm)',
+              background: 'var(--surface)',
               padding: '6px 12px',
-              borderRadius: 6,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              borderRadius: 0,
+              border: '0.5px solid var(--border-popover)',
+              boxShadow: 'none',
               opacity: 1,
             }}
           >
@@ -1057,6 +1071,22 @@ export function TreeCanvas() {
               eraLevel={eraLevel}
               envEvents={project.environmentalEvents}
             />
+          )}
+          {/* A14 (review §4.2): calibration intervals as node-anchored error
+              bars on the time axis. The intervals were export-only data before
+              ("they go to the NEXUS file and nothing draws") — honest, but it
+              left a whole hypothesis layer invisible on its own canvas. Off by
+              default; the 时间 module owns the toggle. */}
+          {/* 用户反馈: a node with min/max ages draws its confidence bar on the
+              canvas whenever calibration points exist (no display toggle — the
+              bars ARE the visualisation of the 时间约束 data). */}
+          {project.calibrationPoints.length > 0 && layout.timeAxis && (
+            <CalibrationBars
+              info={layout.timeAxis}
+              points={project.calibrationPoints}
+              nodes={project.nodes}
+              positions={layout.positions}
+            />
           )}          {mrcaPath &&
             branches
               .filter((b) => mrcaPath.branches.has(b.node.id))
@@ -1090,6 +1120,7 @@ export function TreeCanvas() {
                 orientation={project.layout.orientation}
                 layoutType={project.layout.type}
                 style={style}
+                childId={b.node.id}
                 unmeasured={unmeasured.has(b.node.id)}
                 dimmed={resolved?.dimmed}
               />
@@ -1163,7 +1194,7 @@ export function TreeCanvas() {
                   >
                     ?
                   </text>
-                  <title>{`${t.fromLabel} → ${t.toLabel} · ${tr('端点未赋值：提示补数据，不计入演化转变', 'endpoint unassigned: a prompt for data, not an evolutionary change')}`}</title>
+                  <title>{`${t.fromLabel} → ${t.toLabel}：${tr('端点未赋值，提示补数据，不计入演化转变', 'endpoint unassigned; a prompt for data, not an evolutionary change')}`}</title>
                 </g>
               );
             }
@@ -1253,28 +1284,34 @@ export function TreeCanvas() {
               color={project.defaults.edge.color}
             />
           )}
-        
-      {/* Rubber-band (marquee) selection rectangle — SCREEN space, outside the
-          world transform, so its coordinates match the gesture's screen px. */}
+      </g>
+      {/* B1 (UI_UX_REVIEW 2026-11-15): the marquee rect is genuinely in SCREEN
+          space now — it sits outside the world transform, so its coordinates
+          match the gesture's screen px at any zoom. Color uses the primary ink
+          (the surface-token `--accent` resolved to near-white on light canvas). */}
       {marquee && (
         <rect
           x={marquee.x}
           y={marquee.y}
           width={marquee.w}
           height={marquee.h}
-          fill="var(--accent)"
+          fill="var(--primary)"
           fillOpacity={0.08}
-          stroke="var(--accent)"
+          stroke="var(--primary)"
           strokeWidth={1}
           strokeDasharray="4 3"
           pointerEvents="none"
         />
       )}
-</g>
       </svg>
-      <Minimap layout={layout} nodes={project.nodes} size={size} setView={setView} />
+      {/* Overview aids appear only once there is a tree to navigate. On a small
+          tree the minimap is pure decoration (review finding 3 / R4): below the
+          threshold it hides, because every tip is already visible at a glance. */}
+      {!isEmpty && Object.keys(project.nodes).length >= MINIMAP_MIN_NODES && (
+        <Minimap layout={layout} nodes={project.nodes} size={size} setView={setView} />
+      )}
       {/* On-canvas colour legend */}
-      <CanvasLegend unmeasuredBranches={unmeasured.size > 0} />
+      {!isEmpty && <CanvasLegend unmeasuredBranches={unmeasured.size > 0} />}
       {/* On a dated tree the circular layout is the time wheel (root at the
           centre, radii by age); without ages it degrades to topological depth.
           Either way the mapping / degradation is named out loud instead of
@@ -1287,58 +1324,53 @@ export function TreeCanvas() {
       {project.layout.type === 'rectangular-phylogram' && hasScaleBar(layout.depthScale) ? (
         <ScaleBar depthScale={layout.depthScale as number} />
       ) : null}
-      {project.layout.type === 'time-calibrated' && layout.timeAxis ? (
-        <TimeScaleBar timeAxis={layout.timeAxis} axisScale={project.layout.timeScale} />
-      ) : null}
+      {/* V14 (UI_UX_REVIEW): the time-calibrated axis already carries Ma ticks —
+          a second "10 Ma" bar at the bottom repeated the same information in a
+          weaker form. The axis is the authority; the redundant bar is gone. */}
       {isEmpty && (
         <div className="empty-state">
-          <svg
-            className="empty-glyph"
-            viewBox="0 0 64 64"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M8 32 H20 M20 32 V16 H38 M20 32 V48 H38 M38 16 V10 H56 M38 16 V22 H56 M38 48 V42 H56 M38 48 V54 H56" />
-          </svg>
-          <div className="empty-title">{S.empty.title}</div>
-          <div className="empty-hint">{S.empty.hint}</div>
-          {/* Sample tree: lets a first-time user see a finished
-              document with characters + events within seconds. */}
+          <div className="empty-masthead">
+            <div className="empty-wordmark">{S.app.name}</div>
+            <div className="empty-hint">{S.empty.hint}</div>
+          </div>
+          <div className="empty-actions">
+            <div className="empty-actions-row">
+              <button
+                className="btn primary"
+                onClick={() => void actionImportTree()}
+              >
+                {S.empty.openFile}
+              </button>
+              {/* 用户反馈：a blank front page must also offer to START a tree. */}
+              <button className="btn" onClick={() => actionNewTreeFile()}>
+                {tr('新建树文件', 'New tree file')}
+              </button>
+            </div>
+            {/* 用户反馈：the ⌘K hint sits UNDER the two buttons, not beside
+                them — it is a reading note, not a third action. */}
+            <span className="empty-kbd">{S.empty.shortcutHint}</span>
+          </div>
+          {/* 用户反馈：samples as a 2×2 grid of rounded cards — the big title
+              only (the description stays as the hover tooltip), no gray body
+              copy competing with the actions above. */}
           <div className="sample-picker">
             <div className="sample-picker-title">{S.empty.samplePickerTitle}</div>
-            <div className="sample-picker-hint">{S.empty.samplePickerHint}</div>
-            <div className="sample-grid">
-              {SAMPLE_PROJECTS.map((s) => (
+            <div className="sample-card-grid">
+              {/* 用户反馈：exactly TWO standard samples — a time tree and a
+                  non-time tree, centered. The calibration demo and the
+                  reconciliation sample stay in the sample library dialog. */}
+              {SAMPLE_PROJECTS.filter((s) => s.id === 'feature-tour' || s.id === 'large-tree').map((s) => (
                 <button
                   key={s.id}
                   className="sample-card"
                   title={tr(s.desc, s.descEn)}
                   onClick={() => openSample(s)}
                 >
-                  {/* Reconciliation samples land in the recon workspace with one
-                      click (§7.4) — the badge says so before the click. */}
-                  {s.entryView === 'recon' && (
-                    <span className="sample-card-badge">{S.recon.sampleBadge}</span>
-                  )}
-                  <span className="sample-card-label">{tr(s.label, s.labelEn)}</span>
-                  <span className="sample-card-desc">{tr(s.desc, s.descEn)}</span>
+                  {tr(s.label, s.labelEn)}
                 </button>
               ))}
             </div>
           </div>
-          {/* A single-button equivalent, so keyboard and command-palette users
-              reach a sample in one step */}
-          <button
-            className="btn primary"
-            title={S.empty.loadSampleTitle}
-            onClick={() => openInNewTab(createSampleProject())}
-          >
-            {S.empty.loadSample}
-          </button>
         </div>
       )}
     </div>

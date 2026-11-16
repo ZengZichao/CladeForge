@@ -1096,8 +1096,8 @@ export function parseNexusMatrix(input: string): NexusMatrixResult {
           name: tr(`连续性状 ${col + 1}`, `Continuous ${col + 1}`),
           type: 'continuous',
           states: [],
-          lowColor: '#60a5fa',
-          highColor: '#f97316',
+          lowColor: '#0090ff',
+          highColor: '#f76b15',
         };
         const values: Record<string, number> = {};
         for (const taxon of taxa) {

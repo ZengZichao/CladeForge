@@ -25,8 +25,41 @@
 // working. Manual XY offsets (`labelOffsetX` / `labelOffsetY`) are added on top
 // of any placement.
 
-import type { LabelPosition, Orientation, Point } from '../model/types';
+import type { LabelPosition, Orientation, Point, Project, TreeNode } from '../model/types';
 import { tr } from '../ui/strings';
+
+/**
+ * Tip count in the subtree rooted at `id` (iterative; a tip counts as 1).
+ * A2 (review §4.2): only called for COLLAPSED nodes, so the total cost across
+ * one layout pass is O(sum of collapsed subtrees) ≤ O(n) — no full-tree map is
+ * needed on the collision-planner hot path.
+ */
+export function subtreeTipCount(project: Project, id: string): number {
+  const nodes = project.nodes;
+  if (!nodes[id]) return 0;
+  let count = 0;
+  const stack: string[] = [id];
+  while (stack.length) {
+    const cur = nodes[stack.pop() as string];
+    if (!cur) continue;
+    if (cur.childrenIds.length === 0) {
+      count += 1;
+      continue;
+    }
+    for (const c of cur.childrenIds) stack.push(c);
+  }
+  return count;
+}
+
+/**
+ * The collapsed-subtree tip count as a label suffix, '' for anything else.
+ * Shared by the canvas (NodeView), the collision-planner geometry
+ * (labelBounds) and the exporter, so all three agree on the label's width.
+ */
+export function collapsedLabelSuffix(project: Project, node: TreeNode): string {
+  if (!node.collapsed || node.childrenIds.length === 0) return '';
+  return ` (${subtreeTipCount(project, node.id)})`;
+}
 
 export interface LabelPlacement {
   dx: number;

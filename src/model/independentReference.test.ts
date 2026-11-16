@@ -817,7 +817,7 @@ function feasibleEvents(
   // lineage ancestral to sampled gene tips can never be bought off with a
   // loss (that would delete observed genes — standard DTL forbids it).
   {
-    let losses = kids.length === 1 ? 1 : 0; // surplus copy of a unary duplication
+    const losses = kids.length === 1 ? 1 : 0; // surplus copy of a unary duplication
     let ok = true;
     for (const c of kids) {
       if (place[c] < 0) ok = false;

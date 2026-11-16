@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 /**
- * The app PROPOSES the geological time chart; it never imposes it.
+ * The canvas never pushes the geological time chart at the user.
  *
- * Switching the layout from an effect would, in one move, rewrite the user's
- * explicit choice without asking and depend on the very field it wrote — so
- * undoing the switch would re-fire the effect and re-apply the change, making the
- * layout unrecoverable by design.
- *
- * These tests mount the real canvas and assert (a) a time-ready project never
- * moves the layout on its own, (b) the offer arrives as an informative toast with
- * a one-click switch, (c) accepting it costs exactly ONE undo step, and (d) undoing
- * that step leaves it undone — across a re-render and a flushed effect pass.
+ * Mounting a time-ready project with a non-time layout must not rewrite that
+ * layout, and it must not raise a global toast: a toast outlives the document
+ * that produced it and would follow the user into another tab, where its action
+ * could edit the wrong project. The 时间 panel owns the inline note and the
+ * switch action, next to the data the decision depends on.
  *
  * (`createElement` rather than JSX: vitest's `include` pattern covers `src/` files
  * ending in `.test.ts` only, so a `.tsx` test file is never collected.)
@@ -23,7 +19,6 @@ import { TreeCanvas } from './TreeCanvas';
 import { useStore } from '../model/store';
 import { useToasts } from '../ui/toast';
 import { S } from '../ui/strings';
-import { layoutTypeName } from '../ui/layoutTypeName';
 import { parseNewick } from '../io/newick';
 import type { Project } from '../model/types';
 
@@ -54,7 +49,7 @@ function cleanup(): void {
   host = null;
 }
 
-/** A dated tree whose layout is the plain cladogram — the state machine's trigger. */
+/** A dated tree whose layout is the plain cladogram. */
 function datedCladogram(id: string): Project {
   const p = parseNewick('((A,B),(C,D));', id);
   for (const node of Object.values(p.nodes)) node.age = 10;
@@ -70,9 +65,7 @@ const proposalToast = () =>
     .getState()
     .toasts.find((t) => t.action?.label === S.layoutPanel.switchToTimeChart);
 
-describe('the time-chart layout is proposed, never imposed', () => {
-  // Each case loads a project with its own id: the proposal guard is keyed on the
-  // document, so a fresh id is what makes the cases independent.
+describe('the canvas never proposes a time-chart switch', () => {
   beforeEach(() => {
     useToasts.setState({ toasts: [] });
     localStorage.clear();
@@ -80,102 +73,18 @@ describe('the time-chart layout is proposed, never imposed', () => {
 
   afterEach(cleanup);
 
-  it('a time-ready project does NOT rewrite the user’s layout', () => {
-    useStore.getState().loadProject(datedCladogram('c2-impose'));
+  it('a time-ready project keeps the layout the document set', () => {
+    useStore.getState().loadProject(datedCladogram('c2-no-impose'));
     mountCanvas();
-    // Mounting only PROPOSES: the layout stays exactly as the document set it…
     expect(useStore.getState().project.layout.type).toBe('rectangular-cladogram');
-    // …and no edit reaches the undo stack on its own. `past` holds exactly
-    // the ONE import-undo step loadProject retains (PM-23) — the proposal
-    // itself pushed nothing.
+    // Only the import step loadProject retains (PM-23); mounting adds nothing.
     expect(useStore.getState().past).toHaveLength(1);
   });
 
-  it('the offer is an informative message with a one-click switch', () => {
-    useStore.getState().loadProject(datedCladogram('c2-toast'));
+  it('mounting raises no global layout-proposal toast', () => {
+    useStore.getState().loadProject(datedCladogram('c2-no-toast'));
     mountCanvas();
-    const toast = proposalToast();
-    expect(toast, 'a proposal toast with a switch action').toBeDefined();
-    expect(toast!.message).toBe(S.layoutPanel.timeDataButWrongLayout(S.layoutType.cladogram));
-    // The message names the layout the user chose, i.e. it informs rather than acts.
-    expect(toast!.message).toContain(S.layoutType.cladogram);
-  });
-
-  it('accepting the proposal is ONE undoable step', () => {
-    useStore.getState().loadProject(datedCladogram('c2-accept'));
-    mountCanvas();
-    const before = useStore.getState().past.length;
-    act(() => proposalToast()!.action!.run());
-    expect(useStore.getState().project.layout.type).toBe('time-calibrated');
-    expect(useStore.getState().past).toHaveLength(before + 1);
-  });
-
-  it('undoing the layout change LEAVES it undone (the effect cannot re-apply it)', () => {
-    useStore.getState().loadProject(datedCladogram('c2-undo'));
-    mountCanvas();
-    const chosen = useStore.getState().project.layout.type;
-    act(() => proposalToast()!.action!.run());
-    expect(useStore.getState().project.layout.type).toBe('time-calibrated');
-
-    act(() => useStore.getState().undo());
-    expect(useStore.getState().project.layout.type).toBe(chosen);
-
-    // Re-rendering with the undone layout must leave it alone: an effect that
-    // wrote 'time-calibrated' back would also push another history entry.
-    for (let pass = 0; pass < 3; pass += 1) {
-      act(() => root!.render(createElement(TreeCanvas)));
-    }
-    expect(useStore.getState().project.layout.type).toBe(chosen);
-    // One entry in past (the retained import step, PM-23) and the undone
-    // layout change sits in future.
-    expect(useStore.getState().past).toHaveLength(1);
-    expect(useStore.getState().future).toHaveLength(1);
-
-    // …and undoing again after redo still lands back on the user's choice.
-    act(() => useStore.getState().redo());
-    expect(useStore.getState().project.layout.type).toBe('time-calibrated');
-    act(() => useStore.getState().undo());
-    expect(useStore.getState().project.layout.type).toBe(chosen);
-  });
-
-  it('the proposal is offered once per document, so Undo cannot re-trigger it', () => {
-    useStore.getState().loadProject(datedCladogram('c2-once'));
-    mountCanvas();
-    expect(proposalToast()).toBeDefined();
-    act(() => proposalToast()!.action!.run());
-    act(() => useStore.getState().undo());
-    useToasts.setState({ toasts: [] });
-    // Same document, layout back to the non-time one: no second proposal.
-    act(() => root!.render(createElement(TreeCanvas)));
+    expect(useToasts.getState().toasts).toHaveLength(0);
     expect(proposalToast()).toBeUndefined();
-  });
-
-  it('the proposal names a blank / legacy layout id instead of “” (BUG-5 defense)', () => {
-    // A hand-edited or foreign document can reach the store with an empty or
-    // unknown `layout.type` (projectIO only backfills the other layout fields);
-    // the renderer falls back to the cladogram, but the message quoting it must
-    // never render an empty pair of quotes.
-    for (const weird of ['', 'timechart'] as const) {
-      const project = datedCladogram(`c2-blank-${weird}`);
-      (project.layout as { type: string }).type = weird;
-      useStore.getState().loadProject(project);
-      mountCanvas();
-      const toast = proposalToast();
-      expect(toast, JSON.stringify(weird)).toBeDefined();
-      expect(toast!.message, JSON.stringify(weird)).not.toContain('“”');
-      expect(toast!.message, JSON.stringify(weird)).not.toContain('""');
-      expect(toast!.message, JSON.stringify(weird)).toContain(layoutTypeName(weird));
-      cleanup();
-      useToasts.setState({ toasts: [] });
-    }
-  });
-
-  it('a different document gets its own proposal', () => {
-    useStore.getState().loadProject(datedCladogram('c2-doc-a'));
-    mountCanvas();
-    act(() => useStore.getState().loadProject(datedCladogram('c2-doc-b')));
-    act(() => root!.render(createElement(TreeCanvas)));
-    expect(proposalToast()).toBeDefined();
-    expect(useStore.getState().project.layout.type).toBe('rectangular-cladogram');
   });
 });

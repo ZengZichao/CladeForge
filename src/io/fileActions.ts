@@ -7,6 +7,15 @@
 import { useStore } from '../model/store';
 import { parseNewickTrees, serializeNewick, type NewickParseResult } from './newick';
 import {
+  extractSubtree,
+  rerootAtNode,
+  ladderize,
+  hasBranchLengths,
+  countAnnotatedInternals,
+  unpinAll,
+  addChildrenSpaced,
+} from '../model/treeOps';
+import {
   DEFAULT_NEXUS_OPTIONS,
   applyMatrixToProject,
   parseNexusFile,
@@ -19,15 +28,15 @@ import {
 } from './nexus';
 import { readProjectFile, serializeProject } from './projectIO';
 import { APP_VERSION } from '../model/types';
-import { exportSVGString, toPdfBlob, toPngBlob, type ExportOptions } from './exportImage';
+import { exportSVGString, toPdfBlob, toPngBlob, toTiffBlob, type ExportOptions } from './exportImage';
 import { buildHypothesisJSON, buildNarrative } from './hypothesisExport';
 import { buildRScript } from './scriptExport';
 import { buildReconciliationReport } from './reconExport';
 import { buildEmbeddedReconSVG } from './embeddedReconExport';
 import { openText, saveBinary, saveText, saveTextWithResult, isTauri, decodeBytesWithFallback, type DialogFilter, type OpenedText } from './fileService';
-import { readBinaryFileNative, readTextFileNative, statFileMtimeNative } from './native';
+import { readBinaryFileNative, readTextFileNative, statFileMtimeNative, writeTextFileNative } from './native';
 import { requestConfirm } from '../ui/confirmDialog';
-import { serializeNexml } from './nexml';
+import { serializeNexml, parseNexml } from './nexml';
 import {
   applyMatrixImport,
   exportAnnotationsCsv,
@@ -66,6 +75,34 @@ export function registerExportSettingsHandler(fn: (() => void) | null): void {
   exportSettingsHandler = fn;
 }
 
+/**
+ * Tree-distance report opener, registered by App (2026-11-15 FN-3).
+ * The command palette used to print the RF numbers into a toast; the report is
+ * now a real table the user can copy.
+ */
+let compareHandler: (() => void) | null = null;
+export function registerCompareHandler(fn: (() => void) | null): void {
+  compareHandler = fn;
+}
+
+export function openTreeDistance(): void {
+  if (compareHandler) compareHandler();
+}
+
+/**
+ * Open one of the app-level dialogs from a MENU entry, registered by App
+ * (the menu is built outside React so it cannot hold state itself).
+ */
+export type AppDialogId = 'projectInfo' | 'findReplace' | 'history' | 'sampleLibrary' | 'manual' | 'operationLog' | 'layerCompare' | 'nexusExport';
+let appDialogHandler: ((id: AppDialogId) => void) | null = null;
+export function registerAppDialogHandler(fn: ((id: AppDialogId) => void) | null): void {
+  appDialogHandler = fn;
+}
+
+export function openAppDialog(id: AppDialogId): void {
+  if (appDialogHandler) appDialogHandler(id);
+}
+
 /** Open the export-settings dialog (preset mode), or fall back to a direct export. */
 export function actionOpenExportSettings(): void {
   if (exportSettingsHandler) {
@@ -76,10 +113,53 @@ export function actionOpenExportSettings(): void {
 }
 
 /** Export through the current settings in the given format. */
-export function actionExportWithSettings(format: 'svg' | 'png' | 'pdf'): void {
+export function actionExportWithSettings(format: 'svg' | 'png' | 'pdf' | 'tiff'): void {
   if (format === 'svg') void actionExportSVG();
   else if (format === 'png') void actionExportPNG();
+  else if (format === 'tiff') void actionExportTIFF();
   else void actionExportPDF();
+}
+
+// --- M17/M16 (UI_UX_REVIEW): ONE definition per tree op across all entry points
+// The right-click menu had confirm + refit, the command palette applied
+// silently, and the file menu neither confirmed nor refit. Every entry point
+// now routes through these shared actions: same confirm, same fit, same report.
+
+/**
+ * Reroot at `id` behind the SAME confirmation the context menu always showed
+ * (branch-length / annotation warnings) and the SAME refit afterwards.
+ */
+export function actionRerootAtNode(id: string): void {
+  const st = useStore.getState();
+  if (!st.project.nodes[id]) return;
+  const hasBL = hasBranchLengths(st.project);
+  const annotatedCount = countAnnotatedInternals(st.project);
+  let message = S.confirm.rerootMessage;
+  if (hasBL) message += '\n' + S.confirm.rerootHasBranchLength;
+  else message += '\n' + S.confirm.rerootNoBranchLength;
+  if (annotatedCount > 0) message += '\n' + S.confirm.rerootAffectsChars(annotatedCount);
+  requestConfirm({
+    key: 'reroot',
+    title: S.confirm.rerootTitle,
+    message,
+    confirmLabel: S.confirm.rerootConfirm,
+    onConfirm: () => {
+      useStore.getState().apply((d) => rerootAtNode(d, id));
+      useStore.getState().requestFit();
+    },
+  });
+}
+
+/** Ladderize with the palette's asc/desc choice and a refit, for every entry. */
+export function actionLadderize(asc: boolean): void {
+  useStore.getState().apply((d) => ladderize(d, asc));
+  useStore.getState().requestFit();
+}
+
+/** Re-layout: clear manual positions and refit — one definition. */
+export function actionRelayout(): void {
+  useStore.getState().apply((d) => unpinAll(d));
+  useStore.getState().requestFit();
 }
 
 /**
@@ -138,8 +218,19 @@ function openTreeProjects(
 
 const PROJECT_FILTERS: DialogFilter[] = [{ name: 'CladeForge Project', extensions: ['json'] }];
 const TREE_FILTERS: DialogFilter[] = [
-  { name: 'Tree files', extensions: ['nwk', 'newick', 'tree', 'tre', 'nex', 'nexus'] },
+  { name: 'Tree files', extensions: ['nwk', 'newick', 'tree', 'tre', 'nex', 'nexus', 'xml', 'nexml'] },
 ];
+
+/**
+ * NeXML sniffing for the import path (2026-11-15 FN-4). Content wins over the
+ * extension: a NeXML file renamed to `.nex` must still read as XML, and a
+ * NEXUS file whose first block is DATA must not be routed to the XML parser.
+ */
+export function looksLikeNeXML(name: string, text: string): boolean {
+  if (/\.nexml$/i.test(name)) return true;
+  const head = text.slice(0, 32 * 1024);
+  return /<(\w+:)?nexml[\s>]/i.test(head);
+}
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, '') || 'tree';
@@ -298,6 +389,31 @@ export function actionNewProject(): void {
 }
 
 /**
+ * 用户反馈（empty-state）：the blank front page needs a way to START a tree,
+ * not only to open one. Seeds the CURRENT tab — when it holds a tree already,
+ * a fresh untitled tab is opened instead — with a root and two children, so
+ * the canvas, the inspector and 添加子节点 all have something to work with.
+ */
+export function actionNewTreeFile(): void {
+  const startTree = (): void => {
+    useStore.getState().apply((d) => {
+      d.name = tr('未命名树', 'Untitled tree');
+      addChildrenSpaced(d, d.rootId, 2);
+    });
+    useStore.getState().requestFit();
+  };
+  const st = useStore.getState();
+  const hasTree = Object.values(st.project.nodes).some((n) => n.childrenIds.length > 0);
+  if (!hasTree) {
+    startTree();
+    return;
+  }
+  st.newTab();
+  // newTab() already swapped in a blank document for the new tab.
+  startTree();
+}
+
+/**
  * Find an already-open tab holding the same file (by sourcePath). Opening the
  * same file twice used to create two oblivious copies that overwrote each
  * other's autosave — now the existing tab is focused instead.
@@ -423,10 +539,8 @@ export async function actionSaveProject(): Promise<void> {
       const { writeTextFileNative } = await import('./native');
       await writeTextFileNative(target, serializeProject(project));
       await recordSourceMtime(target);
-      st.apply((d) => {
-        d.savedAt = new Date().toISOString();
-        d.modifiedAt = new Date().toISOString();
-      });
+      // M21: save stamps no longer push an undo step.
+      st.stampSaved();
       useStore.getState().markSaved();
       notify.success(
         tr(
@@ -442,11 +556,8 @@ export async function actionSaveProject(): Promise<void> {
       PROJECT_FILTERS,
     );
     if (saved.ok) {
-      st.apply((d) => {
-        if (saved.path) d.sourcePath = saved.path;
-        d.savedAt = new Date().toISOString();
-        d.modifiedAt = new Date().toISOString();
-      });
+      // M21: save stamps no longer push an undo step.
+      st.stampSaved({ sourcePath: saved.path });
       useStore.getState().markSaved();
       await recordSourceMtime(saved.path);
       // C#19: in a browser "saved" means downloaded — say so instead of
@@ -476,11 +587,8 @@ export async function actionSaveProjectAs(): Promise<void> {
       PROJECT_FILTERS,
     );
     if (saved.ok) {
-      st.apply((d) => {
-        if (saved.path) d.sourcePath = saved.path;
-        d.savedAt = new Date().toISOString();
-        d.modifiedAt = new Date().toISOString();
-      });
+      // M21: save stamps no longer push an undo step.
+      st.stampSaved({ sourcePath: saved.path });
       useStore.getState().markSaved();
       notify.success(
         saved.path
@@ -491,6 +599,39 @@ export async function actionSaveProjectAs(): Promise<void> {
   } catch (e) {
     reportError(S.notify.saveProjectFail, e);
   }
+}
+
+/**
+ * 保存全部标签页 (2026-11-15 OP-10). The active tab goes through the normal
+ * save path; every parked tab with a remembered disk path is written in place.
+ * Tabs that were never saved anywhere cannot be written without inventing a
+ * filename, so they are COUNTED and reported rather than silently skipped.
+ */
+export async function actionSaveAllProjects(): Promise<void> {
+  await actionSaveProject();
+  let saved = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const [tabId, snap] of Object.entries(useStore.getState().tabStore)) {
+    const p = snap.project;
+    if (!p.sourcePath || !isTauri()) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await writeTextFileNative(p.sourcePath, serializeProject(p));
+      useStore.getState().markTabSaved(tabId);
+      saved += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  notify.info(
+    tr(
+      `保存全部标签页：已写入磁盘 ${saved} 个，跳过 ${skipped} 个（从未保存过），失败 ${failed} 个`,
+      `Save all tabs: wrote ${saved} to disk, skipped ${skipped} (never saved), failed ${failed}`,
+    ),
+  );
 }
 
 /**
@@ -536,6 +677,34 @@ export function importTreeText(
   options?: { supportConvention?: 'auto' | SupportScale },
 ): void {
   try {
+    if (looksLikeNeXML(name, text)) {
+      // Symmetric with the exporter (2026-11-15 FN-4): a NeXML tree+matrix file
+      // opens as one project per <tree>; a matrix-only file lands its
+      // characters on the active document instead of being refused.
+      const parsed = parseNexml(text, baseName(name));
+      if (parsed.projects.length > 0) {
+        openTreeProjects(parsed.projects, name, path, parsed.issues);
+        return;
+      }
+      if (parsed.characters.length > 0) {
+        const st = useStore.getState();
+        st.apply((d) => {
+          d.characters.push(...parsed.characters);
+        });
+        notify.success(
+          tr(
+            `已从 NeXML 读取 ${parsed.characters.length} 个性状（文件中没有可解析的树，已加入当前文档）`,
+            `Read ${parsed.characters.length} character${parsed.characters.length === 1 ? '' : 's'} from NeXML (no parsable tree in the file; added to the current document)`,
+          ),
+        );
+        reportParseIssues(parsed.issues, name);
+        return;
+      }
+      throw new Error(
+        parsed.issues[0] ||
+          tr('NeXML 文件中没有可解析的树或性状矩阵', 'No parsable trees or character matrix in the NeXML file'),
+      );
+    }
     if (looksLikeNexus(name, text)) {
       // A NEXUS file may carry trees, a character matrix, or both. Going
       // through `parseNexusFile` lets a matrix-ONLY .nex (the standard
@@ -667,6 +836,10 @@ export async function actionOpenRecent(entry: RecentEntry): Promise<void> {
     }
     const { project, issues } = readProjectFile(text);
     project.name = baseName(entry.name);
+    // m16 (UI_UX_REVIEW): the picker path binds sourcePath; the recents path
+    // skipped it, so a document opened from 最近 saved without its disk
+    // identity (⌘S in place then refused to work).
+    project.sourcePath = entry.path;
     useStore.getState().openInNewTab(project);
     pushRecent(entry);
     if (issues.length > 0) notify.info(repairedCount(issues.length));
@@ -689,6 +862,36 @@ export async function actionExportNewick(): Promise<void> {
       { name: 'Newick', extensions: ['nwk', 'newick', 'tree'] },
     ]);
     if (saved) notifyExported(outName(project.name, 'nwk'), content);
+  } catch (e) {
+    reportError(S.notify.exportNewickFail, e);
+  }
+}
+
+/**
+ * A7 (review §4.2): export the selected clade as its own Newick file, straight
+ * from the context menu. The old path was "extract subtree → new tab → export"
+ * — three steps for what is one assertion about a clade. `extractSubtree`
+ * already builds a standalone Project for the clade; this serialises THAT, so
+ * branch lengths / support / comments round-trip exactly as a full-tree export.
+ */
+export async function actionExportSubtreeNewick(project: Project, nodeId: string): Promise<void> {
+  try {
+    const node = project.nodes[nodeId];
+    if (!node) return;
+    const sub = extractSubtree(project, nodeId);
+    if (!sub) {
+      notify.info(
+        tr('无法提取该子树（节点已不在文档中）', 'Cannot extract this subtree (the node is no longer in the document)'),
+      );
+      return;
+    }
+    const content = serializeNewick(sub, { rootedMarker: true });
+    const label = node.label || node.id.slice(0, 6);
+    const name = outName(`${baseName(project.name)}-${label}`, 'nwk');
+    const saved = await saveText(name, content, [
+      { name: 'Newick', extensions: ['nwk', 'newick', 'tree'] },
+    ]);
+    if (saved) notifyExported(name, content);
   } catch (e) {
     reportError(S.notify.exportNewickFail, e);
   }
@@ -841,6 +1044,41 @@ export async function actionExportPNG(): Promise<void> {
         tr(
           `已导出 ${outName(project.name, 'png')}（${(scale * 96).toFixed(0)} dpi，${(blob.size / 1024).toFixed(0)} KB）`,
           `Exported ${outName(project.name, 'png')} (${(scale * 96).toFixed(0)} dpi, ${(blob.size / 1024).toFixed(0)} KB)`,
+        ),
+      );
+    }
+  } catch (e) {
+    reportError(S.notify.exportPngFail, e);
+  }
+}
+
+export async function actionExportTIFF(): Promise<void> {
+  const project = useStore.getState().project;
+  // Same rule as PNG: density is not content; the DPI setting drives the raster
+  // scale and the canvas-budget clamp is surfaced (see toPngBlob's comment).
+  const dpi = useStore.getState().exportSettings.dpi;
+  const scale = pngScaleFromDpi(dpi);
+  try {
+    const blob = await withBusy(
+      S.busy.exportPng,
+      () =>
+        toTiffBlob(project, scale, exportOptions(), (requested, effective) => {
+          notify.error(
+            tr(
+              `目标分辨率超出画布上限，已从 ${(requested * 96).toFixed(0)} dpi 降至 ${(effective * 96).toFixed(0)} dpi。建议改为导出 SVG（矢量）后放大`,
+              `The requested resolution exceeds the canvas budget; reduced from ${(requested * 96).toFixed(0)} to ${(effective * 96).toFixed(0)} dpi. Export SVG (vector) instead and scale there`,
+            ),
+          );
+        }),
+    );
+    const saved = await saveBinary(outName(project.name, 'tiff'), blob, [
+      { name: 'TIFF', extensions: ['tiff'] },
+    ]);
+    if (saved) {
+      notify.success(
+        tr(
+          `已导出 ${outName(project.name, 'tiff')}（${(scale * 96).toFixed(0)} dpi，${(blob.size / 1024).toFixed(0)} KB）`,
+          `Exported ${outName(project.name, 'tiff')} (${(scale * 96).toFixed(0)} dpi, ${(blob.size / 1024).toFixed(0)} KB)`,
         ),
       );
     }

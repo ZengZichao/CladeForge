@@ -70,22 +70,35 @@ describe('Time module layout-name hint (BUG-5)', () => {
       // Both the template and the interpolated name are on screen.
       expect(text, layout).toContain(layoutTypeName(layout));
       expect(text, layout).toContain(`「${layoutTypeName(layout)}」`);
-      expect(text, layout).toContain('时间数据已具备');
+      expect(text, layout).toContain('不显示时间轴');
       expect(text, layout).not.toContain('“”');
       expect(text, layout).not.toContain('「」');
       cleanup();
     }
   });
 
-  it('the geological time chart shows the axis settings with NO switch prompt', () => {
+  /** Expand a collapsed panel Section by its title text. */
+function openSection(title: string): void {
+  const toggle = Array.from(host!.querySelectorAll('button.section-toggle')).find((b) =>
+    b.textContent?.includes(title),
+  ) as HTMLButtonElement | undefined;
+  if (!toggle) throw new Error(`no section toggle for ${title}`);
+  act(() => {
+    toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+it('the geological time chart shows the axis settings with NO switch prompt', () => {
     useStore.getState().loadProject(datedProject('bug5-time', 'time-calibrated'));
     mountPanel();
     const text = panelText();
     expect(text).not.toContain('时间数据已具备');
     expect(text).not.toContain(S.layoutPanel.switchToTimeChart);
-    // Directly shows the time-axis settings instead of the "please switch" banner.
+    // 用户反馈: every submodule starts COLLAPSED — expand 时间轴 before
+    // asserting the axis settings are present (and no switch banner).
     expect(text).toContain(S.layoutPanel.timeSection);
-    expect(text).toContain(S.layoutPanel.showEras);
+    openSection(S.layoutPanel.timeSection);
+    expect(panelText()).toContain(S.layoutPanel.showEras);
   });
 
   it('a blank / legacy layout id gets an explicit non-empty name', () => {
@@ -107,7 +120,7 @@ describe('Time module layout-name hint (BUG-5)', () => {
     useStore.getState().loadProject(datedProject('bug5-en', 'circular'));
     mountPanel();
     const text = panelText();
-    expect(text).toContain('current layout is “Circular”');
+    expect(text).toContain('layout does not show the time axis');
     expect(text).not.toContain('“”');
   });
 });

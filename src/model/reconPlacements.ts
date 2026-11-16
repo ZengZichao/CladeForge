@@ -1,6 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Effective gene-node placements for the EMBEDDED reconciliation layout
-// (docs/EMBEDDED_RECON_LAYOUT_PLAN_ZH.md §5.1).
+// Effective gene-node placements for the EMBEDDED reconciliation layout.
 //
 // This module answers the SEMANTIC questions of the nested view and never
 // touches React or geometry:

@@ -214,7 +214,16 @@ export function requestDeletion(
   requestConfirm({
     key: confirmKeyFor(entry),
     title: S.confirm.deleteManyTitle,
-    message: S.confirm.deleteManyMessage(risk.nodes, risk.tips, risk.percent),
+    // A12b (review finding 13): the "don't ask again" opt-out is deliberately
+    // scoped per entry point (so unchecking it in the inspector never silences
+    // the context menu) — but from the user's side that looks like the checkbox
+    // lying. Say the scope where the choice is made.
+    message:
+      S.confirm.deleteManyMessage(risk.nodes, risk.tips, risk.percent) +
+      tr(
+        '（勾选「不再询问」只对当前入口生效：右键菜单、键盘、检查器各自独立。）',
+        ' (“Don’t ask again” applies to THIS entry point only — the context menu, the keyboard and the inspector opt out separately.)',
+      ),
     confirmLabel: S.confirm.deleteManyConfirm,
     danger: true,
     onConfirm: run,

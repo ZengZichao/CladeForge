@@ -11,6 +11,14 @@
 // editor's features (time calibration, characters, hypothesis layers, events,
 // calibrations), not to tell a scientific story or assert biology.
 //
+// NO EXCEPTIONS (2026-11-15, user request): the fourth catalogue entry was
+// rewritten from its former real-taxa whale demonstration (A18) into a neutral
+// calibration-and-events example on the same topology, so EVERY sample now
+// carries only abstract, feature-oriented placeholder content. The names and
+// labels deliberately carry no imagery that could be mistaken for a real
+// organism, trait or geological event, and no sample feeds real biology into
+// the cross-check fixtures.
+//
 // Every sample tree is STRICTLY BINARY: each internal node has exactly two
 // children (no polytomies, no single-child chains). The builder helpers below
 // verify the document as it is assembled: `mkNode` enforces the branch-length /
@@ -216,7 +224,7 @@ export function createSampleProject(): Project {
 }
 
 export function createFeatureTourSample(): Project {
-  const project = createEmptyProject(tr('功能导览', 'Feature tour'));
+  const project = createEmptyProject(tr('时间树示例', 'Time-tree example'));
   project.sampleId = 'feature-tour';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
@@ -440,44 +448,56 @@ export function createFeatureTourSample(): Project {
   ];
 
   assertBinary(project);
+  // m4 (UI_UX_REVIEW): a sample NAMED "时间树示例" opened as a rectangular
+  // cladogram whose first screen was a yellow "当前布局不显示时间轴" warning —
+  // the name and the layout contradicted each other. The chronogram IS the
+  // feature being toured.
+  project.layout = { ...project.layout, type: 'time-calibrated', orientation: 'LR' };
   return project;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SAMPLE 2 — Large tree & deep time
+// SAMPLE 2 — Non-time tree example
 // ════════════════════════════════════════════════════════════════════════════
 export function createLargeTreeSample(): Project {
-  const project = createEmptyProject(tr('大树与深时', 'Large tree & deep time'));
+  const project = createEmptyProject(tr('非时间树示例', 'Non-time tree example'));
   project.sampleId = 'large-tree';
   const nextTaxon = taxonNamer();
   const rootId = project.rootId;
-  project.nodes[rootId].label = nextTaxon(); // Taxon_A, age 4000
+  project.nodes[rootId].label = nextTaxon(); // Taxon_A
 
-  // Strictly binary; branchLength = parent.age − node.age on every edge. Two
-  // balanced internal nodes at 3250 / 3050 Ma resolve what would otherwise be a
-  // four-way split.
-  const root = project.nodes[rootId];
-  root.age = 4000; // oldest node; inside the [4000, 4100] root calibration below
-  const branchB = mkNode(project, nextTaxon(), rootId, 3500, 500);
-  const branchC = mkNode(project, nextTaxon(), rootId, 3400, 600);
-  const cladeD = mkNode(project, nextTaxon(), branchC, 3250, 150);
-  const cladeE = mkNode(project, nextTaxon(), cladeD, 3200, 50);
-  mkNode(project, nextTaxon(), cladeD, 3100, 150);
-  const cladeG = mkNode(project, nextTaxon(), branchC, 3050, 350);
-  mkNode(project, nextTaxon(), cladeG, 3000, 50);
-  mkNode(project, nextTaxon(), cladeG, 2900, 150);
-  const cladeJ = mkNode(project, nextTaxon(), branchB, 2800, 700);
-  const cladeK = mkNode(project, nextTaxon(), branchB, 2700, 800);
-  const cladeL = mkNode(project, nextTaxon(), cladeE, 2600, 600);
-  const cladeM = mkNode(project, nextTaxon(), cladeE, 2500, 700);
-  const tipsJ1 = mkNode(project, nextTaxon(), cladeJ, 0, 2800);
-  const tipsJ2 = mkNode(project, nextTaxon(), cladeJ, 0, 2800);
-  const tipsK1 = mkNode(project, nextTaxon(), cladeK, 0, 2700);
-  const tipsK2 = mkNode(project, nextTaxon(), cladeK, 0, 2700);
-  const tipsL1 = mkNode(project, nextTaxon(), cladeL, 0, 2600);
-  const tipsL2 = mkNode(project, nextTaxon(), cladeL, 0, 2600);
-  const tipsM1 = mkNode(project, nextTaxon(), cladeM, 0, 2500);
-  const tipsM2 = mkNode(project, nextTaxon(), cladeM, 0, 2500);
+  // Purely topological for TIME: NO node ages, calibration points or
+  // environmental events — the document carries no time data at all, so the
+  // 时间 module never offers "switch to the time-calibrated tree" for it.
+  // Branch lengths stay: they drive rate-based analyses (Mk r = 1/mean bl)
+  // without enabling any time-chart switch.
+  const mk = (parentId: string, label: string, branchLength?: number): string => {
+    const id = newId();
+    project.nodes[id] = { id, label, parentId, childrenIds: [] };
+    if (branchLength !== undefined) project.nodes[id].branchLength = branchLength;
+    project.nodes[parentId].childrenIds.push(id);
+    return id;
+  };
+  const branchB = mk(rootId, nextTaxon(), 500);
+  const branchC = mk(rootId, nextTaxon(), 600);
+  const cladeD = mk(branchC, nextTaxon(), 150);
+  const cladeE = mk(cladeD, nextTaxon(), 50);
+  mk(cladeD, nextTaxon(), 150);
+  const cladeG = mk(branchC, nextTaxon(), 350);
+  mk(cladeG, nextTaxon(), 50);
+  mk(cladeG, nextTaxon(), 150);
+  const cladeJ = mk(branchB, nextTaxon(), 700);
+  const cladeK = mk(branchB, nextTaxon(), 800);
+  const cladeL = mk(cladeE, nextTaxon(), 600);
+  const cladeM = mk(cladeE, nextTaxon(), 700);
+  const tipsJ1 = mk(cladeJ, nextTaxon(), 2800);
+  const tipsJ2 = mk(cladeJ, nextTaxon(), 2800);
+  const tipsK1 = mk(cladeK, nextTaxon(), 2700);
+  const tipsK2 = mk(cladeK, nextTaxon(), 2700);
+  const tipsL1 = mk(cladeL, nextTaxon(), 2600);
+  const tipsL2 = mk(cladeL, nextTaxon(), 2600);
+  const tipsM1 = mk(cladeM, nextTaxon(), 2500);
+  const tipsM2 = mk(cladeM, nextTaxon(), 2500);
 
   // --- characters ---
   // Every state gets its own id constant and the assignments address states by
@@ -548,18 +568,8 @@ export function createLargeTreeSample(): Project {
   hypothesise(branchB, character1.id, c1aId, 'high', tr('示例证据 B', 'Illustrative evidence B'));
   hypothesise(cladeE, character1.id, c1cId, 'high', tr('示例证据 C', 'Illustrative evidence C'));
 
-  // The 4000–4100 Ma range the root carries as a calibration bound, so the
-  // document carries what it asserts and `validateTimeData` can check the root
-  // age against it.
-  project.calibrationPoints = [
-    {
-      id: newId(),
-      nodeId: rootId,
-      minAge: 4000,
-      maxAge: 4100,
-      label: tr('根节点校准', 'Root calibration'),
-    },
-  ];
+  // No calibration points and no environmental events: this sample carries no
+  // time data by design (see the header comment above).
 
   // Events
   project.events = [
@@ -582,24 +592,6 @@ export function createLargeTreeSample(): Project {
       label: tr('事件 B（适应辐射）', 'Event B (adaptive radiation)'),
       confidence: 'medium',
       triggers: [],
-    },
-  ];
-
-  project.environmentalEvents = [
-    {
-      id: newId(),
-      label: tr('环境标记 A', 'Environmental marker A'),
-      from: 2400,
-      to: 2400,
-      color: '#ef4444',
-      note: tr('示例环境标记', 'Illustrative environmental marker'),
-    },
-    {
-      id: newId(),
-      label: tr('环境区间 B', 'Environmental interval B'),
-      from: 2400,
-      to: 2100,
-      color: '#0284c7',
     },
   ];
 
@@ -717,6 +709,135 @@ export function createReconciliationSample(): Project {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SAMPLE 4 — Calibration & events demo (fully neutral, no biological content)
+// ═════════════════════════════════════════ Taxon placeholders only. ════════
+// Same binary topology and feature coverage as the former real-taxa whale
+// demonstration (A18): 11 nodes, one three-state character with assignments
+// and hypothesis layers, one branch and one node event, three calibration
+// points, one environmental marker, time-calibrated layout. Every name is an
+// abstract placeholder (Taxon_A…, Character 1, State A/B/C, Event A/B), so
+// the sample exercises the SAME features without asserting any biology.
+// ════════════════════════════════════════════════════════════════════════════
+export function createNeutralDemoSample(): Project {
+  const project = createEmptyProject(tr('校准与事件示例', 'Calibration & events example'));
+  project.sampleId = 'demo-neutral';
+  const rootId = project.rootId;
+
+  // Strictly binary placeholder topology. Ages are abstract demo values.
+  // `mkNode` enforces the branchLength = parent.age − age identity on every
+  // edge, and `assertBinary` re-checks the finished tree.
+  const root = project.nodes[rootId];
+  root.label = 'Taxon_A';
+  root.age = 55;
+  const n1 = mkNode(project, 'Taxon_B', rootId, 52, 3);
+  const n2 = mkNode(project, 'Taxon_C', n1, 48, 4);
+  const n3 = mkNode(project, 'Taxon_D', n1, 40, 12);
+  const n4 = mkNode(project, 'Taxon_E', n3, 35, 5);
+  const n5 = mkNode(project, 'Taxon_F', n3, 34, 6);
+  mkNode(project, 'Taxon_G', n5, 0, 34);
+  mkNode(project, 'Taxon_H', n5, 0, 34);
+  const n8 = mkNode(project, 'Taxon_I', rootId, 50, 5);
+  const n9 = mkNode(project, 'Taxon_J', n8, 0, 50);
+  mkNode(project, 'Taxon_K', n8, 0, 50);
+
+  // One three-state character with assignments on the shared palette.
+  const stateAId = newId();
+  const stateBId = newId();
+  const stateCId = newId();
+  project.characters = [
+    {
+      id: sampleCharacterId('demo-neutral-c1'),
+      name: tr('性状 1', 'Character 1'),
+      type: 'discrete',
+      states: [
+        { id: stateAId, label: tr('状态 A', 'State A'), color: '#9ca3af' },
+        { id: stateBId, label: tr('状态 B', 'State B'), color: '#3b82f6' },
+        { id: stateCId, label: tr('状态 C', 'State C'), color: '#1e3a5f' },
+      ],
+      description: tr(
+        '演示数据：抽象三态性状，数值均为示意。',
+        'Demonstration data: an abstract three-state character; every value is illustrative.',
+      ),
+    },
+  ];
+  const assign = (nodeId: string, stateId: string) =>
+    assignStateAt(project, nodeId, project.characters[0].id, stateId);
+  // Tips first (they are the observed matrix rows), then internal nodes — the
+  // same observed/tip + internal split the former whale demo used, so the ASR
+  // oracles that consume the shipped samples keep a well-posed input.
+  assign(n2, stateAId);
+  assign(n4, stateCId);
+  assign(n9, stateBId);
+  assign(n5, stateCId);
+  assign(n8, stateAId);
+
+  // Primary hypothesis: an assertable claim about the root state.
+  project.layers[0].name = tr('主假说：根状态', 'Primary hypothesis: root state');
+  project.layers[0].statement = tr(
+    '演示数据：根状态为状态 A，状态 C 是一次关键创新后的谱系分支。',
+    'Demonstration data: the root carries State A; State C marks a lineage branch after a key innovation.',
+  );
+  hypothesiseStateAt(project, rootId, project.characters[0].id, stateAId, 'high', tr('演示证据', 'Demonstration evidence'));
+  hypothesiseStateAt(project, n1, project.characters[0].id, stateBId, 'medium', tr('演示证据', 'Demonstration evidence'));
+
+  project.events = [
+    {
+      id: newId(),
+      typeId: 'key-innovation',
+      target: 'branch' as const,
+      nodeId: n1,
+      label: tr('事件 A（关键创新）', 'Event A (key innovation)'),
+      note: tr(
+        '演示事件：分支上的关键创新，触发后续分化。',
+        'Demonstration event: a key innovation on the branch, followed by diversification.',
+      ),
+      confidence: 'medium' as const,
+      triggers: [],
+    },
+    {
+      id: newId(),
+      typeId: 'adaptive-radiation',
+      target: 'node' as const,
+      nodeId: n3,
+      label: tr('事件 B（适应辐射）', 'Event B (adaptive radiation)'),
+      confidence: 'medium' as const,
+      triggers: [],
+    },
+  ];
+
+  project.calibrationPoints = [
+    { id: newId(), nodeId: rootId, minAge: 53, maxAge: 56, label: tr('根校准（示意）', 'Root calibration (demo)') },
+    { id: newId(), nodeId: n1, minAge: 50, maxAge: 53, label: tr('节点校准（示意）', 'Node calibration (demo)') },
+    { id: newId(), nodeId: n3, minAge: 38, maxAge: 42, label: tr('节点校准（示意）', 'Node calibration (demo)') },
+  ];
+
+  project.environmentalEvents = [
+    {
+      id: newId(),
+      label: tr('环境标记 A（示意）', 'Environmental marker A (demo)'),
+      from: 51,
+      to: 51,
+      color: '#ab6400',
+      note: tr('演示环境标记，数值为示意。', 'Demonstration environmental marker; the date is illustrative.'),
+    },
+  ];
+
+  project.provenance = {
+    description: tr(
+      '演示数据：抽象类群与性状，所有年代与数值为示意，不可引用。',
+      'Demonstration data: abstract taxa and characters; every date and value is illustrative and not citable.',
+    ),
+  };
+
+  // Open straight into the time-calibrated layout so the chronogram, the
+  // calibration bars (A14) and the era bands have something to show.
+  project.layout = { ...project.layout, type: 'time-calibrated', orientation: 'LR' };
+
+  assertBinary(project);
+  return project;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // SAMPLE CATALOGUE
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -728,27 +849,38 @@ export function sampleById(id: string): SampleDescriptor | undefined {
 export const SAMPLE_PROJECTS: SampleDescriptor[] = [
   {
     id: 'feature-tour',
-    label: '功能导览',
-    labelEn: 'Feature tour',
-    desc: '小型时间树：演示性状与代价矩阵、假说层、事件触发与时间校准',
-    descEn: 'A small time tree demonstrating characters, cost matrices, hypothesis layers, event triggers and time calibration',
+    label: '时间树示例',
+    labelEn: 'Time-tree example',
+    desc: '性状、假说层与事件',
+    descEn: 'A time tree with characters, hypothesis layers and events',
     build: createFeatureTourSample,
   },
   {
+    // 用户反馈：the standard front page shows exactly TWO samples — a
+    // time-calibrated one and a non-time one (the calibration-demo and the
+    // reconciliation samples stay in the sample library dialog).
     id: 'large-tree',
-    label: '大树与深时',
-    labelEn: 'Large tree & deep time',
-    desc: '11 个末端、根年龄 4000 的较大时间树：演示布局、图例与深时轴',
-    descEn: 'A larger time tree (11 tips, root age 4000) demonstrating layout, legend and the deep-time axis',
+    label: '非时间树示例',
+    labelEn: 'Non-time tree example',
+    desc: '11 个末端，纯拓扑（无时间数据）',
+    descEn: '11 tips, purely topological (no time data)',
     build: createLargeTreeSample,
   },
   {
     id: 'recon-family',
-    label: '基因家族协调',
-    labelEn: 'Gene-family reconciliation',
-    desc: '物种树 + 两棵基因树的 DTL 协调演示：重复、转移、丢失各一例，含一个未映射内部节点警告',
-    descEn: 'DTL reconciliation of a species tree plus two gene trees: one duplication, one transfer and one loss, with one unmapped internal-node warning',
+    label: '物种树-基因树协调',
+    labelEn: 'Species–gene tree reconciliation',
+    desc: '两棵基因树，D/T/L 事件各一例',
+    descEn: 'Two gene trees, one example of each D/T/L event',
     build: createReconciliationSample,
     entryView: 'recon',
+  },
+  {
+    id: 'demo-neutral',
+    label: '校准与事件示例',
+    labelEn: 'Calibration & events example',
+    desc: '时间校准 · 校准点 · 环境标记（演示数据）',
+    descEn: 'Time calibration, calibration points, environmental markers (demo data)',
+    build: createNeutralDemoSample,
   },
 ];

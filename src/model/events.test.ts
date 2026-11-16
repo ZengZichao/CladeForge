@@ -179,13 +179,13 @@ describe('event badge text', () => {
     extra: Partial<EvolutionaryEvent> = {},
   ): EvolutionaryEvent => ({ ...newEvent('key-innovation', 'branch', 'root'), ...extra });
 
-  it('is ON by default — shape + code is the CVD-safe pairing', () => {
-    // The catalogue carries four near-identical greens; colour-only badges were
-    // not reliably distinguishable, so the two-letter code is now the default
-    // redundant channel (opt OUT per event with markerShowText: false).
-    expect(eventMarkerTextVisible(event())).toBe(true);
-    expect(eventBadgeText(event())).toBe('KI');
-    expect(eventBadgeFontSize(event())).toBeGreaterThan(0);
+  it('is OFF by default — symbols stay text-free per the 2026-11-15 review', () => {
+    // Letter text inside the event symbols was rejected in review: the shape +
+    // ring colour carry the type, the legend and tooltip carry the name, and
+    // the user can still opt IN per event with markerShowText: true.
+    expect(eventMarkerTextVisible(event())).toBe(false);
+    expect(eventBadgeText(event())).toBe('');
+    expect(eventBadgeFontSize(event())).toBe(0);
   });
 
   it('draws the type code when the user turns text on', () => {

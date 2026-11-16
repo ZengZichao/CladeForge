@@ -8,6 +8,7 @@
 // generated, so the reconciliation view opens with mapping lines immediately.
 
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDownIcon, DotFilledIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import {
   addBuiltGeneTree,
@@ -248,8 +249,8 @@ export function GeneTreeBuilderDialog({
                   style={{ paddingLeft: 8 + depth * 14 }}
                   onClick={() => setSelectedId(node.id)}
                 >
-                  <span className="gene-tree-bullet">
-                    {node.childrenIds.length > 0 ? '▾' : '•'}
+                  <span className="gene-tree-bullet" aria-hidden="true">
+                    {node.childrenIds.length > 0 ? <ChevronDownIcon /> : <DotFilledIcon />}
                   </span>
                   <span className="gene-tree-label" title={node.label}>
                     {node.label || tr('未命名', 'Unnamed')}
