@@ -150,14 +150,14 @@ function apeTree(
 }
 
 /**
- * Render a per-character Mk rate as an R numeric literal. Rounded to 8
+ * Render a per-character Mk rate as an R numeric literal. Rounded to 6
  * significant digits so the exported script (and the committed cross-check
- * fixtures) are byte-identical across CPU architectures: at full precision the
- * last bits differ between the x86_64 CI runner and an arm64 local build, which
- * would make the fixtures drift on every run.
+ * fixtures) are byte-identical across CPU architectures: the x86_64 CI runner
+ * and an arm64 local build disagree by ~3e-7 in the last bits, which would make
+ * the fixtures drift on every run.
  */
 function rateLiteral(rate: number | null | undefined): string {
-  return rate === undefined || rate === null ? 'NULL' : rate.toPrecision(8);
+  return rate === undefined || rate === null ? 'NULL' : rate.toPrecision(6);
 }
 
 /**

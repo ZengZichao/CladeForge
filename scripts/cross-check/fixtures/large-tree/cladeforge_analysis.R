@@ -88,7 +88,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#7c3aed", "#0ea5e9", "#f59e0b"),
     cost = NULL,
-    rate = 0.000067783341,
+    rate = 0.0000677833,
     tips = c("Taxon_N" = "状态 A", "Taxon_O" = "状态 A", "Taxon_P" = "状态 B", "Taxon_Q" = "状态 B", "Taxon_R" = "状态 C", "Taxon_S" = "状态 C", "Taxon_T" = "状态 C", "Taxon_U" = "状态 C")
   ),
   list(
@@ -97,7 +97,7 @@ characters <- list(
     states = c("状态 A", "状态 B", "状态 C"),
     colors = c("#dc2626", "#f97316", "#22c55e"),
     cost = NULL,
-    rate = 0.000068567831,
+    rate = 0.0000685678,
     tips = c("Taxon_N" = "状态 C", "Taxon_O" = "状态 C", "Taxon_P" = "状态 C", "Taxon_Q" = "状态 C", "Taxon_R" = "状态 A", "Taxon_S" = "状态 A", "Taxon_T" = "状态 B", "Taxon_U" = "状态 B")
   )
 )

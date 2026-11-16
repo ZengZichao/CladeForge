@@ -263,7 +263,7 @@ for (const descriptor of [...SAMPLE_PROJECTS, ER_CONTROL]) {
       for (const id of flat.ids) {
         const probs = asr.probs.get(id);
         if (!probs) continue;
-        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id) ?? '', i, char.states[i]?.label ?? '', p.toPrecision(8)]));
+        probs.forEach((p, i) => asrRows.push([char.id, sig.get(id) ?? '', i, char.states[i]?.label ?? '', p.toPrecision(7)]));
       }
     }
     const par = parsimony(project, char);
