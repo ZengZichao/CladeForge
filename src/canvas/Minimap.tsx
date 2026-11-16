@@ -67,6 +67,7 @@ export const Minimap = memo(function Minimap({
       out.push({ x1: a.x, y1: a.y, x2: c.x, y2: c.y });
     }
     return out;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- toMap is a pure projection re-derived from layout/W/H, which are already listed.
   }, [layout, nodes, W, H]);
 
   // Teardown for an in-progress drag; invoked on unmount so the window

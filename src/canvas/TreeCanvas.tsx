@@ -95,6 +95,7 @@ export function TreeCanvas() {
     if (!el) return;
     if (spaceHeld.current) el.style.setProperty('cursor', 'grab');
     else el.style.setProperty('cursor', '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- spaceHeld is a ref, so .current is not a reactive dependency; the grab cursor is painted imperatively by useCanvasGestures and this effect only covers the resting state.
   }, [spaceHeld.current]);
 
   const project = useStore((s) => s.project);
@@ -285,7 +286,6 @@ export function TreeCanvas() {
   // abnormally must not be trusted forever. Only overlay while an interaction is
   // genuinely open in the store; otherwise fall through to a fresh full layout.
   const interactionActive = useStore((s) => s.interactionBase !== null);
-  const dragNode = draggingId ? project.nodes[draggingId] : undefined;
   const layout = useMemo<LayoutResult>(() => {
     if (draggingId && interactionActive && baseLayoutRef.current) {
       const base = baseLayoutRef.current;
@@ -317,7 +317,7 @@ export function TreeCanvas() {
     const full = computeLayout(project, { showEras, eraLevel });
     baseLayoutRef.current = full;
     return full;
-  }, [project, draggingId, interactionActive, dragNode, showEras, eraLevel]);
+  }, [project, draggingId, interactionActive, showEras, eraLevel]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
@@ -460,7 +460,7 @@ export function TreeCanvas() {
     if (!el || !p) return;
     const scale = getLiveView(useStore.getState().view).scale;
     setView({ scale, tx: el.clientWidth / 2 - p.x * scale, ty: el.clientHeight / 2 - p.y * scale });
-  }, [focusTarget]);
+  }, [focusTarget, setView]);
 
   // --- wheel zoom / trackpad pan (non-passive so preventDefault works) ---
   // Trackpad semantics (FigTree / iTOL / every map app): Ctrl-held wheels and
@@ -837,6 +837,7 @@ export function TreeCanvas() {
       if (n.parentId) branchStyles.set(id, resolveBranchStyle(n, project));
     }
     return { nodeStyles, branchStyles };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveNodeStyle only reads project.defaults, which is already listed.
   }, [project.defaults, project.nodes]);
 
   // Resolve each branch's FINAL visual style once per document/colour change.
@@ -888,6 +889,7 @@ export function TreeCanvas() {
       out.set(id, { style, dimmed: belowSupport });
     }
     return out;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveBranchStyle only reads project.defaults, which is already listed.
   }, [
     project.nodes,
     project.defaults,
