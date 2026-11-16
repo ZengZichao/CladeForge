@@ -84,6 +84,7 @@ export function GeneTreeBuilderDialog({
     setSelectedId(doc.rootId);
     // Intentionally re-seed only when the dialog is opened for a (different)
     // tree; edits inside the dialog must not be reset by store updates.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed only on open/editId; project/defaultName are read for the seed and must not reset in-dialog edits.
   }, [open, editId]);
 
   const rows = useMemo(() => flatten(draft), [draft]);

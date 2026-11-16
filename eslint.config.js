@@ -54,7 +54,34 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': [
         'warn',
-        { allowConstantExport: true },
+        {
+          allowConstantExport: true,
+          // These modules deliberately share a helper/constant next to a
+          // component. Splitting each into a second file would add churn and
+          // import cycles for no runtime benefit — Fast Refresh granularity is
+          // the only thing affected, so the shared names are allowlisted here.
+          allowExportNames: [
+            'asrWedgePlan',
+            'tokenLabel',
+            'tokenGlyph',
+            'useAltHeld',
+            'reconPaneBounds',
+            'fitTransformFor',
+            'clampTransform',
+            'stubsFromLines',
+            'WINDOW_BREAKPOINTS',
+            'DTL_STYLE',
+            'errorDiagnostics',
+            'tourCompleted',
+            'markOnboarded',
+            'manualLabel',
+            'NEXUS_DIALOG_DEFAULTS',
+            'characterDataSignature',
+            'clampPanelWidth',
+            'registerConfirmHandler',
+            'requestConfirm',
+          ],
+        },
       ],
       // Leading-underscore names are the project's "intentionally unused"
       // convention; `tsc` already rejects genuinely unused locals.

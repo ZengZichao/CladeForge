@@ -238,6 +238,7 @@ export function ReconciliationView({
     if (embedded) return;
     const t = requestAnimationFrame(() => fitBoth());
     return () => cancelAnimationFrame(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per document/gene-tree switch; fitBoth is recreated with the current layouts, so keying on its identity would re-fit on every edit.
   }, [project.id, entry?.id, embedded]);
 
   // Zoom readouts for the workspace status bar (only on real scale changes).
@@ -259,6 +260,7 @@ export function ReconciliationView({
     if (entry && geneLayout) {
       setGeneTState((t: PaneTransform) => clampTransform(t, reconPaneBounds(entry.doc, geneLayout, options, 'gene'), geneBox.w, geneBox.h));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- resize handler reads the latest layouts through the closure; listing them would re-run on every project edit, not just on resizes.
   }, [hostSize.w, hostSize.h, speciesBox.w, speciesBox.h, geneBox.w, geneBox.h, embedded]);
 
   // ⌘⇧F (global) reaches the recon canvas through this event. Exactly one
@@ -357,6 +359,7 @@ export function ReconciliationView({
         });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- event-style effect keyed on focusSeq; the closure already carries this render's latest values.
   }, [focusSeq]);
 
   // --- derived display metadata ----------------------------------------------
@@ -421,7 +424,7 @@ export function ReconciliationView({
       selectedGeneIds: geneSelection,
       hoveredGeneId,
     });
-  }, [entry, geneLayout, project, speciesLayout, mappingAssumptions, options, geneSelection, hoveredGeneId]);
+  }, [entry, geneLayout, project, speciesLayout, mappingAssumptions, options, geneSelection, hoveredGeneId, embedded]);
 
   const mappingLines = useMemo(
     () => projectMappingAnchors(mappingAnchors, speciesPane, genePane),

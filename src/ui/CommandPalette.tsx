@@ -397,6 +397,7 @@ export function CommandPalette({
       { id: 'manual', label: S.menu.manual, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['manual', 'documentation', 'shouce'], run: () => file.openAppDialog('manual') },
       { id: 'about', label: S.menu.about, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['about', 'version', 'guanyu', 'banben'], run: onOpenAbout },
     ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- language is read through the module-level tr(); listing it rebuilds the catalogue when the UI language switches.
   }, [onOpenMatrix, onOpenAnalysis, onOpenTour, onOpenShortcuts, onOpenAbout, reconMode, language]);
 
   // Search matches the label AND its aliases, so an English or pinyin term finds a

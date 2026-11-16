@@ -110,7 +110,7 @@ export const EventLayer = memo(function EventLayer({
       }
     }
     return out;
-  }, [events, anchors]);
+  }, [events, anchors, project]);
 
   if (anchors.size === 0) return null;
 

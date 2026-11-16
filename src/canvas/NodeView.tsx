@@ -119,13 +119,13 @@ export const NodeView = memo(function NodeView({
       // Focus after the input mounts.
       requestAnimationFrame(() => inputRef.current?.select());
     }
-  }, [editing]);
+  }, [editing, node.label]);
   // F2 (requestRename) opens this node's editor — the keyboard path to the
   // double-click-only rename.
   const renameRequest = useStore((s) => s.renameRequest);
   useEffect(() => {
     if (renameRequest?.id === node.id) setEditing(true);
-  }, [renameRequest?.seq]);
+  }, [renameRequest?.seq, node.id, renameRequest?.id]);
 
   const commitRename = () => {
     setEditing(false);

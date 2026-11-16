@@ -88,7 +88,7 @@ export function ReconWorkspace({
     if (windowWidth < WIDE && (geneSelection.length > 0 || speciesSelection.length > 0)) {
       setRightDrawerOpen(true);
     }
-  }, [geneSelection.length, speciesSelection.length]);
+  }, [geneSelection.length, speciesSelection.length, windowWidth]);
 
   useEffect(() => {
     const onResize = () => setWindowWidth(window.innerWidth);
