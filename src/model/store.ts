@@ -291,10 +291,19 @@ function autoEditLabel(prev: Project, next: Project): string | undefined {
     if (removed) bits.push(tr(`删除 ${removed}`, `${removed} removed`));
     if (renamed) bits.push(tr(`重命名 ${renamed}`, `${renamed} renamed`));
     if (aged) bits.push(tr(`改年龄 ${aged}`, `${aged} re-aged`));
-    changed.push(bits.length ? `${tr('节点', 'Nodes')}（${bits.join('，')}）` : tr('节点', 'Nodes'));
+    // D-P18: the node summary used full-width brackets/comma even in English
+    // ("Nodes（3 added）"), so the whole label read as Chinese punctuation with
+    // English words. Each language gets its own punctuation: the Chinese branch
+    // keeps 「（…，）」, English uses "(…, )".
+    changed.push(
+      bits.length
+        ? tr(`节点（${bits.join('，')}）`, `Nodes (${bits.join(', ')})`)
+        : tr('节点', 'Nodes'),
+    );
   }
   if (changed.length === 0) return undefined;
-  const head = changed.slice(0, 3).join('、');
+  // Same rule for the list separator: 「、」 in Chinese, ", " in English.
+  const head = changed.slice(0, 3).join(tr('、', ', '));
   const more = changed.length > 3 ? tr(` 等 ${changed.length} 处`, ` +${changed.length - 3} more`) : '';
   return `${tr('修改：', 'Edit: ')}${head}${more}`;
 }
@@ -624,6 +633,12 @@ export interface UISlice {
   loadCounter: number;
   /** Bumped to request the canvas to fit the tree into the viewport. */
   fitRequests: number;
+  /**
+   * D-P9/G-P7: maximum zoom the canvas may use for a fit. `requestFit` carries
+   * it so an entry point that must not zoom past 100% (e.g. the starter tree)
+   * can pass `1`, while ordinary fits keep the default of 8.
+   */
+  fitMaxScale: number;
   viewport: { w: number; h: number };
   /** Character whose states currently colour the tree (null = style colours). */
   activeCharacterId: string | null;
@@ -717,7 +732,8 @@ export interface UISlice {
   isSelected: (id: NodeId) => boolean;
 
   setView: (view: ViewTransform) => void;
-  requestFit: () => void;
+  /** `maxScale` caps the zoom used by the fit (default 8). */
+  requestFit: (maxScale?: number) => void;
   setViewport: (w: number, h: number) => void;
   zoomBy: (factor: number) => void;
   setActiveCharacter: (id: string | null) => void;
@@ -1282,6 +1298,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   view: { ...IDENTITY_VIEW },
   loadCounter: 0,
   fitRequests: 0,
+  fitMaxScale: 8,
   viewport: { w: 0, h: 0 },
   activeCharacterId: null,
   showTransitions: true,
@@ -1335,7 +1352,10 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
 
   setView: (view) => set({ view }),
 
-  requestFit: () => set((s) => ({ fitRequests: s.fitRequests + 1 })),
+  requestFit: (maxScale) =>
+    // One update: the counter and the cap travel together, so a canvas effect
+    // keyed on `fitRequests` always sees the cap this request asked for.
+    set((s) => ({ fitMaxScale: maxScale ?? 8, fitRequests: s.fitRequests + 1 })),
 
   setViewport: (w, h) => set({ viewport: { w, h } }),
 
@@ -1429,7 +1449,24 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   runAsr: (force = false) => {
     const s = get();
     const c = s.project.characters.find((x) => x.id === s.activeCharacterId);
-    if (!c || c.type !== 'discrete') return;
+    if (!c || c.type !== 'discrete') {
+      // G-P10: the palette command used to return silently here, so a user on
+      // a continuous character (or with no active character) got neither a
+      // result nor a reason. Say which precondition failed; "select one" and
+      // "this one is not discrete" are different problems.
+      notify.info(
+        !c
+          ? tr(
+              '请先选择一个已赋值的离散性状，再执行 Mk 祖先状态重建',
+              'Select an assigned discrete character before running Mk ancestral-state reconstruction',
+            )
+          : tr(
+              `当前性状「${c.name}」不是离散型，无法执行 Mk 祖先状态重建`,
+              `The active character "${c.name}" is not discrete, so Mk ancestral-state reconstruction cannot run`,
+            ),
+      );
+      return;
+    }
     if (s.asrRunning) return; // one fit at a time; the buttons are disabled anyway
     // Mark busy and yield one frame FIRST: the ML fit is a synchronous
     // ≈350-pruning pass on the main thread, and without this handoff the
@@ -1464,6 +1501,15 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
         }
         for (const w of result.warnings) notify.info(w.message);
         set({ asr: result });
+        // G-P10: a successful fit used to be invisible too — the palette command
+        // closed and nothing announced that the reconstruction exists. Summarise
+        // what landed so the command has an observable result.
+        notify.success(
+          tr(
+            `Mk 祖先状态重建完成：${result.probs.size} 个节点已有后验概率`,
+            `Mk ancestral-state reconstruction complete: ${result.probs.size} node${result.probs.size === 1 ? '' : 's'} with posteriors`,
+          ),
+        );
       } finally {
         set({ asrRunning: false });
       }

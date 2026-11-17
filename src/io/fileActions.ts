@@ -45,6 +45,8 @@ import {
   importAnnotationsTable,
   importCalibrationTable,
   importMatrixTable,
+  normalizeLabelKey,
+  parseTable,
   type MatrixImportResult,
 } from './tableIO';
 import { readClipboardText, clipboardUnavailableMessage } from './clipboardIO';
@@ -190,10 +192,12 @@ function reportParseIssues(issues: string[], sourceName = ''): void {
   }
 }
 
-function openProjects(projects: Project[], name: string, path?: string): void {
+function openProjects(projects: Project[], name: string, path?: string, skipRecent = false): void {
   const st = useStore.getState();
   projects.forEach((p) => st.openInNewTab(p));
-  pushRecent({ name, path, kind: 'tree' });
+  // Clipboard pastes have no file to reopen, so they must not occupy a 最近
+  // slot (E-P11); file / drop / recents imports keep recording as before.
+  if (!skipRecent) pushRecent({ name, path, kind: 'tree' });
   notify.success(S.notify.treeImported);
 }
 
@@ -202,17 +206,18 @@ function openTreeProjects(
   name: string,
   path?: string,
   issues: string[] = [],
+  skipRecent = false,
 ): void {
   if (projects.length > 1 && multiTreeHandler) {
     multiTreeHandler(projects, name, path);
-    pushRecent({ name, path, kind: 'tree' });
+    if (!skipRecent) pushRecent({ name, path, kind: 'tree' });
     reportParseIssues(issues, name);
     return;
   }
   // No chooser registered: keep only the first tree, but say so out loud.
   const shown = projects.length > 1 ? projects.slice(0, 1) : projects;
   if (projects.length > 1) notify.info(importedFirstOf(projects.length));
-  openProjects(shown, name, path);
+  openProjects(shown, name, path, skipRecent);
   reportParseIssues(issues, name);
 }
 
@@ -252,6 +257,19 @@ function outName(name: string, ext: string): string {
 }
 
 /**
+ * ONE human-readable size for every export toast. The formats used to format
+ * independently and `(bytes / 1024).toFixed(0)` printed "0 KB" for any file
+ * under 1 KiB (F-ISSUE-08), so "how big?" depended on which exporter ran and a
+ * small Newick looked empty. Below 1 KiB says `<1 KB`; from 1 MiB the unit
+ * switches to MB so a large raster does not print "40960 KB".
+ */
+export function formatExportSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 1024) return '<1 KB';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+/**
  * The ONE success toast for every export: file name + size, so "did it export?
  * how big?" never depends on which format was chosen (A-08 / C#9 / M20 — PDF,
  * Newick, hypothesis JSON, narrative and the recon report used to get a bare
@@ -261,8 +279,8 @@ function notifyExported(name: string, content: string | Blob): void {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content).length : content.size;
   notify.success(
     tr(
-      `已导出 ${name}（${(bytes / 1024).toFixed(0)} KB）`,
-      `Exported ${name} (${(bytes / 1024).toFixed(0)} KB)`,
+      `已导出 ${name}（${formatExportSize(bytes)}）`,
+      `Exported ${name} (${formatExportSize(bytes)})`,
     ),
   );
 }
@@ -397,10 +415,14 @@ export function actionNewProject(): void {
 export function actionNewTreeFile(): void {
   const startTree = (): void => {
     useStore.getState().apply((d) => {
-      d.name = tr('未命名树', 'Untitled tree');
+      // Same untitled name as every other new tab (S.tabs.untitled), not a
+      // hard-coded "未命名树" that disagreed with the tab strip's own label.
+      d.name = S.tabs.untitled;
       addChildrenSpaced(d, d.rootId, 2);
     });
-    useStore.getState().requestFit();
+    // Fit, but never zoom IN past 100%: a 3-node starter tree used to be
+    // enlarged to ~599% where the labels are unreadably huge (G-P2 / D-P9).
+    useStore.getState().requestFit(1);
   };
   const st = useStore.getState();
   const hasTree = Object.values(st.project.nodes).some((n) => n.childrenIds.length > 0);
@@ -708,7 +730,7 @@ export function importTreeText(
   text: string,
   name: string,
   path?: string,
-  options?: { supportConvention?: 'auto' | SupportScale },
+  options?: { supportConvention?: 'auto' | SupportScale; skipRecent?: boolean },
 ): void {
   try {
     if (looksLikeNeXML(name, text)) {
@@ -717,7 +739,7 @@ export function importTreeText(
       // characters on the active document instead of being refused.
       const parsed = parseNexml(text, baseName(name));
       if (parsed.projects.length > 0) {
-        openTreeProjects(parsed.projects, name, path, parsed.issues);
+        openTreeProjects(parsed.projects, name, path, parsed.issues, options?.skipRecent);
         return;
       }
       if (parsed.characters.length > 0) {
@@ -747,7 +769,7 @@ export function importTreeText(
       // untouched.
       const parsed = parseNexusFile(text, baseName(name), options ?? {});
       if (parsed.projects.length > 0) {
-        openTreeProjects(parsed.projects, name, path, parsed.issues);
+        openTreeProjects(parsed.projects, name, path, parsed.issues, options?.skipRecent);
         return;
       }
       if (parsed.matrix && parsed.matrix.characters.length > 0) {
@@ -760,7 +782,7 @@ export function importTreeText(
       );
     }
     const { projects, issues } = parseNewickTrees(text, baseName(name), undefined, options ?? {});
-    openTreeProjects(projects, name, path, issues);
+    openTreeProjects(projects, name, path, issues, options?.skipRecent);
   } catch (e) {
     reportError(S.notify.importFail, e);
   }
@@ -1018,8 +1040,8 @@ export async function actionExportSVG(): Promise<void> {
     if (saved) {
       notify.success(
         tr(
-          `已导出 ${outName(project.name, 'svg')}（${(svgOut.length / 1024).toFixed(0)} KB）`,
-          `Exported ${outName(project.name, 'svg')} (${(svgOut.length / 1024).toFixed(0)} KB)`,
+          `已导出 ${outName(project.name, 'svg')}（${formatExportSize(svgOut.length)}）`,
+          `Exported ${outName(project.name, 'svg')} (${formatExportSize(svgOut.length)})`,
         ),
       );
     }
@@ -1076,8 +1098,8 @@ export async function actionExportPNG(): Promise<void> {
     if (saved) {
       notify.success(
         tr(
-          `已导出 ${outName(project.name, 'png')}（${(scale * 96).toFixed(0)} dpi，${(blob.size / 1024).toFixed(0)} KB）`,
-          `Exported ${outName(project.name, 'png')} (${(scale * 96).toFixed(0)} dpi, ${(blob.size / 1024).toFixed(0)} KB)`,
+          `已导出 ${outName(project.name, 'png')}（${(scale * 96).toFixed(0)} dpi，${formatExportSize(blob.size)}）`,
+          `Exported ${outName(project.name, 'png')} (${(scale * 96).toFixed(0)} dpi, ${formatExportSize(blob.size)})`,
         ),
       );
     }
@@ -1111,8 +1133,8 @@ export async function actionExportTIFF(): Promise<void> {
     if (saved) {
       notify.success(
         tr(
-          `已导出 ${outName(project.name, 'tiff')}（${(scale * 96).toFixed(0)} dpi，${(blob.size / 1024).toFixed(0)} KB）`,
-          `Exported ${outName(project.name, 'tiff')} (${(scale * 96).toFixed(0)} dpi, ${(blob.size / 1024).toFixed(0)} KB)`,
+          `已导出 ${outName(project.name, 'tiff')}（${(scale * 96).toFixed(0)} dpi，${formatExportSize(blob.size)}）`,
+          `Exported ${outName(project.name, 'tiff')} (${(scale * 96).toFixed(0)} dpi, ${formatExportSize(blob.size)})`,
         ),
       );
     }
@@ -1223,6 +1245,38 @@ export const TABLE_FILTERS: DialogFilter[] = [{ name: 'Table (CSV/TSV)', extensi
 export type TableImportMode = 'matrix' | 'annotations' | 'calibrations';
 
 /**
+ * Headerless CSV/TSV guard (D-P8). `parseTable` always treats row 1 as the
+ * header, so a table exported without a header row silently loses its first
+ * data row. When that first "header" cell is really a tip label of the active
+ * tree — exact or normalised — the row was almost certainly data; say so
+ * instead of letting the loss pass unnoticed. Cheap: the text is already in
+ * memory and the tip set is one project's worth of labels.
+ */
+function warnHeaderlessTable(text: string): void {
+  let firstHeaderCell: string;
+  try {
+    firstHeaderCell = parseTable(text).header[0]?.trim() ?? '';
+  } catch {
+    return; // empty / malformed text: the importer reports its own error
+  }
+  if (!firstHeaderCell) return;
+  const normalized = normalizeLabelKey(firstHeaderCell);
+  const matchesTip = Object.values(useStore.getState().project.nodes).some(
+    (n) =>
+      n.childrenIds.length === 0 &&
+      !!n.label &&
+      (n.label === firstHeaderCell || normalizeLabelKey(n.label) === normalized),
+  );
+  if (!matchesTip) return;
+  notify.error(
+    tr(
+      '表格首行被当作表头读取：它的名称与当前树的一个末端标签一致，因此首行很可能本应是数据——可能丢失了一行数据。建议在首行补上表头（如 taxon,性状…）后重新导入。',
+      'The first table row was read as the header: its label matches a tip of the current tree, so it was almost certainly data — one data row may have been lost. Add a header row (e.g. taxon,trait…) and import again.',
+    ),
+  );
+}
+
+/**
  * Import a CSV/TSV table into the active document. The mode chooses the join:
  *  - matrix: columns become characters, first column matches tips;
  *  - annotations: columns become structured tip metadata (host/country/…);
@@ -1235,6 +1289,9 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
     const result = await openText(TABLE_FILTERS);
     if (!result) return;
     surfaceOpenNotes(result);
+    // D-P8: a headerless table silently eats its first data row. Warn before
+    // the import report so the possible loss is visible next to the success.
+    if (mode === 'matrix' || mode === 'annotations') warnHeaderlessTable(result.text);
     const st = useStore.getState();
     if (mode === 'matrix') {
       const parsed = importMatrixTable(result.text, st.project.name);
@@ -1405,7 +1462,9 @@ export async function actionPasteTreeFromClipboard(): Promise<void> {
     notify.info(clipboardUnavailableMessage());
     return;
   }
-  importTreeText(text, tr('剪贴板树', 'Clipboard tree'));
+  // The clipboard has no file behind it: recording "剪贴板树" in 最近 produced
+  // an entry with no extension that could never be reopened (E-P11).
+  importTreeText(text, tr('剪贴板树', 'Clipboard tree'), undefined, { skipRecent: true });
 }
 
 

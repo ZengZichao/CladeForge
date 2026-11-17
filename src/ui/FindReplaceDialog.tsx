@@ -93,9 +93,32 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
     return out;
   }, [open, project, tabs, activeTabId, tabStore, options, scope]);
 
-  const total = Object.values(jobs).reduce((n, reps) => n + reps.length, 0);
+  // H-D1: `total` counts only replacements that would actually be applied.
+  // Blocked hits (a node name that would become empty) are preview-only: they
+  // must not enable "替换全部" or inflate the "N replacements" text.
+  const { total, blockedCount } = useMemo(() => {
+    let total = 0;
+    let blocked = 0;
+    for (const reps of Object.values(jobs)) {
+      for (const rep of reps) {
+        if (rep.blocked) blocked += 1;
+        else total += 1;
+      }
+    }
+    return { total, blockedCount: blocked };
+  }, [jobs]);
 
   if (!open) return null;
+
+  // H-D7: a preview hit is only actionable if it can be jumped to. focusNode
+  // pans the canvas and select marks the node, so the user can see which of
+  // the (possibly many) hits a row refers to. Non-node fields stay inert.
+  const nodeBacked = (rep: Replacement) => rep.field === 'nodeName' || rep.field === 'hypothesisNote';
+  const locate = (rep: Replacement) => {
+    useStore.getState().focusNode(rep.id);
+    useStore.getState().select(rep.id);
+  };
+  const blockedHint = tr('（替换后将变为空名称，已跳过）', '(empty name — skipped)');
 
   const toggle = (fields: ReplaceField[], checked: boolean) => {
     setSelected((prev) => {
@@ -199,11 +222,18 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
         />
 
         <div className="find-replace-preview">
-          {total === 0 ? (
+          {total === 0 && blockedCount === 0 ? (
             <div className="hint">{S.review.findReplaceNone}</div>
           ) : (
             <>
-              <div className="hint">{S.review.findReplacePreview(total)}</div>
+              <div className="hint">
+                {total === 0
+                  ? tr(
+                      '没有可应用的替换；以下匹配会清空名称，已跳过',
+                      'No applicable replacements; the matches below would blank a name and are skipped',
+                    )
+                  : S.review.findReplacePreview(total)}
+              </div>
               <ul className="find-replace-list">
                 {Object.entries(jobs).flatMap(([tabId, reps]) =>
                   reps.slice(0, 50).map((rep, i) => {
@@ -213,14 +243,58 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
                       tabId === activeTabId
                         ? project.name
                         : tabStore[tabId]?.project.name ?? tr('其他文档', 'Other document');
-                    return (
-                      <li key={`${tabId}-${rep.field}-${rep.id}-${i}`} className="find-replace-row">
+                    const target = (
+                      <>
                         <span className="find-replace-target">
                           {tabName} · {replaceFieldLabel(rep.field, doc, rep)}
                         </span>
                         <span className="find-replace-change">
                           {rep.oldValue} → {rep.newValue}
                         </span>
+                        {rep.blocked && (
+                          <span
+                            className="find-replace-blocked"
+                            style={{
+                              color: 'var(--muted-foreground)',
+                              fontStyle: 'italic',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {blockedHint}
+                          </span>
+                        )}
+                      </>
+                    );
+                    return (
+                      <li
+                        key={`${tabId}-${rep.field}-${rep.id}-${i}`}
+                        className="find-replace-row"
+                      >
+                        {nodeBacked(rep) ? (
+                          <button
+                            type="button"
+                            className="find-replace-locate"
+                            title={tr('点击在画布上定位该节点', 'Click to locate this node on the canvas')}
+                            onClick={() => locate(rep)}
+                            style={{
+                              display: 'flex',
+                              gap: '10px',
+                              flex: 1,
+                              width: '100%',
+                              padding: 0,
+                              border: 0,
+                              background: 'transparent',
+                              font: 'inherit',
+                              color: 'inherit',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {target}
+                          </button>
+                        ) : (
+                          target
+                        )}
                       </li>
                     );
                   }),

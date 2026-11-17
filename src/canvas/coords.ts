@@ -41,12 +41,20 @@ export interface Bounds {
   maxY: number;
 }
 
-/** A view transform that fits `bounds` into a viewport of the given size. */
+/**
+ * A view transform that fits `bounds` into a viewport of the given size.
+ *
+ * `maxScale` overrides the upper clamp. Fit-to-window on a tiny new tree used
+ * to zoom to ~600% (a handful of nodes stretched across the window); the
+ * layout panel's zoom ceiling is passed in so "fit" never exceeds what the user
+ * allowed. Defaults to MAX_SCALE, so every existing caller is unchanged.
+ */
 export function fitView(
   bounds: Bounds,
   viewportW: number,
   viewportH: number,
   padding?: number,
+  maxScale: number = MAX_SCALE,
 ): ViewTransform {
   const w = bounds.maxX - bounds.minX;
   const h = bounds.maxY - bounds.minY;
@@ -71,7 +79,7 @@ export function fitView(
   const scale = clamp(
     Math.min((viewportW - pad * 2) / w, (viewportH - pad * 2) / h),
     MIN_SCALE,
-    MAX_SCALE,
+    maxScale,
   );
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cy = (bounds.minY + bounds.maxY) / 2;

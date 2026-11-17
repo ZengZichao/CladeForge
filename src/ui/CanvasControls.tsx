@@ -139,7 +139,7 @@ export function CanvasControls() {
         className="cc-btn"
         title={S.canvasControls.fitTitle}
         aria-label={S.canvasControls.fitTitle}
-        onClick={requestFit}
+        onClick={() => requestFit()}
       >
         <FrameIcon />
       </button>

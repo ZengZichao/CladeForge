@@ -43,6 +43,7 @@ vi.mock('../io/fileActions', () => ({
   actionExportNarrative: recorder.noop('actionExportNarrative'),
   actionExportHypothesisJSON: recorder.noop('actionExportHypothesisJSON'),
   actionExportRScript: recorder.noop('actionExportRScript'),
+  actionExportReconciliationReport: recorder.noop('actionExportReconciliationReport'),
   // The export-settings dialog entry (导出选项…) is synchronous, not a promise.
   actionOpenExportSettings: recorder.noop('actionOpenExportSettings'),
   // M17: the shared tree-op actions (same confirm/refit for every entry).
@@ -51,9 +52,11 @@ vi.mock('../io/fileActions', () => ({
   actionRelayout: recorder.noop('actionRelayout'),
 }));
 
-import { buildFileMenuItems, buildRecentItems } from './fileMenu';
+import { buildFileMenuItems, buildRecentItems, buildExportMenuItems, itemByLabel } from './fileMenu';
 import { S } from './strings';
 import { DEFAULT_NEXUS_OPTIONS } from '../io/nexus';
+import { useStore } from '../model/store';
+import { createEmptyProject } from '../model/sampleTree';
 import type { DropdownItem } from './Dropdown';
 import type { RecentEntry } from '../io/recent';
 
@@ -123,7 +126,8 @@ describe('buildFileMenuItems', () => {
       it.sep ? '|' : (it.heading ?? it.label),
     );
     // 用户反馈: the menu lost 项目详情 / 树操作 (now in the left panel) /
-    // 导入表格 / 查找与替换 / 历史记录 (now toolbar buttons). Order mirrors
+    // 查找与替换 / 历史记录 (now toolbar buttons). E-P13 re-added the
+    // CSV/TSV import row (the command palette always had one). Order mirrors
     // fileMenu.ts.
     expect(labels).toEqual([
       S.menu.new,
@@ -136,6 +140,7 @@ describe('buildFileMenuItems', () => {
       S.review.importGroup,
       S.menu.importTree,
       S.review.pasteTree,
+      'Import table (CSV/TSV)…',
       '|',
       S.review.exportFigures,
       'Export…',
@@ -144,6 +149,14 @@ describe('buildFileMenuItems', () => {
       'Sample library…',
       'Operation log…',
     ]);
+  });
+
+  it('the CSV/TSV import row routes to the matrix import (E-P13)', () => {
+    const item = itemByLabel(buildFileMenuItems(), 'Import table (CSV/TSV)…');
+    expect(item).toBeDefined();
+    calls.length = 0;
+    item!.onClick!();
+    expect(calls).toEqual([{ name: 'actionImportTable', args: ['matrix'] }]);
   });
 
   it('the recents dropdown still routes each entry to its own record', () => {
@@ -156,5 +169,21 @@ describe('buildFileMenuItems', () => {
     expect(buildRecentItems([], () => undefined, () => undefined)).toEqual([
       { label: S.menu.recentEmpty, disabled: true },
     ]);
+  });
+});
+
+describe('buildExportMenuItems', () => {
+  it('disables the reconciliation report when the document has no gene tree (F-ISSUE-07 / H-D4)', () => {
+    const bare = createEmptyProject();
+    bare.geneTrees = [];
+    useStore.getState().loadProject(bare);
+    expect(itemByLabel(buildExportMenuItems(), S.exportItems.reconReport)?.disabled).toBe(true);
+
+    const withGene = createEmptyProject();
+    withGene.geneTrees = [
+      { id: 'g1', name: 'gene', doc: createEmptyProject(), assumptions: {} },
+    ];
+    useStore.getState().loadProject(withGene);
+    expect(itemByLabel(buildExportMenuItems(), S.exportItems.reconReport)?.disabled).toBe(false);
   });
 });

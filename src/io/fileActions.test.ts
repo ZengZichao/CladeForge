@@ -8,9 +8,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const saved: { name: string; content: string }[] = [];
 
+// Hoisted so the module mocks below and the tests share the same spies.
+const mocks = vi.hoisted(() => ({
+  openText: vi.fn(async (): Promise<{ name: string; text: string } | null> => null),
+  pushRecent: vi.fn(),
+  readClipboardText: vi.fn(async (): Promise<string | null> => null),
+}));
+
 vi.mock('./fileService', () => ({
   isTauri: () => false,
-  openText: vi.fn(async () => null),
+  openText: mocks.openText,
   saveBinary: vi.fn(async () => true),
   saveText: vi.fn(async (name: string, content: string) => {
     saved.push({ name, content });
@@ -18,10 +25,27 @@ vi.mock('./fileService', () => ({
   }),
 }));
 
-import { actionExportNexus, isNexusOptions } from './fileActions';
+// pushRecent is spied so the clipboard/recent contract can be asserted without
+// a DOM localStorage; clipboardIO is stubbed for the paste action.
+vi.mock('./recent', () => ({ pushRecent: mocks.pushRecent }));
+vi.mock('./clipboardIO', () => ({
+  readClipboardText: mocks.readClipboardText,
+  clipboardUnavailableMessage: () => 'clipboard unavailable',
+}));
+
+import {
+  actionExportNexus,
+  isNexusOptions,
+  formatExportSize,
+  actionImportTable,
+  actionImportTree,
+  actionPasteTreeFromClipboard,
+} from './fileActions';
 import { DEFAULT_NEXUS_OPTIONS, type NexusExportOptions } from './nexus';
 import { useStore } from '../model/store';
 import { createSampleProject } from '../model/sampleTree';
+import { parseNewick } from './newick';
+import { useToasts } from '../ui/toast';
 
 /** Top-level block names a NEXUS reader will see, in order. */
 function blocks(text: string): string[] {
@@ -122,5 +146,64 @@ describe('actionExportNexus — one file per name, whatever the entry point', ()
     ]);
     expect(full.content).toContain('STATELABELS');
     expect(full.content.length).toBeGreaterThan(minimal.content.length);
+  });
+});
+
+// --- F-ISSUE-08: one size format for every export ------------------------------
+
+describe('formatExportSize', () => {
+  it('never reports 0 KB for a non-empty file and switches to MB', () => {
+    expect(formatExportSize(0)).toBe('<1 KB');
+    expect(formatExportSize(1)).toBe('<1 KB');
+    expect(formatExportSize(1023)).toBe('<1 KB');
+    expect(formatExportSize(1024)).toBe('1 KB');
+    expect(formatExportSize(2048)).toBe('2 KB');
+    expect(formatExportSize(1024 * 1024)).toBe('1.0 MB');
+    expect(formatExportSize(Math.round(1.2 * 1024 * 1024))).toBe('1.2 MB');
+  });
+});
+
+// --- D-P8 / E-P11: table header guard and clipboard recents -------------------
+
+describe('import guards', () => {
+  beforeEach(() => {
+    useToasts.getState().toasts.forEach((t) => useToasts.getState().dismiss(t.id));
+    mocks.pushRecent.mockClear();
+    mocks.openText.mockResolvedValue(null);
+    mocks.readClipboardText.mockResolvedValue(null);
+  });
+
+  it("warns when a headerless table's first row is really a tip label (matrix)", async () => {
+    useStore.getState().openInNewTab(parseNewick('(A,B);'));
+    mocks.openText.mockResolvedValue({ name: 'traits.csv', text: 'A,trait\nB,1\n' });
+    await actionImportTable('matrix');
+    const messages = useToasts.getState().toasts.map((t) => t.message);
+    expect(messages.some((m) => m.includes('header') || m.includes('表头'))).toBe(true);
+  });
+
+  it('warns for the annotations mode too', async () => {
+    useStore.getState().openInNewTab(parseNewick('(A,B);'));
+    mocks.openText.mockResolvedValue({ name: 'notes.csv', text: 'A,host\nB,human\n' });
+    await actionImportTable('annotations');
+    const messages = useToasts.getState().toasts.map((t) => t.message);
+    expect(messages.some((m) => m.includes('header') || m.includes('表头'))).toBe(true);
+  });
+
+  it('does not warn when the first row is a real header', async () => {
+    useStore.getState().openInNewTab(parseNewick('(A,B);'));
+    mocks.openText.mockResolvedValue({ name: 'traits.csv', text: 'taxon,trait\nA,0\nB,1\n' });
+    await actionImportTable('matrix');
+    const messages = useToasts.getState().toasts.map((t) => t.message);
+    expect(messages.some((m) => m.includes('header') || m.includes('表头'))).toBe(false);
+  });
+
+  it('does not record a clipboard paste in 最近, but does record a file import', async () => {
+    mocks.readClipboardText.mockResolvedValue('(A,B);');
+    await actionPasteTreeFromClipboard();
+    expect(mocks.pushRecent).not.toHaveBeenCalled();
+
+    mocks.openText.mockResolvedValue({ name: 'tree.nwk', text: '(A,B);' });
+    await actionImportTree();
+    expect(mocks.pushRecent).toHaveBeenCalledTimes(1);
   });
 });

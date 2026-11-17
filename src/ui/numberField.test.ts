@@ -194,3 +194,58 @@ describe('NumberField — cross-field validation (P-10)', () => {
     expect(onCommit).toHaveBeenCalledWith(50);
   });
 });
+
+// F-ISSUE-02: a commit refused by the min/max gate used to leave the raw
+// invalid text (e.g. 999) sitting in the box, which read as "accepted". The
+// field must show the value the document actually holds.
+describe('NumberField — refused commit reverts to the stored value (F-ISSUE-02)', () => {
+  it('puts the stored value back when the typed number is above max', () => {
+    const onCommit = vi.fn();
+    renderField({ value: 10, min: 0, max: 20, onCommit });
+    const input = numberInput();
+    type(input, '999');
+    expect(input.value).toBe('999'); // the draft is visible while typing
+    blur(input);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(host.querySelector('.field-error')?.textContent).toMatch(/20/);
+    expect(input.value).toBe('10');
+  });
+
+  it('puts the stored value back when the typed number is below min', () => {
+    const onCommit = vi.fn();
+    renderField({ value: 10, min: 5, max: 20, onCommit });
+    const input = numberInput();
+    type(input, '1');
+    blur(input);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(host.querySelector('.field-error')?.textContent).toMatch(/5/);
+    expect(input.value).toBe('10');
+  });
+
+  it('reverts to empty when the stored value is empty', () => {
+    const onCommit = vi.fn();
+    renderField({ value: undefined, allowEmpty: true, max: 20, onCommit });
+    const input = numberInput();
+    type(input, '999');
+    blur(input);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(input.value).toBe('');
+  });
+
+  it('leaves the valid-commit path untouched', () => {
+    const onCommit = vi.fn();
+    renderField({ value: 10, min: 0, max: 20, onCommit });
+    const input = numberInput();
+    type(input, '15');
+    blur(input);
+    expect(onCommit).toHaveBeenCalledWith(15);
+    expect(input.value).toBe('15');
+    expect(host.querySelector('.field-error')).toBeNull();
+  });
+
+  it('can render disabled (D-P7) without committing', () => {
+    const onCommit = vi.fn();
+    renderField({ value: 10, disabled: true, onCommit });
+    expect(numberInput().disabled).toBe(true);
+  });
+});

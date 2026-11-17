@@ -22,6 +22,8 @@ import { Toaster } from './Toaster';
 import { ConfirmDialog, requestConfirm, registerConfirmHandler } from './confirmDialog';
 import { AnalysisDialog } from './AnalysisDialog';
 import { ImportReportDialog } from './ImportReportDialog';
+import { TreeDistanceDialog } from './TreeDistanceDialog';
+import { parseNewick } from '../io/newick';
 import { useImportReport } from './importReport';
 import { hasUnsavedChanges } from '../io/desktopShell';
 import { changeLanguage } from './i18n';
@@ -232,6 +234,21 @@ describe('hasUnsavedChanges (close guard)', () => {
       });
     });
     expect(hasUnsavedChanges()).toBe(true);
+  });
+});
+
+// --- TreeDistanceDialog --------------------------------------------------------
+
+describe('TreeDistanceDialog (G-P2)', () => {
+  it('lists skipped trees with a reason instead of the misleading empty hint', () => {
+    // Two open tabs with different tip sets: the old dialog reported the
+    // generic "open more tabs" hint even though a tab WAS there.
+    useStore.getState().loadProject(parseNewick('(A,B);'));
+    useStore.getState().openInNewTab(parseNewick('(C,D);'));
+    mount(createElement(TreeDistanceDialog, { open: true, onClose: () => {} }));
+    expect(text()).toContain('Skipped');
+    expect(text()).toContain('different tip sets');
+    expect(text()).not.toContain('No other trees to compare');
   });
 });
 

@@ -160,7 +160,7 @@ A node's label gets its own placement controls: nine anchor positions plus an au
 
 ### Command Palette (⌘K)
 
-Press ⌘K (macOS) or Ctrl + K (Windows/Linux) at any time to open the command palette; press it again to close it. The current build offers **59 commands** in seven categories — **File, Edit, View, Tree operations, Analysis, Reconciliation, Help** (displayed in that order) — each entry carrying an icon and its keyboard hint.
+Press ⌘K (macOS) or Ctrl + K (Windows/Linux) at any time to open the command palette; press it again to close it. The current build offers **60 commands** in seven categories — **File, Edit, View, Tree operations, Analysis, Reconciliation, Help** (displayed in that order) — each entry carrying an icon and its keyboard hint.
 
 Type to filter. Every command matches its displayed name, its English alias, and the pinyin spelling of its Chinese name, so `dakai` finds Open project and `baocun` finds Save project. Use ↑/↓ to navigate and Enter to execute.
 
@@ -216,7 +216,7 @@ Beyond the tree topology, CladeForge supports custom edges for reticulation even
 
 ### Multiple Selection
 
-- **Shift + click** to select multiple nodes.
+- **Shift + click** or **Ctrl/⌘ + click** to select multiple nodes.
 - With two nodes selected, their **most recent common ancestor (MRCA)** is highlighted with an orange ring.
 - The inspector panel shows batch-edit options (fill, stroke, size, label colour, font size, branch colour, show/hide labels, delete selected).
 
@@ -784,7 +784,7 @@ The SVG export is generated from scratch (not by cloning the live DOM) to ensure
 | Alt + Enter | Rename the selected node (equivalent to F2) |
 | ⇧F10 | Open the node context menu |
 | Click the collapse arrow | Expand a collapsed branch |
-| Shift + click | Multi-select (2 selected shows MRCA) |
+| Shift / Ctrl/⌘ + click | Multi-select (2 selected shows MRCA) |
 
 ### Command Palette
 

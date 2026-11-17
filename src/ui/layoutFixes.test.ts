@@ -127,4 +127,15 @@ describe('requested layout fixes', () => {
     expect(dropdown).toContain("overflowY: 'auto'");
     expect(source('MenuBar.tsx')).toContain('maxHeight');
   });
+
+  it('gates the font-size row on a node selection (D-P7)', () => {
+    // The 字号 row edits the SELECTED node, so with nothing selected it must
+    // not look fully active: subscribe to the store selection, disable the
+    // whole SliderNumberField, and say what is missing. The other rows edit
+    // document DEFAULTS and stay enabled.
+    const panel = source('LayoutPanel.tsx');
+    expect(panel).toContain('useStore((s) => s.selection.length)');
+    expect(panel).toContain('disabled={selectionLength === 0}');
+    expect(panel).toContain("tr('请先选中一个节点', 'Select a node first')");
+  });
 });

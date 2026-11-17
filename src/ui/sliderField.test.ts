@@ -121,4 +121,28 @@ describe('SliderNumberField', () => {
     // Exactly one undo step for the commit, on top of the load baseline.
     expect(useStore.getState().past).toHaveLength(pastBaseline + 1);
   });
+
+  // D-P7: the caller disables the whole control — a half-disabled field (number
+  // editable, slider not) is exactly the "silently does nothing" trap the row
+  // was being gated to avoid.
+  it('disables BOTH the number input and the slider when asked', () => {
+    act(() =>
+      root.render(
+        field(
+          '字号',
+          createElement(SliderNumberField, {
+            value: 12,
+            min: 6,
+            max: 48,
+            disabled: true,
+            recipe: (v: number) => (d: Project) => {
+              d.defaults.node.fontSize = v;
+            },
+          }),
+        ),
+      ),
+    );
+    expect(numberInput().disabled).toBe(true);
+    expect(sliderInput().disabled).toBe(true);
+  });
 });

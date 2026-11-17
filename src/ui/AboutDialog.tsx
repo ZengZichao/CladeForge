@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { getAppInfo, isTauri, type AppInfo } from '../io/native';
+import { PROJECT_VERSION } from '../model/types';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
 import { notify } from './toast';
@@ -62,6 +63,14 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
                   {tr('复制版本号', 'Copy version')}
                 </button>
               </dd>
+            </div>
+            {/* E-P6: the app version and the saved-file format version are two
+                different numbers (0.3.0 vs 0.2.0). Showing only the former made
+                the two look contradictory, so the format version is stated
+                explicitly beside it. */}
+            <div className="about-row">
+              <dt>{tr('项目格式版本', 'Project format version')}</dt>
+              <dd>{PROJECT_VERSION}</dd>
             </div>
             <div className="about-row">
               <dt>{S.about.author}</dt>
