@@ -744,7 +744,7 @@ export const ReconPane = memo(function ReconPane({
   );
 
   const bgDown = (e: React.PointerEvent) => {
-    if ((e.target as Element).closest('[data-node-id]')) return;
+    if ((e.target as Element | null)?.closest('[data-node-id]')) return;
     const live = transformRef.current;
     drag.current = { x: e.clientX, y: e.clientY, tx: live.tx, ty: live.ty };
     gestureRef.current = true;

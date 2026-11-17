@@ -21,6 +21,7 @@ import { shouldReselectOnRightClick } from './selectionGuard';
 import { MAX_COLLISION_PLAN_NODES } from '../canvas/eventBadgeLayout';
 import { MAX_DOCUMENT_NODES, MAX_PARSED_NODES } from '../io/limits';
 import { mrcaOf } from '../model/treeOps';
+import { switchLayer } from '../model/layers';
 import { computeLayout } from '../layout/autoLayout';
 import { LayoutPanel } from './LayoutPanel';
 import { TimePanel } from './TimePanel';
@@ -116,6 +117,9 @@ function StatusBar() {
   const nodeCount = useStore((s) => Object.keys(s.project.nodes).length);
   const edgeCount = useStore((s) => s.project.customEdges.length);
   const scale = useStore((s) => s.view.scale);
+  // A#10: a blank welcome document has no tree to zoom — the stale transform
+  // (e.g. an earlier sample's 800%) read as a meaningless "Zoom 800%".
+  const hasTree = useStore((s) => documentHasTree(s.project));
   const selection = useStore((s) => s.selection);
   const selectionCount = useStore((s) => s.selection.length);
   // M20: the active hypothesis layer is invisible outside the 假说 module —
@@ -124,6 +128,12 @@ function StatusBar() {
   const activeLayerName = useStore(
     (s) => s.project.layers.find((l) => l.id === s.project.activeLayerId)?.name ?? null,
   );
+  // BUG-16: the active-layer chip was inert even though nothing else in the UI
+  // could switch layers (LayerPanel is no longer mounted). Make it the switch:
+  // click cycles to the next hypothesis layer, one undoable edit.
+  const layers = useStore((s) => s.project.layers);
+  const activeLayerId = useStore((s) => s.project.activeLayerId);
+  const apply = useStore((s) => s.apply);
   // M22: an edge selection clears the node selection and was otherwise
   // invisible in the status bar.
   const selectedEdge = useStore((s) => s.selectedEdgeId);
@@ -144,13 +154,29 @@ function StatusBar() {
   // conflated by one ambiguous word.
   const activeDirty = useStore((s) => s.revision !== s.lastSavedRevision);
   const diskSavedAt = useStore((s) => s.project.savedAt);
+  const hasDiskPath = useStore((s) => Boolean(s.project.sourcePath));
+  // BUG-09: "On-disk version" is only honest when the app can re-read that
+  // path. A browser download has no sourcePath — it gets its own chip instead
+  // of a claim that contradicts 「回退到磁盘版本」's refusal.
   const diskText = activeDirty
     ? S.review.diskUnsaved
-    : diskSavedAt
-      // m12 (UI_UX_REVIEW): the UI locale — not a hardcoded zh-CN — formats the
-      // disk timestamp (English users read "11/15/2026, 14:03").
-      ? S.review.diskSavedAt(new Date(diskSavedAt).toLocaleString(undefined, { hour12: false }))
-      : S.review.diskUnsaved;
+    : diskSavedAt && hasDiskPath
+      ? // m12 (UI_UX_REVIEW): the UI locale — not a hardcoded zh-CN — formats the
+        // disk timestamp (English users read "11/15/2026, 14:03").
+        S.review.diskSavedAt(new Date(diskSavedAt).toLocaleString(undefined, { hour12: false }))
+      : diskSavedAt
+        ? S.review.diskDownloaded
+        : S.review.diskUnsaved;
+  const diskTooltip = activeDirty
+    ? tr('当前文档有尚未写入项目文件的更改', 'This document has changes not yet written to its project file')
+    : diskSavedAt && hasDiskPath
+      ? S.status.savedTitle
+      : diskSavedAt
+        ? S.review.diskDownloadedTitle
+        : tr(
+            '尚未写入过项目文件：当前内容只在本地恢复区（自动保存），重启后仍可恢复；执行「保存项目」写入磁盘。',
+            'No project file yet: the content lives in the local recovery area (autosave) and survives a restart; “Save project” writes it to disk.',
+          );
   return (
     // The selection count is announced to assistive tech (the canvas tree has
     // no aria-live region of its own).
@@ -167,9 +193,11 @@ function StatusBar() {
       </span>
       {/* "Fit" clamps at MIN_SCALE, so a very tall tree can stay partly
           off-screen; the zoom readout says explicitly when that limit is hit. */}
-      <span title={minScaleReached ? S.canvasControls.fitClampedTitle : undefined}>
-        {S.status.zoom} {Math.round(scale * 100)}%
-        {minScaleReached ? tr(`（${S.canvasControls.fitClamped}）`, ` (${S.canvasControls.fitClamped})`) : ''}
+      <span title={minScaleReached && hasTree ? S.canvasControls.fitClampedTitle : undefined}>
+        {S.status.zoom} {hasTree ? `${Math.round(scale * 100)}%` : '—'}
+        {hasTree && minScaleReached
+          ? tr(`（${S.canvasControls.fitClamped}）`, ` (${S.canvasControls.fitClamped})`)
+          : ''}
       </span>
       {selectionCount > 0 && (
         <span>
@@ -186,9 +214,23 @@ function StatusBar() {
       {/* M20: the active hypothesis layer is one authoritative chip — outside
           the 假说 module nothing else showed which layer undo would edit. */}
       {activeLayerName && (
-        <span title={tr('当前假说层：编辑目标', 'Active hypothesis layer: undo target')}>
-          {tr('层', 'Layer')}：{activeLayerName}
-        </span>
+        <button
+          className="status-layer"
+          onClick={() => {
+            if (layers.length < 2) return;
+            const idx = layers.findIndex((l) => l.id === activeLayerId);
+            const next = layers[(idx + 1 + layers.length) % layers.length];
+            if (next) apply((d) => void switchLayer(d, next.id));
+          }}
+          title={tr(
+            '当前假说层：点击切换到下一层',
+            'Active hypothesis layer: click to switch to the next layer',
+          )}
+        >
+          {/* A#10: the other status chips use a half-width colon; this one was
+              the odd full-width 「：」out. */}
+          {tr('层', 'Layer')}: {activeLayerName}
+        </button>
       )}
       {/* MRCA is highlighted whenever exactly two nodes are selected — surface
           this otherwise invisible capability explicitly, and make the hint do
@@ -248,16 +290,7 @@ function StatusBar() {
       )}
       <span
         className={`status-disk${activeDirty ? ' status-disk-dirty' : ''}`}
-        title={
-          activeDirty
-            ? tr('当前文档有尚未写入项目文件的更改', 'This document has changes not yet written to its project file')
-            : diskSavedAt
-              ? S.status.savedTitle
-              : tr(
-                  '尚未写入过项目文件：当前内容只在本地恢复区（自动保存），重启后仍可恢复；执行「保存项目」写入磁盘。',
-                  'No project file yet: the content lives in the local recovery area (autosave) and survives a restart; “Save project” writes it to disk.',
-                )
-        }
+        title={diskTooltip}
       >
         {diskText}
        </span>
@@ -285,9 +318,14 @@ function LeftPanelContent() {
 
 export function StandardWorkspace({
   panelsHidden,
+  onShowPanels,
   onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
+  /** A#2: restores BOTH panels from the double-hidden state reached via the
+   *  header button / ⌘.; without this the edge toggle had no way to bring the
+   *  left panel back (the per-panel hide buttons only cover their own side). */
+  onShowPanels: () => void;
   /** Opens the shared add-children dialog (owned by App, toolbar shares it). */
   onAddChildrenDialog: (parentId: string) => void;
 }) {
@@ -447,13 +485,18 @@ export function StandardWorkspace({
 
         {/* Left-panel toggle: on narrow screens it opens the overlay; on desktop
             it re-shows the panel after its own hide button collapsed it. */}
-        {(isNarrow || leftHidden) && showPanels && (
+        {/* A#2: `panelsHidden` (the header button / ⌘.) hides BOTH panels, so
+            this edge entry must exist in that state too — otherwise the left
+            panel has no on-screen way back at all. */}
+        {(isNarrow || leftHidden || panelsHidden) && showPanels && (
           <button
             className="panel-toggle-btn left"
             onClick={() => {
               if (isNarrow) {
                 setLeftOverlayOpen(true);
                 setRightOverlayOpen(false);
+              } else if (panelsHidden) {
+                onShowPanels();
               } else {
                 setLeftHidden(false);
               }
@@ -509,13 +552,15 @@ export function StandardWorkspace({
         {/* V16: between the narrow overlay mode and a roomy desktop the right
             panel folds; its toggle re-opens it (inline, user decides). The same
             button re-shows the panel after its own hide button collapsed it. */}
-        {(isNarrow || rightHidden || (midFold && !userReopenedRight)) && showPanels && (
+        {(isNarrow || rightHidden || (midFold && !userReopenedRight) || panelsHidden) && showPanels && (
           <button
             className="panel-toggle-btn right"
             onClick={() => {
               if (isNarrow) {
                 setRightOverlayOpen(true);
                 setLeftOverlayOpen(false);
+              } else if (panelsHidden) {
+                onShowPanels();
               } else if (rightHidden) {
                 setRightHidden(false);
               } else {

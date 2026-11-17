@@ -831,6 +831,8 @@ A project file contains:
 
 CladeForge maintains 100 undo steps by default (300 or 1000 can be selected in Preferences) using structural sharing (Immer). All topology edits, style changes, character assignments, and event placements are undoable.
 
+Note that **the undo stack is per session**. Reloading the page or restarting the app restores document content from local recovery, but not the pre-reload undo history (the history-limit setting applies to the current session).
+
 ### Autosave and Recovery
 
 CladeForge autosaves the workspace to local storage while you work and restores it on the next launch. The status indicator is driven by the **actual write result**, never by a debounce timer, so it cannot report success for a write that failed:

@@ -121,11 +121,16 @@ export function Section({
   count,
   summary,
   summaryTitle,
+  scope,
 }: {
   /** Stable identifier for persistence (language-independent). Falls back to the
    *  catalogue path of `title`, so the state survives a 中/EN switch. Pass an
    *  explicit id whenever two sections share a title. */
   id?: string;
+  /** P-08: namespaces the persisted open/pin/favourite state (e.g. the active
+   *  document id), so collapsing a section in one tree does not silently
+   *  collapse it in every other tab. Omit for app-global sections. */
+  scope?: string;
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -149,7 +154,9 @@ export function Section({
   // translated text, so switching 中文/English does not silently reset every
   // collapsed / pinned / favourited section. `stableId(title)` is the title-hash
   // fallback read when no path-based key has been written.
-  const persistId = sectionId ?? titleKey(title);
+  const baseId = sectionId ?? titleKey(title);
+  const persistId = scope ? `${scope}::${baseId}` : baseId;
+  // The unscoped hash key stays a read fallback so pre-P-08 state is not lost.
   const legacyId = sectionId ? undefined : stableId(title);
   const [open, setOpen] = useState(() => readStored(persistId, defaultOpen, legacyId));
   const [fav, setFav] = useState(() => (favoritable ? readFav(persistId) : false));
@@ -279,15 +286,19 @@ export function GroupSection({
   children,
   defaultOpen = true,
   pinable = false,
+  scope,
 }: {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
   /** When true, a pushpin toggle is rendered; pinned groups stay expanded. */
   pinable?: boolean;
+  /** P-08: per-document persistence namespace; see Section. */
+  scope?: string;
 }) {
   // Same locale-independent keying as Section.
-  const groupId = `group:${titleKey(title)}`;
+  const baseGroupId = `group:${titleKey(title)}`;
+  const groupId = scope ? `${scope}::${baseGroupId}` : baseGroupId;
   const legacyGroupId = `group:${stableId(title)}`;
   const [open, setOpen] = useState(() => readStored(groupId, defaultOpen, legacyGroupId));
   const [pin, setPin] = useState(() => (pinable ? readPin(groupId) : false));

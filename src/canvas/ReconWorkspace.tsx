@@ -20,7 +20,7 @@
 //    <1024 both drawers (full overlay)
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Cross1Icon, HamburgerMenuIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, HamburgerMenuIcon, ViewVerticalIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { S, tr } from '../ui/strings';
 import { ReconPanel } from '../ui/ReconPanel';
@@ -67,10 +67,13 @@ function readReconWidth(key: string, fallback: number): number {
 /** Vertical splitter, shared implementation with the standard workspace. */
 export function ReconWorkspace({
   panelsHidden,
+  onShowPanels,
   onCopySpeciesTree,
   onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
+  /** A#2: restores both panels after the header / ⌘. double-hide. */
+  onShowPanels: () => void;
   /** Empty state: 新建协调视图 — seeds the reconciliation from the species tree. */
   onCopySpeciesTree: () => void;
   /** Opens the shared add-children dialog (owned by App) — the tree-edit
@@ -146,6 +149,7 @@ export function ReconWorkspace({
         <div className="recon-edit-column">
           <StandardWorkspace
             panelsHidden={panelsHidden}
+            onShowPanels={onShowPanels}
             onAddChildrenDialog={onAddChildrenDialog}
           />
         </div>
@@ -201,6 +205,17 @@ export function ReconWorkspace({
           )}
           <ReconPanel />
         </div>
+        {/* A#2: when the header / ⌘. toggle hid BOTH panels, each edge gets its
+            own way back; previously neither button existed in this state. */}
+        {panelsHidden && !fullNarrow && !reconEmpty && (
+          <button
+            className="panel-toggle-btn left"
+            onClick={onShowPanels}
+            title={tr('打开左侧面板', 'Open left panel')}
+          >
+            <HamburgerMenuIcon />
+          </button>
+        )}
         {!fullNarrow && !panelsHidden && !reconEmpty && (
           <ResizeHandle side="left" width={leftWidth} panelRef={leftPanelRef} onCommit={setLeftWidth} minWidth={RECON_MIN_PANEL} maxWidth={RECON_MAX_PANEL} />
         )}
@@ -240,6 +255,15 @@ export function ReconWorkspace({
             )}
             <ReconInspector />
           </div>
+        )}
+        {panelsHidden && !fullNarrow && !reconEmpty && (
+          <button
+            className="panel-toggle-btn right"
+            onClick={onShowPanels}
+            title={tr('打开右侧面板', 'Open right panel')}
+          >
+            <ViewVerticalIcon />
+          </button>
         )}
       </div>
     </div>

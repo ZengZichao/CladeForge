@@ -81,12 +81,24 @@ describe('assessDeletion — one predicate, tips as the unit', () => {
     expect(risk.needsConfirm).toBe(true);
   });
 
-  it('a 5-node / 3-tip cut needs no confirmation, where the node count said "large"', () => {
+  it('a 5-node / 3-tip TIP cut stays quiet, where the node count said "large"', () => {
     const p = tree40();
+    const risk = assessDeletion(p, [tipId(p, 'L2')]);
+    expect(risk.tips).toBe(1);
+    expect(risk.nodes).toBe(1);
+    expect(risk.needsConfirm).toBe(false); // losing one tip is toast + Undo
+  });
+
+  it('cutting an INTERNAL node (a whole clade) confirms even when it is small', () => {
+    const p = tree40();
+    // L2/L3/L4 sit under one internal parent: a 3-tip, 5-node subtree.
     const risk = assessDeletion(p, [cladeId(p, 'L2', 'L3', 'L4')]);
     expect(risk.tips).toBe(3);
-    expect(risk.nodes).toBe(5); // sizing on the NODE count alone would call this "large"
-    expect(risk.needsConfirm).toBe(false); // the tip-based predicate does not
+    expect(risk.nodes).toBe(5);
+    expect(risk.removesInternal).toBe(true);
+    // P-13 / BUG-05: a clade removal deserves a question even below the tip
+    // threshold; a single tip keeps the fast delete + Undo toast path.
+    expect(risk.needsConfirm).toBe(true);
   });
 
   it('a 7-node clade that takes 6 tips of 40 confirms', () => {

@@ -217,8 +217,14 @@ export function FirstRunTour({
   if (!open) return null;
 
   const steps = STEPS[mode]();
-  const current = steps[step];
-  const isLast = step === steps.length - 1;
+  // A#3: finishing the basics tour on its last step left `step` at 4; opening
+  // the 4-step workflow tour afterwards rendered with step=4, so `steps[step]`
+  // was undefined and `current.target` threw into the error boundary. Clamp for
+  // rendering (the reset effect still runs right after) and never dereference
+  // an out-of-range step.
+  const safeStep = Math.max(0, Math.min(step, steps.length - 1));
+  const current = steps[safeStep];
+  const isLast = safeStep === steps.length - 1;
   // A16: on an EMPTY document the natural next step after a tour is to see a
   // worked example — offer the sample library right on the finish card instead
   // of sending the user hunting through the File menu.
@@ -276,9 +282,9 @@ export function FirstRunTour({
           style={{ left: rect.left - 4, top: rect.top - 4, width: rect.width + 8, height: rect.height + 8 }}
         />
       )}
-      <div className={`tour-card tour-card-${mode}`} style={cardStyle} data-tour-step={step}>
+      <div className={`tour-card tour-card-${mode}`} style={cardStyle} data-tour-step={safeStep}>
         <div className="tour-step">
-          {step + 1} / {steps.length}
+          {safeStep + 1} / {steps.length}
           {mode === 'workflow' ? tr(`（工作流）`, ` (Workflow)`) : ''}
         </div>
         <div className="tour-title">{current.title}</div>

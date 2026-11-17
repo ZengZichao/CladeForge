@@ -22,6 +22,24 @@ export const C_UNKNOWN = '#8d8d8d';
 /** Fallback fill for a transition target circle when no state colour exists. */
 export const C_TRANSITION_TO = '#646464';
 
+/**
+ * A readable ink for text drawn directly on the canvas (era bands, environmental
+ * markers). A#9 / BUG: the Dark preset paints a near-black canvas but the axis
+ * labels kept the chrome's dark-gray `--text`, so they all but disappeared.
+ * Non-hex values (CSS variables, named colours) return undefined — callers keep
+ * their existing colour then.
+ */
+export function inkOnBackground(background: string): string | undefined {
+  const m = /^#([0-9a-f]{6})$/i.exec(background.trim());
+  if (!m) return undefined;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.55 ? '#202020' : '#e8e6e3';
+}
+
 // --- Export-figure palette (centralised, was scattered inline) ---
 // Warm monochrome equivalents of the canvas tokens, hardcoded because exported
 // SVG / PDF files are self-contained and cannot reference CSS variables.

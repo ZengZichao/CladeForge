@@ -167,6 +167,34 @@ describe('AddChildrenDialog — target is always stated (BUG-3)', () => {
   });
 });
 
+describe('AddChildrenDialog — zero children is a no-op (P-04)', () => {
+  it('adds nothing for Number = 0 instead of silently adding one', () => {
+    freshProject();
+    const childId = addNamedChild('Taxon_B');
+    mount(
+      createElement(AddChildrenDialog, {
+        open: true,
+        targetId: childId,
+        onCancel: () => undefined,
+      }),
+    );
+    setNumber('0');
+    const before = nodeCount();
+    // The Add button is disabled for the same condition the confirm path
+    // re-checks, so the user cannot reach the hidden 0→1 coercion at all.
+    const addBtn = [...document.querySelectorAll('.dialog .actions button')].find(
+      (b) => b.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(true);
+    act(() => addBtn.click());
+    expect(nodeCount()).toBe(before);
+    // Enter takes the same guarded path.
+    const ev = pressOnInput('Enter');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(nodeCount()).toBe(before);
+  });
+});
+
 describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => {
   it('Enter prevents its default action, adds the children and closes', () => {
     freshProject();

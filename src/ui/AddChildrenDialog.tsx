@@ -70,7 +70,16 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
       onCancel();
       return;
     }
-    const requested = Math.round(count) || 1;
+    // P-04: an explicit 0 used to be silently turned into 1 ("typed 0, got a
+    // new child"). Zero children is a NO-OP with a clear message, never a
+    // hidden default; the Add button is disabled for the same condition.
+    if (!Number.isFinite(count) || count < 1) {
+      notify.info(
+        tr('子节点数量至少为 1：未添加任何节点。', 'Number of children must be at least 1: nothing was added.'),
+      );
+      return;
+    }
+    const requested = Math.round(count);
     const n = Math.max(1, Math.min(50, requested));
     // The clamp used to be silent: typing 999 produced 2 children, typing 0
     // produced 1, with no word about it (M15).
@@ -195,7 +204,7 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
           <button className="btn" onClick={onCancel}>
             {S.addDialog.cancel}
           </button>
-          <button className="btn primary" onClick={confirm} disabled={!targetNode}>
+          <button className="btn primary" onClick={confirm} disabled={!targetNode || !(count >= 1)}>
             {S.addDialog.confirm}
           </button>
         </div>

@@ -176,3 +176,27 @@ describe('project IO — event marker style', () => {
     expect(e.markerColor).toBe('#0ea5a3');
   });
 });
+
+describe('project IO — GUI report regressions', () => {
+  it('BUG-07: environmental-event ranges and labels survive serialize → parse unchanged', () => {
+    const p = createEmptyProject('env');
+    p.environmentalEvents = [
+      { id: 'en1', label: '事件 A', from: 31, to: 52, color: '#ab6400', note: 'note' },
+      { id: 'en2', label: 'B', from: 33.9, to: 33.9, color: '#0ea5a3' },
+      { id: 'en3', label: 'C', from: 0, to: 14, color: '#d1495b' },
+    ];
+    const { project: back, issues } = readProjectFile(serializeProject(p));
+    expect(issues).toEqual([]);
+    expect(back.environmentalEvents).toEqual(p.environmentalEvents);
+  });
+
+  it('A#6: a 120-character node name is neither truncated nor rejected on save/load', () => {
+    const p = createEmptyProject('long');
+    const [child] = addChildren(p, p.rootId, 1);
+    const long = 'X'.repeat(120);
+    renameNode(p, child, long);
+    const { project: back, issues } = readProjectFile(serializeProject(p));
+    expect(issues).toEqual([]);
+    expect(back.nodes[child].label).toBe(long);
+  });
+});

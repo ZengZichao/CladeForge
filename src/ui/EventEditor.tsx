@@ -168,8 +168,12 @@ function OneEvent({
               />
             </Field>
             <Field label={tr('填充颜色', 'Fill colour')}>
+              {/* P-14: the native swatch needs a real #rrggbb. `var(--surface)`
+                  is a valid CSS colour but not a valid input[type=color] value,
+                  so the swatch rendered black while the stored value stayed a
+                  variable — pass an equivalent literal instead. */}
               <ColorField
-                value={event.markerFill ?? 'var(--surface)'}
+                value={event.markerFill ?? '#ffffff'}
                 ariaLabel={tr('填充颜色', 'Fill colour')}
                 onChange={(v) => up({ markerFill: v })}
               />
@@ -255,9 +259,13 @@ export function EventEditor({
       {events.map((e) => (
         <OneEvent key={e.id} event={e} project={project} apply={apply} isRoot={isRoot} />
       ))}
-      <Field label={S.event.add}>
+      {/* BUG-12: this used to be a `Field` whose label read "+ Add event" with
+          the button repeating "+ Add event" — two controls saying the same
+          thing. One unlabeled action row now. */}
+      <div className="field row-actions">
         <button
           className="btn"
+          title={S.event.add}
           onClick={() => {
             const target: 'node' | 'branch' = isRoot ? 'node' : 'branch';
             apply((d) => addEvent(d, newEvent('custom', target, node.id)));
@@ -265,7 +273,7 @@ export function EventEditor({
         >
           ＋ {tr('添加事件', 'Add event')}
         </button>
-      </Field>
+      </div>
     </Section>
   );
 }

@@ -15,7 +15,7 @@ import * as file from '../io/fileActions';
 import { RECENTS_CHANGED_EVENT, readRecents, clearRecents, type RecentEntry } from '../io/recent';
 import { Dropdown, type DropdownItem } from './Dropdown';
 import { buildFileMenuItems, buildRecentItems, buildExportMenuItems } from './fileMenu';
-import { S, tr } from './strings';
+import { S, modKey, tr } from './strings';
 import { notify } from './toast';
 
 interface PanelPos {
@@ -185,7 +185,7 @@ export function MenuBar({
 
   const helpItems: DropdownItem[] = [
     { heading: tr('帮助', 'Help') },
-    { label: S.menu.shortcuts, onClick: onOpenShortcuts, kbd: '⌘?' },
+    { label: S.menu.shortcuts, onClick: onOpenShortcuts, kbd: `${modKey()}?` },
     { label: S.menu.guide, onClick: onOpenTour },
     {
       label: tr('工作流引导', 'Workflow tour'),

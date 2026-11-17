@@ -169,13 +169,18 @@ export function ColorField({
   const HEX_RE = /^#?([0-9a-fA-F]{6})$/;
   const normalize = (v: string) => `#${v.replace('#', '').toLowerCase()}`;
   const textInputRef = useRef<HTMLInputElement | null>(null);
+  // P-14: an invalid value that already lives in the document used to be fed
+  // straight to <input type="color">, which sanitises it to #000000 — the next
+  // picker interaction then committed BLACK over the stored value. Show a safe
+  // white swatch instead and say why; typed-invalid drafts still revert.
+  const storedInvalid = !HEX_RE.test(value);
 
   return (
     <div className="color-field">
       <input
         type="color"
         aria-label={ariaLabel}
-        value={HEX_RE.test(draft) ? normalize(draft) : value}
+        value={HEX_RE.test(draft) ? normalize(draft) : storedInvalid ? '#ffffff' : value}
         disabled={disabled}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -196,6 +201,15 @@ export function ColorField({
         disabled={disabled}
         spellCheck={false}
         aria-label={ariaLabel ? `${ariaLabel} (hex)` : tr('颜色十六进制代码', 'Colour hex code')}
+        aria-invalid={storedInvalid || undefined}
+        title={
+          storedInvalid
+            ? tr(
+                '存储的颜色值不是有效的 #rrggbb，色板按白色显示；重新选择颜色即可覆盖。',
+                'The stored colour is not a valid #rrggbb; the swatch shows white. Pick a colour to replace it.',
+              )
+            : undefined
+        }
         onChange={(e) => {
           const v = e.target.value;
           setDraft(v);
@@ -275,7 +289,7 @@ export function TextField({
       onBlur={() => v !== value && onCommit(v)}
       onKeyDown={(e) => {
         // Enter belongs to the IME while a candidate list is open.
-        if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement).blur();
+        if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement | null)?.blur();
       }}
     />
   );
@@ -316,7 +330,7 @@ export function TextAreaField({
         if (isImeComposing(e)) return;
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          (e.target as HTMLTextAreaElement).blur();
+          (e.target as HTMLTextAreaElement | null)?.blur();
         }
       }}
     />
@@ -347,6 +361,7 @@ export function NumberField({
   unitSide = 'suffix',
   hint,
   ariaLabel,
+  validate,
 }: {
   value: number | undefined;
   onCommit: (v: number | undefined) => void;
@@ -354,6 +369,13 @@ export function NumberField({
   max?: number;
   step?: number;
   allowEmpty?: boolean;
+  /**
+   * Cross-field / cross-record check run AFTER the single-field min/max gate.
+   * P-10: a calibration Min above Max, or an environmental From after To, must
+   * be refused with a visible reason instead of silently drawing an inverted
+   * interval. Return null (or omit) when the value is acceptable.
+   */
+  validate?: (v: number) => string | null;
   /** Visible unit decoration (e.g. "Ma", "px", "s/s"). Optional. */
   unit?: string;
   /** Hover/spoken expansion of the unit (e.g. "million years ago (Ma = Mya)"). */
@@ -389,6 +411,11 @@ export function NumberField({
     }
     if (max !== undefined && n > max) {
       setError(tr(`最大值为 ${max}`, `Maximum is ${max}`));
+      return;
+    }
+    const cross = validate?.(n);
+    if (cross) {
+      setError(cross);
       return;
     }
     setError(null);
@@ -433,7 +460,7 @@ export function NumberField({
           }}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement).blur();
+            if (e.key === 'Enter' && !isImeComposing(e)) (e.target as HTMLInputElement | null)?.blur();
           }}
         />
         {unitSide !== 'prefix' && unitNode}

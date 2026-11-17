@@ -49,7 +49,7 @@ import { notify } from './toast';
 import { isImeComposing } from './imeGuard';
 import { useLanguage } from './i18n';
 import { midpointText } from './treeEditNotices';
-import { S, tr } from './strings';
+import { S, modKey, tr } from './strings';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from './sampleOpener';
 
@@ -158,10 +158,10 @@ export function CommandPalette({
     // four 树操作 commands parked between 协调 and 分析.
     return [
       // --- 文件 ---
-      { id: 'new', label: S.cmd.newTab, category: tr('文件','File'), icon: <PlusIcon />, kbd: '⌘T', aliases: ['new', 'tab', 'xinjian'], run: () => st().newTab() },
-      { id: 'open', label: S.cmd.open, category: tr('文件','File'), icon: <FileIcon />, kbd: '⌘O', aliases: ['open', 'dakai'], run: () => void file.actionOpenProject() },
-      { id: 'save', label: S.cmd.save, category: tr('文件','File'), icon: <DownloadIcon />, kbd: '⌘S', aliases: ['save', 'baocun'], run: () => void file.actionSaveProject() },
-      { id: 'saveAs', label: S.review.cmdSaveAs, category: tr('文件','File'), icon: <DownloadIcon />, kbd: '⌘⇧S', aliases: ['save as', 'lingcun', 'saveas'], run: () => void file.actionSaveProjectAs() },
+      { id: 'new', label: S.cmd.newTab, category: tr('文件','File'), icon: <PlusIcon />, kbd: `${modKey()}T`, aliases: ['new', 'tab', 'xinjian'], run: () => st().newTab() },
+      { id: 'open', label: S.cmd.open, category: tr('文件','File'), icon: <FileIcon />, kbd: `${modKey()}O`, aliases: ['open', 'dakai'], run: () => void file.actionOpenProject() },
+      { id: 'save', label: S.cmd.save, category: tr('文件','File'), icon: <DownloadIcon />, kbd: `${modKey()}S`, aliases: ['save', 'baocun'], run: () => void file.actionSaveProject() },
+      { id: 'saveAs', label: S.review.cmdSaveAs, category: tr('文件','File'), icon: <DownloadIcon />, kbd: `${modKey()}⇧S`, aliases: ['save as', 'lingcun', 'saveas'], run: () => void file.actionSaveProjectAs() },
       { id: 'revert', label: S.review.cmdRevert, category: tr('文件','File'), icon: <ResetIcon />, aliases: ['revert', 'huitui'], run: () => void file.actionRevertProject() },
       // App-level dialogs (2026-11-15): identity/provenance, batch text edit,
       // undo history and the sample catalogue were menu-only until now.
@@ -180,20 +180,20 @@ export function CommandPalette({
       { id: 'exHyp', label: S.cmd.exportHypothesis, category: tr('文件','File'), icon: <DownloadIcon />, aliases: ['hypothesis', 'json', 'export'], run: () => void file.actionExportHypothesisJSON() },
       { id: 'exRScript', label: S.exportItems.rScript, category: tr('文件','File'), icon: <DownloadIcon />, aliases: ['r', 'script', 'reproducible', 'reproducib', 'export'], run: () => void file.actionExportRScript() },
       // --- 编辑 ---
-      { id: 'undo', label: S.cmd.undo, category: tr('编辑','Edit'), icon: <ResetIcon />, kbd: '⌘Z', aliases: ['undo', 'chexiao'], run: () => st().undo() },
-      { id: 'redo', label: S.cmd.redo, category: tr('编辑','Edit'), icon: <ReloadIcon />, kbd: '⌘⇧Z', aliases: ['redo', 'chongzuo'], run: () => st().redo() },
+      { id: 'undo', label: S.cmd.undo, category: tr('编辑','Edit'), icon: <ResetIcon />, kbd: `${modKey()}Z`, aliases: ['undo', 'chexiao'], run: () => st().undo() },
+      { id: 'redo', label: S.cmd.redo, category: tr('编辑','Edit'), icon: <ReloadIcon />, kbd: `${modKey()}⇧Z`, aliases: ['redo', 'chongzuo'], run: () => st().redo() },
       { id: 'findReplace', label: tr('查找与替换…', 'Find & replace…'), category: tr('编辑','Edit'), icon: <MagnifyingGlassIcon />, aliases: ['find', 'replace', 'search and replace', 'tihuan', 'chazhao'], run: () => file.openAppDialog('findReplace') },
       { id: 'history', label: tr('历史记录…', 'History…'), category: tr('编辑','Edit'), icon: <ReloadIcon />, aliases: ['history', 'undo list', 'lishi'], run: () => file.openAppDialog('history') },
       { id: 'operationLog', label: tr('操作日志…', 'Operation log…'), category: tr('编辑','Edit'), icon: <TableIcon />, aliases: ['log', 'operations', 'caozuo', 'rizhi'], run: () => file.openAppDialog('operationLog') },
       // --- 视图 ---
-      { id: 'fit', label: S.cmd.fit, category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘⇧F', aliases: ['fit', 'zoom', 'shiyin'], run: fit },
-      { id: 'search', label: S.cmd.search, category: tr('视图','View'), icon: <MagnifyingGlassIcon />, kbd: '⌘F', aliases: ['search', 'find', 'sousuo'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:focus-search')) },
+      { id: 'fit', label: S.cmd.fit, category: tr('视图','View'), icon: <FrameIcon />, kbd: `${modKey()}⇧F`, aliases: ['fit', 'zoom', 'shiyin'], run: fit },
+      { id: 'search', label: S.cmd.search, category: tr('视图','View'), icon: <MagnifyingGlassIcon />, kbd: `${modKey()}F`, aliases: ['search', 'find', 'sousuo'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:focus-search')) },
       // OP-04: fit-to-window answers "show the whole tree"; a multi-selection
       // asks "show THIS clade". One chord, one event, no extra store state.
       { id: 'zoomSelection', label: S.cmd.zoomSelection, category: tr('视图','View'), icon: <FrameIcon />, aliases: ['zoom selection', 'fit selection', 'suofang'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:fit-selection')) },
       // Module jumps close the view group (navigation, not canvas state).
       // 用户反馈: the rail has ONE module (时间 + 样式 merged), so a single ⌘1.
-      { id: 'navEdit', label: S.review.cmdFocusModule(S.nav.edit), category: tr('视图','View'), icon: <FrameIcon />, kbd: '⌘1', aliases: ['edit', 'panel', 'bianji'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'edit' })) },
+      { id: 'navEdit', label: S.review.cmdFocusModule(S.nav.edit), category: tr('视图','View'), icon: <FrameIcon />, kbd: `${modKey()}1`, aliases: ['edit', 'panel', 'bianji'], run: () => window.dispatchEvent(new CustomEvent('cladeforge:tour-navigate', { detail: 'edit' })) },
       // --- 树操作 ---
       {
         id: 'relayout',
@@ -392,7 +392,7 @@ export function CommandPalette({
         void file.actionExportReconciliationReport();
       } },
       // --- 帮助 ---
-      { id: 'shortcuts', label: S.menu.shortcuts, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, kbd: '⌘?', aliases: ['shortcuts', 'help', 'bangzhu'], run: onOpenShortcuts },
+      { id: 'shortcuts', label: S.menu.shortcuts, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, kbd: `${modKey()}?`, aliases: ['shortcuts', 'help', 'bangzhu'], run: onOpenShortcuts },
       { id: 'guide', label: S.cmd.guide, category: tr('帮助','Help'), icon: <MagicWandIcon />, aliases: ['guide', 'tour', 'help', 'xinren', 'workflow', 'gongzuo'], run: onOpenTour },
       { id: 'manual', label: S.menu.manual, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['manual', 'documentation', 'shouce'], run: () => file.openAppDialog('manual') },
       { id: 'about', label: S.menu.about, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['about', 'version', 'guanyu', 'banben'], run: onOpenAbout },

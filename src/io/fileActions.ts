@@ -182,7 +182,7 @@ function reportParseIssues(issues: string[], sourceName = ''): void {
     notify.action(
       tr(
         `另有 ${issues.length - MAX_TOASTS} 条导入提示未显示`,
-        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? '' : 's'} were not shown`,
+        `${issues.length - MAX_TOASTS} further import note${issues.length - MAX_TOASTS === 1 ? ' was' : 's were'} not shown`,
       ),
       S.review.importReportViewAll,
       () => useImportReport.getState().setOpen(true),
@@ -437,7 +437,16 @@ export async function actionOpenProject(): Promise<void> {
     const result = await openText(PROJECT_FILTERS);
     if (!result) return;
     surfaceOpenNotes(result);
-    openProjectFromText(result.text, result.name, result.path);
+    // A#4: Open… accepts a tree file too (the picker advertises .json, but a
+    // user can select any file). Route by CONTENT — JSON → project; anything
+    // else → the same Newick/NEXUS import pipeline as Import Tree… — instead of
+    // failing with "not valid JSON" and then having to re-import by hand.
+    // The successful tree path also records the file in Recent (as the shell
+    // open path always did), so both import routes share one record policy.
+    const looksLikeProject =
+      result.text.trimStart().startsWith('{') || /\.json$/i.test(result.name);
+    if (looksLikeProject) openProjectFromText(result.text, result.name, result.path);
+    else importTreeText(result.text, result.name, result.path);
   } catch (e) {
     reportError(S.notify.openProjectFail, e);
   }
@@ -503,7 +512,7 @@ export async function openPathFromShell(path: string): Promise<void> {
  * File binding every desktop editor owes its user: twenty ⌘S presses in a
  * twenty-minute session must not be twenty dialog boxes.
  */
-export async function actionSaveProject(): Promise<void> {
+export async function actionSaveProject(): Promise<'in-place' | 'downloaded' | 'none'> {
   const st = useStore.getState();
   // While 「基因树编辑」 is swapped, the file on disk is the species project
   // with the edited gene doc merged back — never the bare gene doc.
@@ -533,7 +542,7 @@ export async function actionSaveProject(): Promise<void> {
               onCancel: () => resolve(false),
             });
           });
-          if (!proceed) return;
+          if (!proceed) return 'none';
         }
       }
       // In-place write via the native writer; the store pins the revision so
@@ -544,13 +553,16 @@ export async function actionSaveProject(): Promise<void> {
       // M21: save stamps no longer push an undo step.
       st.stampSaved();
       useStore.getState().markSaved();
+      // P-16: saving records the file in Recent too — the menu must list the
+      // projects the user actually works on, not only files opened by hand.
+      pushRecent({ name: baseName(target), path: target, kind: 'project' });
       notify.success(
         tr(
           `已保存到 ${target}`,
           `Saved to ${target}`,
         ),
       );
-      return;
+      return 'in-place';
     }
     const saved = await saveTextWithResult(
       outName(project.name, 'cladeforge.json'),
@@ -562,6 +574,14 @@ export async function actionSaveProject(): Promise<void> {
       st.stampSaved({ sourcePath: saved.path });
       useStore.getState().markSaved();
       await recordSourceMtime(saved.path);
+      // P-16: a browser download has no absolute path, but the name still
+      // belongs in Recent; clicking it falls back to the open dialog, which is
+      // the honest browser semantic.
+      pushRecent({
+        name: outName(project.name, 'cladeforge.json'),
+        path: saved.path,
+        kind: 'project',
+      });
       // C#19: in a browser "saved" means downloaded — say so instead of
       // implying a path-bound file the app can reopen.
       notify.success(
@@ -572,10 +592,12 @@ export async function actionSaveProject(): Promise<void> {
               `Downloaded ${outName(project.name, 'cladeforge.json')} (browser download folder)`,
             ),
       );
+      return 'downloaded';
     }
   } catch (e) {
     reportError(S.notify.saveProjectFail, e);
   }
+  return 'none';
 }
 
 /** ⌘⇧S — always ask where to put the file (and adopt that path). */
@@ -592,6 +614,12 @@ export async function actionSaveProjectAs(): Promise<void> {
       // M21: save stamps no longer push an undo step.
       st.stampSaved({ sourcePath: saved.path });
       useStore.getState().markSaved();
+      // P-16: 另存为 produces a real file the user chose — record it.
+      pushRecent({
+        name: outName(project.name, 'cladeforge.json'),
+        path: saved.path,
+        kind: 'project',
+      });
       notify.success(
         saved.path
           ? tr(`已另存为 ${saved.path}`, `Saved as ${saved.path}`)
@@ -610,8 +638,12 @@ export async function actionSaveProjectAs(): Promise<void> {
  * filename, so they are COUNTED and reported rather than silently skipped.
  */
 export async function actionSaveAllProjects(): Promise<void> {
-  await actionSaveProject();
-  let saved = 0;
+  // BUG-09 / P-17: the old summary counted only in-place writes and never
+  // mentioned the ACTIVE tab's download, so "wrote 0" appeared next to a file
+  // the browser had just downloaded. Count every distinct outcome instead.
+  const activeOutcome = await actionSaveProject();
+  const downloaded = activeOutcome === 'downloaded' ? 1 : 0;
+  let saved = activeOutcome === 'in-place' ? 1 : 0;
   let failed = 0;
   let skipped = 0;
   for (const [tabId, snap] of Object.entries(useStore.getState().tabStore)) {
@@ -630,8 +662,8 @@ export async function actionSaveAllProjects(): Promise<void> {
   }
   notify.info(
     tr(
-      `保存全部标签页：已写入磁盘 ${saved} 个，跳过 ${skipped} 个（从未保存过），失败 ${failed} 个`,
-      `Save all tabs: wrote ${saved} to disk, skipped ${skipped} (never saved), failed ${failed}`,
+      `保存全部标签页：下载 ${downloaded} 个，写入磁盘 ${saved} 个，跳过 ${skipped} 个（从未保存过），失败 ${failed} 个`,
+      `Save all tabs: downloaded ${downloaded}, written in place ${saved}, skipped ${skipped} (never saved), failed ${failed}`,
     ),
   );
 }
@@ -1134,6 +1166,12 @@ export async function actionExportHypothesisJSON(): Promise<void> {
 /** Markdown reconciliation report for every embedded gene tree. */
 export async function actionExportReconciliationReport(): Promise<void> {
   const project = useStore.getState().project;
+  // P-18: the menu row is never disabled (matching the command palette), so
+  // the reason lives here: no gene trees means there is nothing to report.
+  if ((project.geneTrees?.length ?? 0) === 0) {
+    notify.info(S.recon.emptyReconTitle);
+    return;
+  }
   try {
     const content = buildReconciliationReport(project); // built once, reused for the toast size
     const saved = await saveText(

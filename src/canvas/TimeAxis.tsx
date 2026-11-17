@@ -55,7 +55,7 @@ export const TimeAxis = memo(function TimeAxis({
             y={ay}
             textAnchor="end"
             fontSize={FONT}
-            fill="var(--muted-foreground)"
+            fill="var(--canvas-ink, var(--muted-foreground))"
             transform={`rotate(-90 ${ax} ${ay})`}
           >
             {l.label}
@@ -77,7 +77,7 @@ export const TimeAxis = memo(function TimeAxis({
               opacity={0.7}
             />
           )}
-          <text x={l.center} y={y} textAnchor="middle" fontSize={FONT} fill="var(--muted-foreground)">
+          <text x={l.center} y={y} textAnchor="middle" fontSize={FONT} fill="var(--canvas-ink, var(--muted-foreground))">
             {l.label}
           </text>
         </g>
@@ -94,7 +94,7 @@ export const TimeAxis = memo(function TimeAxis({
           textAnchor="middle"
           dominantBaseline="central"
           fontSize={FONT}
-          fill="var(--muted-foreground)"
+          fill="var(--canvas-ink, var(--muted-foreground))"
           transform={`rotate(-90 ${ax} ${ay})`}
         >
           {l.label}
@@ -116,7 +116,7 @@ export const TimeAxis = memo(function TimeAxis({
             opacity={0.7}
           />
         )}
-        <text x={x} y={l.center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--muted-foreground)">
+        <text x={x} y={l.center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--canvas-ink, var(--muted-foreground))">
           {l.label}
         </text>
       </g>
@@ -194,7 +194,7 @@ ${e.note}` : e.label}</title>
               strokeWidth={1}
               strokeDasharray="3 3"
             />
-            <text x={t.coord} y={b1 + 13} textAnchor="middle" fontSize={FONT} fill="var(--muted-foreground)">
+            <text x={t.coord} y={b1 + 13} textAnchor="middle" fontSize={FONT} fill="var(--canvas-ink, var(--muted-foreground))">
               {label}
             </text>
           </g>
@@ -217,7 +217,7 @@ ${e.note}` : e.label}</title>
               textAnchor="start"
               dominantBaseline="central"
               fontSize={FONT}
-              fill="var(--muted-foreground)"
+              fill="var(--canvas-ink, var(--muted-foreground))"
             >
               {label}
             </text>
@@ -256,7 +256,7 @@ ${e.note}` : e.label}</title>
                     strokeDasharray="4 3"
                   />
                 )}
-                <text x={center} y={labelY} textAnchor="middle" fontSize={FONT} fill="var(--text)">
+                <text x={center} y={labelY} textAnchor="middle" fontSize={FONT} fill="var(--canvas-ink, var(--text))">
                   {e.label}
                 </text>
                 <title>{e.note ? `${e.label}\n${e.note}` : e.label}</title>
@@ -280,7 +280,7 @@ ${e.note}` : e.label}</title>
                   strokeDasharray="4 3"
                 />
               )}
-              <text x={labelX} y={center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--text)">
+              <text x={labelX} y={center} textAnchor="end" dominantBaseline="central" fontSize={FONT} fill="var(--canvas-ink, var(--text))">
                 {e.label}
               </text>
               <title>{e.note ? `${e.label}\n${e.note}` : e.label}</title>

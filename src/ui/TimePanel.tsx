@@ -11,7 +11,7 @@
 // calibration points). On a purely topological tree the panel shows a warning
 // and disables the time-consuming controls, preventing "orphan" time data.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, Cross1Icon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import {
@@ -187,12 +187,22 @@ function EnvItem({
           <NumberField
             value={event.from}
             step={0.1}
+            validate={(v) =>
+              v > event.to
+                ? tr('起始不能晚于结束（From ≤ To）', 'Start cannot be after the end (From ≤ To)')
+                : null
+            }
             onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, event.id, { from: v }))}
           />
           <label>{S.layoutPanel.envTo}</label>
           <NumberField
             value={event.to}
             step={0.1}
+            validate={(v) =>
+              v < event.from
+                ? tr('结束不能早于起始（From ≤ To）', 'End cannot be before the start (From ≤ To)')
+                : null
+            }
             onCommit={(v) => v !== undefined && apply((d) => updateEnvironmentalEvent(d, event.id, { to: v }))}
           />
           <span
@@ -254,6 +264,11 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
                 value={c.minAge}
                 step={0.1}
                 unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
+                validate={(v) =>
+                  v > c.maxAge
+                    ? tr('最小年龄不能大于最大年龄', 'Minimum age cannot exceed maximum age')
+                    : null
+                }
                 onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { minAge: v }))}
               />
             </label>
@@ -263,6 +278,11 @@ function CalibrationPoints({ project, apply, disabled }: { project: Project; app
                 value={c.maxAge}
                 step={0.1}
                 unit={timeUnitSymbol(project.layout.timeUnit ?? 'Ma')}
+                validate={(v) =>
+                  v < c.minAge
+                    ? tr('最大年龄不能小于最小年龄', 'Maximum age cannot be less than minimum age')
+                    : null
+                }
                 onCommit={(v) => v !== undefined && apply((d) => updateCalibrationPoint(d, c.id, { maxAge: v }))}
               />
             </label>
@@ -309,6 +329,14 @@ export function TimePanel() {
   const [customUnitMode, setCustomUnitMode] = useState(false);
   const storedUnit = project.layout.timeUnit ?? 'Ma';
   const storedIsPreset = TIME_UNIT_OPTIONS.includes(storedUnit.toLowerCase());
+  // P-07: choosing Custom… opens an EMPTY input. It used to be pre-filled with
+  // the current preset ('ma'), which read as an already-applied custom unit and
+  // left the user unsure whether typing anything had an effect.
+  const [customDraft, setCustomDraft] = useState('');
+  useEffect(() => {
+    if (customUnitMode) setCustomDraft('');
+    else setCustomDraft(storedUnit);
+  }, [customUnitMode, storedUnit]);
   const showCustomField = !storedIsPreset || customUnitMode;
 
   // STATE MACHINE: check whether the tree carries time-calibration data.
@@ -392,12 +420,16 @@ export function TimePanel() {
       )}
       {/* 用户反馈：the section starts COLLAPSED like every other submodule of
           the merged panel. */}
-      <Section title={S.layoutPanel.timeSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.timeSection} defaultOpen={false} pinable scope={project.id}>
         <Field label={S.layoutPanel.timeUnit}>
           {/* Known units become a dropdown; the custom entry stays available
               for exotic units. */}
           <select
-            value={storedIsPreset ? storedUnit.toLowerCase() : 'custom'}
+            value={
+              customUnitMode || !storedIsPreset
+                ? 'custom'
+                : storedUnit.toLowerCase()
+            }
             onChange={(e) => {
               const v = e.target.value;
               if (v === 'custom') {
@@ -419,13 +451,22 @@ export function TimePanel() {
         {showCustomField && (
           <Field label={tr('自定义单位', 'Custom unit')}>
             <TextField
-              value={storedUnit}
+              value={customDraft}
+              placeholder={tr('例如 kya、Myr', 'e.g. kya, Myr')}
               onCommit={(v) => {
                 setCustomUnitMode(false);
                 const next = v.trim();
-                apply((d) => void (d.layout.timeUnit = next === '' ? 'Ma' : next));
+                if (next !== '') apply((d) => void (d.layout.timeUnit = next));
               }}
             />
+            {/* P-07: the axis updates on commit — say so instead of leaving the
+                user to guess why typing alone did nothing. */}
+            <div className="hint">
+              {tr(
+                '输入单位标签后按 Enter 或点击别处生效；例如 kya。',
+                'Press Enter or click away to apply the unit label, e.g. kya.',
+              )}
+            </div>
           </Field>
         )}
         <Field label={S.layoutPanel.showEras}>
@@ -470,11 +511,11 @@ export function TimePanel() {
           </div>
         )}
       </Section>
-      <Section title={S.layoutPanel.envSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.envSection} defaultOpen={false} pinable scope={project.id}>
         <EnvEvents project={project} apply={apply} disabled={!timeReady} />
       </Section>
 
-      <Section title={S.layoutPanel.calibrationSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.calibrationSection} defaultOpen={false} pinable scope={project.id}>
         {/* 用户反馈: the hint paragraph is gone — the manager stays usable on a
             purely topological tree so the first calibration can be added at
             all; once one exists, `timeReady` flips true and the other controls

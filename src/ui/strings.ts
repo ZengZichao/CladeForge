@@ -1048,6 +1048,11 @@ samplePickerTitle: '示例',
     // status bar disk state (OP-11)
     diskUnsaved: '未写入磁盘',
     diskSavedAt: (t: string) => `磁盘版本：${t}`,
+    // BUG-09: a browser "save" is a DOWNLOAD, not an app-writable path — the
+    // chip must not claim a revertable on-disk version it cannot re-read.
+    diskDownloaded: '已下载（浏览器）',
+    diskDownloadedTitle:
+      '已在浏览器下载目录生成项目文件；此环境无法回读该文件，再次打开请用「文件 › 打开」选择它',
     autoSaveState: (label: string) => `本地恢复区：${label}`,
     // operation log (OP-22)
     operationLogTitle: '操作日志',
@@ -2055,6 +2060,9 @@ samplePickerTitle: 'Samples',
     // status bar disk state (OP-11)
     diskUnsaved: 'Not on disk yet',
     diskSavedAt: (t: string) => `On-disk version: ${t}`,
+    diskDownloaded: 'Downloaded (browser)',
+    diskDownloadedTitle:
+      'The project file was generated in the browser download folder; this environment cannot read it back, so use File › Open to choose it again',
     autoSaveState: (label: string) => `Local recovery: ${label}`,
     // operation log (OP-22)
     operationLogTitle: 'Operation log',
@@ -2095,6 +2103,18 @@ function indexPath(value: unknown, path: string): void {
 // both means a string that only ever appears in one locale still resolves.
 indexPath(zh, '');
 indexPath(en, '');
+
+/**
+ * A#10: the platform's modifier name. Menus used to print ⌘ everywhere, so on
+ * Windows/Linux the primary shortcut hint was one users could not type until
+ * they read the help table. macOS/iOS keep ⌘; everything else says Ctrl.
+ */
+export function modKey(): string {
+  if (typeof navigator === 'undefined') return '⌘';
+  const ua = navigator.userAgent ?? '';
+  const platform = navigator.platform ?? '';
+  return /Mac|iPad|iPhone|iPod/i.test(platform) || /Mac OS X|iPhone|iPad/i.test(ua) ? '⌘' : 'Ctrl';
+}
 
 /** Language-independent identifier for a rendered UI string (falls back to a hash). */
 export function titleKey(title: string): string {
