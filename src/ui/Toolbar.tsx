@@ -23,7 +23,7 @@ import { documentHasTree } from './documentContent';
 import { useStore } from '../model/store';
 import { PreferencesMenu } from './PreferencesMenu';
 import * as file from '../io/fileActions';
-import { S, tr } from './strings';
+import { S, modKey, tr } from './strings';
 
 /** View-mode segment: 标准 standard canvas ↔ 协调 side-by-side reconciliation.
  *
@@ -121,7 +121,7 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
           <button
             className="btn"
             onClick={() => file.openAppDialog('findReplace')}
-            title={tr('查找与替换（⌘K 亦可搜索命令）', 'Find & replace')}
+            title={tr(`查找与替换（${modKey()}K 亦可搜索命令）`, 'Find & replace')}
           >
             <MagnifyingGlassIcon /> <span className="toolbar-btn-label">{tr('查找', 'Find')}</span>
           </button>
@@ -146,7 +146,15 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
  * trigger used to sit 20px past the window edge, at 768px only half of Save
  * project was still on screen).
  */
-export function HeaderActions() {
+export function HeaderActions({
+  prefsOpen,
+  onPrefsOpenChange,
+}: {
+  /** P-03: owned by App so the dialog stays open across the locale remount.
+   *  Optional so isolated component tests can mount the header bare. */
+  prefsOpen?: boolean;
+  onPrefsOpenChange?: (v: boolean) => void;
+}) {
   return (
     <div className="header-actions">
       {/* The workspace switch is a document-level mode change, not an editing
@@ -157,7 +165,7 @@ export function HeaderActions() {
           nothing visible offered it. A header button toggles both panels. */}
       <button
         className="btn icon"
-        title={tr('显示 / 隐藏两侧面板（⌘.）', 'Show / hide both side panels (⌘.)')}
+        title={tr(`显示 / 隐藏两侧面板（${modKey()}.）`, `Show / hide both side panels (${modKey()}.)`)}
         aria-label={tr('显示 / 隐藏两侧面板', 'Show / hide side panels')}
         onClick={() => window.dispatchEvent(new CustomEvent('cladeforge:toggle-panels'))}
       >
@@ -166,7 +174,7 @@ export function HeaderActions() {
       <button
         className="btn primary header-save"
         onClick={() => void file.actionSaveProject()}
-        title={tr('保存项目文件（⌘S）', 'Save project file (⌘S)')}
+        title={tr(`保存项目文件（${modKey()}S）`, `Save project file (${modKey()}S)`)}
         aria-label={S.menu.save}
       >
         {/* Below 640px the full label no longer fits next to the menubar; the
@@ -174,7 +182,7 @@ export function HeaderActions() {
         <span className="header-save-full">{S.menu.save}</span>
         <span className="header-save-short">{S.menu.saveShort}</span>
       </button>
-      <PreferencesMenu />
+      <PreferencesMenu open={prefsOpen} onOpenChange={onPrefsOpenChange} />
     </div>
   );
 }

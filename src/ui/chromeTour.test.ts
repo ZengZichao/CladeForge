@@ -161,14 +161,14 @@ describe('header target budget (BUG-10, revised by S19)', () => {
     expect(panel!.querySelectorAll('.prefs-seg').length).toBe(options.length);
     expect(panel!.querySelectorAll('.prefs-seg-group').length).toBeGreaterThanOrEqual(4);
 
-    // Language swap still works; the dialog closes because the locale switch
-    // remounts the app tree.
+    // P-03: the language swap relabels the dialog IN PLACE — switching several
+    // preferences in one visit must not force the user to reopen it each time.
     const en = options.find((o) => /English/.test(o.textContent ?? '')) as HTMLElement;
     act(() => en.click());
     expect(currentLanguage()).toBe('en');
+    expect(document.body.querySelector('.prefs-dialog')).not.toBeNull();
 
-    // Theme choice still works and persists.
-    act(() => trigger.click());
+    // Theme choice still works and persists (same still-open dialog).
     const dark = [...document.body.querySelectorAll('.prefs-dialog .prefs-seg')].find((o) =>
       /Dark|深色/.test(o.textContent ?? ''),
     ) as HTMLElement;

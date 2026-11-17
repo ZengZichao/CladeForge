@@ -42,6 +42,10 @@ export interface DeletionRisk {
   percent: number;
   /** Adaptive, tip-based: `max(5, 5 % of the tree's tips)`. */
   threshold: number;
+  /** Whether the cut takes at least one INTERNAL node (a whole subtree), even
+   *  when it is too small to reach the tip threshold. P-13 / BUG-05: losing a
+   *  tip is recoverable from the toast; losing a clade deserves a question. */
+  removesInternal: boolean;
   needsConfirm: boolean;
 }
 
@@ -62,9 +66,15 @@ export function assessDeletion(project: Project, ids: readonly NodeId[]): Deleti
   }
   let tips = 0;
   let totalTips = 0;
+  let removesInternal = false;
   for (const id of Object.keys(project.nodes)) {
     const node = project.nodes[id];
-    if (!node || node.childrenIds.length > 0) continue;
+    if (!node) continue;
+    if (node.childrenIds.length > 0) {
+      // Root cannot be deleted; any other internal node means a subtree is cut.
+      if (removed.has(id) && id !== project.rootId) removesInternal = true;
+      continue;
+    }
     totalTips += 1;
     if (removed.has(id)) tips += 1;
   }
@@ -76,7 +86,8 @@ export function assessDeletion(project: Project, ids: readonly NodeId[]): Deleti
     totalTips,
     percent,
     threshold,
-    needsConfirm: tips >= threshold || (tips > 0 && percent >= 50),
+    removesInternal,
+    needsConfirm: tips >= threshold || (tips > 0 && percent >= 50) || removesInternal,
   };
 }
 

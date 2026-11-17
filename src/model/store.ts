@@ -134,7 +134,7 @@ import { createEmptyProject, SAMPLE_PROJECTS } from './sampleTree';
 import { applyDisplayThreshold, reconstructMk, type AsrDisplayNode, type AsrResult, type AsrOptions, DEFAULT_ASR_OPTIONS } from './asr';
 import type { DtlScenario } from './dtl';
 import { applyReplacements, type Replacement } from './replace';
-import { tr } from '../ui/strings';
+import { S, tr } from '../ui/strings';
 // Side-effectful import ON PURPOSE: i18n.ts resolves the stored / OS locale at
 // module load and swaps the string catalogue via setLanguage(). ESM evaluates
 // imports before this module body, so the initial document seeded below —
@@ -370,6 +370,13 @@ interface TabSnapshot {
   asr: AsrResult | null;
   asrOptions: AsrOptions;
   reconMode: boolean;
+  /**
+   * BUG-01 follow-up: which edit surface the reconciliation workspace was on.
+   * Without it, switching away from 基因树编辑 left `reconEditTarget='gene'`
+   * while the target tab's `reconMode` may be true, so returning rendered the
+   * standard editor where the coordination canvas was expected.
+   */
+  reconEditTarget: ReconEditTarget;
   activeGeneTreeId: string | null;
   geneSelection: NodeId[];
 }
@@ -395,6 +402,7 @@ function captureTab(s: AppState): TabSnapshot {
     asr: s.asr,
     asrOptions: s.asrOptions,
     reconMode: s.reconMode,
+    reconEditTarget: s.reconEditTarget,
     activeGeneTreeId: s.activeGeneTreeId,
     geneSelection: s.geneSelection,
   };
@@ -422,6 +430,7 @@ function snapshotFor(project: Project): TabSnapshot {
     asr: null as AsrResult | null,
     asrOptions: DEFAULT_ASR_OPTIONS,
     reconMode: false,
+    reconEditTarget: 'recon',
     activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
     geneSelection: [],
   };
@@ -506,6 +515,9 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     // Old in-session snapshots (pre-M8) may lack the field; fall back cleanly.
     asrOptions: snap.asrOptions ?? DEFAULT_ASR_OPTIONS,
     reconMode: snap.reconMode,
+    // Old in-session snapshots (pre-fix) may lack the field; default to the
+    // coordination canvas.
+    reconEditTarget: snap.reconEditTarget ?? ('recon' as ReconEditTarget),
     // Drop a stale gene-tree pointer (e.g. removed while tab was parked).
     activeGeneTreeId:
       snap.activeGeneTreeId && snap.project.geneTrees?.some((g) => g.id === snap.activeGeneTreeId)
@@ -1634,11 +1646,22 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
     get().exitGeneDocEdit();
     set((s) => {
       const id = newTabId();
+      // P-01: one predictable naming scheme for "+ New tab" / File ▸ New tab.
+      // The base follows the UI language (the old hard-coded 'Untitled' showed
+      // English in a Chinese UI) and each additional blank tab gets a suffix,
+      // so two empty tabs are never indistinguishable.
+      const base = S.tabs.untitled;
+      const used = new Set([
+        s.project.name,
+        ...Object.values(s.tabStore).map((snap) => snap.project.name),
+      ]);
+      let name = base;
+      for (let n = 2; used.has(name); n += 1) name = `${base} ${n}`;
       return {
         tabStore: { ...s.tabStore, [s.activeTabId]: captureTab(s) },
         tabs: [...s.tabs, id],
         activeTabId: id,
-        ...docStateFor(createEmptyProject()),
+        ...docStateFor(createEmptyProject(name)),
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
       };

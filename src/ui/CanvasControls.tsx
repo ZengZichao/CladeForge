@@ -54,6 +54,13 @@ function NodeSearch() {
         aria-label={S.canvasControls.searchAria}
         value={q}
         placeholder={S.toolbar.searchPlaceholder}
+        // BUG-03 (canvas half): the box filters live and shows a match count,
+        // but nothing said that Enter is what JUMPS to the hit — a user typed a
+        // name, saw a count, and had no cue that the selection would follow.
+        title={tr(
+          '输入即实时筛选；按 Enter 定位匹配节点（type:leaf 只搜末端）',
+          'Filters live as you type; press Enter to jump to a match (type:leaf searches tips only)',
+        )}
         onChange={(e) => {
           setQ(e.target.value);
           setNext(0);

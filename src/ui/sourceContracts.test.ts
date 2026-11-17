@@ -179,6 +179,62 @@ describe('the remaining source-level contracts', () => {
     expect(canvas).toContain('draggingId && interactionActive');
   });
 
+  it('the shared confirm dialog mounts LAST so it stacks above every app modal (P-12)', () => {
+    // All backdrops share z-index var(--z-modal); source order breaks the tie.
+    // Mounted before SampleLibraryDialog, the confirm rendered underneath it
+    // while its focus trap still stole focus — “Replace current document”
+    // looked dead and every click stacked another invisible scrim.
+    const app = sourceOf('../App.tsx');
+    const confirm = app.indexOf('<ConfirmDialog />');
+    expect(confirm).toBeGreaterThan(-1);
+    for (const modal of ['<SampleLibraryDialog', '<ImportReportDialog', '<ManualDialog']) {
+      expect(confirm, modal).toBeGreaterThan(app.indexOf(modal));
+    }
+  });
+
+  it('find & replace updates its preview on every keystroke (P-05)', () => {
+    const dlg = sourceOf('../ui/FindReplaceDialog.tsx');
+    // The live inputs replace the buffered TextField: onChange writes the query
+    // state directly, so the "No matches" preview can never lag the typed text.
+    expect(dlg).toContain('onChange={(e) => setFind(e.target.value)}');
+    expect(dlg).toContain('onChange={(e) => setReplace(e.target.value)}');
+  });
+
+  it('the reconciliation report is never greyed without a reason (P-18)', () => {
+    const menu = sourceOf('../ui/fileMenu.ts');
+    expect(menu).not.toContain('disabled: !hasGeneTrees');
+    // The action itself explains the missing gene trees when clicked.
+    const actions = sourceOf('../io/fileActions.ts');
+    const guard = actions.indexOf('actionExportReconciliationReport');
+    expect(guard).toBeGreaterThan(-1);
+    expect(actions.slice(guard, guard + 400)).toContain('emptyReconTitle');
+  });
+
+  it('the import-note overflow toast agrees in number with its subject (BUG-08)', () => {
+    const actions = sourceOf('../io/fileActions.ts');
+    expect(actions).toContain("=== 1 ? ' was' : 's were'");
+  });
+
+  it('underscore-only Newick names get the convention note, not a whitespace warning (BUG-08)', () => {
+    const newick = sourceOf('../io/newick.ts');
+    expect(newick).toContain('raw: v');
+    expect(newick).toContain('hadRealWhitespace');
+  });
+
+  it('left-panel sections persist per document, not globally (P-08)', () => {
+    const sec = sourceOf('../ui/Section.tsx');
+    expect(sec).toContain('scope ? `${scope}::${baseId}` : baseId');
+    expect(sourceOf('../ui/TimePanel.tsx')).toContain('scope={project.id}');
+    expect(sourceOf('../ui/LayoutPanel.tsx')).toContain('scope={project.id}');
+  });
+
+  it('Custom time unit starts EMPTY and shows as Custom… in the dropdown (P-07)', () => {
+    const panel = sourceOf('../ui/TimePanel.tsx');
+    expect(panel).toContain("customUnitMode || !storedIsPreset");
+    expect(panel).toContain('value={customDraft}');
+    expect(panel).toContain('setCustomDraft(\'\')');
+  });
+
   it('panel widths are re-clamped at render, not only on commit', () => {
     // The standard panel widths live in StandardWorkspace since the workspace
     // split; the recon workspace clamps its own widths through the same rule.

@@ -79,7 +79,7 @@ export function LayoutPanel() {
 
   return (
     <>
-      <Section title={S.layoutPanel.presetSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.presetSection} defaultOpen={false} pinable scope={project.id}>
         <div className="preset-row">
           {STYLE_PRESETS.map((p) => (
             <button
@@ -89,7 +89,13 @@ export function LayoutPanel() {
                  the preferences' dark THEME (its title says so). */
               className={`btn preset-btn${stylePresetId === p.id ? ' active' : ''}`}
               aria-pressed={stylePresetId === p.id}
-              title={p.id === 'dark' ? tr('深色图面（仅画布配色；界面主题在「偏好」中设置）', 'Dark figure palette (canvas only; the UI theme lives in Preferences)') : undefined}
+              title={
+                p.id === 'dark'
+                  ? tr('深色图面（仅画布配色；界面主题在「偏好」中设置）', 'Dark figure palette (canvas only; the UI theme lives in Preferences)')
+                  // A#8: with ellipsis on narrow panels, hover shows the full
+                  // preset name.
+                  : tr(p.label, p.labelEn)
+              }
               onClick={() => {
                 set((d) => applyStylePreset(d, p));
                 useStore.getState().setStylePresetId(p.id);
@@ -100,7 +106,7 @@ export function LayoutPanel() {
           ))}
         </div>
       </Section>
-      <Section title={S.layoutPanel.layoutSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.layoutSection} defaultOpen={false} pinable scope={project.id}>
         <Field
           label={S.layoutPanel.type}
           stacked
@@ -191,7 +197,7 @@ export function LayoutPanel() {
         </div>
       </Section>
 
-      <Section title={S.layoutPanel.spacingSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.spacingSection} defaultOpen={false} pinable scope={project.id}>
         <Field label={S.layoutPanel.branchGap}>
           <SliderNumberField
             value={layout.vGap}
@@ -212,7 +218,7 @@ export function LayoutPanel() {
         </Field>
       </Section>
 
-      <Section title={S.layoutPanel.branchSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.branchSection} defaultOpen={false} pinable scope={project.id}>
         <Field label={S.layoutPanel.branchShape}>
           <BranchShapeSelect value={branch.shape} onChange={setBranchShape} />
         </Field>
@@ -248,7 +254,7 @@ export function LayoutPanel() {
         </Field>
       </Section>
 
-      <Section title={S.layoutPanel.gradientSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.gradientSection} defaultOpen={false} pinable scope={project.id}>
         {/* 用户反馈：rounded dropdown (启用 / 禁用) instead of a checkbox. */}
         <Field label={S.layoutPanel.gradientSection}>
           <select
@@ -276,7 +282,7 @@ export function LayoutPanel() {
         <DismissibleHint id="gradient-hint">{S.layoutPanel.gradientHint}</DismissibleHint>
       </Section>
 
-      <Section title={S.layoutPanel.fontSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.fontSection} defaultOpen={false} pinable scope={project.id}>
         <Field label={S.layoutPanel.fontSize}>
           <SliderNumberField
             value={node.fontSize}
@@ -356,7 +362,7 @@ export function LayoutPanel() {
 
       {/* 用户反馈: the tree-structure operations moved OUT of the 文件 menu into
           the left panel. */}
-      <Section title={tr('树操作', 'Tree operations')} defaultOpen={false} pinable>
+      <Section title={tr('树操作', 'Tree operations')} defaultOpen={false} pinable scope={project.id}>
         <div className="field row-actions">
           <button className="btn" onClick={() => rerootAtSelection()}>
             {tr('从选中节点重新定根', 'Reroot at the selected node')}
@@ -368,7 +374,7 @@ export function LayoutPanel() {
       </Section>
 
       {/* 用户反馈: legend placement + item arrangement. */}
-      <Section title={tr('图例设置', 'Legend settings')} defaultOpen={false} pinable>
+      <Section title={tr('图例设置', 'Legend settings')} defaultOpen={false} pinable scope={project.id}>
         <Field label={tr('图例位置', 'Legend position')}>
           <select
             value={legendPosition}
@@ -393,7 +399,7 @@ export function LayoutPanel() {
         </Field>
       </Section>
 
-      <Section title={S.layoutPanel.canvasSection} defaultOpen={false} pinable>
+      <Section title={S.layoutPanel.canvasSection} defaultOpen={false} pinable scope={project.id}>
         <Field label={S.layoutPanel.background}>
           <ColorField
             value={project.canvas.background}

@@ -247,7 +247,7 @@ export function EmbeddedReconCanvas({
   );
 
   const bgDown = (e: React.PointerEvent) => {
-    if ((e.target as Element).closest('[data-node-id],[data-tube-id]')) return;
+    if ((e.target as Element | null)?.closest('[data-node-id],[data-tube-id]')) return;
     const live = transformRef.current;
     dragRef.current = { x: e.clientX, y: e.clientY, tx: live.tx, ty: live.ty };
     gestureRef.current = true;

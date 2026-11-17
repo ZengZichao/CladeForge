@@ -100,7 +100,9 @@ function TabBar() {
     if (!p) return titleOf(id);
     const lines = [titleOf(id), p.sourcePath ?? tr('尚未保存到磁盘', 'Not saved to disk yet')];
     if (dirtyOf(id)) lines.push(S.review.unsavedDot);
-    else if (p.savedAt) {
+    // BUG-09: only a remembered path is an "on-disk version" the app can
+    // reopen; a browser download is not.
+    else if (p.savedAt && p.sourcePath) {
       const d = new Date(p.savedAt);
       if (!Number.isNaN(d.getTime())) {
         const pad = (n: number) => String(n).padStart(2, '0');
@@ -264,6 +266,10 @@ export function App() {
     );
   };
 
+  // P-03: the preferences dialog's open state lives HERE, above the
+  // `key={lang}` workspace subtree, so switching language re-labels it in
+  // place instead of unmounting it.
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -573,13 +579,14 @@ export function App() {
           onOpenAbout={() => setAboutOpen(true)}
         />
         <Toolbar onAddChildrenDialog={openAddForSelection} />
-        <HeaderActions />
+        <HeaderActions prefsOpen={prefsOpen} onPrefsOpenChange={setPrefsOpen} />
       </div>
 
       {reconMode ? (
         <ErrorBoundary scope={tr('协调工作区', 'Reconciliation workspace')}>
           <ReconWorkspace
             panelsHidden={panelsHidden}
+            onShowPanels={() => setPanelsHidden(false)}
             onCopySpeciesTree={copySpeciesTreeToGene}
             onAddChildrenDialog={openAddForNode}
           />
@@ -588,6 +595,7 @@ export function App() {
         <ErrorBoundary scope={tr('标准工作区', 'Standard workspace')}>
           <StandardWorkspace
             panelsHidden={panelsHidden}
+            onShowPanels={() => setPanelsHidden(false)}
             onAddChildrenDialog={openAddForNode}
           />
         </ErrorBoundary>
@@ -624,7 +632,6 @@ export function App() {
       />
       <BusyOverlay />
       <Toaster />
-      <ConfirmDialog />
       <ImportReportDialog />
       <ShortcutsDialog
         open={shortcutsOpen}
@@ -709,6 +716,13 @@ export function App() {
         }}
         onClose={() => setTourMode(null)}
       />
+      {/* P-12: the shared confirm dialog must be the LAST modal in DOM order.
+          Every backdrop shares z-index var(--z-modal), so a tie is resolved by
+          source order: mounted before SampleLibraryDialog, the confirm rendered
+          UNDERNEATH it (invisible) while its focus trap still stole focus —
+          “Replace current document” looked dead and each click stacked another
+          invisible scrim. Last position makes it the top-most modal. */}
+      <ConfirmDialog />
     </div>
   );
 }

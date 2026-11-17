@@ -1366,6 +1366,15 @@ body.panel-resizing {
   color: var(--muted-foreground);
   pointer-events: none;
 }
+/* BUG-15: favourited sections move to the top of the inspector, so the star
+   has a visible, immediately understandable effect. */
+.inspector-content {
+  display: flex;
+  flex-direction: column;
+}
+.inspector-content > .panel-section.favorited {
+  order: -1;
+}
 /* Empty inspector: centred status lines (用户反馈), not an instruction manual. */
 .inspector-empty {
   padding: 18px 0 0;
@@ -2689,9 +2698,12 @@ body.panel-resizing {
   gap: 6px;
 }
 .preset-row {
-  /* 用户反馈：four equal-size rounded buttons (默认 / 黑白 / 彩色 / 暗色). */
+  /* A#8 / P-06: FIVE presets (PhyloRec 管道 added later) in a row that used
+     to force four ~60px tracks — the long labels clipped to "Defaul"/"Colo"
+     and wrapped. auto-fit keeps every button readable, and ellipsis + the
+     button's own title preserves the full name when space is tight. */
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
   gap: var(--space-2);
 }
 .preset-btn {
@@ -2699,6 +2711,8 @@ body.panel-resizing {
   padding: 6px 4px;
   justify-content: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .legacy-preset-row {
   display: flex;
@@ -4098,6 +4112,17 @@ input.has-error {
   cursor: pointer;
 }
 .status-mrca:hover { color: var(--primary); text-decoration: underline; }
+/* BUG-16: the layer chip is a switch, styled like the MRCA action chip. */
+.status-layer {
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-weight: 500;
+  cursor: pointer;
+}
+.status-layer:hover { color: var(--primary); text-decoration: underline; }
 /* The degradation/capacity chips are buttons now (ID-03). */
 .status .status-failed { cursor: pointer; }
 
@@ -4107,7 +4132,7 @@ input.has-error {
 }
 
 /* === Inspector search: no-results spacing === */
-.inspector-search + .panel-section {
+.inspector-search ~ .panel-section {
   margin-top: 4px;
 }
 

@@ -16,7 +16,7 @@ import {
   type ReplaceField,
   type Replacement,
 } from '../model/replace';
-import { Field, TextField, CheckboxField } from './fields';
+import { Field, CheckboxField } from './fields';
 import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
 import { S, tr } from './strings';
@@ -127,11 +127,29 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
         <h2>{S.review.findReplaceTitle}</h2>
 
         <div className="find-replace-grid">
+          {/* P-05 / BUG-03: these two boxes drive a LIVE preview, so they must
+              update the query on every keystroke. `TextField` buffers until
+              blur/Enter — which left the dialog showing "No matches" for text
+              the user had already typed, and made the whole search look broken
+              until Enter re-committed. Search options are not document data,
+              so there is nothing to protect from per-keystroke commits. */}
           <Field label={S.review.findReplaceFind}>
-            <TextField value={find} onCommit={setFind} />
+            <input
+              type="text"
+              value={find}
+              placeholder={tr('输入要查找的文本', 'Type text to find')}
+              aria-label={S.review.findReplaceFind}
+              onChange={(e) => setFind(e.target.value)}
+            />
           </Field>
           <Field label={S.review.findReplaceReplace}>
-            <TextField value={replace} onCommit={setReplace} />
+            <input
+              type="text"
+              value={replace}
+              placeholder={tr('替换为（可留空）', 'Replace with (may be empty)')}
+              aria-label={S.review.findReplaceReplace}
+              onChange={(e) => setReplace(e.target.value)}
+            />
           </Field>
         </div>
 

@@ -4,7 +4,7 @@
 // viewport fitting, keyboard shortcuts and the layered SVG rendering:
 //   background -> tree branches -> custom edges -> nodes -> connection overlay.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
 import { fitView, zoomAt } from './coords';
@@ -52,7 +52,7 @@ import { eventScreenPoint, useSpaceHeld, useWheel } from './usePanZoom';
 import { useCanvasGestures } from './useDrag';
 import { branchMidpointOn } from './paths';
 import { removeCustomEdge } from '../model/treeOps';
-import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO } from './colors';
+import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO, inkOnBackground } from './colors';
 import { importTreeText, actionImportTree, actionNewTreeFile } from '../io/fileActions';
 import { MAX_PROJECT_CHARS, MAX_TREE_CHARS } from '../io/limits';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
@@ -933,11 +933,19 @@ export function TreeCanvas() {
     project.canvas.background === DEFAULT_CANVAS.background
       ? 'var(--canvas-bg)'
       : project.canvas.background;
+  // A#9: expose a canvas-appropriate text ink as a custom property so the SVG
+  // overlays (TimeAxis env/era labels) can follow a user-chosen dark canvas.
+  const canvasInk = inkOnBackground(project.canvas.background);
 
   return (
     <div
       ref={wrapRef}
-      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        ...(canvasInk ? ({ '--canvas-ink': canvasInk } as CSSProperties) : {}),
+      }}
       onDragOver={(e) => {
         if (e.dataTransfer?.types?.includes('Files')) {
           e.preventDefault();

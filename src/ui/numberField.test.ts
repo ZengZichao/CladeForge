@@ -173,3 +173,24 @@ describe('NumberField — visible unit decoration', () => {
     expect(input.value).toBe('7');
   });
 });
+
+describe('NumberField — cross-field validation (P-10)', () => {
+  it('refuses a value the caller rejects and shows the reason inline', () => {
+    const onCommit = vi.fn();
+    renderField({
+      value: 60,
+      onCommit,
+      validate: (v) => (v > 55 ? '最小年龄不能大于最大年龄' : null),
+    });
+    const input = numberInput();
+    type(input, '60');
+    blur(input);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(host.querySelector('.field-error')?.textContent).toMatch(/不能大于/);
+
+    // An acceptable value clears the error and commits as usual.
+    type(input, '50');
+    blur(input);
+    expect(onCommit).toHaveBeenCalledWith(50);
+  });
+});

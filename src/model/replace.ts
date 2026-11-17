@@ -95,6 +95,9 @@ export function collectReplacements(project: Project, options: ReplaceOptions): 
     if (oldValue === '' || !matches(oldValue, find, caseSensitive)) return;
     const newValue = substitute(oldValue, find, replace, caseSensitive);
     if (newValue === oldValue) return;
+    // A#7 / BUG-14: a replacement that would leave a node nameless is refused
+    // rather than silently dropping its canvas label.
+    if (field === 'nodeName' && !newValue.trim()) return;
     out.push({ field, id, ...(parentId ? { parentId } : {}), oldValue, newValue });
   };
 
@@ -135,7 +138,7 @@ export function applyReplacements(project: Project, replacements: Replacement[])
     switch (rep.field) {
       case 'nodeName': {
         const n = project.nodes[rep.id];
-        if (n && n.label === rep.oldValue) {
+        if (n && n.label === rep.oldValue && rep.newValue.trim() !== '') {
           n.label = rep.newValue;
           applied += 1;
         }

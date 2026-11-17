@@ -22,6 +22,7 @@ import { getCanvasCollisionPlan, getLastCanvasCollisionPlan } from './eventBadge
 import { isImeComposing } from '../ui/imeGuard';
 import { markerPath } from './markerGeometry';
 import { S, tr } from '../ui/strings';
+import { notify } from '../ui/toast';
 import { C_SELECT, C_CONNECT, C_UNKNOWN } from './colors';
 
 interface NodeViewProps {
@@ -131,6 +132,19 @@ export const NodeView = memo(function NodeView({
   }, [renameRequest?.seq, node.id, renameRequest?.id]);
 
   const commitRename = () => {
+    // A#7 / BUG-14: refuse an empty name here too — the inline editor is the
+    // other rename entry point and must not be able to hide the label.
+    if (!draft.trim()) {
+      notify.info(
+        tr(
+          '名称不能为空：已保留原名称，避免画布上的节点标签消失。',
+          'The name cannot be empty: the original name was kept so the canvas label does not disappear.',
+        ),
+      );
+      setDraft(node.label);
+      setEditing(false);
+      return;
+    }
     setEditing(false);
     if (draft !== node.label) apply((d) => renameNode(d, node.id, draft));
   };
@@ -152,7 +166,10 @@ export const NodeView = memo(function NodeView({
     ? Number(collapsedSuffix.replace(/[^\d]/g, ''))
     : 0;
   const showPort = hovered || selected;
-  const showLabel = style.showLabel && (node.label !== '' || editing);
+  // An empty name can still arrive from an imported file; show a placeholder
+  // rather than silently dropping the node's only on-canvas handle.
+  const displayLabel = node.label.trim() || tr('（未命名）', '(unnamed)');
+  const showLabel = style.showLabel;
   const note = node.hypothesisNote?.trim();
   const labelNudge = useMemo(() => {
     if (!showLabel) return 0;
@@ -298,7 +315,10 @@ export const NodeView = memo(function NodeView({
           data-node-id={node.id}
           style={{ userSelect: 'none' }}
         >
-          {node.label}
+          {/* BUG-13: the canvas label can be clipped by the viewport; a native
+              tooltip keeps the full name readable without changing layout. */}
+          <title>{node.label || displayLabel}</title>
+          {displayLabel}
           {collapsedSuffix}
         </text>
       )}

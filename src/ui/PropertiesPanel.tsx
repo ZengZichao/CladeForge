@@ -262,7 +262,24 @@ function NodePanel({
         keywords={NODE_SECTION_KEYWORDS.section}
       >
         <Field label={S.node.name}>
-          <TextField value={node.label} onCommit={(v) => apply((d) => renameNode(d, id, v))} />
+          {/* A#7 / BUG-14: an empty name used to be committed silently, leaving
+              the node invisible on the canvas (no label to click). Refuse it at
+              the edit boundary with a word about why. */}
+          <TextField
+            value={node.label}
+            onCommit={(v) => {
+              if (!v.trim()) {
+                notify.info(
+                  tr(
+                    '名称不能为空：已保留原名称，避免画布上的节点标签消失。',
+                    'The name cannot be empty: the original name was kept so the canvas label does not disappear.',
+                  ),
+                );
+                return;
+              }
+              apply((d) => renameNode(d, id, v));
+            }}
+          />
         </Field>
         {/* Structured tip metadata (joined from a CSV table) renders right
             under the name: accession, host, country, date, lineage — the
@@ -1114,8 +1131,9 @@ export function PropertiesPanel() {
         </div>
       )}
 
-      {/* Panel content */}
-      <div ref={contentRef}>{content}</div>
+      {/* Panel content. BUG-15: favourited sections float to the top (flex
+          order), so the star has a visible effect instead of only colouring. */}
+      <div ref={contentRef} className="inspector-content">{content}</div>
       {hasNoResults && (
         <div className="panel-section">
           <h3>{S.inspector.noResults}</h3>

@@ -54,12 +54,27 @@ interface ThemeOption {
   label: string;
 }
 
-export function PreferencesMenu() {
+export function PreferencesMenu({
+  open: openProp,
+  onOpenChange,
+}: {
+  /** Controlled open state. App supplies it so the dialog survives the locale
+   *  switch (the app subtree remounts on `key={lang}`); standalone mounts fall
+   *  back to internal state. */
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+} = {}) {
   const langPref = useLanguagePref();
   const historyLimit = useStore((s) => s.historyLimit);
   const [pref, setPref] = useState<Theme>(storedTheme);
   const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (next: boolean | ((o: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    if (onOpenChange) onOpenChange(value);
+    else setInternalOpen(value);
+  };
   const boxRef = useRef<HTMLDivElement>(null);
   // M2: the dialog contract — focus trap + Escape + focus return (replaces the
   // flyout's hand-rolled dismissal listeners; a centered dialog needs no
@@ -92,9 +107,10 @@ export function PreferencesMenu() {
   };
 
   const chooseLanguage = (value: 'zh' | 'en' | 'system') => {
-    // M2: close before switching — the locale change relabels the whole tree,
-    // and a closed dialog is the clean state either way.
-    setOpen(false);
+    // P-03: switching language relabels the dialog in place; it must NOT close
+    // (theme / UI scale / undo limit all stay open, and users often change
+    // several preferences in one visit). The open state lives in App, so the
+    // `key={lang}` remount of the workspace subtree cannot lose it either.
     changeLanguage(value);
   };
 

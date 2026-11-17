@@ -15,7 +15,7 @@
 
 import * as file from '../io/fileActions';
 import type { DropdownItem } from './Dropdown';
-import { S, tr } from './strings';
+import { S, modKey, tr } from './strings';
 import type { RecentEntry } from '../io/recent';
 import { useStore } from '../model/store';
 
@@ -49,12 +49,16 @@ export function ladderizeTree(): void {
  *  gone, and 查找与替换 / 历史记录 became toolbar buttons. */
 export function buildFileMenuItems(): DropdownItem[] {
   return [
-    { label: S.menu.new, onClick: () => file.actionNewProject(), kbd: '⌘T' },
-    { label: S.menu.open, onClick: () => void file.actionOpenProject(), kbd: '⌘O' },
+    { label: S.menu.new, onClick: () => file.actionNewProject(), kbd: `${modKey()}T` },
+    { label: S.menu.open, onClick: () => void file.actionOpenProject(), kbd: `${modKey()}O` },
     // 保存 lives in the FILE menu — it used to exist only on the toolbar and
     // ⌘S, which is the least conventional place for the most conventional action.
-    { label: S.review.saveMenu, onClick: () => void file.actionSaveProject(), kbd: '⌘S' },
-    { label: S.review.saveAsMenu, onClick: () => void file.actionSaveProjectAs(), kbd: '⌘⇧S' },
+    { label: S.review.saveMenu, onClick: () => void file.actionSaveProject(), kbd: `${modKey()}S` },
+    {
+      label: S.review.saveAsMenu,
+      onClick: () => void file.actionSaveProjectAs(),
+      kbd: `${modKey()}⇧S`,
+    },
     // OP-10: multi-tab users had to switch tabs and press ⌘S once each; the
     // string existed but no entry point ever used it.
     { label: S.review.saveAllTabs, onClick: () => void file.actionSaveAllProjects() },
@@ -94,7 +98,6 @@ export function buildFileMenuItems(): DropdownItem[] {
  *  gene-tree gate as the old rail panel; the NEXUS row opens the options
  *  dialog through the app-dialog route. */
 export function buildExportMenuItems(): DropdownItem[] {
-  const hasGeneTrees = (useStore.getState().project.geneTrees?.length ?? 0) > 0;
   return [
     { label: S.exportItems.options, onClick: () => file.actionOpenExportSettings() },
     { sep: true },
@@ -110,9 +113,10 @@ export function buildExportMenuItems(): DropdownItem[] {
     { label: S.exportItems.hypothesisJSON, onClick: () => void file.actionExportHypothesisJSON() },
     { label: S.exportItems.rScript, onClick: () => void file.actionExportRScript() },
     {
+      // P-18: the palette's entry is never disabled; it explains itself when
+      // clicked. The menu must agree instead of greying the row with no reason.
       label: S.exportItems.reconReport,
       onClick: () => void file.actionExportReconciliationReport(),
-      disabled: !hasGeneTrees,
     },
     { heading: S.exportGroup.report },
     { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },

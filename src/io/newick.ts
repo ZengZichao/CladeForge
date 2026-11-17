@@ -60,7 +60,7 @@ type Token =
    *  how a *deliberate* numeric node name is distinguished from a support
    *  value on an internal node. `at` is the input index where the token
    *  starts, so a parse error can name the line and column. */
-  | { t: 'label'; v: string; quoted: boolean; at: number }
+  | { t: 'label'; v: string; quoted: boolean; at: number; raw?: string }
   | { t: 'comment'; v: string; at: number };
 
 /** 1-based line/column of a character index — what a user needs to actually
@@ -189,7 +189,16 @@ function tokenize(input: string): Token[] {
         v += ' ' + input.slice(k, m);
         i = m;
       }
-      tokens.push({ t: 'label', v: v.replace(/_/g, ' '), quoted: false, at: labelStart });
+      // BUG-08: keep the ORIGINAL text. The converted name cannot tell whether
+      // a space came from real whitespace or from Newick's underscore rule, and
+      // the two warrant different notes.
+      tokens.push({
+        t: 'label',
+        v: v.replace(/_/g, ' '),
+        raw: v,
+        quoted: false,
+        at: labelStart,
+      });
     }
   }
   return tokens;
@@ -369,13 +378,22 @@ function parseSegment(
    * but it is a judgement call, so surface it rather than rewriting names in
    * silence.
    */
-  const noteMergedLabel = (v: string, quoted: boolean): void => {
+  const noteMergedLabel = (v: string, quoted: boolean, raw?: string): void => {
     if (quoted || !/\s/.test(v)) return;
+    // BUG-08: distinguish the two sources of a space. Underscores are the
+    // Newick convention for a space inside an unquoted name — not a mistake to
+    // warn about; real whitespace in an unquoted label is the judgement call.
+    const hadRealWhitespace = raw !== undefined && /\s/.test(raw);
     issues.push(
-      tr(
-        `节点名「${v}」未加引号且含空格，已合并为一个名称；如非本意请在源文件中用双引号包裹`,
-        `Node name "${v}" was unquoted and contained whitespace; merged into a single name. Quote it in the source file if that is not intended`,
-      ),
+      hadRealWhitespace
+        ? tr(
+            `节点名「${v}」未加引号且含空格，已合并为一个名称；如非本意请在源文件中用双引号包裹`,
+            `Node name "${v}" was unquoted and contained whitespace; merged into a single name. Quote it in the source file if that is not intended`,
+          )
+        : tr(
+            `节点名「${raw ?? v}」中的下划线已按 Newick 约定转换为空格（现为「${v}」）`,
+            `Underscores in node name "${raw ?? v}" were converted to spaces per the Newick convention (now "${v}")`,
+          ),
     );
   };
 
@@ -491,11 +509,11 @@ function parseSegment(
     // the tree's polarity on export.
     node.meta = { ...node.meta, comments: [...nodeComments(node), text] };
   };
-  const readLabel = (): { v: string; quoted: boolean } | null => {
+  const readLabel = (): { v: string; quoted: boolean; raw?: string } | null => {
     const tok = ti < tokens.length ? tokens[ti] : null;
     if (tok && tok.t === 'label') {
       ti += 1;
-      return { v: tok.v, quoted: tok.quoted };
+      return { v: tok.v, quoted: tok.quoted, raw: tok.raw };
     }
     return null;
   };
@@ -568,7 +586,7 @@ function parseSegment(
         const label = readLabel();
         if (label) {
           applyLabel(current, label.v, label.quoted);
-          noteMergedLabel(label.v, label.quoted);
+          noteMergedLabel(label.v, label.quoted, label.raw);
         }
         readBranchLength();
         readComment();
@@ -581,7 +599,7 @@ function parseSegment(
       }
       case 'label': {
         applyLabel(current, tok.v, tok.quoted);
-        noteMergedLabel(tok.v, tok.quoted);
+        noteMergedLabel(tok.v, tok.quoted, tok.raw);
         ti += 1;
         readComment();
         break;
