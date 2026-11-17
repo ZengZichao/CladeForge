@@ -52,6 +52,11 @@ export function LayoutPanel() {
   const setLegendPosition = useStore((s) => s.setLegendPosition);
   const legendLayout = useStore((s) => s.legendLayout);
   const setLegendLayout = useStore((s) => s.setLegendLayout);
+  // D-P7: the 字号 row edits the SELECTED node's typography. With nothing
+  // selected the edit has no target and was silently dropped, so the row is
+  // disabled instead of looking fully active. Other rows here legitimately
+  // edit document DEFAULTS and stay enabled.
+  const selectionLength = useStore((s) => s.selection.length);
 
   const layout = project.layout;
   const branch = project.defaults.branch;
@@ -288,9 +293,15 @@ export function LayoutPanel() {
             value={node.fontSize}
             min={6}
             max={48}
+            disabled={selectionLength === 0}
             recipe={(v) => (d) => void (d.defaults.node.fontSize = v)}
           />
         </Field>
+        {/* D-P7: a disabled control with no explanation reads as a bug; say
+            what is missing. Only shown while the row is actually disabled. */}
+        {selectionLength === 0 && (
+          <div className="hint">{tr('请先选中一个节点', 'Select a node first')}</div>
+        )}
         <Field label={S.layoutPanel.fontWeight}>
           <FontWeightSelect
             value={weight}

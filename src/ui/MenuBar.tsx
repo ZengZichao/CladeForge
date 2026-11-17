@@ -17,6 +17,7 @@ import { Dropdown, type DropdownItem } from './Dropdown';
 import { buildFileMenuItems, buildRecentItems, buildExportMenuItems } from './fileMenu';
 import { S, modKey, tr } from './strings';
 import { notify } from './toast';
+import { useStore } from '../model/store';
 
 interface PanelPos {
   top: number;
@@ -175,6 +176,11 @@ export function MenuBar({
     return () => window.removeEventListener(RECENTS_CHANGED_EVENT, refresh);
   }, []);
   const openRecent = (entry: RecentEntry) => void file.actionOpenRecent(entry);
+  // Subscribe to the gene-tree set so the export list is rebuilt when it
+  // changes: the reconciliation-report row greys out the moment the last gene
+  // tree is removed, instead of staying active until the next unrelated render
+  // (F-ISSUE-07 / H-D4). The value itself is read inside buildExportMenuItems.
+  useStore((s) => s.project.geneTrees);
   // Both lists are built by `fileMenu.ts`: every export action
   // is wrapped there, so no handler can receive the click event as an argument.
   const recentItems = buildRecentItems(recents, openRecent, () => clearRecents());

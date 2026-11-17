@@ -74,6 +74,12 @@ export function buildFileMenuItems(): DropdownItem[] {
     { heading: S.review.importGroup },
     { label: S.menu.importTree, onClick: () => void file.actionImportTree() },
     { label: S.review.pasteTree, onClick: () => void file.actionPasteTreeFromClipboard() },
+    // E-P13: the command palette had a CSV/TSV import entry but the File › 导入
+    // group did not, so the only discoverable route was a hidden palette.
+    {
+      label: tr('导入表格（CSV/TSV）…', 'Import table (CSV/TSV)…'),
+      onClick: () => void file.actionImportTable('matrix'),
+    },
     { sep: true },
     // M1 (UI_UX_REVIEW): the file menu carried THIRTEEN export entries that
     // duplicated the left 导出 module and the palette. ONE "导出…" entry now
@@ -98,6 +104,10 @@ export function buildFileMenuItems(): DropdownItem[] {
  *  gene-tree gate as the old rail panel; the NEXUS row opens the options
  *  dialog through the app-dialog route. */
 export function buildExportMenuItems(): DropdownItem[] {
+  // F-ISSUE-07 / H-D4: the reconciliation report needs at least one embedded
+  // gene tree. Grey the row out instead of letting the click report the reason
+  // only after the fact; the click handler keeps its own guard as a fallback.
+  const geneTreeCount = useStore.getState().project.geneTrees?.length ?? 0;
   return [
     { label: S.exportItems.options, onClick: () => file.actionOpenExportSettings() },
     { sep: true },
@@ -115,8 +125,12 @@ export function buildExportMenuItems(): DropdownItem[] {
     {
       // P-18: the palette's entry is never disabled; it explains itself when
       // clicked. The menu must agree instead of greying the row with no reason.
+      // The one exception is a document with NO gene tree at all: then the row
+      // is disabled because the click could only ever produce the empty-state
+      // toast (F-ISSUE-07 / H-D4).
       label: S.exportItems.reconReport,
       onClick: () => void file.actionExportReconciliationReport(),
+      disabled: geneTreeCount === 0,
     },
     { heading: S.exportGroup.report },
     { label: S.exportItems.narrative, onClick: () => void file.actionExportNarrative() },

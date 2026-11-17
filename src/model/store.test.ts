@@ -1,5 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { useStore, isReconActive, hasActiveGeneTree, persistedProject } from './store';
@@ -7,6 +7,8 @@ import { makeGeneTreeEntry } from './geneTrees';
 import { IDENTITY_VIEW } from './types';
 import { createEmptyProject, createLargeTreeSample } from './sampleTree';
 import { addChildren, deleteNode, moveNode } from './treeOps';
+import { changeLanguage, currentLanguage } from '../ui/i18n';
+import { useToasts } from '../ui/toast';
 
 const s = () => useStore.getState();
 
@@ -556,5 +558,118 @@ describe('gene document edit swap (基因树编辑)', () => {
     expect(Object.keys(persisted.nodes)).toHaveLength(1); // species tree
     expect(Object.keys(persisted.geneTrees![0].doc.nodes)).toHaveLength(4);
     s().setReconEditTarget('recon');
+  });
+});
+
+describe('history label punctuation follows the UI language (D-P18)', () => {
+  const startLang = currentLanguage();
+  afterEach(() => changeLanguage(startLang));
+
+  it('uses half-width brackets and commas in English, full-width in Chinese', () => {
+    useStore.getState().loadProject(createEmptyProject());
+
+    changeLanguage('en');
+    s().apply((d) => {
+      addChildren(d, d.rootId, 3);
+    });
+    const enLabel = s().past[s().past.length - 1].label ?? '';
+    expect(enLabel).toContain('Nodes (3 added)');
+    expect(enLabel).not.toContain('（');
+    expect(enLabel).not.toContain('，');
+
+    useStore.getState().loadProject(createEmptyProject());
+    changeLanguage('zh');
+    s().apply((d) => {
+      addChildren(d, d.rootId, 2);
+    });
+    // The Chinese branch is unchanged: 「（…，）」.
+    expect(s().past[s().past.length - 1].label ?? '').toContain('节点（新增 2）');
+  });
+
+  it('separates several changed fields with ", " in English', () => {
+    changeLanguage('en');
+    useStore.getState().loadProject(createEmptyProject());
+    s().apply((d) => {
+      d.name = 'Renamed';
+      addChildren(d, d.rootId, 1);
+    });
+    expect(s().past[s().past.length - 1].label ?? '').toContain('Document name, Nodes (1 added)');
+  });
+});
+
+describe('fit channel carries its scale cap (D-P9/G-P7)', () => {
+  beforeEach(() => {
+    useStore.getState().loadProject(createEmptyProject());
+  });
+
+  it('stores maxScale and bumps fitRequests in the same update', () => {
+    const before = s().fitRequests;
+    s().requestFit(1);
+    expect(s().fitMaxScale).toBe(1);
+    expect(s().fitRequests).toBe(before + 1);
+  });
+
+  it('defaults the cap to 8 when no argument is given', () => {
+    s().requestFit(2);
+    s().requestFit();
+    expect(s().fitMaxScale).toBe(8);
+  });
+});
+
+describe('runAsr preconditions and result notice (G-P10)', () => {
+  const startLang = currentLanguage();
+  beforeEach(() => {
+    useToasts.setState({ toasts: [] });
+    useStore.getState().loadProject(createEmptyProject());
+    changeLanguage('en');
+  });
+  afterEach(() => changeLanguage(startLang));
+
+  it('explains a missing active character instead of returning silently', () => {
+    s().runAsr();
+    expect(s().asr).toBeNull();
+    expect(s().asrRunning).toBe(false);
+    expect(
+      useToasts.getState().toasts.some((t) => t.message.includes('Select an assigned discrete character')),
+    ).toBe(true);
+  });
+
+  it('distinguishes an active continuous character from no character at all', () => {
+    const id = 'cont';
+    s().apply((d) => {
+      d.characters.push({ id, name: 'size', type: 'continuous', states: [] });
+    });
+    s().setActiveCharacter(id);
+    s().runAsr();
+    expect(s().asr).toBeNull();
+    expect(useToasts.getState().toasts.some((t) => t.message.includes('is not discrete'))).toBe(true);
+  });
+
+  it('announces a completed reconstruction with its posterior node count', async () => {
+    const p = createEmptyProject();
+    const ids = addChildren(p, p.rootId, 2);
+    for (const id of ids) {
+      p.nodes[id].branchLength = 1;
+      p.nodes[id].charStates = { c1: 'A' };
+    }
+    p.characters.push({
+      id: 'c1',
+      name: 'habitat',
+      type: 'discrete',
+      states: [
+        { id: 'A', label: 'A', color: '#123456' },
+        { id: 'B', label: 'B', color: '#654321' },
+      ],
+    });
+    useStore.getState().loadProject(p);
+    s().setActiveCharacter('c1');
+    s().runAsr();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(s().asr).not.toBeNull();
+    expect(
+      useToasts
+        .getState()
+        .toasts.some((t) => t.kind === 'success' && t.message.includes('reconstruction complete')),
+    ).toBe(true);
   });
 });

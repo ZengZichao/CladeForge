@@ -183,7 +183,9 @@ export const NodeView = memo(function NodeView({
   // a parent's label straight through its child's label).
   const labelY = place.dy + labelNudge;
 
-  // Accessible name: label + support + leaf/internal, for the tree role.
+  // Accessible name: label + support + leaf/internal, for the tree role. The
+  // separator is locale-aware (H-D10): a full-width comma is wrong in the
+  // English label, and a half-width comma reads as a typo in the Chinese one.
   const ariaLabel = [
     (node.label || tr('未命名节点', 'Unnamed node')) +
       (collapsedSuffix
@@ -194,7 +196,7 @@ export const NodeView = memo(function NodeView({
     node.age !== undefined ? `${tr('年龄', 'Age')} ${node.age}` : '',
   ]
     .filter(Boolean)
-    .join('，');
+    .join(tr('，', ', '));
 
   // When colouring by a character, an unassigned node reads as "unknown":
   // a hollow marker with a dashed grey outline, prompting a hypothesis.
@@ -220,7 +222,12 @@ export const NodeView = memo(function NodeView({
       onPointerLeave={() => setHovered(false)}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        setEditing(true);
+        // Mirrors the gesture layer's double-press, which is the path a real
+        // pointer takes (the SVG's pointer capture retargets the browser's
+        // dblclick to the SVG, so this handler only sees dispatched events).
+        // A collapsed node expands; every other node opens the rename editor.
+        if (node.collapsed && node.childrenIds.length > 0) toggleCollapse();
+        else setEditing(true);
       }}
       style={{ cursor: 'pointer' }}
     >

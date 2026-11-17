@@ -848,6 +848,10 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   fontWeight: 400,
   labelRotation: 0,
   showLabel: true,
+  // H-D5: a label that crosses its branch was unreadable, and the halo that
+  // fixes it defaulted off. On by default; a node's own `style.labelHalo: false`
+  // still wins because resolveNodeStyle overlays the node on the defaults.
+  labelHalo: true,
   labelPosition: 'auto',
   labelOffsetX: 0,
   labelOffsetY: 0,

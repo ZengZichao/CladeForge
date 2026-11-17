@@ -33,6 +33,7 @@ import {
 } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import * as file from '../io/fileActions';
+import { writeClipboardText } from '../io/clipboardIO';
 import {
   addChildrenSpaced,
   applyMidpointReroot,
@@ -110,6 +111,15 @@ export function CommandPalette({
     const sel = () => st().selection[0] as string | undefined;
     const target = () => sel() ?? st().project.rootId;
     const fit = () => st().requestFit();
+    // D-P10: the palette's tree ops returned silently (ladderize, relayout,
+    // collapse/expand all), so a keyboard-only user could not tell whether the
+    // edit landed. Announce it — but only when the document actually moved, so
+    // "done" never describes a no-op.
+    const appliedChange = (run: () => void, message: string): void => {
+      const before = st().project;
+      run();
+      if (st().project !== before) notify.success(message);
+    };
     // M18: topology edits must not run in the reconciliation workspace — the
     // toolbar hides them there; the palette now obeys the same rule instead of
     // silently invalidating the mappings.
@@ -201,7 +211,8 @@ export function CommandPalette({
         category: tr('树操作','Tree'),
         icon: <GearIcon />,
         aliases: ['relayout', 'layout', 'chongpai'],
-        run: () => file.actionRelayout(),
+        run: () =>
+          appliedChange(() => file.actionRelayout(), tr('已重新布局', 'Relaid out')),
       },
       {
         id: 'ladderAsc',
@@ -212,7 +223,8 @@ export function CommandPalette({
         disabled: reconMode,
         disabledHint: reconDisabledHint,
         // M17: same definition as the context menu / file menu (shared action).
-        run: () => file.actionLadderize(true),
+        run: () =>
+          appliedChange(() => file.actionLadderize(true), tr('已阶梯化（升序）', 'Ladderized (ascending)')),
       },
       {
         id: 'ladderDesc',
@@ -222,7 +234,8 @@ export function CommandPalette({
         aliases: ['ladderize', 'ladder', 'jieti'],
         disabled: reconMode,
         disabledHint: reconDisabledHint,
-        run: () => file.actionLadderize(false),
+        run: () =>
+          appliedChange(() => file.actionLadderize(false), tr('已阶梯化（降序）', 'Ladderized (descending)')),
       },
       {
         id: 'rerootSel',
@@ -329,14 +342,43 @@ export function CommandPalette({
           if (sub) st().openInNewTab(sub);
         },
       },
-      { id: 'collapseAll', label: S.review.cmdCollapseAll, category: tr('树操作','Tree'), icon: <FrameIcon />, aliases: ['collapse all', 'zhedie'], run: () => apply((d) => void collapseAll(d)) },
-      { id: 'expandAll', label: S.review.cmdExpandAll, category: tr('树操作','Tree'), icon: <FrameIcon />, aliases: ['expand all', 'zhangkai'], run: () => apply((d) => void expandAll(d)) },
+      {
+        id: 'collapseAll',
+        label: S.review.cmdCollapseAll,
+        category: tr('树操作','Tree'),
+        icon: <FrameIcon />,
+        aliases: ['collapse all', 'zhedie'],
+        run: () =>
+          appliedChange(() => apply((d) => void collapseAll(d)), tr('已折叠全部枝', 'Collapsed all clades')),
+      },
+      {
+        id: 'expandAll',
+        label: S.review.cmdExpandAll,
+        category: tr('树操作','Tree'),
+        icon: <FrameIcon />,
+        aliases: ['expand all', 'zhangkai'],
+        run: () =>
+          appliedChange(() => apply((d) => void expandAll(d)), tr('已展开全部枝', 'Expanded all clades')),
+      },
       { id: 'deriveLens', label: S.review.cmdDeriveBranchLengths, category: tr('树操作','Tree'), icon: <MagicWandIcon />, aliases: ['branch length', 'ages', 'zhichang'], run: () => { const r = deriveBranchLengthsFromAgesSnapshot(); if (r) notify.info(r); } },
       { id: 'fitCalib', label: S.review.cmdEstimateCalibratedAges, category: tr('树操作','Tree'), icon: <MagicWandIcon />, aliases: ['calibration', 'isotonic', 'jiaozhun'], run: () => { const r = fitCalibratedAgesSnapshot(); if (r) notify.info(r); } },
       // --- 分析 ---
       { id: 'compareTrees', label: S.review.cmdCompareTrees, category: tr('分析','Analysis'), icon: <TableIcon />, aliases: ['robinson foulds', 'distance', 'duibi'], run: () => file.openTreeDistance() },
       { id: 'layerDiff', label: S.review.cmdLayerDiff, category: tr('分析','Analysis'), icon: <LayersIcon />, aliases: ['diff', 'layers compare', 'duibi'], run: compareLayers },
-      { id: 'asr', label: S.cmd.runAsr, category: tr('分析','Analysis'), icon: <MagicWandIcon />, aliases: ['asr', 'ancestral', '重建', 'zhuzu'], run: () => st().runAsr() },
+      {
+        // G-P10: the palette command was silent when it could not run and gave
+        // no visible result when it could. `runAsr` now toasts either way; open
+        // the analysis surface so a successful posterior is actually readable.
+        id: 'asr',
+        label: S.cmd.runAsr,
+        category: tr('分析','Analysis'),
+        icon: <MagicWandIcon />,
+        aliases: ['asr', 'ancestral', '重建', 'zhuzu'],
+        run: () => {
+          st().runAsr();
+          onOpenAnalysis();
+        },
+      },
       { id: 'matrix', label: S.cmd.matrix, category: tr('分析','Analysis'), icon: <TableIcon />, aliases: ['matrix', 'juzhen'], run: onOpenMatrix },
       { id: 'analysis', label: S.cmd.analysis, category: tr('分析','Analysis'), icon: <GearIcon />, aliases: ['analysis', 'inference', 'fenxi', 'tuili'], run: onOpenAnalysis },
       // --- 协调 ---
@@ -393,6 +435,27 @@ export function CommandPalette({
       } },
       // --- 帮助 ---
       { id: 'shortcuts', label: S.menu.shortcuts, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, kbd: `${modKey()}?`, aliases: ['shortcuts', 'help', 'bangzhu'], run: onOpenShortcuts },
+      {
+        // E-P9: the Help menu offered "copy the issue-report URL" but the ⌘K
+        // palette did not, so a keyboard-only user had no path to the feedback
+        // channel. Same URL and same wording as that menu entry (m13: a denied
+        // clipboard must never announce success).
+        id: 'reportIssue',
+        label: tr('复制问题反馈地址', 'Copy issue-report URL'),
+        category: tr('帮助','Help'),
+        icon: <QuestionMarkIcon />,
+        aliases: ['issue', 'feedback', 'report', 'wenti'],
+        run: () => {
+          const url = 'https://github.com/zengzichao/CladeForge/issues/new?template=bug_report.md';
+          void writeClipboardText(url).then((ok) =>
+            notify.info(
+              ok
+                ? tr(`问题反馈地址已复制：${url}`, `Issue-report URL copied: ${url}`)
+                : tr(`无法访问剪贴板，请手动复制：${url}`, `Clipboard unavailable — copy manually: ${url}`),
+            ),
+          );
+        },
+      },
       { id: 'guide', label: S.cmd.guide, category: tr('帮助','Help'), icon: <MagicWandIcon />, aliases: ['guide', 'tour', 'help', 'xinren', 'workflow', 'gongzuo'], run: onOpenTour },
       { id: 'manual', label: S.menu.manual, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['manual', 'documentation', 'shouce'], run: () => file.openAppDialog('manual') },
       { id: 'about', label: S.menu.about, category: tr('帮助','Help'), icon: <QuestionMarkIcon />, aliases: ['about', 'version', 'guanyu', 'banben'], run: onOpenAbout },

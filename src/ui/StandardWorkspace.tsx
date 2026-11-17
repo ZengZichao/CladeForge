@@ -181,8 +181,11 @@ function StatusBar() {
     // The selection count is announced to assistive tech (the canvas tree has
     // no aria-live region of its own).
     <div className="status" aria-live="polite">
+      {/* G-P12: a blank document still owns the invisible root node, so the
+          count read "Nodes 1" over an empty canvas. With no tree there is
+          nothing to count — show 0 rather than the internal placeholder. */}
       <span>
-        {S.status.nodes} {nodeCount}
+        {S.status.nodes} {hasTree ? nodeCount : 0}
       </span>
       {/* 发现9: on narrow windows the status bar already carries 8 entries and
           wraps; the edge count (usually `nodes − 1`) is the most redundant one

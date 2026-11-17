@@ -25,6 +25,13 @@ interface Comparison {
   unique: number;
 }
 
+/** A candidate that could not be compared, kept so the dialog can say why. */
+interface SkippedComparison {
+  key: string;
+  name: string;
+  reason: string;
+}
+
 export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const project = useStore((s) => s.project);
   const tabs = useStore((s) => s.tabs);
@@ -32,8 +39,8 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
   const tabStore = useStore((s) => s.tabStore);
   const ref = useDialogFocus(open, onClose);
 
-  const comparisons = useMemo(() => {
-    if (!open) return [];
+  const { comparisons, skipped } = useMemo(() => {
+    if (!open) return { comparisons: [] as Comparison[], skipped: [] as SkippedComparison[] };
     const others: { key: string; name: string; doc: Project }[] = [];
     for (const id of tabs) {
       if (id === activeTabId) continue;
@@ -44,6 +51,7 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
       others.push({ key: `gene:${g.id}`, name: g.name, doc: g.doc });
     }
     const out: Comparison[] = [];
+    const skippedOut: SkippedComparison[] = [];
     for (const other of others) {
       try {
         const d = treeDistance(project, other.doc);
@@ -57,11 +65,18 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
           unique: d.onlyA.length + d.onlyB.length,
         });
       } catch {
-        // Different tip sets: skip silently here; the table says how many
-        // comparisons exist and the tooltip explains why one was excluded.
+        // Different tip sets (G-P2): record the candidate and the reason
+        // instead of dropping it silently. "No other trees to compare" next to
+        // an existing tab is misleading; the user needs to see WHY it was
+        // skipped. The copy button still only covers real comparisons.
+        skippedOut.push({
+          key: other.key,
+          name: other.name,
+          reason: tr('末端集合不同', 'different tip sets'),
+        });
       }
     }
-    return out;
+    return { comparisons: out, skipped: skippedOut };
   }, [open, project, tabs, activeTabId, tabStore]);
 
   if (!open) return null;
@@ -91,40 +106,51 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>{S.review.treeDistanceTitle}</h2>
-        {comparisons.length === 0 ? (
+        {comparisons.length === 0 && skipped.length === 0 ? (
           <div className="hint">{S.review.treeDistanceEmpty}</div>
         ) : (
           <>
-            <table className="tree-distance-table">
-              <thead>
-                <tr>
-                  <th>{tr('对比对象', 'Compared with')}</th>
-                  <th>{S.review.treeDistanceRf}</th>
-                  <th>{S.review.treeDistanceRfNorm}</th>
-                  <th>{S.review.treeDistanceWrF}</th>
-                  <th>{S.review.treeDistanceShared}</th>
-                  <th>{S.review.treeDistanceUnique}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisons.map((c) => (
-                  <tr key={c.key}>
-                    <td title={c.name}>{c.name}</td>
-                    <td>{c.rf}</td>
-                    <td>{(c.rfNormalized * 100).toFixed(1)}%</td>
-                    <td>{c.wrf === null ? '—' : c.wrf.toFixed(3)}</td>
-                    <td>{c.shared}</td>
-                    <td>{c.unique}</td>
+            {comparisons.length > 0 && (
+              <table className="tree-distance-table">
+                <thead>
+                  <tr>
+                    <th>{tr('对比对象', 'Compared with')}</th>
+                    <th>{S.review.treeDistanceRf}</th>
+                    <th>{S.review.treeDistanceRfNorm}</th>
+                    <th>{S.review.treeDistanceWrF}</th>
+                    <th>{S.review.treeDistanceShared}</th>
+                    <th>{S.review.treeDistanceUnique}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="hint">
-              {tr(
-                '加权 RF 仅在两棵树都有枝长时计算；末端集合不同的树无法比较，已跳过。',
-                'Weighted RF is computed only when both trees carry branch lengths; trees with different tip sets cannot be compared and were skipped.',
-              )}
-            </div>
+                </thead>
+                <tbody>
+                  {comparisons.map((c) => (
+                    <tr key={c.key}>
+                      <td title={c.name}>{c.name}</td>
+                      <td>{c.rf}</td>
+                      <td>{(c.rfNormalized * 100).toFixed(1)}%</td>
+                      <td>{c.wrf === null ? '—' : c.wrf.toFixed(3)}</td>
+                      <td>{c.shared}</td>
+                      <td>{c.unique}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {comparisons.length > 0 && (
+              <div className="hint">
+                {tr(
+                  '加权 RF 仅在两棵树都有枝长时计算；末端集合不同的树无法比较，已跳过。',
+                  'Weighted RF is computed only when both trees carry branch lengths; trees with different tip sets cannot be compared and were skipped.',
+                )}
+              </div>
+            )}
+            {skipped.length > 0 && (
+              <div className="hint">
+                {skipped
+                  .map((s) => tr(`已跳过：${s.name}（${s.reason}）`, `Skipped: ${s.name} (${s.reason})`))
+                  .join(tr('、', ', '))}
+              </div>
+            )}
           </>
         )}
         <div className="actions">

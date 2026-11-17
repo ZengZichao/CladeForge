@@ -86,3 +86,34 @@ describe('fitView on a degenerate document holds at 1:1', () => {
     expect(v.scale).toBeCloseTo(2, 10);
   });
 });
+
+/**
+ * D-P9 / G-P7: fit-to-window on a tiny new tree stretched a handful of nodes
+ * across the window (~600%), because the only upper clamp was MAX_SCALE. The
+ * optional ceiling lets the store's zoom limit bound the fit.
+ */
+describe('fitView honours an optional max-scale ceiling', () => {
+  const ZERO = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  // Two nodes one unit apart: the unconstrained fit wants ~400x.
+  const TINY = { minX: 0, minY: 0, maxX: 2, maxY: 1 };
+
+  it('clamps to the given ceiling instead of MAX_SCALE', () => {
+    expect(fitView(TINY, 800, 600, 0).scale).toBe(8);
+    expect(fitView(TINY, 800, 600, 0, 1.5).scale).toBe(1.5);
+  });
+
+  it('leaves a box that already fits under the ceiling untouched', () => {
+    const box = { minX: 0, minY: 0, maxX: 400, maxY: 200 };
+    expect(fitView(box, 800, 600, 0, 8).scale).toBeCloseTo(2, 10);
+    expect(fitView(box, 800, 600, 0, 1.5).scale).toBe(1.5);
+  });
+
+  it('falls back to MAX_SCALE when the ceiling is omitted or undefined', () => {
+    expect(fitView(TINY, 800, 600, 0).scale).toBe(8);
+    expect(fitView(TINY, 800, 600, 0, undefined).scale).toBe(8);
+  });
+
+  it('does not affect the degenerate-box 1:1 behaviour', () => {
+    expect(fitView(ZERO, 900, 600, undefined, 2).scale).toBe(1);
+  });
+});

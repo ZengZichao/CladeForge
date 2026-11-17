@@ -42,6 +42,13 @@ export interface Replacement {
   parentId?: string;
   oldValue: string;
   newValue: string;
+  /**
+   * Preview-only marker (H-D1): the hit is real, but applying it is refused —
+   * currently only A#7 / BUG-14, a node-name replacement that would leave the
+   * label empty. It stays in the list so an exact-name search is visibly a
+   * match instead of a misleading "No matches".
+   */
+  blocked?: boolean;
 }
 
 function matches(haystack: string, needle: string, caseSensitive: boolean): boolean {
@@ -95,10 +102,21 @@ export function collectReplacements(project: Project, options: ReplaceOptions): 
     if (oldValue === '' || !matches(oldValue, find, caseSensitive)) return;
     const newValue = substitute(oldValue, find, replace, caseSensitive);
     if (newValue === oldValue) return;
-    // A#7 / BUG-14: a replacement that would leave a node nameless is refused
-    // rather than silently dropping its canvas label.
-    if (field === 'nodeName' && !newValue.trim()) return;
-    out.push({ field, id, ...(parentId ? { parentId } : {}), oldValue, newValue });
+    // A#7 / BUG-14: a replacement that would leave a node nameless must never
+    // be applied. It is still PUSHED, flagged `blocked`, because dropping it
+    // hid the hit entirely: searching a complete node name with an empty
+    // "Replace with" looked like "No matches" while a substring matched.
+    // applyReplacements refuses blocked entries again, so the preview can
+    // never be the thing that blanks a canvas label.
+    const blocked = field === 'nodeName' && !newValue.trim();
+    out.push({
+      field,
+      id,
+      ...(parentId ? { parentId } : {}),
+      oldValue,
+      newValue,
+      ...(blocked ? { blocked: true } : {}),
+    });
   };
 
   for (const n of Object.values(project.nodes)) {
@@ -131,6 +149,9 @@ export function collectReplacements(project: Project, options: ReplaceOptions): 
 /**
  * Apply collected replacements to a draft, re-checking each old value first.
  * Returns how many replacements actually landed (a stale preview can miss).
+ * Entries flagged `blocked` are preview-only and are never applied — the
+ * nodeName case below re-checks the blank-name guard independently, so a
+ * blocked entry cannot slip through even if a caller ignores the flag.
  */
 export function applyReplacements(project: Project, replacements: Replacement[]): number {
   let applied = 0;
@@ -138,6 +159,8 @@ export function applyReplacements(project: Project, replacements: Replacement[])
     switch (rep.field) {
       case 'nodeName': {
         const n = project.nodes[rep.id];
+        // Blank-name guard, enforced here as well as in collectReplacements:
+        // `blocked` is a preview marker, not the thing protecting the label.
         if (n && n.label === rep.oldValue && rep.newValue.trim() !== '') {
           n.label = rep.newValue;
           applied += 1;

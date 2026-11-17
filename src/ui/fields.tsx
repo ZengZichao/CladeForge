@@ -356,6 +356,7 @@ export function NumberField({
   max,
   step = 1,
   allowEmpty = false,
+  disabled,
   unit,
   unitTitle,
   unitSide = 'suffix',
@@ -369,6 +370,9 @@ export function NumberField({
   max?: number;
   step?: number;
   allowEmpty?: boolean;
+  /** Renders the input inert (dimmed by `.field input:disabled`). Used when the
+   *  value only makes sense for a selection that does not exist right now. */
+  disabled?: boolean;
   /**
    * Cross-field / cross-record check run AFTER the single-field min/max gate.
    * P-10: a calibration Min above Max, or an environmental From after To, must
@@ -407,10 +411,15 @@ export function NumberField({
     }
     if (min !== undefined && n < min) {
       setError(tr(`最小值为 ${min}`, `Minimum is ${min}`));
+      // F-ISSUE-02: a refused draft used to stay in the box, so an out-of-range
+      // number read as "accepted". Restore the stored value — the field must
+      // never display a number the document does not hold.
+      setV(value === undefined ? '' : String(value));
       return;
     }
     if (max !== undefined && n > max) {
       setError(tr(`最大值为 ${max}`, `Maximum is ${max}`));
+      setV(value === undefined ? '' : String(value));
       return;
     }
     const cross = validate?.(n);
@@ -441,6 +450,7 @@ export function NumberField({
           min={min}
           max={max}
           step={step}
+          disabled={disabled}
           aria-invalid={error ? true : undefined}
           placeholder={hint}
           className={error ? 'has-error' : undefined}

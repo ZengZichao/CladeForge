@@ -28,6 +28,10 @@ import type { NodeId, Point, ViewTransform } from '../model/types';
 import type { LayoutResult } from '../layout/autoLayout';
 
 const MOVE_THRESHOLD = 4; // px before a press becomes a drag
+// Two presses on the same node within this window are a double-click. The
+// browser's own dblclick never reaches the node group (see lastNodePress), so
+// this window is the gesture layer's definition of "double".
+const DOUBLE_PRESS_MS = 450;
 const HIT_RADIUS = 22; // px radius for node hit-testing during drag
 // Magnetic alignment: when the dragged node's free-axis coordinate comes
 // within this many SCREEN pixels of another node's coordinate, it snaps and
@@ -143,6 +147,15 @@ export function useCanvasGestures(
   const selectEdge = useStore((s) => s.selectEdge);
 
   const gestureRef = useRef<Gesture>({ kind: 'none' });
+  /**
+   * The last press that landed on a node, for double-press detection. TreeCanvas
+   * captures the pointer on the SVG at pointerdown, so the browser retargets the
+   * following `dblclick` to the SVG and React's onDoubleClick on `g.node-group`
+   * never fires for a real pointer — the gesture layer must recognise the second
+   * press itself. `moved` is set when that press becomes a drag, so a drag is
+   * never mistaken for a double-click.
+   */
+  const lastNodePress = useRef<{ id: NodeId; at: number; moved: boolean } | null>(null);
   const [connect, setConnect] = useState<{ sourceId: NodeId; world: Point } | null>(null);
   const [dropTargetId, setDropTargetId] = useState<NodeId | null>(null);
   const [snapGuide, setSnapGuide] = useState<{ axis: 'x' | 'y'; coord: number } | null>(null);
@@ -291,6 +304,10 @@ export function useCanvasGestures(
         nodeId = nearest;
       }
     }
+    // A double press only counts when BOTH presses land on a node: a pan,
+    // marquee, port, custom-edge or background press in between is a different
+    // gesture and must not leave a stale node press behind.
+    if (!(role === 'node' && nodeId)) lastNodePress.current = null;
     try {
       svg.setPointerCapture(e.pointerId);
     } catch {
@@ -328,7 +345,36 @@ export function useCanvasGestures(
       return;
     }
     if (role === 'node' && nodeId) {
-      select(nodeId, e.shiftKey);
+      // H-D8: Shift OR Ctrl/Cmd adds to the selection. Shift alone used to be
+      // the only additive modifier, so the platform-standard Ctrl/Cmd+click
+      // silently replaced the selection instead of extending it.
+      const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+      // G-P16 / D-P11: a second press on the same node inside the double-click
+      // window — one that did not turn into a drag — is a double-click. A
+      // collapsed node expands; any other node opens the inline rename editor.
+      // The press-node gesture is deliberately NOT started, so the editor gets
+      // a clean pointer state instead of an abandoned drag.
+      const lastPress = lastNodePress.current;
+      if (
+        lastPress &&
+        lastPress.id === nodeId &&
+        !lastPress.moved &&
+        Date.now() - lastPress.at < DOUBLE_PRESS_MS
+      ) {
+        lastNodePress.current = { id: nodeId, at: Date.now(), moved: false };
+        const pressed = useStore.getState().project.nodes[nodeId];
+        if (pressed?.collapsed && pressed.childrenIds.length > 0) {
+          apply((d) => {
+            const n = d.nodes[nodeId];
+            if (n) n.collapsed = false;
+          });
+        } else {
+          useStore.getState().requestRename(nodeId);
+        }
+        return;
+      }
+      select(nodeId, additive);
+      lastNodePress.current = { id: nodeId, at: Date.now(), moved: false };
       gestureRef.current = {
         kind: 'press-node',
         id: nodeId,
@@ -385,6 +431,9 @@ export function useCanvasGestures(
         const dist = Math.hypot(screen.x - g.startScreen.x, screen.y - g.startScreen.y);
         if (!g.moved && dist > MOVE_THRESHOLD) {
           g.moved = true;
+          // The press that is now a drag must not be remembered as the first
+          // half of a double-click.
+          if (lastNodePress.current?.id === g.id) lastNodePress.current.moved = true;
           beginInteraction(g.id);
         }
         if (g.moved) {

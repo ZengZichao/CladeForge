@@ -375,7 +375,12 @@ export function TreeCanvas() {
         layout.visible,
         layout.bounds,
       );
-      setView(fitView(box, w, h));
+      // Fit-to-window on a tiny new tree stretched a handful of nodes across the
+      // window (~600%): the only clamp was MAX_SCALE. Honour the store's zoom
+      // ceiling (样式 › 缩放上限) when it exposes one; `?? 8` keeps the default
+      // if the channel is ever absent.
+      const maxScale = useStore.getState().fitMaxScale ?? 8;
+      setView(fitView(box, w, h, undefined, maxScale));
     },
     [setView],
   );

@@ -31,6 +31,7 @@ export function SliderNumberField({
   unit,
   unitTitle,
   ariaLabel,
+  disabled,
 }: {
   value: number;
   /** Draft mutation for one value, e.g. `(v) => (d) => d.defaults.branch.width = v`. */
@@ -46,6 +47,8 @@ export function SliderNumberField({
   unitTitle?: string;
   /** Accessible name; `Field` supplies the row label automatically. */
   ariaLabel?: string;
+  /** Disables BOTH the typed number and the slider (D-P7). */
+  disabled?: boolean;
 }) {
   const apply = useStore((s) => s.apply);
   const beginInteraction = useStore((s) => s.beginInteraction);
@@ -105,6 +108,7 @@ export function SliderNumberField({
         unit={unit}
         unitTitle={unitTitle}
         ariaLabel={ariaLabel}
+        disabled={disabled}
         onCommit={(v) => {
           if (v !== undefined) apply(recipe(v));
         }}
@@ -115,6 +119,7 @@ export function SliderNumberField({
         max={sMax}
         step={step}
         value={sliderValue}
+        disabled={disabled}
         aria-label={ariaLabel ? `${ariaLabel} ${tr('滑块', 'slider')}` : undefined}
         onPointerDown={start}
         onPointerUp={finish}

@@ -18,7 +18,7 @@ function projectWithNames(names: string[]) {
 }
 
 describe('find & replace — node-name guards', () => {
-  it('refuses a replacement that would blank a node name (A#7)', () => {
+  it('shows a blanking node-name replacement as blocked in the preview (A#7 / H-D1)', () => {
     const p = projectWithNames(['Taxon_A', 'Taxon_B']);
     const reps = collectReplacements(p, {
       find: 'Taxon_A',
@@ -26,7 +26,46 @@ describe('find & replace — node-name guards', () => {
       fields: ['nodeName'],
       caseSensitive: false,
     });
-    expect(reps).toEqual([]);
+    // H-D1: the hit must stay visible instead of vanishing as "No matches".
+    // `blocked` marks it preview-only; applyReplacements still refuses it.
+    expect(reps).toEqual([
+      expect.objectContaining({
+        field: 'nodeName',
+        oldValue: 'Taxon_A',
+        newValue: '',
+        blocked: true,
+      }),
+    ]);
+    const applied = applyReplacements(p, reps);
+    expect(applied).toBe(0);
+    expect(Object.values(p.nodes).some((n) => n.label.trim() === '')).toBe(false);
+    expect(p.nodes[reps[0].id].label).toBe('Taxon_A');
+  });
+
+  it('keeps a complete-name hit visible (blocked) while a substring hit is applicable (H-D1)', () => {
+    const p = projectWithNames(['Taxon_A', 'Taxon_B']);
+    const exact = collectReplacements(p, {
+      find: 'Taxon_A',
+      replace: '',
+      fields: ['nodeName'],
+      caseSensitive: false,
+    });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]).toMatchObject({ oldValue: 'Taxon_A', newValue: '', blocked: true });
+
+    // The same empty replacement on a substring leaves a non-empty label, so
+    // both hits are applicable and the preview must offer them.
+    const partial = collectReplacements(p, {
+      find: 'Taxon',
+      replace: '',
+      fields: ['nodeName'],
+      caseSensitive: false,
+    });
+    expect(partial).toHaveLength(2);
+    expect(partial.every((r) => !r.blocked)).toBe(true);
+    const applied = applyReplacements(p, partial);
+    expect(applied).toBe(2);
+    expect(Object.values(p.nodes).map((n) => n.label).sort()).toEqual(['Root', '_A', '_B']);
   });
 
   it('applyReplacements re-checks the guard against a stale preview', () => {
