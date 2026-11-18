@@ -188,6 +188,7 @@ export function ExportSettingsDialog({
               <TextField
                 value={presetName}
                 placeholder={S.review.exportPresetPlaceholder}
+                onChange={setPresetName}
                 onCommit={setPresetName}
               />
             </Field>

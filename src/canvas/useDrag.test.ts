@@ -177,6 +177,32 @@ describe('canvas node gestures', () => {
     expect(s().renameRequest).toBeNull();
   });
 
+  it('a press on the collapse arrow expands the subtree (GUI-C DEF-4)', () => {
+    const p = gestureTree();
+    const internal = Object.values(p.nodes).find(
+      (n) => n.childrenIds.length > 0 && n.parentId !== null,
+    )!;
+    mount(p);
+    act(() => {
+      s().apply((d) => {
+        d.nodes[internal.id].collapsed = true;
+      });
+    });
+    const toggle = host!.querySelector(
+      `[data-role="collapse-toggle"][data-node-id="${internal.id}"]`,
+    );
+    expect(toggle).not.toBeNull();
+
+    // A REAL mouse press: the event target is the arrow path, while the SVG's
+    // pointer capture retargets the following click to the <svg>. The old
+    // onClick on the path was therefore unreachable; the gesture layer must
+    // toggle on pointerdown.
+    press(toggle as Element);
+
+    expect(s().project.nodes[internal.id].collapsed).toBe(false);
+    expect(s().interactionBase).toBeNull();
+  });
+
   it('a press that turned into a drag is not a double-click', () => {
     mount(gestureTree());
     const a = nodeByLabel('A');

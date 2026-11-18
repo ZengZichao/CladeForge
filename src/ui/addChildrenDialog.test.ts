@@ -195,6 +195,53 @@ describe('AddChildrenDialog — zero children is a no-op (P-04)', () => {
   });
 });
 
+describe('AddChildrenDialog — over-max is refused like under-min (GUI-A P2)', () => {
+  it('disables Add for 51, shows an inline reason and adds nothing', () => {
+    freshProject();
+    const childId = addNamedChild('Taxon_B');
+    mount(
+      createElement(AddChildrenDialog, {
+        open: true,
+        targetId: childId,
+        onCancel: () => undefined,
+      }),
+    );
+    setNumber('51');
+    const addBtn = [...document.querySelectorAll('.dialog .actions button')].find(
+      (b) => b.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(true);
+    expect(dialogEl().textContent).toMatch(/1\D{0,8}50/);
+    const before = nodeCount();
+    act(() => addBtn.click());
+    expect(nodeCount()).toBe(before);
+    // Enter takes the same guarded path — no silent clamp to 50.
+    const ev = pressOnInput('Enter');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(nodeCount()).toBe(before);
+  });
+
+  it('still accepts the upper bound of 50', () => {
+    freshProject();
+    const childId = addNamedChild('Taxon_B');
+    mount(
+      createElement(AddChildrenDialog, {
+        open: true,
+        targetId: childId,
+        onCancel: () => undefined,
+      }),
+    );
+    setNumber('50');
+    const addBtn = [...document.querySelectorAll('.dialog .actions button')].find(
+      (b) => b.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(false);
+    const before = nodeCount();
+    act(() => addBtn.click());
+    expect(nodeCount()).toBe(before + 50);
+  });
+});
+
 describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => {
   it('Enter prevents its default action, adds the children and closes', () => {
     freshProject();

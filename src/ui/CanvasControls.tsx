@@ -9,35 +9,29 @@ import { useEffect, useMemo, useState } from 'react';
 import { FrameIcon, MagnifyingGlassIcon, PlusIcon, MinusIcon, Crosshair2Icon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { isImeComposing } from './imeGuard';
+import { nodeMatchesSearch } from './nodeSearch';
 import { S, tr } from './strings';
 
 function NodeSearch() {
   const nodes = useStore((s) => s.project.nodes);
   const select = useStore((s) => s.select);
   const focusNode = useStore((s) => s.focusNode);
-  const [q, setQ] = useState('');
+  // GUI-B OBS-03: the query lives in the store so TreeCanvas can highlight its
+  // matches; this component only owns the caret position.
+  const q = useStore((s) => s.searchQuery);
+  const setSearchQuery = useStore((s) => s.setSearchQuery);
   const [next, setNext] = useState(0);
 
-  // Supports `type:leaf` / `type:internal` filters alongside label matching.
-  const matches = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return [] as string[];
-    let typeFilter: 'leaf' | 'internal' | null = null;
-    let labelText = t;
-    const typeMatch = /^type:(leaf|internal)\s*(.*)$/.exec(t);
-    if (typeMatch) {
-      typeFilter = typeMatch[1] as 'leaf' | 'internal';
-      labelText = typeMatch[2].trim();
-    }
-    return Object.values(nodes)
-      .filter((n) => {
-        if (typeFilter === 'leaf' && n.childrenIds.length > 0) return false;
-        if (typeFilter === 'internal' && n.childrenIds.length === 0) return false;
-        if (!labelText) return true;
-        return (n.label || '').toLowerCase().includes(labelText);
-      })
-      .map((n) => n.id);
-  }, [q, nodes]);
+  // Closing the box (or unmounting) must not leave a stale highlight on the
+  // canvas — an empty query is the "no search" state by contract.
+  useEffect(() => () => setSearchQuery(''), [setSearchQuery]);
+
+  // Supports `type:leaf` / `type:internal` filters alongside label matching;
+  // the same matcher draws the highlight (see ui/nodeSearch.ts).
+  const matches = useMemo(
+    () => Object.values(nodes).filter((n) => nodeMatchesSearch(n, q)).map((n) => n.id),
+    [q, nodes],
+  );
 
   const focusAt = (i: number) => {
     if (!matches.length) return;
@@ -62,7 +56,7 @@ function NodeSearch() {
           'Filters live as you type; press Enter to jump to a match (type:leaf searches tips only)',
         )}
         onChange={(e) => {
-          setQ(e.target.value);
+          setSearchQuery(e.target.value);
           setNext(0);
         }}
         onKeyDown={(e) => {

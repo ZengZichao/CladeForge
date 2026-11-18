@@ -110,6 +110,21 @@ describe('newick', () => {
     expect(() => parseNewickTrees('((A,B),C)R;((A,B),C;')).toThrow(/(未闭合|unclosed)/);
   });
 
+  it('rejects plain prose that carries no tree structure (GUI-B BUG-05)', () => {
+    // A wrong text file used to become a one-node "tree" plus a confusing
+    // warning about spaces in the label — the import looked successful.
+    for (const prose of [
+      'this is not a tree {{{',
+      'this is not a newick string', // balanced-ish words, still no structure
+      'hello world',
+    ]) {
+      expect(() => parseNewickTrees(prose)).toThrow(/(无法识别|not recognisable)/i);
+    }
+    // A single leaf with its terminator is still valid Newick.
+    const leaf = parseNewick('A;');
+    expect(leaf.nodes[leaf.rootId].label).toBe('A');
+  });
+
   it('rejects an unbalanced ")" instead of popping past the root', () => {
     // '(A,B))' pops the one group it opened and then pops again on an empty
     // stack; re-parenting onto a non-existent ancestor must throw, not produce

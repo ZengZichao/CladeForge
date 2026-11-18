@@ -471,6 +471,7 @@ function docStateFor(project: Project): Partial<AppState> {
     stylePresetId: null,
     focusTarget: null,
     renameRequest: null,
+    searchQuery: '',
     asr: null,
     asrRunning: false,
     historyLimit: HISTORY_LIMIT,
@@ -515,6 +516,7 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     eraLevel: snap.eraLevel,
     focusTarget: null,
     renameRequest: null,
+    searchQuery: '',
     // M8: the reconstruction travels with the tab instead of being dropped —
     // previously this line hard-nulled `asr`, so returning to a tab lost the
     // Mk result with no notice (review finding 14).
@@ -669,6 +671,12 @@ export interface UISlice {
   focusTarget: { id: NodeId; seq: number } | null;
   /** A node whose label the canvas should switch into inline rename (bumped `seq` re-triggers). */
   renameRequest: { id: NodeId; seq: number } | null;
+  /**
+   * GUI-B OBS-03: the live node-search text. Kept in the store (not in
+   * CanvasControls) because the tree itself must highlight its matches; empty
+   * means "no search active". Cleared with every document swap.
+   */
+  searchQuery: string;
   /** Probabilistic ancestral-state reconstruction for the active character (transient). */
   asr: AsrResult | null;
   /** True while the (synchronous) Mk fit is in flight — the UI disables the run buttons. */
@@ -737,6 +745,8 @@ export interface UISlice {
   setViewport: (w: number, h: number) => void;
   zoomBy: (factor: number) => void;
   setActiveCharacter: (id: string | null) => void;
+  /** GUI-B OBS-03: live node-search text; empty clears the canvas highlight. */
+  setSearchQuery: (q: string) => void;
   setShowTransitions: (v: boolean) => void;
   setCharacterColorTarget: (v: CharacterColorTarget) => void;
   setShowEvents: (v: boolean) => void;
@@ -1319,6 +1329,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   exportPresets: loadExportPresets(),
   styleClipboard: null,
   renameRequest: null,
+  searchQuery: '',
   reconMode: false,
   activeGeneTreeId: null,
   geneSelection: [],
@@ -1370,6 +1381,8 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
     }),
 
   setActiveCharacter: (id) => set({ activeCharacterId: id, asr: null }),
+
+  setSearchQuery: (q) => set({ searchQuery: q }),
 
   setShowTransitions: (v) => set({ showTransitions: v }),
 

@@ -79,18 +79,20 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
       );
       return;
     }
-    const requested = Math.round(count);
-    const n = Math.max(1, Math.min(50, requested));
-    // The clamp used to be silent: typing 999 produced 2 children, typing 0
-    // produced 1, with no word about it (M15).
-    if (n !== requested) {
+    // GUI-A P2: over-max used to be CLAMPED to 50 while under-min was refused,
+    // i.e. two different rules for the same declared range [1, 50]. Both ends
+    // are now refused: the button is disabled above and this path re-checks for
+    // the Enter key. No silent coercion in either direction.
+    if (count > 50) {
       notify.info(
         tr(
-          `每节点子节点数限制为 1–50：输入的 ${requested} 已按 ${n} 处理。`,
-          `Children per node is capped at 1–50: the entered ${requested} was applied as ${n}.`,
+          `每节点子节点数最多为 50：未添加任何节点。`,
+          `Number of children is capped at 50: nothing was added.`,
         ),
       );
+      return;
     }
+    const n = Math.round(count);
     apply((d) => {
       const ids = addChildrenSpaced(d, targetId, n);
       // Store polytomy type in each new child's meta for ≥3 children.
@@ -187,6 +189,17 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
             }
           }}
         />
+        {/* GUI-A P2: state the range violation INLINE, next to the field that
+            carries it — the same visible reason NumberField gives for an
+            out-of-range age. */}
+        {(count < 1 || count > 50) && (
+          <div className="field-error">
+            {tr(
+              `数量需在 1–50 之间（当前 ${count}）`,
+              `Number of children must be between 1 and 50 (currently ${count})`,
+            )}
+          </div>
+        )}
         {count >= 3 && (
           <div className="field" style={{ marginTop: 12 }}>
             <label htmlFor="add-children-polytomy-type">{S.addDialog.polytomyType}</label>
@@ -204,7 +217,11 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
           <button className="btn" onClick={onCancel}>
             {S.addDialog.cancel}
           </button>
-          <button className="btn primary" onClick={confirm} disabled={!targetNode || !(count >= 1)}>
+          <button
+            className="btn primary"
+            onClick={confirm}
+            disabled={!targetNode || !(count >= 1 && count <= 50)}
+          >
             {S.addDialog.confirm}
           </button>
         </div>

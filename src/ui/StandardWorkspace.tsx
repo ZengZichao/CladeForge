@@ -115,6 +115,11 @@ function useAutoSaveStatus(): { status: SaveStatus; detail: string | null } {
 
 function StatusBar() {
   const nodeCount = useStore((s) => Object.keys(s.project.nodes).length);
+  // GUI-C OBS-1: "Nodes" counts EVERY node (tips + internal), which readers
+  // routinely misinterpret as the tip count. State both.
+  const tipCount = useStore(
+    (s) => Object.values(s.project.nodes).filter((n) => n.childrenIds.length === 0).length,
+  );
   const edgeCount = useStore((s) => s.project.customEdges.length);
   const scale = useStore((s) => s.view.scale);
   // A#10: a blank welcome document has no tree to zoom — the stale transform
@@ -186,6 +191,7 @@ function StatusBar() {
           nothing to count — show 0 rather than the internal placeholder. */}
       <span>
         {S.status.nodes} {hasTree ? nodeCount : 0}
+        {hasTree && ` (${S.status.tips} ${tipCount})`}
       </span>
       {/* 发现9: on narrow windows the status bar already carries 8 entries and
           wraps; the edge count (usually `nodes − 1`) is the most redundant one

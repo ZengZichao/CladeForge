@@ -34,11 +34,13 @@ export const useToasts = create<ToastState>((set, get) => ({
     // Every announcement becomes part of the reviewable operation log (OP-22).
     logOperation(kind, message);
     const id = nanoid(6);
-    // A#5 / GUI test reports: toasts lingered for tens of seconds and piled
+    // A#5 / GUI-A/C test reports: toasts lingered for tens of seconds and piled
     // up, so a later command's own result could hide behind earlier ones.
     // Bounded clocks plus a hard stack cap (the newest wins): the stack never
     // grows past three, and nothing stays on screen unread for half a minute.
-    const timeout = ttl ?? (action ? 12000 : kind === 'error' ? 9000 : 5000);
+    // Error keeps the longest clock, still inside the 3–6 s the GUI report
+    // asked for (DEF-5).
+    const timeout = ttl ?? (action ? 12000 : kind === 'error' ? 6000 : 5000);
     set((s) => {
       const next = [...s.toasts, { id, kind, message, action }];
       return { toasts: next.length > 3 ? next.slice(next.length - 3) : next };

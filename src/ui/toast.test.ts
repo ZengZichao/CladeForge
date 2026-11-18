@@ -2,7 +2,7 @@
 // a later command's own result could hide behind earlier ones. These tests pin
 // the bounded stack and the dedupe rule.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useToasts } from './toast';
 
 describe('toast stack', () => {
@@ -29,5 +29,19 @@ describe('toast stack', () => {
     useToasts.getState().push('success', '已保存', undefined, 0);
     useToasts.getState().push('success', '已保存', undefined, 0);
     expect(useToasts.getState().toasts).toHaveLength(1);
+  });
+
+  it('auto-dismisses an error inside the 3–6s window (GUI-C DEF-5)', () => {
+    vi.useFakeTimers();
+    try {
+      useToasts.getState().push('error', 'boom');
+      expect(useToasts.getState().toasts).toHaveLength(1);
+      vi.advanceTimersByTime(5999);
+      expect(useToasts.getState().toasts).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(useToasts.getState().toasts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -329,8 +329,16 @@ export function useCanvasGestures(
     }
 
     if (role === 'collapse-toggle' && nodeId) {
-      // The expand/collapse triangle handles itself (see NodeView); never turn
-      // it into a node press.
+      // GUI-C DEF-4: TreeCanvas captures the pointer on the SVG at pointerdown,
+      // so the browser retargets the following CLICK to the <svg> — the ▶ path's
+      // own onClick never ran for a real mouse, and the documented "click the
+      // arrow to expand" gesture silently did nothing. The toggle belongs to
+      // the gesture layer, where the press is actually resolved. Undoable, like
+      // every other collapse entry point (double-press / context menu).
+      apply((d) => {
+        const n = d.nodes[nodeId];
+        if (n && n.childrenIds.length > 0) n.collapsed = !n.collapsed;
+      });
       gestureRef.current = { kind: 'none' };
       return;
     }
