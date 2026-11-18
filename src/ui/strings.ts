@@ -97,6 +97,7 @@ const zh = {
   },
   status: {
     nodes: '节点',
+    tips: '末端',
     edges: '自定义连线',
     zoom: '缩放',
     selected: '已选',
@@ -1141,6 +1142,7 @@ const en: Strings = {
   },
   status: {
     nodes: 'Nodes',
+    tips: 'tips',
     edges: 'Custom links',
     zoom: 'Zoom',
     selected: 'Selected',

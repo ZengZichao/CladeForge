@@ -27,8 +27,9 @@ export function hitTargetFor(target: EventTarget | null): HitTarget {
   // renders inside the node group, so it must win over the node branch; a node
   // group also contains label/hit children that should select the node. The
   // collapse triangle is a node-group child too, but a press on it is NOT a
-  // node press — the background gesture handler checks for this role and
-  // stands down so the toggle's own click handler acts alone.
+  // node press — the gesture layer resolves the role and toggles the subtree
+  // itself (the SVG's pointer capture would retarget a real click away from
+  // the path).
   const port = el.closest('[data-role="port"]');
   if (port) {
     return { role: 'port', nodeId: port.getAttribute('data-node-id'), edgeId: null };

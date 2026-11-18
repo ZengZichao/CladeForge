@@ -119,7 +119,7 @@ export function ConfirmDialog() {
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={dismiss}>
+    <div className="dialog-backdrop confirm-backdrop" onMouseDown={dismiss}>
       <div
         ref={ref}
         className="dialog confirm-dialog"

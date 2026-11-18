@@ -235,7 +235,7 @@
   --z-canvas-ctl: 20; --z-canvas-notice: 24; --z-panel-toggle: 25;
   --z-panel-overlay: 30; --z-panel-overlay-top: 31; --z-recon-overlay: 40;
   --z-menu: 50;
-  --z-context: 100; --z-modal: 200; --z-toast: 300; --z-busy: 400;
+  --z-context: 100; --z-modal: 200; --z-confirm: 250; --z-toast: 300; --z-busy: 400;
   --z-tour: 500;
   --z-menu-above-toast: 310; --z-context-above-toast: 320;
 
@@ -623,6 +623,27 @@ body {
     padding-top: var(--space-1);
     padding-bottom: var(--space-1);
   }
+}
+/* GUI-B BUG-06: the Preferences "UI scale" applies CSS `zoom` to <html>, and
+   the layout viewport does NOT shrink with it — so at 130% a 1440 px window
+   has only ~1108 px of content space while every child is 1.3× larger. Media
+   queries still see 1440 px, never fire, the flex row overflows, and the
+   toolbar (the only shrinkable item) is squeezed until its icons are clipped
+   under HeaderActions. App.tsx measures innerWidth / zoom and sets
+   [data-header-compact]; these rules reuse the exact two-row responsive
+   layout below 1100 px so nothing is cut off at any scale. */
+:root[data-header-compact='true'] .header-bar { flex-wrap: wrap; }
+:root[data-header-compact='true'] .header-bar > .menubar { order: 1; flex: 1 1 auto; }
+:root[data-header-compact='true'] .header-bar > .header-actions {
+  order: 2;
+  padding-right: var(--space-3);
+}
+:root[data-header-compact='true'] .header-bar > .toolbar {
+  order: 3;
+  flex: 1 1 100%;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
 }
 /* Narrow mode (<1024 matches App.tsx's NARROW_THRESHOLD): the panel-toggle
    buttons sit at the canvas top corners, so the legend moves clear of the left
@@ -2015,6 +2036,12 @@ body.panel-resizing {
   justify-content: center;
   z-index: var(--z-modal);
 }
+/* GUI-B BUG-04: the confirm is rendered in-place inside `.app`, while dialogs
+   such as Preferences are portalled to <body>; a body-level backdrop with the
+   same z-index paints above in-app siblings, so the "Reset local data" confirm
+   was covered by the still-open Preferences and its Cancel could not be
+   clicked. Give the confirm layer an explicit level above --z-modal. */
+.dialog-backdrop.confirm-backdrop { z-index: var(--z-confirm); }
 .dialog {
   background: var(--background);
   border: 1px solid var(--border);
@@ -2606,11 +2633,26 @@ body.panel-resizing {
 /* 用户反馈：one grid for every env row — the swatch column, the label column
    and the action columns line up vertically across rows, and the fixed columns
    keep one width. */
+/* GUI-C DEF-1/DEF-2: the tracks must RESERVE room for the name and let the
+   summary shrink. `auto minmax(0,1fr) auto auto auto` resolved the middle
+   track to ~0 because the colour wrapper (flex:1 + hidden hex) and the
+   hard-coded 108 px summary absorbed the row, leaving a 14 px name field.
+   Explicit minimums + a shrinkable summary give the name ≥48 px and keep the
+   row usable down to the narrowest panel. */
 .env-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 32px minmax(48px, 1fr) minmax(0, auto) 32px 32px;
   align-items: center;
   gap: 6px;
+}
+/* The expanded numeric editor reuses .env-row; its five children are
+   From-label, From-field, To-label, To-field, unit — two equal fields. */
+.env-item .env-row + .env-row {
+  grid-template-columns: auto minmax(64px, 1fr) auto minmax(64px, 1fr) auto;
+}
+.env-row .color-field {
+  flex: none;
+  width: 32px;
 }
 .env-row + .env-row { margin-top: 4px; }
 /* The hex readout needs ~66px next to the swatch; inside a ~200px env row that
@@ -3227,6 +3269,16 @@ body.panel-resizing {
   stroke-width: 1.5;
   opacity: 0.7;
   stroke-dasharray: 4 3;
+}
+/* GUI-B OBS-03: the live node-search matches carry a dashed accent ring, so
+   the filter box's count is visible on the tree itself. */
+.node-search-hit {
+  fill: none;
+  stroke: var(--c-select);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+  opacity: 0.95;
+  pointer-events: none;
 }
 
 /* === Theme Toggle (segmented light/dark/system) === */
@@ -5691,7 +5743,13 @@ details.hint-details[open] > summary.hint {
    gets the same width regardless of how long the range text is. */
 .env-summary {
   flex: none;
-  width: 108px;
+  /* DEF-1/DEF-2: the summary is secondary to the name field; it shrinks and
+     ellipsises instead of starving the input down to 14 px. */
+  width: auto;
+  min-width: 0;
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: right;
   font-size: var(--text-xs, 11px);
   color: var(--muted-foreground);

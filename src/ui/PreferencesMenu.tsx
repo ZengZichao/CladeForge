@@ -46,6 +46,10 @@ function applyUiScale(scale: number): void {
   // `zoom` scales the chrome including hit targets; tree typography is
   // unaffected (the canvas computes its own sizes).
   document.documentElement.style.setProperty('zoom', String(scale));
+  // The layout viewport does NOT shrink with `zoom`, so media queries cannot
+  // see that the effective width has dropped (at 130% a 1440 px window lays
+  // out as ~1108 px of content space). Tell the shell to re-evaluate.
+  window.dispatchEvent(new CustomEvent('cladeforge:ui-scale-change', { detail: scale }));
 }
 
 interface ThemeOption {
@@ -125,7 +129,12 @@ export function PreferencesMenu({
   };
 
   const clearLocalData = () => {
-    setOpen(false);
+    // GUI-B BUG-04: this used to close Preferences FIRST and then open the
+    // confirm, so cancelling dropped the user back on the canvas with all the
+    // other settings unreachable. Keep Preferences open: the confirm carries
+    // its own higher backdrop layer (.confirm-backdrop) so it still stacks
+    // above this portalled dialog, and useDialogFocus arbitrates Escape/focus
+    // through the dialog stack. Close Preferences only on the confirming path.
     requestConfirm({
       key: 'clear-local-data',
       title: S.review.clearLocalData,
@@ -133,6 +142,7 @@ export function PreferencesMenu({
       confirmLabel: S.review.clearLocalData,
       danger: true,
       onConfirm: () => {
+        setOpen(false);
         try {
           const keepTheme = localStorage.getItem('cladeforge:theme');
           localStorage.clear();

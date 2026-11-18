@@ -7,6 +7,18 @@ Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
 ## [Unreleased]
 
+### Fixed — 2026-11-18 软件实际测试报告（A/B/C）修复
+- **P2 / BUG-03**：「添加子节点」数量上限与下限改为同一策略——超过 50 与小于 1 一样禁用提交、给出同行内错误提示，不再静默钳制；节点年龄在无校准时也强制 ≥ 0。
+- **BUG-04**：偏好设置 › 重置本地数据改为在偏好对话框之上叠加确认框，取消后回到偏好而非主界面；确认层新增独立 z-index 层级。
+- **BUG-05**：不含任何树结构符号（括号/逗号/冒号/分号）的纯文本不再被解析成 1 节点「树」，直接拒绝并提示改用表格导入。
+- **BUG-06**：UI 缩放下 `zoom` 不改变布局视口，130% 英文界面曾把工具栏挤到图标被「标准视图」遮挡；顶栏改为按 `innerWidth / zoom` 计算有效宽度并复用两行响应式布局。
+- **BUG-07 / BUG-08**：导出预设名输入实时镜像草稿（粘贴/密码管理器一次赋值即可启用保存）；空白未编辑标签点击示例卡改为载入当前标签，不再累积 Untitled 标签。
+- **DEF-1 / DEF-2**：环境事件行网格为名称预留最小宽度、时间范围摘要可收缩省略；展开行的 From/To 输入框等宽（约 84px），名称输入恢复到可用宽度。
+- **DEF-4**：折叠箭头改为在手势层响应 pointerdown（SVG 指针捕获会把真实 click 重定向掉），并加透明命中圆盘，避开标签热区。
+- **DEF-5**：toast 错误驻留收敛到 6s（信息/成功 5s），堆叠上限 3 条。
+- **OBS-01 / OBS-03 / P6**：状态栏补「末端」计数（Nodes 7 (tips 4)）；节点搜索在画布上用虚线环高亮全部匹配；CSV 导入提示改为「数据列 / data column」。
+- 新增回归测试：`guiReportContracts`、`preferencesReset`、`exportPresetName`、`sampleOpener`、`nodeSearchHighlight`、折叠箭头手势、toast 超时、Newick 纯文本拒绝、Add children 越界。
+
 ### Fixed — 2026-11-15 dual-review remediation: token semantics, modal ownership, scientific readability
 - **设计令牌语义修复（B1–B4）**：TSX 中 28 处把表面色令牌当墨色用的 `var(--muted)` / `var(--accent)` 全部改为 `--muted-foreground` / `--primary`——时间轴刻度、地质年代名、假说标注、事件引导线在浅色主题下是白字压白底、深色主题下是深灰压深灰的问题根除；迁移中丢失的 `--radius-inner`（41 处引用）与 `--shadow-float/panel/card`（17 处）按主题补回定义，弹层/对话框/命令面板恢复圆角与阴影；`--border-strong` 提到 ≥3:1、`--ring` 改不透明墨色、`color-scheme` 与 `@custom-variant dark` 就位。新增 `designTokenGuard.test.ts` 守卫（app.css 每个 `var(--x)` 必须有定义；TSX 禁用表面色作 fill/stroke/color）。
 - **框选矩形（B1）**：`<rect>` 移出世界变换组——此前 126% 缩放下虚线框偏离指针 63/257px 且颜色不可见；颜色改用 `--primary`；`marqueeContract.test.ts` 锁定结构。

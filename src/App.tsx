@@ -473,6 +473,30 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // GUI-B BUG-06: Preferences applies UI scale with CSS `zoom`, which makes
+  // every child larger WITHOUT shrinking the layout viewport — so a 1440 px
+  // window at 130% has only ~1108 px of content space while media queries
+  // still read 1440 px. The flex header then overflows and squeezes the one
+  // shrinkable item (the toolbar) until its icons are clipped under
+  // HeaderActions. Measure the EFFECTIVE width and reuse the two-row header.
+  useEffect(() => {
+    const syncHeaderCompact = () => {
+      const zoom = parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1;
+      const effective = window.innerWidth / zoom;
+      // NB: toggleAttribute(name, true) stores an EMPTY value, so use the
+      // explicit form — the stylesheet matches [data-header-compact='true'].
+      if (effective < 1200) document.documentElement.setAttribute('data-header-compact', 'true');
+      else document.documentElement.removeAttribute('data-header-compact');
+    };
+    syncHeaderCompact();
+    window.addEventListener('resize', syncHeaderCompact);
+    window.addEventListener('cladeforge:ui-scale-change', syncHeaderCompact);
+    return () => {
+      window.removeEventListener('resize', syncHeaderCompact);
+      window.removeEventListener('cladeforge:ui-scale-change', syncHeaderCompact);
+    };
+  }, []);
+
   // A-10: the title used to be stamped once at startup, so every window in the
   // task switcher read "CladeForge 0.2.0" with no document name and no dirty
   // marker. Follow the ACTIVE tab like any desktop editor does.

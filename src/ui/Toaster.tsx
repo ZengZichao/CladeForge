@@ -3,8 +3,9 @@
 // M40 (UI_UX_REVIEW): a 500px error toast used to offer only "click the whole
 // strip to dismiss" — no visible control, and a pointer-down on the message
 // itself could be a failed copy attempt. Every toast now carries an explicit
-// close button (Cross2Icon, named), and error toasts linger 30s (persistent
-// enough to read, no longer a race against a 7s clock).
+// close button (Cross2Icon, named). Toasts auto-dismiss on a bounded clock
+// (5 s; errors 6 s) and the stack is capped at three, so a later result can
+// never sit behind a pile of earlier ones (GUI-C DEF-5).
 
 import { useToasts } from './toast';
 import { Cross2Icon } from '@radix-ui/react-icons';

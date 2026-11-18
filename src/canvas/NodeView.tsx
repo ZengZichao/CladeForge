@@ -43,6 +43,8 @@ interface NodeViewProps {
   labelAngle?: number;
   /** Canvas background colour — the label halo strokes with it. */
   canvasBg?: string;
+  /** GUI-B OBS-03: this node matches the live search query. */
+  searchHit?: boolean;
 }
 
 function Marker({
@@ -89,6 +91,7 @@ export const NodeView = memo(function NodeView({
   characterColor,
   labelAngle,
   canvasBg,
+  searchHit,
 }: NodeViewProps) {
   const selected = useStore((s) => s.selection.includes(node.id));
   const apply = useStore((s) => s.apply);
@@ -264,21 +267,24 @@ export const NodeView = memo(function NodeView({
         <circle r={style.size + 9} fill="none" stroke={C_CONNECT} strokeWidth={2} opacity={0.6} />
       )}
 
+      {/* GUI-B OBS-03: the search box reported a match count while the canvas
+          showed nothing; the matching nodes now carry a dashed accent ring. */}
+      {searchHit && <circle r={style.size + 6} className="node-search-hit" />}
+
       <Marker style={style} role="node" id={node.id} fill={markerFill} stroke={markerStroke} dashed={markerDashed} />
 
           {node.collapsed && node.childrenIds.length > 0 && (
         // The collapse arrow used to carry data-role="node", so the FIRST thing
         // a user tried with it (click the triangle to expand) selected or began
-        // dragging the node instead. It is now its own toggle target.
+        // dragging the node instead. It is now its own toggle target, and the
+        // PRESS is handled in useDrag: the SVG's pointer capture retargets a
+        // real click away from this path, so an onClick here was unreachable
+        // (GUI-C DEF-4).
         <path
           d={`M ${style.size + 2} ${-4} L ${style.size + 10} 0 L ${style.size + 2} 4 Z`}
           fill={style.stroke}
           data-role="collapse-toggle"
           data-node-id={node.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleCollapse();
-          }}
           style={{ cursor: 'pointer' }}
         >
           <title>
@@ -328,6 +334,29 @@ export const NodeView = memo(function NodeView({
           {displayLabel}
           {collapsedSuffix}
         </text>
+      )}
+
+      {/* GUI-C DEF-4: an invisible, GENEROUS hit disc for the same toggle. The
+          visible triangle sits under the label's hit box, so a real press at
+          its centre landed on the node label; this disc is painted last and
+          wins. The press is handled by useDrag (see above). */}
+      {node.collapsed && node.childrenIds.length > 0 && (
+        <circle
+          cx={style.size + 7}
+          cy={0}
+          r={7}
+          fill="transparent"
+          pointerEvents="all"
+          data-role="collapse-toggle"
+          data-node-id={node.id}
+          style={{ cursor: 'pointer' }}
+        >
+          <title>
+            {collapsedTips > 0
+              ? tr(`点击展开此枝（${collapsedTips} 个末端）`, `Click to expand this branch (${collapsedTips} tips)`)
+              : tr('点击展开此枝', 'Click to expand this branch')}
+          </title>
+        </circle>
       )}
 
       {/* 用户反馈：support shown ON the figure — a small value above the node

@@ -53,6 +53,7 @@ import { useCanvasGestures } from './useDrag';
 import { branchMidpointOn } from './paths';
 import { removeCustomEdge } from '../model/treeOps';
 import { C_MRCA, C_MRCA_TEXT, C_UNKNOWN, C_TRANSITION_TO, inkOnBackground } from './colors';
+import { nodeMatchesSearch } from '../ui/nodeSearch';
 import { importTreeText, actionImportTree, actionNewTreeFile } from '../io/fileActions';
 import { MAX_PROJECT_CHARS, MAX_TREE_CHARS } from '../io/limits';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
@@ -690,6 +691,18 @@ export function TreeCanvas() {
     [layout, project],
   );
 
+  // GUI-B OBS-03: which visible nodes the live search matches. Computed once
+  // here (not per node) so typing re-renders one set instead of every marker.
+  const searchQuery = useStore((s) => s.searchQuery);
+  const searchHits = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    const hits = new Set<NodeId>();
+    for (const n of visibleNodes) {
+      if (nodeMatchesSearch(n, searchQuery)) hits.add(n.id);
+    }
+    return hits;
+  }, [searchQuery, visibleNodes]);
+
   // Circular layout: "away from the parent" is an ANGLE here, not a side, so
   // each label's outward ray is resolved from its own parent's position and
   // handed to NodeView. Rectangular layouts skip the work.
@@ -1249,6 +1262,7 @@ export function TreeCanvas() {
                   activeCharacter ? nodeCharacterColor(activeCharacter, n, charRange) : undefined
                 }
                 labelAngle={labelAngles.get(n.id)}
+                searchHit={searchHits?.has(n.id) ?? false}
               />
             ))}
           {showEvents && project.events.length > 0 && (

@@ -322,7 +322,12 @@ function NodePanel({
             value={node.age}
             allowEmpty
             step={0.1}
-            min={calibration?.minAge}
+            /* BUG-03 residual: an age is a point in deep time, so it can never
+               be negative. Without a calibration the field had no lower bound
+               at all and accepted -10, drawing the node far above the axis;
+               the bound is the tighter of "now" (0) and the calibration's
+               minimum, matching the branch-length field right above. */
+            min={Math.max(0, calibration?.minAge ?? 0)}
             max={calibration?.maxAge}
             unit={timeUnitSymbol(timeUnit)}
             unitTitle={tr(

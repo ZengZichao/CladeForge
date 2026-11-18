@@ -265,10 +265,19 @@ export function TextField({
   onCommit,
   placeholder,
   ariaLabel,
+  onChange,
 }: {
   value: string;
   onCommit: (v: string) => void;
   placeholder?: string;
+  /**
+   * Optional LIVE mirror of the draft (GUI-B BUG-07). The buffered commit is
+   * for document edits that must not flood the undo history; a form field
+   * whose only consumer is a button's enabled state needs the current text
+   * immediately — including a single paste / password-manager fill, which
+   * produces one `input` event and no blur.
+   */
+  onChange?: (v: string) => void;
   /**
    * Accessible name. `placeholder` is not one (a screen reader drops it as soon
    * as the field has content, and Chrome flags placeholder-only fields), and a
@@ -285,7 +294,10 @@ export function TextField({
       value={v}
       placeholder={placeholder}
       aria-label={ariaLabel}
-      onChange={(e) => setV(e.target.value)}
+      onChange={(e) => {
+        setV(e.target.value);
+        onChange?.(e.target.value);
+      }}
       onBlur={() => v !== value && onCommit(v)}
       onKeyDown={(e) => {
         // Enter belongs to the IME while a candidate list is open.

@@ -820,6 +820,23 @@ export function parseNewickTrees(
   // Walk the input WITH the token stream so each segment keeps its raw text:
   // parse errors can then quote the actual line the user needs to look at.
   const tokens = tokenize(trimmed);
+  // GUI-B BUG-05: prose that carries no tree-structure punctuation used to be
+  // accepted as a one-node "tree", so opening an obviously wrong text file
+  // looked like a successful import (plus a confusing warning about spaces in
+  // the label). Newick/NEXUS always has at least one of ( ) , : ; — refuse the
+  // input before any topology is built. A single leaf `A;` still passes via
+  // its semicolon; a bare `A` was never valid Newick either.
+  const hasTreeSyntax = tokens.some(
+    (t) => t.t === '(' || t.t === ')' || t.t === ',' || t.t === ':' || t.t === ';',
+  );
+  if (!hasTreeSyntax) {
+    throw parseErrorAt(
+      input,
+      0,
+      '未找到任何树结构符号（括号、逗号、冒号或分号）：无法识别为 Newick/NEXUS。请确认文件内容，或改用「导入表格」导入数据表。',
+      'No tree-structure punctuation found (parentheses, comma, colon or semicolon): not recognisable as Newick/NEXUS. Check the file contents, or use "Import table" for a data matrix.',
+    );
+  }
   for (const tok of tokens) {
     if (cur.length === 0) curStart = tok.at;
     if (tok.t === ';') {

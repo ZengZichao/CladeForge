@@ -804,8 +804,8 @@ function importMatrixOnly(matrix: NexusMatrixResult, name: string, issues: strin
   if (matched > 0) {
     notify.info(
       tr(
-        `已从「${name}」导入 ${added} 个性状，${matched} 个末端匹配成功${unmatched > 0 ? `；${unmatched} 行未匹配到末端` : ''}${issues.length > 0 ? `；另有 ${issues.length} 条解析备注（可用提示上的「${'查看全部导入提示'}」查看）` : ''}`,
-        `Imported ${added} character${added === 1 ? '' : 's'} from "${name}"; ${matched} tip${matched === 1 ? '' : 's'} matched${unmatched > 0 ? `; ${unmatched} row${unmatched === 1 ? '' : 's'} matched no tip` : ''}${issues.length > 0 ? `; ${issues.length} parse note${issues.length === 1 ? '' : 's'} recorded (see "View all import notes" on the toast)` : ''}`,
+        `已从「${name}」导入 ${added} 个数据列，${matched} 个末端匹配成功${unmatched > 0 ? `；${unmatched} 行未匹配到末端` : ''}${issues.length > 0 ? `；另有 ${issues.length} 条解析备注（可用提示上的「${'查看全部导入提示'}」查看）` : ''}`,
+        `Imported ${added} data column${added === 1 ? '' : 's'} from "${name}"; ${matched} tip${matched === 1 ? '' : 's'} matched${unmatched > 0 ? `; ${unmatched} row${unmatched === 1 ? '' : 's'} matched no tip` : ''}${issues.length > 0 ? `; ${issues.length} parse note${issues.length === 1 ? '' : 's'} recorded (see "View all import notes" on the toast)` : ''}`,
       ),
     );
     reportParseIssues(issues, name);
@@ -1304,8 +1304,8 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
       });
       notify.success(
         tr(
-          `已导入 ${appliedCharacters} 个性状，${report.matched} 个分类单元匹配成功（精确 ${report.exact}，归一化 ${report.normalized}）`,
-          `Imported ${appliedCharacters} character${appliedCharacters === 1 ? '' : 's'}; ${report.matched} taxon label${report.matched === 1 ? '' : 's'} matched (${report.exact} exact, ${report.normalized} normalised)`,
+          `已导入 ${appliedCharacters} 个数据列，${report.matched} 个分类单元匹配成功（精确 ${report.exact}，归一化 ${report.normalized}）`,
+          `Imported ${appliedCharacters} data column${appliedCharacters === 1 ? '' : 's'}; ${report.matched} taxon label${report.matched === 1 ? '' : 's'} matched (${report.exact} exact, ${report.normalized} normalised)`,
         ),
       );
       if (report.unmatched.length > 0) {
