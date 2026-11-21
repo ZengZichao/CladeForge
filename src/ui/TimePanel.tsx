@@ -346,12 +346,19 @@ export function TimePanel() {
   // Validate time-data consistency (parent ages >= child ages, etc.).
   const timeIssues = timeReady ? validateTimeData(project) : [];
 
-  // Layered status: detect nodes missing ages when the time-calibrated layout
-  // is active (or when time data exists but the layout is wrong). The missing
-  // nodes are only relevant in the time-calibrated layout because that is the
-  // only layout that reads `age`.
+  // Only the time-calibrated layout draws the time axis; the other layouts
+  // still label the tree but do not consume node ages as positions.
   const isTimeLayout = project.layout.type === 'time-calibrated';
-  const missingNodes = isTimeLayout ? nodesMissingAges(project) : [];
+  // The wrong-layout warning is advisory: it can be dismissed for the CURRENT
+  // document + layout. Changing either makes it reappear, so the close is not
+  // a permanent opt-out hiding a real data state.
+  const [dismissedLayoutWarning, setDismissedLayoutWarning] = useState<string | null>(null);
+  const layoutWarningKey = `${project.id}:${project.layout.type}`;
+  // Dismissal lasts for the current document + layout; changing either brings
+  // the advisory back if the condition still holds.
+  useEffect(() => setDismissedLayoutWarning(null), [project.id, project.layout.type]);
+  const showLayoutWarning =
+    timeReady && !isTimeLayout && dismissedLayoutWarning !== layoutWarningKey;
 
   return (
     <>
@@ -369,8 +376,17 @@ export function TimePanel() {
       )}
       {/* Case 1: time data exists but the layout is not the geological time
           chart — offer a one-click switch so the remedy is at hand here. */}
-      {timeReady && !isTimeLayout && (
+      {showLayoutWarning && (
         <div className="time-warning">
+          <button
+            type="button"
+            className="time-warning-close"
+            aria-label={tr('关闭提示', 'Dismiss notice')}
+            title={tr('关闭提示', 'Dismiss notice')}
+            onClick={() => setDismissedLayoutWarning(layoutWarningKey)}
+          >
+            <Cross1Icon />
+          </button>
           <div className="time-warning-title">
             {S.layoutPanel.timeDataButWrongLayout(layoutTypeName(project.layout.type))}
           </div>
@@ -415,10 +431,6 @@ export function TimePanel() {
             ))}
           </ul>
         </div>
-      )}
-      {/* Case 3: everything is fine — time data present, no issues, no missing ages. */}
-      {timeReady && timeIssues.length === 0 && isTimeLayout && missingNodes.length === 0 && (
-        <div className="hint time-ok">{S.layoutPanel.timeCalibrated}</div>
       )}
       {/* 用户反馈：the section starts COLLAPSED like every other submodule of
           the merged panel. */}

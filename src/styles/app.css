@@ -3202,12 +3202,12 @@ body.panel-resizing {
   gap: var(--space-1-5);
 }
 .preset-row {
-  /* A#8 / P-06: FIVE presets (PhyloRec 管道 added later) in a row that used
-     to force four ~60px tracks — the long labels clipped to "Defaul"/"Colo"
-     and wrapped. auto-fit keeps every button readable, and ellipsis + the
-     button's own title preserves the full name when space is tight. */
+  /* Four presets. One row on a normal panel, 2×2 when the resizable sidebar is
+     narrow; LayoutPanel measures the row and sets the column count inline, so
+     the choice follows the actual width and language. Two columns are also the
+     no-JS fallback. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
 .preset-btn {
@@ -3274,12 +3274,43 @@ body.panel-resizing {
   color: var(--foreground);
 }
 .time-warning {
+  position: relative;
   border: 0;
   border-radius: var(--radius-inset);
   padding: var(--space-2-5) var(--space-3);
   margin: var(--space-2) 0 var(--space-1);
   background: var(--c-warn-bg);
   box-shadow: var(--shadow-card);
+}
+/* Advisory callouts can be dismissed from their top-right corner. */
+.time-warning-close {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-inset);
+  background: transparent;
+  color: var(--c-warn);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color var(--ease-fast), color var(--ease-fast);
+}
+.time-warning-close:hover {
+  background: color-mix(in srgb, var(--c-warn) 12%, transparent);
+  color: var(--foreground);
+}
+.time-warning-close:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: 1px;
+}
+.time-warning-close svg {
+  width: 12px;
+  height: 12px;
 }
 /* The remedy button's label (“Switch to the time-calibrated tree layout”) is
    wider than the callout's 203px content box; a nowrap button therefore hung
@@ -3296,6 +3327,8 @@ body.panel-resizing {
   font-weight: 600;
   color: var(--c-warn);
   margin-bottom: var(--space-1);
+  /* Keep the first line clear of the 24 px close button. */
+  padding-right: var(--space-6);
 }
 .time-issue-list {
   margin: var(--space-1) 0 0;
@@ -3306,17 +3339,6 @@ body.panel-resizing {
   color: var(--muted-foreground);
   margin-bottom: var(--space-0-5);
 }
-.time-ok {
-  /* A quiet status line, not a bordered card: text stays on the panel's one
-     left edge and only a shadow marks the break from the controls below. */
-  border: 0;
-  padding: var(--space-1) 0 var(--space-2);
-  margin: 0 0 var(--space-1);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: 0 1px 0 var(--border);
-}
-
 /* === Scale Bar === */
 .scale-bar {
   position: absolute;

@@ -19,7 +19,7 @@ export interface StylePreset {
    * Branch restyling. BUG-10: every preset must state the FULL set it owns —
    * a preset that only wrote shape/width left `dash` and `gradient.enabled`
    * from an earlier preset in place, so 「默认」 did not actually restore the
-   * default look after PhyloRec 管道.
+   * default look after a restyling preset.
    */
   branch?: Partial<Pick<BranchStyle, 'shape' | 'width' | 'opacity' | 'dash'>>;
   /** Depth-gradient restyling; non-gradient presets disable it explicitly. */
@@ -64,20 +64,6 @@ export const STYLE_PRESETS: StylePreset[] = [
     branchColor: '#33658a',
     branch: { shape: 'line', width: 1.5, opacity: 1, dash: 'solid' },
     gradient: { enabled: false, from: '#2563eb', to: '#dc2626' },
-  },
-  {
-    // 用户反馈 (2026-11-16): PhyloRecViewer look — smooth curved slate tubes
-    // with a fill→stroke depth gradient, paper background.
-    id: 'phylo',
-    label: 'PhyloRec 管道',
-    labelEn: 'PhyloRec tubes',
-    background: '#f9f9fb',
-    nodeFill: '#fcfcfd',
-    nodeStroke: '#1c2024',
-    labelColor: '#1c2024',
-    branchColor: '#d9d9e0',
-    branch: { shape: 'curved', width: 12, opacity: 1, dash: 'solid' },
-    gradient: { enabled: true, from: '#f0f0f3', to: '#d9d9e0' },
   },
   {
     id: 'dark',

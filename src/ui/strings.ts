@@ -593,7 +593,6 @@ const zh = {
     agesAreEstimated: '部分节点年龄为拓扑深度估计，非化石或校准证据。',
     timeNotCalibrated: '尚无时间数据。',
     timeNotCalibratedHint: '设置节点年龄、添加校准点，或按拓扑深度填充。',
-    timeCalibrated: '已检测到时间数据，时间轴功能可用。',
     // Shown when the tree has time data but the layout is not time-calibrated.
     timeDataButWrongLayout: (layoutName: string) => `当前布局「${layoutName}」不显示时间轴。`,
     // One-click switch offered by the Time panel when the layout is not the
@@ -1620,7 +1619,6 @@ const en: Strings = {
     agesAreEstimated: 'Some node ages are topological-depth estimates, not fossil or calibration evidence.',
     timeNotCalibrated: 'No time data yet.',
     timeNotCalibratedHint: 'Set node ages, add calibration points, or fill from topological depth.',
-    timeCalibrated: 'Time data detected; time-axis features are available.',
     // Shown when the tree has time data but the layout is not time-calibrated.
     timeDataButWrongLayout: (layoutName: string) => `The “${layoutName}” layout does not show the time axis.`,
     switchToTimeChart: 'Switch to the time-calibrated tree',

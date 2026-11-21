@@ -8,6 +8,7 @@
 // era overlay, environmental events, calibration points) lives in the
 // separate 时间 module — see TimePanel.
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore, type LegendLayout, type LegendPosition } from '../model/store';
 import {
   fontWeightValue,
@@ -37,6 +38,7 @@ import { SliderNumberField } from './SliderNumberField';
 import { S, tr } from './strings';
 import { notify } from './toast';
 import { enterTimeChartLayout } from './timeChartEras';
+import { useLanguage } from './i18n';
 import { rerootAtSelection, ladderizeTree } from './fileMenu';
 
 type Apply = (recipe: (d: Project) => void) => void;
@@ -47,6 +49,34 @@ export function LayoutPanel() {
   const requestFit = useStore((s) => s.requestFit);
   // m1: which style preset is currently applied (drives the row's selected state).
   const stylePresetId = useStore((s) => s.stylePresetId);
+  // Four presets fit one row on a normal panel and fall back to 2×2 when the
+  // sidebar is narrow. The label widths differ between Chinese and English, so
+  // the breakpoint follows the active language; ResizeObserver keeps the choice
+  // in sync with the drag-resizable panel.
+  const lang = useLanguage();
+  const [presetColumns, setPresetColumns] = useState(4);
+  const presetObserver = useRef<ResizeObserver | null>(null);
+  const measurePresets = useCallback(
+    (el: HTMLElement) => {
+      const threshold = lang === 'zh' ? 220 : 260;
+      setPresetColumns(el.clientWidth >= threshold ? 4 : 2);
+    },
+    [lang],
+  );
+  const attachPresetRow = useCallback(
+    (el: HTMLDivElement | null) => {
+      presetObserver.current?.disconnect();
+      presetObserver.current = null;
+      if (!el) return;
+      measurePresets(el);
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(() => measurePresets(el));
+      observer.observe(el);
+      presetObserver.current = observer;
+    },
+    [measurePresets],
+  );
+  useEffect(() => () => presetObserver.current?.disconnect(), []);
   // 用户反馈: legend placement + item arrangement (样式 › 图例设置).
   const legendPosition = useStore((s) => s.legendPosition);
   const setLegendPosition = useStore((s) => s.setLegendPosition);
@@ -85,7 +115,11 @@ export function LayoutPanel() {
   return (
     <>
       <Section title={S.layoutPanel.presetSection} defaultOpen={false} pinable scope={project.id}>
-        <div className="preset-row">
+        <div
+          className="preset-row"
+          ref={attachPresetRow}
+          style={{ gridTemplateColumns: `repeat(${presetColumns}, minmax(0, 1fr))` }}
+        >
           {STYLE_PRESETS.map((p) => (
             <button
               key={p.id}
