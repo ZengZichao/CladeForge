@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
 import { isImeComposing } from './imeGuard';
+import { usePresence } from './motion';
 
 export interface DropdownItem {
   label?: string;
@@ -52,6 +53,9 @@ export function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
+  // Keep the panel mounted for one short exit transition (fade + 4 px lift +
+  // blur). Reopening during that window cancels it and turns the motion around.
+  const presence = usePresence(open);
   const ref = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -208,12 +212,13 @@ export function Dropdown({
         {label}
         <ChevronDownIcon style={{ marginLeft: 2, opacity: 0.6 }} />
       </button>
-      {open &&
+      {presence.mounted &&
         pos &&
         createPortal(
           <div
             ref={panelRef}
             className="dropdown-panel"
+            data-state={presence.state}
             role="menu"
             aria-label={label}
             style={{

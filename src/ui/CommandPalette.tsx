@@ -11,6 +11,7 @@
 //   - English/pinyin aliases
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { usePresence } from './motion';
 import {
   FileIcon,
   ReloadIcon,
@@ -522,7 +523,9 @@ export function CommandPalette({
     if (open) syncScroll();
   }, [open, q, filtered.length, language]);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
 
   const safeIdx = Math.min(idx, Math.max(0, filtered.length - 1));
   const activeId = filtered.length ? `cmd-${filtered[safeIdx].id}` : undefined;
@@ -585,9 +588,9 @@ export function CommandPalette({
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
-        className="command-palette"
+        className="command-palette" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.shortcuts.palette}

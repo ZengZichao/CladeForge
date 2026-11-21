@@ -1,8 +1,10 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Right-click context menu. Actions depend on what was clicked (node, custom
 // edge, or empty canvas).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../model/store';
+import { EXIT_MS, motionEnabled } from './motion';
 import {
   addChildrenSpaced,
   addSiblingSpaced,
@@ -66,16 +68,38 @@ export function ContextMenu({
   // items; Enter/Space activate; Escape closes.
   const listRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState(0);
+  // The menu leaves with a short fade/lift/blur instead of disappearing
+  // between frames. The parent unmounts it only after the exit window.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    if (!motionEnabled()) {
+      onClose();
+      return;
+    }
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      onClose();
+    }, EXIT_MS);
+  }, [closing, onClose]);
   useEffect(() => {
     listRef.current?.focus();
   }, []);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   useEffect(() => {
-    const onDoc = () => onClose();
+    const onDoc = () => requestClose();
     // Escape while an IME candidate list is open cancels the composition,
     // it must not also dismiss the context menu behind it.
     const onKey = (e: KeyboardEvent) => {
       if (isImeComposing(e)) return;
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('mousedown', onDoc);
     window.addEventListener('keydown', onKey);
@@ -83,11 +107,11 @@ export function ContextMenu({
       window.removeEventListener('mousedown', onDoc);
       window.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [requestClose]);
 
   const run = (fn: () => void) => () => {
     fn();
-    onClose();
+    requestClose();
   };
 
   let items: Item[];
@@ -291,6 +315,7 @@ export function ContextMenu({
     <div
       ref={listRef}
       className="context-menu"
+      data-state={closing ? 'closed' : 'open'}
       style={{ left, top, outline: 'none' }}
       role="menu"
       aria-label={contextLabel}

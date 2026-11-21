@@ -20,6 +20,7 @@ import { Field, CheckboxField } from './fields';
 import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 interface FieldOption {
   label: string;
@@ -62,6 +63,9 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
     'layerPrediction',
   ]);
   const ref = useDialogFocus(open, onClose);
+  // Read before the preview memo: keeping the preview alive through the exit
+  // avoids a blank flash while the dialog fades out.
+  const presence = usePresence(open);
 
   const options = useMemo(
     () => ({
@@ -76,7 +80,7 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
   // Preview: recomputed from the LIVE documents on every keystroke; nothing is
   // mutated until "替换全部".
   const jobs = useMemo(() => {
-    if (!open) return {};
+    if (!presence.mounted) return {};
     const out: Record<string, Replacement[]> = {};
     const collect = (tabId: string, doc: typeof project) => {
       const reps = collectReplacements(doc, options);
@@ -91,7 +95,7 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
       }
     }
     return out;
-  }, [open, project, tabs, activeTabId, tabStore, options, scope]);
+  }, [presence.mounted, project, tabs, activeTabId, tabStore, options, scope]);
 
   // H-D1: `total` counts only replacements that would actually be applied.
   // Blocked hits (a node name that would become empty) are preview-only: they
@@ -108,7 +112,7 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
     return { total, blockedCount: blocked };
   }, [jobs]);
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
 
   // H-D7: a preview hit is only actionable if it can be jumped to. focusNode
   // pans the canvas and select marks the node, so the user can see which of
@@ -138,10 +142,10 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog find-replace-dialog"
+        className="dialog find-replace-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.findReplaceTitle}
@@ -156,7 +160,7 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
               the user had already typed, and made the whole search look broken
               until Enter re-committed. Search options are not document data,
               so there is nothing to protect from per-keystroke commits. */}
-          <Field label={S.review.findReplaceFind}>
+          <Field label={S.review.findReplaceFind} stacked>
             <input
               type="text"
               value={find}
@@ -165,7 +169,7 @@ export function FindReplaceDialog({ open, onClose }: { open: boolean; onClose: (
               onChange={(e) => setFind(e.target.value)}
             />
           </Field>
-          <Field label={S.review.findReplaceReplace}>
+          <Field label={S.review.findReplaceReplace} stacked>
             <input
               type="text"
               value={replace}

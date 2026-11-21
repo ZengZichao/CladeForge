@@ -44,7 +44,10 @@ export function focusablesOf(el: HTMLElement): HTMLElement[] {
 export function claimFocusInto(el: HTMLElement, active: Element | null = document.activeElement): boolean {
   if (active && active !== document.body && el.contains(active)) return false;
   const focusables = focusablesOf(el);
-  (focusables[0] ?? el).focus();
+  // A dialog may nominate its landing control (e.g. the first setting rather
+  // than the header's close button); otherwise the first focusable wins.
+  const preferred = el.querySelector<HTMLElement>('[data-autofocus]');
+  (preferred ?? focusables[0] ?? el).focus();
   return true;
 }
 
@@ -70,8 +73,25 @@ export function useDialogFocus(
     const token = Symbol('modal-dialog');
     dialogStack.push(token);
 
-    const el = ref.current;
-    if (el) claimFocusInto(el);
+    // Presence-based exits insert the dialog one render AFTER `open` flips, so
+    // the ref can still be null when this effect first runs. Poll a frame (or a
+    // timeout in environments without rAF) until the node exists, then claim
+    // focus; the Tab trap below also reads the ref live for the same reason.
+    let alive = true;
+    let poll = 0;
+    const focusInto = () => {
+      if (!alive) return;
+      const el = ref.current;
+      if (!el) {
+        poll =
+          typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame(focusInto)
+            : window.setTimeout(focusInto, 0);
+        return;
+      }
+      claimFocusInto(el);
+    };
+    focusInto();
 
     const onKeyDown = (e: KeyboardEvent) => {
       // Inside a dialog the user is routinely composing Pinyin in a text
@@ -93,6 +113,7 @@ export function useDialogFocus(
         closeRef.current();
         return;
       }
+      const el = ref.current;
       if (e.key !== 'Tab' || !el) return;
       const focusables = focusablesOf(el);
       if (focusables.length === 0) {
@@ -113,6 +134,11 @@ export function useDialogFocus(
 
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
+      alive = false;
+      if (poll) {
+        if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(poll);
+        window.clearTimeout(poll);
+      }
       document.removeEventListener('keydown', onKeyDown, true);
       // S03-B: pop our token — removing only the LAST entry would break when
       // an effect re-arms (locale remount) or siblings close out of order.

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Left-column hypothesis-layer panel (the evolutionary semantic layer).
 //
 // Maintain several competing hypotheses over the same tree: switch the active
@@ -23,7 +24,7 @@ import {
   switchLayer,
   type LayerDiff,
 } from '../model/layers';
-import { Field, TextField, CheckboxField } from './fields';
+import { Field, TextField, SwitchField } from './fields';
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { requestConfirm } from './confirmDialog';
@@ -231,7 +232,7 @@ export function LayerPanel() {
         </>
       )}
 
-      <CheckboxField
+      <SwitchField
         label={S.event.showEvents}
         checked={showEvents}
         onChange={(v) => setShowEvents(v)}

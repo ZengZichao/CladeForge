@@ -140,41 +140,56 @@ describe('header target budget (BUG-10, revised by S19)', () => {
     expect(host!.querySelector('.prefs-trigger')).not.toBeNull();
   });
 
-  it('preferences reaches every language and theme option from the one trigger', () => {
+  it('preferences is a settings page: one named row per setting, control on the right', () => {
     mount(createElement(PreferencesMenu));
     const trigger = host!.querySelector('.prefs-trigger') as HTMLButtonElement;
     expect(trigger.textContent).toContain('偏好');
     act(() => trigger.click());
 
-    // M2 + 用户反馈: preferences render as a real DIALOG whose groups are
-    // rounded segmented BUTTON rows (`.prefs-seg`, role=radio) — no per-option
-    // full-width rows.
+    // 2026-11 review: a settings PAGE (no outer card), grouped rows with the
+    // name on the left and one small control on the right. Segmented buttons
+    // were retired here — a native select / stepper fits a single setting row.
     const panel = document.body.querySelector('.prefs-dialog');
     expect(panel).not.toBeNull();
-    const options = [...panel!.querySelectorAll('[role="radio"]')];
-    const labels = options.map((o) => (o.textContent ?? '').trim());
-    expect(labels).toEqual(
-      expect.arrayContaining(['中文', 'English', '浅色', '深色', '跟随系统']),
-    );
-    expect(panel!.querySelector('[role="radio"][aria-checked="true"]')).not.toBeNull();
-    // The segmented rows are real rounded buttons, equal width in a group.
-    expect(panel!.querySelectorAll('.prefs-seg').length).toBe(options.length);
-    expect(panel!.querySelectorAll('.prefs-seg-group').length).toBeGreaterThanOrEqual(4);
+    expect(panel!.querySelectorAll('.prefs-group-title').length).toBeGreaterThanOrEqual(4);
 
-    // P-03: the language swap relabels the dialog IN PLACE — switching several
+    const rows = [...panel!.querySelectorAll('.prefs-row')];
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+    for (const row of rows) {
+      expect(row.querySelector('.prefs-row-label')).not.toBeNull();
+      expect(row.querySelector('.prefs-row-control')).not.toBeNull();
+    }
+
+    const selects = [...panel!.querySelectorAll('select.prefs-select')] as HTMLSelectElement[];
+    expect(selects).toHaveLength(3);
+    const langOptions = [...selects[0].options].map((o) => (o.textContent ?? '').trim());
+    expect(langOptions).toEqual(expect.arrayContaining(['中文', 'English']));
+    const themeOptions = [...selects[1].options].map((o) => (o.textContent ?? '').trim());
+    expect(themeOptions).toEqual(expect.arrayContaining(['浅色', '深色', '跟随系统']));
+    // The bounded numeric setting uses a stepper, not a row of preset tabs.
+    expect(panel!.querySelector('.prefs-stepper')).not.toBeNull();
+
+    // P-03: the language swap relabels the page IN PLACE — switching several
     // preferences in one visit must not force the user to reopen it each time.
-    const en = options.find((o) => /English/.test(o.textContent ?? '')) as HTMLElement;
-    act(() => en.click());
+    act(() => {
+      selects[0].value = 'en';
+      selects[0].dispatchEvent(new Event('change', { bubbles: true }));
+    });
     expect(currentLanguage()).toBe('en');
     expect(document.body.querySelector('.prefs-dialog')).not.toBeNull();
 
-    // Theme choice still works and persists (same still-open dialog).
-    const dark = [...document.body.querySelectorAll('.prefs-dialog .prefs-seg')].find((o) =>
-      /Dark|深色/.test(o.textContent ?? ''),
-    ) as HTMLElement;
-    act(() => dark.click());
+    // Theme choice still works and persists (same still-open page).
+    const theme = document.body.querySelectorAll('select.prefs-select')[1] as HTMLSelectElement;
+    act(() => {
+      theme.value = 'dark';
+      theme.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.getItem('cladeforge:theme')).toBe('dark');
+
+    // Delete-type action lives in its own group at the bottom of the page.
+    const groups = [...panel!.querySelectorAll('.prefs-group')];
+    expect(groups[groups.length - 1]!.classList.contains('prefs-group-danger')).toBe(true);
   });
 });
 

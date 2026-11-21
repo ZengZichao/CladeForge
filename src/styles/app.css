@@ -170,6 +170,9 @@
   --border-strong: oklch(0.62 0 0);
   --border-popover: var(--border);
   --text: var(--foreground);
+  /* Canvas label ink. A user-chosen canvas colour overrides this inline from
+     TreeCanvas; the default follows the UI theme. */
+  --canvas-ink: var(--text);
   --on-accent: var(--primary-foreground);
   --accent-hover: color-mix(in srgb, var(--primary) 90%, transparent);
   --accent-weak: var(--accent);
@@ -181,13 +184,27 @@
 
   /* Elevation tokens (B3): the migration removed the definitions but kept
      41 radius / 17 shadow consumers, collapsing every popover, dialog and
-     panel to square, shadow-less corners. Defined once per theme block. */
+     panel to square, shadow-less corners. Defined once per theme block.
+
+     2026-11 review: containers are separated by LAYERED shadow, not a 1px
+     hard border — three overlapping soft shadows read as one elevation and
+     blend into any background, including the grey app shell below. */
   --radius-inner: var(--radius-sm);
-  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.08);
-  --shadow-panel: 0 4px 16px oklch(0 0 0 / 0.10);
-  --shadow-float: 0 8px 24px oklch(0 0 0 / 0.12);
-  --shadow-float-lg: 0 16px 48px oklch(0 0 0 / 0.18);
-  --shadow-md: 0 2px 8px oklch(0 0 0 / 0.10);
+  /* Concentric nesting: a control inset by `--space-1` inside a surface with
+     `--radius-lg` uses `--radius-sm` (10 − 4 = 6), so the two arcs stay
+     parallel instead of drifting apart. */
+  --radius-surface: var(--radius-lg);
+  --radius-control: var(--radius-md);
+  --radius-inset: var(--radius-sm);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 12px oklch(0 0 0 / 0.05);
+  --shadow-panel: 0 1px 2px oklch(0 0 0 / 0.04), 0 8px 24px oklch(0 0 0 / 0.07);
+  --shadow-float: 0 2px 4px oklch(0 0 0 / 0.04), 0 10px 28px oklch(0 0 0 / 0.12);
+  --shadow-float-lg: 0 4px 8px oklch(0 0 0 / 0.05), 0 24px 64px oklch(0 0 0 / 0.18);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 14px oklch(0 0 0 / 0.08);
+
+  /* App shell sits one tone below the panels/canvas so the white surfaces
+     float without relying on borders. */
+  --app-bg: var(--muted);
 
   /* Must stay byte-identical to FONT_FAMILY in src/io/exportImage.ts — a test enforces it.
      V6: explicit CJK fallbacks so Chinese/English measure consistently on Windows. */
@@ -199,9 +216,14 @@
 
   /* Spacing scale (4px grid): tight (within groups), normal (between fields),
      loose (between sections) */
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
-  --space-12: 48px; --space-16: 64px;
+  /* Fixed spacing ladder. Two half-steps below 4 px exist only for hairline
+     seams (segmented-control tracks, icon stacks) — never for layout gaps. */
+  --space-px: 1px; --space-0-5: 2px;
+  --space-1: 4px; --space-1-5: 6px; --space-2: 8px; --space-2-5: 10px;
+  --space-3: 12px; --space-3-5: 14px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 28px; --space-8: 32px;
+  --space-9: 36px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --space-20: 80px;
 
   --gap-tight: var(--space-1);      /* within a field row */
   --gap-field: var(--space-2);      /* between fields in a section */
@@ -255,11 +277,21 @@
   /* Tour mask */
   --tour-mask: color-mix(in srgb, var(--gray-12) 55%, transparent);
 
-  /* Motion: short ease-out; 250ms is the base for entrances. Native controls
-     (<select> popups, scrollbars, autofill) follow color-scheme (V2). */
-  --ease-fast: 150ms ease-out;
-  --ease-normal: 250ms ease-out;
-  --ease-slow: 250ms ease-out;
+  /* Motion: transition-first. Entrances use an expo-out curve (fast start,
+     gentle settle) instead of linear/keyframe playback, so an interrupted
+     action can turn around from wherever it is. `--motion-exit` matches
+     EXIT_MS in ui/motion.ts. */
+  --ease-out-quint: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-instant: 90ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --motion-exit: 240ms;
+  --ease-fast: var(--dur-fast) var(--ease-out-soft);
+  --ease-normal: var(--dur-base) var(--ease-out-soft);
+  --ease-slow: var(--dur-slow) var(--ease-out-soft);
 
   color-scheme: light;
 }
@@ -321,11 +353,12 @@
   /* Elevation tokens (B3) — dark mirrors. */
   --era-band-opacity: 0.3;
   --radius-inner: var(--radius-sm);
-  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.40);
-  --shadow-panel: 0 4px 16px oklch(0 0 0 / 0.45);
-  --shadow-float: 0 8px 24px oklch(0 0 0 / 0.50);
-  --shadow-float-lg: 0 16px 48px oklch(0 0 0 / 0.55);
-  --shadow-md: 0 2px 8px oklch(0 0 0 / 0.45);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.35), 0 4px 12px oklch(0 0 0 / 0.30);
+  --shadow-panel: 0 1px 2px oklch(0 0 0 / 0.35), 0 10px 28px oklch(0 0 0 / 0.38);
+  --shadow-float: 0 2px 4px oklch(0 0 0 / 0.35), 0 12px 32px oklch(0 0 0 / 0.48);
+  --shadow-float-lg: 0 4px 8px oklch(0 0 0 / 0.35), 0 28px 72px oklch(0 0 0 / 0.58);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.35), 0 6px 16px oklch(0 0 0 / 0.35);
+  --app-bg: var(--background);
   --border-strong: oklch(0.62 0 0);
 
   /* V2: native controls follow color-scheme (dark). */
@@ -368,11 +401,12 @@
     /* Elevation tokens (B3) — dark mirrors. */
     --era-band-opacity: 0.3;
     --radius-inner: var(--radius-sm);
-    --shadow-card: 0 1px 3px oklch(0 0 0 / 0.40);
-    --shadow-panel: 0 4px 16px oklch(0 0 0 / 0.45);
-    --shadow-float: 0 8px 24px oklch(0 0 0 / 0.50);
-    --shadow-float-lg: 0 16px 48px oklch(0 0 0 / 0.55);
-    --shadow-md: 0 2px 8px oklch(0 0 0 / 0.45);
+    --shadow-card: 0 1px 2px oklch(0 0 0 / 0.35), 0 4px 12px oklch(0 0 0 / 0.30);
+    --shadow-panel: 0 1px 2px oklch(0 0 0 / 0.35), 0 10px 28px oklch(0 0 0 / 0.38);
+    --shadow-float: 0 2px 4px oklch(0 0 0 / 0.35), 0 12px 32px oklch(0 0 0 / 0.48);
+    --shadow-float-lg: 0 4px 8px oklch(0 0 0 / 0.35), 0 28px 72px oklch(0 0 0 / 0.58);
+    --shadow-md: 0 1px 2px oklch(0 0 0 / 0.35), 0 6px 16px oklch(0 0 0 / 0.35);
+    --app-bg: var(--background);
     --border-strong: oklch(0.62 0 0);
 
     /* V2: native controls follow color-scheme (dark). */
@@ -411,7 +445,28 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg);
+  background: var(--app-bg);
+}
+
+/* Balanced headings: a two-line title never leaves one orphan word on the
+   last line. Kept global so every dialog, panel and empty state inherits it. */
+h1, h2, h3, .empty-wordmark, .panel-header-title {
+  text-wrap: balance;
+}
+
+/* Numbers share one advance width wherever they update in place (counts,
+   zoom, ages, step counts). The body already inherits tabular-nums; the
+   explicit list protects controls that reset `font-variant` (form widgets in
+   some engines) and documents the intent next to the components. */
+.status,
+.field-value,
+.section-summary,
+.cc-zoom,
+.kbd,
+input[type='number'],
+input[type='range'] + input,
+.recon-zoom-input {
+  font-variant-numeric: tabular-nums;
 }
 
 /* === Tab Bar === */
@@ -421,10 +476,11 @@ body {
 .tabbar {
   display: flex;
   align-items: stretch;
-  gap: 18px;
-  padding: 0 12px;
+  gap: var(--space-4);
+  padding: 0 var(--space-3);
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
+  box-shadow: 0 1px 0 var(--border);
   overflow: hidden; /* tabs shrink to fit instead of scrolling (no bar) */
   min-height: 36px;
   -webkit-user-select: none;
@@ -437,12 +493,12 @@ body {
 .tab {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex: 1 1 180px;
   min-width: 0;
   max-width: 220px;
   align-self: stretch;
-  padding: 0 2px;
+  padding: 0 var(--space-0-5);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   background: transparent;
@@ -483,7 +539,7 @@ body {
   background: transparent;
   color: var(--muted-foreground);
   line-height: 1;
-  padding: 2px;
+  padding: var(--space-1);
   cursor: pointer;
   border-radius: var(--radius-sm);
   display: inline-flex;
@@ -507,7 +563,7 @@ body {
   border: none;
   background: transparent;
   color: var(--muted-foreground);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   cursor: pointer;
   border-radius: var(--radius-inner);
   display: inline-flex;
@@ -528,7 +584,8 @@ body {
   align-items: center;
   gap: 0;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
+  box-shadow: 0 1px 0 var(--border), 0 4px 14px oklch(0 0 0 / 0.04);
   flex-wrap: nowrap;
   -webkit-app-region: drag;
 }
@@ -542,9 +599,9 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex: 0 0 auto;
-  padding: 6px 12px 6px 8px;
+  padding: var(--space-1-5) var(--space-3) var(--space-1-5) var(--space-2);
   margin-left: auto;
 }
 .header-save-short { display: none; }
@@ -553,8 +610,8 @@ body {
 .menubar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 14px;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-2) var(--space-1-5) var(--space-3-5);
   background: transparent;
   flex-wrap: nowrap;
   flex: 0 0 auto;
@@ -566,7 +623,7 @@ body {
    the label and the caret drop away, keeping the same responsive behaviour the
    three separate help buttons used to have while costing one target. */
 .btn.menubar-help-btn {
-  gap: 5px;
+  gap: var(--space-1);
 }
 .btn.menubar-help-btn .menubar-help-label {
   font-weight: 600;
@@ -580,7 +637,7 @@ body {
    icon gone, hiding the label below 1440px would render an empty button. */
 
 .brand {
-  margin-right: 10px;
+  margin-right: var(--space-2-5);
   display: flex;
   align-items: center;
   color: var(--foreground);
@@ -593,7 +650,7 @@ body {
   font-weight: 500;
   letter-spacing: -0.01em;
   line-height: 1;
-  padding-top: 1px; /* optical: serif caps sit slightly low in a 28px row */
+  padding-top: var(--space-0-5); /* optical: serif caps sit slightly low in a 28px row */
 }
 
 /* === Responsive header (BUG-9) ===
@@ -662,23 +719,23 @@ body {
     letter-spacing: 0.05em;
   }
   .menubar {
-    padding: 7px 4px 7px 8px;
-    gap: 4px;
+    padding: var(--space-1-5) var(--space-1) var(--space-1-5) var(--space-2);
+    gap: var(--space-1);
   }
   .header-actions {
-    gap: 6px;
-    padding: 7px 8px 7px 4px;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-2) var(--space-1-5) var(--space-1);
   }
   .header-save-full { display: none; }
   .header-save-short { display: inline; }
-  .header-save { padding: 3px 10px; }
+  .header-save { padding: var(--space-0-5) var(--space-2-5); }
   .toolbar {
-    padding: 6px 8px;
-    gap: 6px;
+    padding: var(--space-1-5) var(--space-2);
+    gap: var(--space-1-5);
   }
   /* The view-mode switch is the widest toolbar item; at phone width its default
      padding pushes the row into an unnecessary horizontal scroll. */
-  .seg-btn { padding: 4px 7px 5px; font-size: var(--text-xs); }
+  .seg-btn { padding: var(--space-1) var(--space-1-5) var(--space-1); font-size: var(--text-xs); }
   .toolbar-btn-label { display: none; }
   .prefs-trigger-label,
   .prefs-caret {
@@ -695,8 +752,8 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-3) var(--space-1-5) var(--space-2);
   background: transparent;
   flex-wrap: nowrap;
   flex: 1 1 auto;
@@ -721,7 +778,7 @@ body {
 
 /* Prominent Save button in the header bar — the one solid action. */
 .header-save {
-  padding: 3px 14px;
+  padding: var(--space-0-5) var(--space-3-5);
   font-size: var(--text-sm);
   font-weight: 600;
 }
@@ -737,7 +794,7 @@ body {
 .group {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-0-5);
   padding-right: 0;
   margin-right: 0;
 }
@@ -748,7 +805,7 @@ body {
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.01em;
-  margin-right: 4px;
+  margin-right: var(--space-1);
   white-space: nowrap;
 }
 
@@ -760,13 +817,13 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-height: 32px;
   border: 1px solid var(--input);
   background: var(--background);
   color: var(--foreground);
   border-radius: var(--radius-md);
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
@@ -813,7 +870,7 @@ body {
 }
 /* V7/S20 (Sonus+UI_UX_REVIEW): secondary destructive for LIST-ROW deletes.
    Solid red at every row out-shouted the object names, values and add actions
-   (three 44px red ✕s were the loudest thing in the time panel); the strong red
+   (three 44px red close buttons were the loudest thing in the time panel); the strong red
    is reserved for final confirm dialogs. Keep discoverability (no hover-only). */
 .btn.ghost-danger {
   background: transparent;
@@ -842,6 +899,7 @@ body {
 .btn.ghost {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .btn.ghost:hover:not(:disabled) {
   background: var(--accent-weak);
@@ -854,7 +912,7 @@ body {
 .btn.text {
   border-color: transparent;
   background: transparent;
-  padding: 3px 5px;
+  padding: var(--space-0-5) var(--space-1);
   font-weight: 500;
   color: var(--foreground);
 }
@@ -884,7 +942,7 @@ body {
   border-top-color: transparent;
   border-radius: 50%;
   animation: busy-spin 0.7s linear infinite;
-  margin-left: 6px;
+  margin-left: var(--space-1-5);
 }
 .btn svg {
   display: inline-block;
@@ -929,26 +987,48 @@ body {
   min-width: 170px;
   background: var(--popover);
   color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border: 0;
+  /* 4 px inset + 6 px item = 10 px outer: concentric menu corners. */
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
   padding: var(--space-1);
+  transform-origin: top left;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-fast) var(--ease-out-soft);
   /* Above the toast layer: the toast stack is anchored top-right, exactly where
      the Preferences panel opens, and toast children intercept pointer events —
      a lower z-index let a toast cover (and click-block) the open menu's first
      items, including the language switch, for up to 7 s. */
   z-index: var(--z-menu-above-toast);
 }
+@starting-style {
+  .dropdown-panel {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+    filter: blur(2px);
+  }
+}
+.dropdown-panel[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-3px) scale(0.99);
+  filter: blur(2px);
+  /* Leave BELOW any dialog the menu item may have just opened, and never
+     intercept a click meant for it. */
+  z-index: var(--z-local);
+  pointer-events: none;
+}
 .menu-item {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
   text-align: left;
   border: none;
   background: none;
   color: var(--foreground);
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -967,13 +1047,12 @@ body {
   margin: 4px -4px;
 }
 
-/* === Preferences dropdown (language + theme, BUG-10) === */
-/* One trigger replaces the 2-button language toggle and the 3-button theme
-   toggle, which together cost five of the header's ten-target budget. */
+/* Preferences trigger. The settings surface it opens is a full page, defined
+   with the dialog styles further down. */
 .prefs-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 .prefs-trigger svg {
@@ -988,51 +1067,25 @@ body {
 .prefs-trigger-label {
   font-weight: 600;
 }
-.prefs-panel {
-  max-height: min(420px, calc(100vh - 80px));
-  overflow-y: auto;
-}
+/* Dropdown group headings (used by the File menu). */
 .menu-section-label {
-  padding: 6px 10px 3px;
+  padding: var(--space-1-5) var(--space-2-5) var(--space-0-5);
   font-size: var(--text-2xs);
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
 }
-.prefs-item {
-  justify-content: flex-start;
-  padding: 6px 10px;
-}
-.prefs-item-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-/* Check column: a fixed 12px box that must not shrink. As a plain flex item a
-   long row label ("300 steps (more memory, slower)") squeezed it to 5px, which
-   pulled the label left and broke the column the whole menu relies on. */
-.prefs-check {
-  flex: 0 0 12px;
-  width: 12px;
-  display: inline-block;
-  color: var(--primary);
-  font-weight: 500;
-}
-.prefs-item-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--muted-foreground);
-}
-.prefs-item-icon svg {
-  width: 14px;
-  height: 14px;
-}
 
 /* === Body & Canvas === */
+/* The canvas row is a set of floating surfaces on the grey app shell: an 8 px
+   gutter runs around every panel and the canvas, so the left and right
+   sidebars have IDENTICAL edge whitespace and share the canvas radius. */
 .body {
   flex: 1;
   display: flex;
   min-height: 0;
+  padding: var(--space-2);
+  gap: 0;
   /* Containing block for the narrow-screen overlay panels and the panel-toggle
      buttons: both belong to the canvas row (between the header and the bottom
      tab bar), not to the viewport. */
@@ -1043,6 +1096,9 @@ body {
   flex: 1;
   min-width: 0;
   background: var(--canvas-bg);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
 }
 .canvas-host svg {
   /* 用户反馈：clicking / click-dragging the canvas must never TEXT-SELECT the
@@ -1063,8 +1119,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  padding: 8px 6px;
+  gap: var(--space-0-5);
+  padding: var(--space-2) var(--space-1-5);
   background: var(--surface);
   border-right: 1px solid var(--border);
   box-shadow: var(--shadow-panel);
@@ -1074,8 +1130,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 7px 2px 6px;
+  gap: var(--space-0-5);
+  padding: var(--space-1-5) var(--space-0-5) var(--space-1-5);
   border: none;
   background: transparent;
   color: var(--muted-foreground);
@@ -1117,7 +1173,7 @@ body {
   width: 100%;
   height: 0.5px;
   background: var(--border);
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 .nav-rail-spacer { flex: 1; }
 
@@ -1140,10 +1196,10 @@ body {
 .tool-shelf-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .tool-shelf-group .btn {
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
 }
 .tool-shelf-group .btn svg {
@@ -1154,7 +1210,7 @@ body {
 .tool-shelf-search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex: 1;
   min-width: 0;
 }
@@ -1166,7 +1222,7 @@ body {
 .tool-shelf .branch-group {
   flex: 1;
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .tool-shelf .branch-group .btn {
   justify-content: center;
@@ -1174,20 +1230,23 @@ body {
 }
 
 /* === Side Panels === */
+/* Same radius as the canvas, no hard border: the panel is separated from the
+   shell by a layered shadow only (which also survives a theme change). */
 .panel {
   flex-shrink: 0;
   background: var(--surface);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-4);
+  /* Symmetric inner whitespace: the heading, section rows and field labels all
+     start on ONE left edge, and the right inset matches it. */
+  padding: var(--space-4) var(--space-4) var(--space-6);
   position: relative;
+  border-radius: var(--radius-surface);
   box-shadow: var(--shadow-panel);
 }
-.panel-left {
-  border-right: 1px solid var(--border);
-}
+.panel-left,
 .panel-right {
-  border-left: 1px solid var(--border);
+  border: 0;
 }
 /* Narrow-screen overlay panels sit BETWEEN the header and the bottom chrome.
    They are positioned against `.body` (the canvas row) rather than the viewport:
@@ -1197,18 +1256,21 @@ body {
    header's lower edge and the right end of the bottom tabs. */
 .panel.overlay {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  /* Inside the same 8 px gutter as the inline panels, so opening the drawer
+     does not make it jump flush against the window edge. */
+  top: var(--space-2);
+  bottom: var(--space-2);
   z-index: var(--z-panel-overlay);
   background: var(--surface);
+  box-shadow: var(--shadow-float-lg);
 }
 .panel-left.overlay {
-  left: 0;
-  border-right: 1px solid var(--border);
+  left: var(--space-2);
+  border: 0;
 }
 .panel-right.overlay {
-  right: 0;
-  border-left: 1px solid var(--border);
+  right: var(--space-2);
+  border: 0;
 }
 .panel-toggle-btn {
   position: absolute;
@@ -1228,19 +1290,23 @@ body {
   background: var(--accent-weak);
   border-color: var(--border-strong);
 }
-.panel-toggle-btn.left { left: 4px; top: 4px; }
-.panel-toggle-btn.right { right: 4px; top: 4px; }
+.panel-toggle-btn.left { left: var(--space-3); top: var(--space-3); }
+.panel-toggle-btn.right { right: var(--space-3); top: var(--space-3); }
 .panel-toggle-btn svg { width: 18px; height: 18px; }
 .overlay-close {
+  /* Floats in the panel's top-right corner, over the header row. The rows it
+     can overlap reserve a 40 px gutter (see .panel > .panel-header /
+     .panel > .inspector-search below), so text and inputs never run beneath
+     it — and it costs no extra vertical strip. */
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--foreground);
-  border-radius: var(--radius-inner);
+  border-radius: var(--radius-inset);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1251,11 +1317,20 @@ body {
   background: var(--accent-weak);
   border-color: var(--border-strong);
 }
+/* Reserve the top-right corner for the panel's collapse button instead of
+   letting it sit on top of the first row's content. */
+.panel > .panel-header,
+.panel > .inspector-search {
+  padding-right: calc(32px + var(--space-2) + var(--space-2));
+}
 .overlay-close svg { width: 14px; height: 14px; }
 
+/* The splitter occupies the SAME 8 px gutter as the shell padding, so the
+   panel/canvas spacing is identical on both sides and no extra divider line
+   competes with the floating-shadow edges. */
 .resizer {
-  flex: 0 0 5px;
-  width: 5px;
+  flex: 0 0 var(--space-2);
+  width: var(--space-2);
   cursor: col-resize;
   background: transparent;
   position: relative;
@@ -1271,25 +1346,28 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -4px;
-  right: -4px;
+  left: -3px;
+  right: -3px;
 }
 .resizer::before {
   content: '';
   position: absolute;
-  left: 1px;
-  top: 0;
-  bottom: 0;
-  width: 0.5px;
-  background: var(--border);
-  /* Keep the divider line above the ::after hover tint. */
+  left: 50%;
+  top: 40%;
+  bottom: 40%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color var(--ease-fast), top var(--ease-fast), bottom var(--ease-fast);
+  /* Keep the grip above the ::after hover tint. */
   z-index: var(--z-local);
 }
 .resizer:hover { background: var(--accent-weak); }
 /* Tint the whole 13px hit strip, not just the 5px gap, and thicken/darken the
    divider line so the drag affordance is actually visible. */
 .resizer:hover::after { background: var(--accent-weak); }
-.resizer:hover::before { background: var(--primary); width: 1px; }
+.resizer:hover::before { background: var(--border-strong); top: 20%; bottom: 20%; }
 
 /* During panel drag we disable ALL transitions so width changes are instant
    and the browser doesn't animate every pointermove frame (janky dragging). */
@@ -1302,15 +1380,24 @@ body.panel-resizing {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-2);
+  min-height: 32px;
+  margin: 0 0 var(--space-2);
+  padding: 0 0 var(--space-2);
+  /* A soft hairline shadow separates the module title from its rows without
+     the hard 1px border that used to cut the floating panel in two. */
+  box-shadow: 0 1px 0 var(--border);
+}
+/* A second module inside the same panel (时间 → 样式) gets a full group break:
+   more air above it than between any two sections below it. */
+.panel-header:not(:first-of-type) {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
 }
 .panel-header-title {
   font-size: var(--font-title);
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 .panel-header-subtitle {
@@ -1321,9 +1408,10 @@ body.panel-resizing {
 /* === Inspector Tabs — shadcn Tabs === */
 .inspector-tabs {
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  background: var(--muted);
+  gap: var(--space-0-5);
+  /* 2 px padding + 6 px tab = 8 px outer radius. */
+  padding: var(--space-0-5);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-4);
 }
@@ -1331,10 +1419,11 @@ body.panel-resizing {
   flex: 1;
   border: none;
   background: transparent;
+  border-radius: var(--radius-inset);
   color: var(--muted-foreground);
   font-size: var(--text-sm);
   font-weight: 500;
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-2-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -1365,7 +1454,7 @@ body.panel-resizing {
   box-sizing: border-box;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  padding: 0 8px 0 28px;
+  padding: 0 var(--space-2) 0 var(--space-7);
   font-size: var(--text-sm);
   background: transparent;
   color: var(--foreground);
@@ -1396,16 +1485,17 @@ body.panel-resizing {
 .inspector-content > .panel-section.favorited {
   order: -1;
 }
-/* Empty inspector: centred status lines (用户反馈), not an instruction manual. */
+/* Empty inspector: a left-aligned status column, like every other row in the
+   panel (centred copy broke the one left edge the inspector is built on). */
 .inspector-empty {
-  padding: 18px 0 0;
-  text-align: center;
+  padding: var(--space-2) 0 0;
+  text-align: left;
 }
 .inspector-empty-title {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--foreground);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 .inspector-empty-hint {
   font-size: var(--text-xs);
@@ -1425,7 +1515,7 @@ body.panel-resizing {
   align-items: center;
   gap: 0;
   background: var(--popover);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
 }
@@ -1437,7 +1527,7 @@ body.panel-resizing {
   border-radius: var(--radius-sm);
   min-width: 30px;
   height: 30px;
-  padding: 0 6px;
+  padding: 0 var(--space-1-5);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
@@ -1461,14 +1551,14 @@ body.panel-resizing {
 .cc-wide {
   font-size: var(--text-sm);
   font-weight: 500;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
 }
 .cc-zoom {
   color: var(--muted-foreground);
   text-align: center;
   font-size: var(--text-xs);
   font-weight: 500;
-  padding: 0 6px;
+  padding: 0 var(--space-1-5);
   min-width: 42px;
   height: 30px;
   cursor: pointer;
@@ -1498,13 +1588,13 @@ body.panel-resizing {
 .group-toggle-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   margin: 0 0 var(--space-3);
 }
 .group-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
   background: none;
@@ -1527,7 +1617,7 @@ body.panel-resizing {
   font-size: var(--text-xs);
   font-weight: 500;
   color: var(--muted-foreground);
-  padding: 2px 0;
+  padding: var(--space-0-5) 0;
   margin: 0 0 var(--space-2);
 }
 
@@ -1536,37 +1626,49 @@ body.panel-resizing {
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: var(--space-3) 0;
-  margin-bottom: 0;
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
+/* Sibling sections are the TIGHT group: 4 px apart, no rules. The only air
+   break inside a panel is the module heading above (--space-6). */
 .panel-section + .panel-section {
-  border-top: 1px solid var(--border);
+  border-top: 0;
 }
-/* Section header row: toggle + favorite star */
+/* Section header row: toggle + optional pin/favourite. 36 px tall so the whole
+   row — not just the label text — is a comfortable click target. */
 .section-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  margin: 0 0 var(--space-3);
+  gap: 0;
+  margin: 0;
 }
 .section-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
+  min-height: 36px;
+  /* Negative inline margin keeps the TEXT on the same 16 px column as the
+     module title while the hover/click surface still reaches the panel edge. */
+  margin: 0 calc(var(--space-2) * -1);
   /* shadcn sidebar-group-label: no filled band; weight + muted colour mark the
      heading level, spacing separates it from the field rows below. */
   background: transparent;
   border: none;
-  padding: 2px 0;
+  padding: 6px var(--space-2);
   cursor: pointer;
-  font-size: var(--text-xs);
+  font-size: var(--font-label);
   font-weight: 500;
+  line-height: 1.3;
   color: var(--muted-foreground);
   text-align: left;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-inset);
+}
+.section-title {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 /* Disclosure caret — the only non-colour cue for “this header folds”. */
 .section-caret {
@@ -1574,9 +1676,15 @@ body.panel-resizing {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  /* The caret sits at the TRAILING edge: a leading 12 px glyph pushed every
+     section title 18 px to the right of the module title, breaking the one
+     left edge the sidebar is built on. */
+  margin-left: auto;
   color: var(--muted-foreground);
-  transition: transform var(--ease-fast);
+  transition: transform var(--ease-normal);
 }
+/* 12 px glyph next to 13 px labels — an icon is always a step smaller than
+   the text it belongs to. */
 .section-caret svg {
   width: 12px;
   height: 12px;
@@ -1590,7 +1698,7 @@ body.panel-resizing {
 }
 .section-toggle:hover {
   color: var(--foreground);
-  background: var(--surface-3);
+  background: var(--accent);
 }
 /* Section favorite star toggle */
 .section-fav {
@@ -1598,7 +1706,7 @@ body.panel-resizing {
   background: none;
   color: var(--muted-foreground);
   cursor: pointer;
-  padding: 2px;
+  padding: var(--space-1);
   border-radius: var(--radius-inner);
   display: inline-flex;
   align-items: center;
@@ -1618,8 +1726,8 @@ body.panel-resizing {
   color: var(--primary);
 }
 .section-fav svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 /* Pin button — pins the section expanded so clicking the header leaves it open;
    unpinning restores normal collapse behaviour. Hover-only: at rest the pin's
@@ -1631,7 +1739,7 @@ body.panel-resizing {
   background: none;
   color: var(--muted-foreground);
   cursor: pointer;
-  padding: 2px;
+  padding: var(--space-1);
   border-radius: var(--radius-inner);
   display: inline-flex;
   align-items: center;
@@ -1659,8 +1767,8 @@ body.panel-resizing {
 }
 .section-pin svg,
 .group-pin svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .panel-section.pinned .section-toggle {
   color: var(--primary);
@@ -1682,7 +1790,37 @@ body.panel-resizing {
 .section-body {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-field);
+  gap: var(--space-2-5);
+  padding: var(--space-1) 0 var(--space-2);
+}
+/* Collapse/expand is a real transition (not a height keyframe): the grid row
+   animates while opacity, a 2 px lift and a 2 px blur soften the swap. Because
+   it is a transition, clicking the header mid-animation turns it around where
+   it is instead of restarting from the top. */
+.section-body-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  filter: blur(2px);
+  transform: translateY(-calc(var(--space-1) / 2));
+  transition:
+    grid-template-rows var(--dur-base) var(--ease-out-quint),
+    opacity var(--dur-fast) var(--ease-out-soft),
+    filter var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint);
+}
+.section-body-reveal[data-state='open'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  filter: blur(0);
+  transform: none;
+}
+.section-body-reveal[data-state='closed'] {
+  pointer-events: none;
+}
+.section-body-clip {
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* === Fields === */
@@ -1690,7 +1828,7 @@ body.panel-resizing {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: var(--gap-field);
 }
 .field label {
@@ -1716,7 +1854,7 @@ body.panel-resizing {
   display: grid;
   grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: var(--gap-field);
 }
 .panel .field > label {
@@ -1764,7 +1902,7 @@ body.panel-resizing {
 .field.stacked label {
   display: block;
   max-width: none;
-  margin-bottom: 2px;
+  margin-bottom: var(--space-0-5);
 }
 .field.stacked .field-value {
   display: block;
@@ -1778,7 +1916,7 @@ body.panel-resizing {
 }
 .field.check {
   justify-content: flex-start;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 /* Range inputs use the native control with the primary accent — Chromium
@@ -1823,10 +1961,76 @@ body.panel-resizing {
   cursor: pointer;
   color: var(--foreground);
 }
+
+/* Immediate boolean: a switch, not a checkbox — the state is visible at rest
+   and the click applies at once (no separate Save step). */
+.field.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+.field.switch-row > label {
+  min-width: 0;
+  color: var(--foreground);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: var(--space-0-5);
+  border: 0;
+  border-radius: 999px;
+  /* Off track reuses the control-boundary token (already ≥3:1 against the
+     surface); `--input` was nearly white in light mode and the switch read as
+     a blank pill. */
+  background: var(--border-strong);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color var(--ease-normal);
+}
+/* Hit area larger than the 36 × 20 track: the thumb is the visual, the whole
+   row height is the target. */
+.switch::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.switch .switch-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transform: translateX(0);
+  transition: transform var(--dur-base) var(--ease-out-quint);
+}
+.switch[aria-checked='true'] {
+  background: var(--primary);
+}
+.switch[aria-checked='true'] .switch-thumb {
+  transform: translateX(16px);
+}
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.switch:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: 2px;
+}
+
 .color-field {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex: 1;
   min-width: 0;
 }
@@ -1849,7 +2053,7 @@ body.panel-resizing {
   font-family: var(--font-mono);
   min-width: 72px;
   /* 用户反馈：the hex readout is a rounded EDITABLE box, not a bare span. */
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
   background: var(--background);
@@ -1869,7 +2073,7 @@ body.panel-resizing {
   height: 32px;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   font-size: var(--text-sm);
   background: transparent;
   color: var(--foreground);
@@ -1904,17 +2108,17 @@ body.panel-resizing {
 .field input[type='range'] { flex: 1; }
 .field.row-actions {
   justify-content: flex-start;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex-wrap: wrap;
 }
 .field.row-actions-spread {
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex-wrap: wrap;
 }
 .field.row-actions-spread > .actions-group {
   display: flex;
-  gap: 6px;
+  gap: var(--space-1-5);
   flex-wrap: wrap;
 }
 
@@ -1927,7 +2131,27 @@ body.panel-resizing {
 .hint-row {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--space-1-5);
+}
+/* Warning callout: a line icon (same icon family as the rest of the chrome)
+   replaces the warning emoji, and a soft tint + shadow replaces the hard
+   coloured border. */
+.hint-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2-5) var(--space-3);
+  border-radius: var(--radius-inset);
+  background: var(--c-warn-bg);
+  color: var(--foreground);
+  box-shadow: var(--shadow-card);
+}
+.hint-callout-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: var(--space-0-5);
+  color: var(--c-warn);
 }
 .hint-row .hint { flex: 1; }
 .hint-close {
@@ -1951,17 +2175,18 @@ body.panel-resizing {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
 
 /* === Status Bar === */
 .status {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 10px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2-5);
   background: var(--surface);
-  border-top: 1px solid var(--border);
+  border-top: 0;
+  box-shadow: 0 -1px 0 var(--border);
   color: var(--muted-foreground);
   font-size: var(--text-xs);
   letter-spacing: 0.01em;
@@ -1989,7 +2214,7 @@ body.panel-resizing {
 .toolbar .select {
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 0 7px;
+  padding: 0 var(--space-1-5);
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--foreground);
@@ -2012,17 +2237,36 @@ body.panel-resizing {
   z-index: var(--z-context-above-toast);
   min-width: 168px;
   background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
   padding: var(--space-1);
+  transform-origin: top left;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-fast) var(--ease-out-soft);
+}
+@starting-style {
+  .context-menu {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+    filter: blur(2px);
+  }
+}
+.context-menu[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-3px) scale(0.99);
+  filter: blur(2px);
+  z-index: var(--z-local);
+  pointer-events: none;
 }
 .context-menu-label {
   font-size: var(--text-xs);
   font-weight: 500;
   color: var(--muted-foreground);
-  padding: 4px 8px 6px;
-  margin-bottom: 4px;
+  padding: var(--space-1) var(--space-2) var(--space-1-5);
+  margin-bottom: var(--space-1);
   user-select: none;
 }
 
@@ -2042,9 +2286,17 @@ body.panel-resizing {
    was covered by the still-open Preferences and its Cancel could not be
    clicked. Give the confirm layer an explicit level above --z-modal. */
 .dialog-backdrop.confirm-backdrop { z-index: var(--z-confirm); }
+.dialog-backdrop {
+  transition: opacity var(--dur-fast) var(--ease-out-soft),
+    backdrop-filter var(--dur-fast) var(--ease-out-soft);
+}
+.dialog-backdrop[data-state='closed'] {
+  pointer-events: none;
+  opacity: 0;
+}
 .dialog {
   background: var(--background);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float-lg);
   padding: var(--space-5);
@@ -2055,7 +2307,33 @@ body.panel-resizing {
   width: min(480px, 92vw);
   max-height: min(86vh, 720px);
   overflow-y: auto;
-  animation: dialog-enter 250ms ease-out;
+  /* Entrance/exit are TRANSITIONS: an interrupted close turns around in
+     place, and the same curves also drive the reduced-motion-free exit that
+     ui/motion.ts waits for. */
+  transition:
+    opacity var(--dur-base) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-base) var(--ease-out-soft);
+}
+.dialog[data-state='closed'],
+.command-palette[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.99);
+  filter: blur(2px);
+}
+@starting-style {
+  .dialog {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+    filter: blur(3px);
+  }
+}
+@starting-style {
+  .dialog.prefs-dialog {
+    opacity: 0;
+    transform: scale(0.996);
+    filter: blur(2px);
+  }
 }
 
 /* S13: content-typed widths — the export settings dialog needs room for the
@@ -2063,91 +2341,260 @@ body.panel-resizing {
 .dialog.export-dialog {
   width: min(440px, 92vw);
 }
-/* M2: the preferences dialog carries 12 radio rows + diagnostics/destructive
-   actions — roomier than the generic dialog, scrollable within the viewport. */
+/* === Settings page (Preferences) ===
+   The 2026-11 review asked for the SETTINGS pattern, not a form: every row is
+   name on the left, one small control on the right; groups carry a heading and
+   more air than the rows inside them; the outer card frame is gone entirely —
+   the page is the surface. Delete-type actions live in their own group at the
+   bottom, away from everyday switches. */
+.prefs-backdrop {
+  background: var(--app-bg);
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+  transition: opacity var(--dur-base) var(--ease-out-soft);
+}
+.prefs-backdrop[data-state='closed'] {
+  opacity: 0;
+}
 .dialog.prefs-dialog {
-  width: min(420px, 92vw);
-}
-.dialog.prefs-dialog .menu-section-label {
-  margin-top: 6px;
-}
-.dialog.prefs-dialog .prefs-item {
   width: 100%;
-  justify-content: flex-start;
-  padding: 5px 8px;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--app-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition:
+    opacity var(--dur-base) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-base) var(--ease-out-soft);
 }
-/* 用户反馈: the destructive row is wrapped in ONE long rounded rectangle. */
-.dialog.prefs-dialog .prefs-reset-btn {
-  /* 用户反馈: the destructive action reads as one — red fill, white ink — and
-     stands apart from the rounded option rows above it. */
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
-  margin-top: 14px;
-  background: var(--danger);
-  color: #fff;
+.dialog.prefs-dialog[data-state='closed'] {
+  opacity: 0;
+  transform: scale(0.996);
+  filter: blur(2px);
 }
-.dialog.prefs-dialog .prefs-reset-btn:hover {
-  filter: brightness(1.08);
+.prefs-page-header {
+  flex: 0 0 auto;
+  background: var(--surface);
+  box-shadow: 0 1px 0 var(--border), var(--shadow-card);
+  z-index: var(--z-local);
 }
-.dialog.prefs-dialog .prefs-reset-btn .prefs-item-label {
-  color: #fff;
+.prefs-page-header-inner {
+  width: min(780px, 100%);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
-/* 用户反馈：preference groups are rounded segmented BUTTON ROWS — every
-   option the same width and height, labels of comparable length, the active
-   option filled with the primary ink. */
-.prefs-seg-group {
+.prefs-page-header h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.prefs-close {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  flex: none;
+}
+.prefs-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* No reserved gutter: it shifts the centered 780 px column ~7 px away from
+     the header's column, breaking the single left edge the page is built on. */
+}
+.prefs-page-inner {
+  width: min(780px, 100%);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-16);
+}
+.prefs-group {
+  padding: 0;
+}
+.prefs-group + .prefs-group {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  /* Group break: a hairline shadow, not a border box. */
+  box-shadow: 0 -1px 0 var(--border);
+}
+.prefs-group-title {
+  margin: 0 0 var(--space-1);
+  padding: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+}
+/* One setting per row: name + explanation on the left, the single control
+   flush right. min-height keeps every row a comfortable click target. */
+.prefs-row {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: 4px;
-  margin: 4px 0 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 56px;
+  padding: var(--space-2) 0;
 }
-.prefs-seg {
+.prefs-row + .prefs-row {
+  box-shadow: 0 -1px 0 var(--border);
+}
+.prefs-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+.prefs-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--foreground);
+}
+.prefs-desc {
+  max-width: 52ch;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.prefs-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+/* One small control per row, right-aligned. A native select is the most
+   compact way to browse 3 preset values and keeps the current choice visible
+   without spending a whole row on options. */
+.prefs-select {
+  min-width: 168px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--ease-fast),
+    box-shadow var(--ease-fast);
+}
+.prefs-select:hover {
+  border-color: var(--border-strong);
+}
+.prefs-select:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: 2px;
+  border-color: var(--border-strong);
+}
+/* Bounded numeric control: ±5 % steps, value always readable, no popup.
+   Concentric: 4 px padding + 6 px button radius = 10 px track. */
+.prefs-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: var(--space-1);
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  border-radius: var(--radius-control);
+}
+.prefs-step-btn {
   appearance: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-inset);
+  background: transparent;
+  color: var(--foreground);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--muted-foreground);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  white-space: nowrap;
   cursor: pointer;
-  transition: border-color var(--ease-fast), background-color var(--ease-fast);
+  transition:
+    background-color var(--ease-fast),
+    box-shadow var(--ease-fast),
+    opacity var(--ease-fast);
 }
-.prefs-seg:hover:not(.active) {
-  border-color: var(--border-strong);
-  color: var(--foreground);
+.prefs-step-btn:hover:not(:disabled) {
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
-.prefs-seg.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-foreground);
-  font-weight: 600;
+.prefs-step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
-.prefs-seg:focus-visible {
+.prefs-step-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.prefs-step-btn:focus-visible {
   outline: 1px solid var(--foreground);
-  outline-offset: 2px;
+  outline-offset: 1px;
+}
+.prefs-step-value {
+  min-width: 48px;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Destructive group: its own section at the bottom; a quiet outline button
+   rather than a full-width red slab. */
+.prefs-group-danger {
+  margin-top: var(--space-10);
+}
+.prefs-reset-btn {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: transparent;
+  box-shadow: none;
+}
+.prefs-reset-btn:hover:not(:disabled) {
+  background: var(--danger-weak);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+/* Below phone width a row would squeeze the control: stack name over control,
+   the same rule the review applies to sequential forms. */
+@media (max-width: 640px) {
+  .prefs-page-header-inner,
+  .prefs-page-inner {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+  .prefs-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+  }
+  .prefs-row-control {
+    justify-content: flex-start;
+  }
+  .prefs-select {
+    width: 100%;
+  }
 }
 /* Preset name field and save action stack vertically (S13: the horizontal
    row could not fit inside the old 320px frame). */
 .dialog .export-preset-save {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-}
-/* A 250ms opacity-only entrance: no scale, no travel. */
-@keyframes dialog-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  gap: var(--space-2);
 }
 .dialog h2 {
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-3-5);
   font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -2155,14 +2602,14 @@ body.panel-resizing {
 .dialog .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 .dialog input[type='number'] {
   width: 100%;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   height: 32px;
   font-size: var(--text-sm);
   background: transparent;
@@ -2175,17 +2622,27 @@ body.panel-resizing {
   margin-top: 12vh;
   width: min(520px, 92vw);
   background: var(--popover);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float-lg);
   overflow: hidden;
-  animation: dialog-enter 250ms ease-out;
+  transition:
+    opacity var(--dur-base) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-base) var(--ease-out-soft);
+}
+@starting-style {
+  .command-palette {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+    filter: blur(3px);
+  }
 }
 .command-input {
   width: 100%;
   border: none;
   border-bottom: 1px solid var(--border);
-  padding: 14px 16px;
+  padding: var(--space-3-5) var(--space-4);
   font-size: var(--text-lg);
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -2197,7 +2654,7 @@ body.panel-resizing {
 .command-list {
   max-height: 50vh;
   overflow-y: auto;
-  padding: 6px;
+  padding: var(--space-1-5);
   /* 51 commands overflow 50vh. macOS draws overlay scroll bars that only appear
      mid-scroll, so the list looked complete while its last row was sliced in
      half. The wrap below carries a permanent hairline rail instead. */
@@ -2225,13 +2682,13 @@ body.panel-resizing {
 .command-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   border: none;
   background: none;
   color: var(--foreground);
-  padding: 9px 12px;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-inner);
   font-size: var(--text-base);
   cursor: pointer;
@@ -2259,20 +2716,20 @@ body.panel-resizing {
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   background: var(--surface-2);
-  padding: 1px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
 }
 /* Command palette category group labels */
 .cmd-group {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-0-5);
 }
 .cmd-group-label {
   font-size: var(--text-2xs);
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  padding: 8px 12px 4px;
+  padding: var(--space-2) var(--space-3) var(--space-1);
   user-select: none;
 }
 .cmd-group:first-child .cmd-group-label {
@@ -2289,14 +2746,14 @@ body.panel-resizing {
   display: flex;
   flex-direction: column;
   gap: var(--gap-field);
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 .char-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
   border-radius: var(--radius-inner);
 }
 .char-row:hover {
@@ -2312,29 +2769,30 @@ body.panel-resizing {
   padding-left: var(--space-1);
 }
 .char-editor {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
-  padding: 10px;
-  margin: 4px 0 2px;
+  padding: var(--space-2-5);
+  margin: var(--space-1) 0 var(--space-0-5);
   background: var(--surface-2);
+  box-shadow: var(--shadow-card);
 }
 .char-states {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--space-1-5);
+  margin-top: var(--space-1);
 }
 .char-state-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .char-state-row input[type='text'] {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   font-size: var(--text-sm);
 }
 .char-state-row input[type='color'] {
@@ -2352,8 +2810,9 @@ body.panel-resizing {
 .matrix-scroll {
   max-height: 60vh;
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 .matrix-table {
   border-collapse: collapse;
@@ -2363,7 +2822,7 @@ body.panel-resizing {
 .matrix-table th,
 .matrix-table td {
   border: 1px solid var(--border);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   text-align: left;
   white-space: nowrap;
 }
@@ -2387,7 +2846,7 @@ body.panel-resizing {
 .matrix-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .matrix-swatch {
   width: 12px;
@@ -2399,7 +2858,7 @@ body.panel-resizing {
 .matrix-cell select {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 3px 5px;
+  padding: var(--space-0-5) var(--space-1);
   font-size: var(--text-sm);
   background: var(--surface);
 }
@@ -2407,7 +2866,7 @@ body.panel-resizing {
   width: 80px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 3px 5px;
+  padding: var(--space-0-5) var(--space-1);
   font-size: var(--text-sm);
 }
 
@@ -2416,7 +2875,7 @@ body.panel-resizing {
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: 6px;
+  gap: var(--space-1-5);
   align-items: center;
 }
 .char-value select,
@@ -2425,8 +2884,8 @@ body.panel-resizing {
   min-width: 0;
 }
 .char-meta {
-  margin: 0 0 8px 0;
-  padding: 8px 10px;
+  margin: 0 0 var(--space-2) 0;
+  padding: var(--space-2) var(--space-2-5);
   border: 1px solid var(--border);
   background: var(--surface-2);
   border-radius: var(--radius-inner);
@@ -2434,11 +2893,12 @@ body.panel-resizing {
 
 /* === Evolutionary Events === */
 .event-item {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
   margin-bottom: var(--gap-field);
   overflow: hidden;
   background: var(--surface-2);
+  box-shadow: var(--shadow-card);
 }
 .event-item:hover {
   border-color: var(--border-strong);
@@ -2446,8 +2906,8 @@ body.panel-resizing {
 .event-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2-5);
 }
 .event-badge-preview {
   width: 26px;
@@ -2462,7 +2922,7 @@ body.panel-resizing {
   overflow: visible;
 }
 .event-marker-hint {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-1-5);
 }
 .event-title {
   flex: 1;
@@ -2473,7 +2933,7 @@ body.panel-resizing {
   font-size: var(--text-sm);
 }
 .event-editor {
-  padding: 10px;
+  padding: var(--space-2-5);
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
@@ -2484,7 +2944,7 @@ body.panel-resizing {
 .event-marker-style {
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   margin: 2px 0 var(--gap-field);
 }
 .event-marker-style-title {
@@ -2492,7 +2952,7 @@ body.panel-resizing {
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
 }
 /* Number/colour inputs in the subsection keep a readable width even when the
    inspector is at its narrowest: the number field shows its value and the px
@@ -2503,19 +2963,19 @@ body.panel-resizing {
 .event-marker-style .color-field {
   min-width: 96px;
 }
-.event-triggers { margin-top: 6px; }
+.event-triggers { margin-top: var(--space-1-5); }
 .event-triggers-label {
   display: block;
   color: var(--muted-foreground);
   font-size: var(--text-xs);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 .event-trigger-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   font-size: var(--text-xs);
-  padding: 2px 0;
+  padding: var(--space-0-5) 0;
 }
 .event-trigger-row span {
   overflow: hidden;
@@ -2524,16 +2984,16 @@ body.panel-resizing {
 }
 
 /* === Step Matrix === */
-.step-matrix-wrap { margin-top: 6px; }
+.step-matrix-wrap { margin-top: var(--space-1-5); }
 .step-grid {
   border-collapse: collapse;
   font-size: var(--text-sm);
-  margin: 6px 0;
+  margin: var(--space-1-5) 0;
 }
 .step-grid th,
 .step-grid td {
   border: 1px solid var(--border);
-  padding: 2px 4px;
+  padding: var(--space-0-5) var(--space-1);
   text-align: center;
 }
 .step-grid th {
@@ -2548,7 +3008,7 @@ body.panel-resizing {
   width: 44px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 2px 3px;
+  padding: var(--space-0-5) var(--space-0-5);
   font-size: var(--text-sm);
 }
 .step-grid .diag { color: var(--muted-foreground); }
@@ -2556,9 +3016,9 @@ body.panel-resizing {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 8px 10px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2) var(--space-2-5);
+  padding: var(--space-1-5) var(--space-2-5);
   font-size: var(--text-xs);
   color: var(--foreground);
   background: var(--accent-weak);
@@ -2583,25 +3043,26 @@ body.panel-resizing {
   z-index: var(--z-local);
   background: var(--surface);
   border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 12px;
+  padding-top: var(--space-2-5);
+  margin-top: var(--space-3);
 }
-.analysis-dialog .panel-section { margin-bottom: 14px; }
+.analysis-dialog .panel-section { margin-bottom: var(--space-3-5); }
 .issue-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .issue {
   font-size: var(--text-sm);
   line-height: 1.5;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface-2);
+  box-shadow: var(--shadow-card);
 }
 .issue-warning {
   border-color: var(--c-warn);
@@ -2617,18 +3078,19 @@ body.panel-resizing {
 .env-label {
   color: var(--muted-foreground);
   font-size: var(--text-xs);
-  margin: 8px 0 4px;
+  margin: var(--space-2) 0 var(--space-1);
   letter-spacing: 0.01em;
 }
 .env-events {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .env-item {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
   padding: var(--space-2);
+  box-shadow: var(--shadow-card);
 }
 /* 用户反馈：one grid for every env row — the swatch column, the label column
    and the action columns line up vertically across rows, and the fixed columns
@@ -2643,7 +3105,7 @@ body.panel-resizing {
   display: grid;
   grid-template-columns: 32px minmax(48px, 1fr) minmax(0, auto) 32px 32px;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 /* The expanded numeric editor reuses .env-row; its five children are
    From-label, From-field, To-label, To-field, unit — two equal fields. */
@@ -2654,7 +3116,7 @@ body.panel-resizing {
   flex: none;
   width: 32px;
 }
-.env-row + .env-row { margin-top: 4px; }
+.env-row + .env-row { margin-top: var(--space-1); }
 /* The hex readout needs ~66px next to the swatch; inside a ~200px env row that
    squeezes the name input until the hex text is overlapped by it (measured:
    hex right edge 214 px vs input left edge 189 px). The swatch already shows
@@ -2677,14 +3139,14 @@ body.panel-resizing {
   min-width: 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   font-size: var(--text-sm);
 }
 .env-row input[type='number'] {
   width: 64px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   font-size: var(--text-sm);
 }
 /* S05 (Sonus): calibration min/max as a two-column grid with labels above —
@@ -2692,13 +3154,13 @@ body.panel-resizing {
 .cal-age-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--space-2);
+  margin-top: var(--space-1-5);
 }
 .cal-age-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .cal-age-cell .number-wrap {
@@ -2710,7 +3172,7 @@ body.panel-resizing {
   min-width: 76px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   font-size: var(--text-sm);
 }
 .cal-age-label {
@@ -2737,7 +3199,7 @@ body.panel-resizing {
 .node-search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .preset-row {
   /* A#8 / P-06: FIVE presets (PhyloRec 管道 added later) in a row that used
@@ -2750,7 +3212,7 @@ body.panel-resizing {
 }
 .preset-btn {
   min-width: 0;
-  padding: 6px 4px;
+  padding: var(--space-1-5) var(--space-1);
   justify-content: center;
   white-space: nowrap;
   overflow: hidden;
@@ -2759,11 +3221,11 @@ body.panel-resizing {
 .legacy-preset-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .asr-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 /* === MiniMap ===
@@ -2773,7 +3235,7 @@ body.panel-resizing {
   left: 12px;
   bottom: 50px;
   z-index: var(--z-canvas-ctl);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--popover);
   box-shadow: var(--shadow-float);
@@ -2800,9 +3262,11 @@ body.panel-resizing {
 .panel-note {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 6px 0 12px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-0-5);
+  padding: var(--space-1-5) 0 var(--space-3);
+  /* Separator as a shadow, so the note blends into a different panel tone
+     without a hard rule across the column. */
+  box-shadow: 0 1px 0 var(--border);
 }
 .panel-note-title {
   font-size: var(--text-sm);
@@ -2810,11 +3274,12 @@ body.panel-resizing {
   color: var(--foreground);
 }
 .time-warning {
-  border: 1px solid var(--c-warn);
-  border-radius: var(--radius-lg);
-  padding: 10px 12px;
-  margin: 8px 0 4px;
+  border: 0;
+  border-radius: var(--radius-inset);
+  padding: var(--space-2-5) var(--space-3);
+  margin: var(--space-2) 0 var(--space-1);
   background: var(--c-warn-bg);
+  box-shadow: var(--shadow-card);
 }
 /* The remedy button's label (“Switch to the time-calibrated tree layout”) is
    wider than the callout's 203px content box; a nowrap button therefore hung
@@ -2824,29 +3289,32 @@ body.panel-resizing {
   height: auto;
   white-space: normal;
   text-align: center;
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2-5);
 }
 .time-warning-title {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--c-warn);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 .time-issue-list {
-  margin: 4px 0 0;
-  padding-left: 16px;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
 }
 .time-issue-list li {
   font-size: var(--text-xs);
   color: var(--muted-foreground);
-  margin-bottom: 2px;
+  margin-bottom: var(--space-0-5);
 }
 .time-ok {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  margin: 4px 0;
-  border-radius: var(--radius-inner);
-  background: var(--surface-2);
+  /* A quiet status line, not a bordered card: text stays on the panel's one
+     left edge and only a shadow marks the break from the controls below. */
+  border: 0;
+  padding: var(--space-1) 0 var(--space-2);
+  margin: 0 0 var(--space-1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* === Scale Bar === */
@@ -2859,7 +3327,7 @@ body.panel-resizing {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-0-5);
   pointer-events: none;
 }
 .scale-bar-line {
@@ -2882,7 +3350,7 @@ body.panel-resizing {
   font-size: var(--text-xs);
   color: var(--muted-foreground);
   background: var(--overlay-bg);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: 0;
 }
 /* On-canvas data notice: e.g. "the circular layout does not consume
@@ -2895,10 +3363,11 @@ body.panel-resizing {
   transform: translateX(-50%);
   z-index: var(--z-canvas-notice);
   max-width: min(560px, 62%);
-  padding: 5px 10px;
-  border: 1px solid var(--border);
+  padding: var(--space-1) var(--space-2-5);
+  border: 0;
   border-radius: var(--radius-inner);
   background: var(--overlay-bg);
+  box-shadow: var(--shadow-card);
   color: var(--foreground);
   font-size: var(--text-xs);
   line-height: 1.35;
@@ -2914,7 +3383,7 @@ body.panel-resizing {
   height: 32px;
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--foreground);
@@ -2932,7 +3401,7 @@ body.panel-resizing {
   color: var(--primary);
   background: var(--accent-weak);
   border-radius: var(--radius-lg);
-  padding: 1px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   font-weight: 600;
 }
 
@@ -2951,7 +3420,7 @@ body.panel-resizing {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   max-width: min(480px, 60vw);
   pointer-events: none;
 }
@@ -2961,8 +3430,8 @@ body.panel-resizing {
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: var(--space-2-5);
+  padding: var(--space-2-5) var(--space-3-5);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -2971,9 +3440,27 @@ body.panel-resizing {
   /* M40: dismissal is the close button's job now — the whole-strip click
      cursor invited accidental dismissal while selecting the message. */
   cursor: default;
-  border: 1px solid var(--border);
+  border: 0;
   box-shadow: var(--shadow-float);
   word-break: break-word;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-fast) var(--ease-out-soft);
+}
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+    filter: blur(2px);
+  }
+}
+/* Leaving downward (short travel, then fade + blur) reads as "settle and go"
+   rather than the old in-place disappearance. */
+.toast[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
+  filter: blur(3px);
 }
 .toast-msg { flex: 1; min-width: 0; }
 .toast-error .toast-msg { color: var(--danger); }
@@ -2983,7 +3470,7 @@ body.panel-resizing {
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
-  padding: 2px;
+  padding: var(--space-1);
   border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
@@ -3006,7 +3493,7 @@ body.panel-resizing {
 .toast-with-action {
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .toast-with-action .toast-msg { flex: none; }
 .toast-action {
@@ -3015,12 +3502,128 @@ body.panel-resizing {
   border: 1px solid var(--input);
   color: var(--foreground);
   border-radius: var(--radius-md);
-  padding: 4px 11px;
+  padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-sm);
   cursor: pointer;
   white-space: nowrap;
 }
 .toast-action:hover { background: var(--accent); color: var(--accent-foreground); }
+
+/* === Motion primitives (transition-first) ===
+   All entrances/exits in the chrome are CSS transitions on `data-state` or
+   `@starting-style`, never keyframes: a user who reverses a gesture mid-flight
+   gets motion that turns around from its current value instead of restarting.
+   The expo-out curves start quickly and settle softly. */
+
+/* Two-state icon: stacked glyphs cross-fade with a slight scale + blur. */
+.icon-xfade {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.icon-xfade-layer {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-base) var(--ease-out-quint),
+    filter var(--dur-fast) var(--ease-out-soft);
+}
+.icon-xfade-layer[data-layer='on'] {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+.icon-xfade-layer[data-layer='off'] {
+  opacity: 0;
+  transform: scale(0.86);
+  filter: blur(2px);
+}
+.icon-xfade[data-state='off'] .icon-xfade-layer[data-layer='on'] {
+  opacity: 0;
+  transform: scale(0.86);
+  filter: blur(2px);
+}
+.icon-xfade[data-state='off'] .icon-xfade-layer[data-layer='off'] {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+/* Workspace swap (标准视图 → 协调视图): the new workspace fades in with a
+   whisper of scale and blur instead of replacing the canvas between frames.
+   `key` on the wrapper in App remounts it, so @starting-style runs the
+   transition on every switch. */
+.workspace-swap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  transition:
+    opacity var(--dur-base) var(--ease-out-soft),
+    transform var(--dur-slow) var(--ease-out-quint),
+    filter var(--dur-base) var(--ease-out-soft);
+}
+@starting-style {
+  .workspace-swap {
+    opacity: 0;
+    transform: scale(0.996);
+    filter: blur(2px);
+  }
+}
+
+/* Staggered entrance: panel groups, the empty-state masthead and its samples
+   arrive in sequence (0 / 40 / 80 ms …) rather than one flat fade. The
+   delays are on the TRANSITION, so an interrupted mount still settles
+   immediately instead of holding at opacity 0. */
+@media (prefers-reduced-motion: no-preference) {
+  .panel-left > *,
+  .panel-right > *,
+  .empty-state > *,
+  .recon-empty-stage > * {
+    transition:
+      opacity var(--dur-slow) var(--ease-out-soft),
+      transform var(--dur-slow) var(--ease-out-quint),
+      filter var(--dur-slow) var(--ease-out-soft);
+  }
+  @starting-style {
+    .panel-left > *,
+    .panel-right > *,
+    .empty-state > *,
+    .recon-empty-stage > * {
+      opacity: 0;
+      transform: translateY(6px);
+      filter: blur(3px);
+    }
+  }
+  .panel-left > :nth-child(2),
+  .panel-right > :nth-child(2),
+  .empty-state > :nth-child(2),
+  .recon-empty-stage > :nth-child(2) { transition-delay: 40ms; }
+  .panel-left > :nth-child(3),
+  .panel-right > :nth-child(3),
+  .empty-state > :nth-child(3),
+  .recon-empty-stage > :nth-child(3) { transition-delay: 80ms; }
+  .panel-left > :nth-child(4),
+  .panel-right > :nth-child(4),
+  .empty-state > :nth-child(4),
+  .recon-empty-stage > :nth-child(4) { transition-delay: 120ms; }
+  .panel-left > :nth-child(5),
+  .panel-right > :nth-child(5) { transition-delay: 160ms; }
+  .panel-left > :nth-child(6),
+  .panel-right > :nth-child(6) { transition-delay: 200ms; }
+  .panel-left > :nth-child(7),
+  .panel-right > :nth-child(7) { transition-delay: 240ms; }
+  .panel-left > :nth-child(n + 8),
+  .panel-right > :nth-child(n + 8) { transition-delay: 280ms; }
+}
 
 /* === Reduced Motion === */
 @media (prefers-reduced-motion: reduce) {
@@ -3050,8 +3653,8 @@ body.panel-resizing {
 .busy-badge {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
+  gap: var(--space-2-5);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -3081,7 +3684,7 @@ body.panel-resizing {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: var(--space-7);
   padding: var(--space-10);
   pointer-events: none;
   text-align: center;
@@ -3091,14 +3694,16 @@ body.panel-resizing {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 .empty-wordmark {
+  margin: 0;
   font-size: var(--text-display);
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
   color: var(--foreground);
+  text-wrap: balance;
 }
 .empty-hint {
   font-size: var(--text-xs);
@@ -3118,7 +3723,7 @@ body.panel-resizing {
 .empty-actions-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .empty-kbd {
   font-size: var(--text-xs);
@@ -3138,7 +3743,7 @@ body.panel-resizing {
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  padding-bottom: 6px;
+  padding-bottom: var(--space-1-5);
   /* 用户反馈：居中，与卡片的居中排版对齐。 */
   text-align: center;
 }
@@ -3157,7 +3762,7 @@ body.panel-resizing {
   justify-content: center;
   min-height: 64px;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--foreground);
@@ -3165,11 +3770,16 @@ body.panel-resizing {
   font-weight: 600;
   text-align: center;
   cursor: pointer;
-  transition: border-color var(--ease-fast), background-color var(--ease-fast);
+  box-shadow: var(--shadow-card);
+  transition:
+    box-shadow var(--ease-fast),
+    background-color var(--ease-fast),
+    transform var(--dur-fast) var(--ease-out-quint);
 }
 .sample-card:hover {
-  border-color: var(--border-strong);
-  background: var(--accent-weak);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  transform: translateY(-1px);
 }
 .sample-card:focus-visible {
   outline: 1px solid var(--foreground);
@@ -3189,7 +3799,7 @@ body.panel-resizing {
 .recon-zoom-input {
   width: 52px;
   height: 24px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -3284,8 +3894,8 @@ body.panel-resizing {
 /* === Theme Toggle (segmented light/dark/system) === */
 .theme-toggle {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
   background: var(--muted);
   border: none;
   border-radius: var(--radius-md);
@@ -3330,14 +3940,14 @@ body.panel-resizing {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--space-1);
   appearance: none;
   border: none;
   background: transparent;
   color: var(--muted-foreground);
   font-size: var(--text-sm);
   font-weight: 500;
-  padding: 9px 8px;
+  padding: var(--space-2) var(--space-2);
   cursor: pointer;
   /* A label wider than the tab's share ends in an ellipsis instead of running
      into its neighbour (“CharactersHypotheses”). */
@@ -3377,12 +3987,12 @@ body.panel-resizing {
   z-index: var(--z-canvas-ctl);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   border: 1px solid var(--border-strong);
   background: var(--overlay-bg-strong);
   color: var(--foreground);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-sm);
   cursor: pointer;
   box-shadow: none;
@@ -3399,11 +4009,11 @@ body.panel-resizing {
   z-index: var(--z-canvas-ctl);
   width: max-content;
   max-width: 280px;
-  border: 1px solid var(--border-popover);
+  border: 0;
   border-radius: var(--radius-lg);
   background: var(--overlay-bg-strong);
   box-shadow: var(--shadow-float);
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
 }
 .legend-header {
   display: flex;
@@ -3411,7 +4021,7 @@ body.panel-resizing {
   justify-content: space-between;
   font-size: var(--text-sm);
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .legend-close {
   appearance: none;
@@ -3421,13 +4031,13 @@ body.panel-resizing {
   font-size: var(--text-md);
   cursor: pointer;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0 var(--space-0-5);
 }
 .legend-close:hover { color: var(--foreground); }
 .legend-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 /* 用户反馈: legend placement (样式 › 图例设置). */
 .legend-pos-top-left { top: 12px; left: 12px; right: auto; bottom: auto; }
@@ -3435,31 +4045,31 @@ body.panel-resizing {
 .legend-pos-bottom-left { bottom: 12px; left: 12px; top: auto; right: auto; }
 .legend-pos-bottom-right { bottom: 12px; right: 12px; top: auto; left: auto; }
 /* 用户反馈: item arrangement — vertical columns or horizontal rows. */
-.legend-layout-one-column { display: flex; flex-direction: column; gap: 6px; }
+.legend-layout-one-column { display: flex; flex-direction: column; gap: var(--space-1-5); }
 .legend-layout-two-columns {
   display: grid;
   grid-template-columns: repeat(2, max-content);
-  column-gap: 16px;
-  row-gap: 6px;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1-5);
 }
 .legend-layout-one-row {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: var(--space-1-5) var(--space-3-5);
 }
 .legend-layout-two-rows {
   display: grid;
   grid-template-rows: repeat(2, auto);
   grid-auto-flow: column;
-  column-gap: 16px;
-  row-gap: 6px;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1-5);
   width: max-content;
 }
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .legend-swatch {
   width: 16px;
@@ -3475,7 +4085,7 @@ body.panel-resizing {
 
 /* === Gesture legend popover === */
 .gesture-toggle {
-  gap: 5px;
+  gap: var(--space-1);
 }
 .gesture-toggle-label {
   font-size: var(--text-xs);
@@ -3486,15 +4096,15 @@ body.panel-resizing {
   width: 340px;
   max-height: 60vh;
   overflow-y: auto;
-  padding: 10px;
+  padding: var(--space-2-5);
 }
 .gesture-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 2px 8px;
+  gap: var(--space-0-5);
+  padding: 0 var(--space-0-5) var(--space-2);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   font-size: var(--text-sm);
   font-weight: 600;
 }
@@ -3506,8 +4116,8 @@ body.panel-resizing {
 .gesture-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 5px 2px;
+  gap: var(--space-2-5);
+  padding: var(--space-1) var(--space-0-5);
 }
 .gesture-keys {
   flex-shrink: 0;
@@ -3518,7 +4128,7 @@ body.panel-resizing {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   color: var(--foreground);
 }
 .gesture-text { min-width: 0; }
@@ -3547,13 +4157,13 @@ body.panel-resizing {
 .about-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0 12px;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-3);
 }
 .about-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-lg);
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -3563,15 +4173,15 @@ body.panel-resizing {
   font-size: var(--text-sm);
 }
 .about-facts {
-  margin: 6px 0 0;
+  margin: var(--space-1-5) 0 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .about-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   font-size: var(--text-sm);
 }
 .about-row dt {
@@ -3582,7 +4192,7 @@ body.panel-resizing {
    squeezing the label onto two lines. */
 .about-row.wide {
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   align-items: flex-start;
 }
 .about-row dd {
@@ -3591,14 +4201,14 @@ body.panel-resizing {
 }
 .shortcuts-search {
   position: relative;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2-5);
 }
 .shortcuts-search input {
   width: 100%;
   height: 32px;
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 0 8px 0 28px;
+  padding: 0 var(--space-2) 0 var(--space-7);
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--foreground);
@@ -3622,20 +4232,20 @@ body.panel-resizing {
   flex: 1;
   min-height: 0;
 }
-.shortcuts-group { margin-bottom: 12px; }
+.shortcuts-group { margin-bottom: var(--space-3); }
 .shortcuts-group-label {
   font-size: var(--text-2xs);
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
 }
 .shortcut-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 5px 2px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-0-5);
 }
 .shortcut-label {
   font-size: var(--text-sm);
@@ -3647,7 +4257,7 @@ body.panel-resizing {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 2px 7px;
+  padding: var(--space-0-5) var(--space-1-5);
   color: var(--muted-foreground);
   white-space: nowrap;
 }
@@ -3671,24 +4281,24 @@ body.panel-resizing {
   border: 1px solid var(--border-popover);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
-  padding: 22px 24px;
+  padding: var(--space-5) var(--space-6);
 }
 .narrow-hint-title {
   font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .narrow-hint-desc {
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   line-height: 1.7;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-4);
 }
 .narrow-hint-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* === First-run tour === */
@@ -3718,7 +4328,7 @@ body.panel-resizing {
   border: 1px solid var(--border-popover);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float-lg);
-  padding: 18px 20px;
+  padding: var(--space-4) var(--space-5);
   z-index: var(--z-local);
 }
 .tour-step {
@@ -3726,33 +4336,33 @@ body.panel-resizing {
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--primary);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
 }
 .tour-title {
   font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .tour-desc {
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   line-height: 1.7;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 .tour-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   /* The workflow finish card offers three actions (replay / shortcuts / done);
      wrap instead of clipping when a translated label is long. */
   flex-wrap: wrap;
-  row-gap: 8px;
+  row-gap: var(--space-2);
 }
 
 /* === Confirm dialog === */
 .confirm-message {
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-3-5);
   font-size: var(--text-sm);
   color: var(--foreground);
   line-height: 1.7;
@@ -3760,11 +4370,11 @@ body.panel-resizing {
 .confirm-skip {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
   cursor: pointer;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   user-select: none;
 }
 
@@ -3773,18 +4383,18 @@ body.panel-resizing {
   width: min(460px, 92vw);
 }
 .import-tree-list {
-  margin: 12px 0;
+  margin: var(--space-3) 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   max-height: 40vh;
   overflow-y: auto;
 }
 .import-tree-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-2-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -3817,12 +4427,12 @@ body.panel-resizing {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 .number-input-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .number-input-row > input[type='number'] {
@@ -3840,7 +4450,7 @@ body.panel-resizing {
   display: inline-flex;
   align-items: center;
   height: 20px;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
   background: var(--surface-2);
@@ -3858,7 +4468,7 @@ body.panel-resizing {
 .slider-number-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
   flex: 1;
   min-width: 0;
 }
@@ -3875,38 +4485,38 @@ body.panel-resizing {
    second gap on top of it; together with generous card padding this pushed the
    lower controls out of view. Collapse the double spacing and trim the cards. */
 .panel .panel-section {
-  padding: 10px 0;
-  margin-bottom: 0;
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
 .panel .panel-section.collapsed {
-  padding: 8px 0;
+  padding: 0;
 }
 .panel .panel-section.collapsed .section-header-row {
   margin-bottom: 0;
 }
 .panel .section-header-row {
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 .panel .section-body {
-  gap: 5px;
+  gap: var(--gap-field);
 }
 .panel .section-body > .field {
   margin-bottom: 0;
 }
 .panel .panel-header {
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1-5);
 }
 .panel .hint {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-1);
   line-height: 1.35;
 }
 .panel .char-list {
-  gap: 4px;
-  margin: 4px 0;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
 }
 .panel .char-row {
-  padding: 2px 0;
+  padding: var(--space-0-5) 0;
 }
 .layer-summary {
   color: var(--muted-foreground);
@@ -3927,7 +4537,7 @@ body.panel-resizing {
   background: transparent;
   color: var(--muted-foreground);
   height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
@@ -3952,13 +4562,13 @@ body.panel-resizing {
 /* Export menu: every action has the same width, so labels no longer dictate
    the button lengths. */
 .export-panel-section h3 {
-  margin: 10px 0 6px;
+  margin: var(--space-2-5) 0 var(--space-1-5);
   color: var(--foreground);
   font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.01em;
   background: var(--surface-2);
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
 }
 .export-panel-section h3:first-of-type {
   margin-top: 0;
@@ -3966,17 +4576,17 @@ body.panel-resizing {
 /* The 「Export options…」 row opens the publication dialog; it sits above the
    format groups, so give it the same breathing room a group heading would. */
 .export-panel-section .export-options {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .export-mode {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
   color: var(--muted-foreground);
   font-size: var(--text-xs);
 }
 .export-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .export-btn {
   width: 100%;
@@ -3993,7 +4603,7 @@ body.panel-resizing {
   background: transparent;
   color: var(--foreground);
   text-align: left;
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -4037,9 +4647,9 @@ input.has-error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0 0 var(--space-3);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-inner);
   font-size: var(--text-2xs);
   color: var(--muted-foreground);
@@ -4058,7 +4668,7 @@ input.has-error {
   font-size: var(--text-2xs);
   font-weight: 600;
   cursor: pointer;
-  padding: 1px 4px;
+  padding: var(--space-0-5) var(--space-1);
   border-radius: var(--radius-inner);
 }
 .override-restore:hover {
@@ -4067,17 +4677,17 @@ input.has-error {
 
 /* === Section count badge === */
 .section-count {
+  /* Informational text beside the title, not a decorative badge. */
   font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--muted-foreground);
-  /* Sits on the section header's `--surface-2` band, so it needs the lighter
-     surface to stay legible there. */
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 0 7px;
-  margin-left: 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin-left: var(--space-1);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* === Collapsed-section value preview (Section `summary`) ===
@@ -4087,7 +4697,7 @@ input.has-error {
    duplicates the fields of the open body. */
 .section-toggle.has-summary {
   flex-wrap: wrap;
-  row-gap: 3px;
+  row-gap: var(--space-0-5);
 }
 .section-title {
   min-width: 0;
@@ -4096,12 +4706,12 @@ input.has-error {
   flex-basis: 100%;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
   /* Line up under the title text, past the disclosure caret (12px + 6px gap),
      so the collapsed-state summary reads as part of the header, not as a new
      block. */
-  margin-left: 18px;
+  margin-left: var(--space-4);
   overflow: hidden;
   white-space: nowrap;
   /* The header title is the display masthead; the value line is not. */
@@ -4131,26 +4741,27 @@ input.has-error {
   color: var(--muted-foreground);
 }
 .summary-chip {
+  /* A count is text, not a badge: no box, no fill, tabular digits. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 14px;
   height: 14px;
-  padding: 0 3px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--muted-foreground);
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Inspector save-semantics note: inspector edits apply live and auto-save; the
    toolbar Save writes the project FILE. Muted and non-interactive so it reads
    as panel guidance, not as a control. */
 .hint-tip {
-  margin-top: 6px;
+  margin-top: var(--space-1-5);
 }
 
 /* === Status bar MRCA hint === */
@@ -4185,7 +4796,7 @@ input.has-error {
 
 /* === Inspector search: no-results spacing === */
 .inspector-search ~ .panel-section {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* Focus-visible ring: a consistent, visible ring for every
@@ -4217,14 +4828,14 @@ input.has-error {
 .nav-rail-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 .nav-rail-group-label {
   font-size: var(--text-xs);
   color: var(--muted-foreground);
   letter-spacing: 0.01em;
   text-align: center;
-  margin: 4px 0 2px;
+  margin: var(--space-1) 0 var(--space-0-5);
   user-select: none;
   /* “Inference” at 12px + tracking is wider than the rail's content box; it
      wraps instead of being clipped by the panel border. */
@@ -4241,7 +4852,7 @@ input.has-error {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--foreground);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   font-size: var(--text-sm);
   outline: none;
 }
@@ -4251,7 +4862,7 @@ input.has-error {
 .search-count {
   align-self: center;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 var(--space-1-5);
   background: transparent;
   color: var(--muted-foreground);
   font-weight: 500;
@@ -4261,14 +4872,14 @@ input.has-error {
 .gene-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1-5);
 }
 .gene-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 7px;
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-1-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -4299,7 +4910,7 @@ input.has-error {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-inner);
   background: var(--accent-soft);
   font-size: var(--text-xs);
@@ -4312,13 +4923,13 @@ input.has-error {
 .recon-stat-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .recon-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 8px;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
   font-size: var(--text-xs);
@@ -4341,11 +4952,18 @@ input.has-error {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: var(--space-2);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--app-bg);
   flex: 1;
+}
+/* 物种树编辑 / 基因树编辑 nest a standard workspace inside the recon column;
+   the outer row already supplies the 8 px gutter, so the inner one must not
+   add a second inset. */
+.recon-workspace .body {
+  padding: 0;
 }
 /* The row below the toolbar: left panel / canvas / right panel. */
 .recon-workspace-row {
@@ -4388,6 +5006,8 @@ input.has-error {
   min-height: 0;
   overflow: hidden;
   background: var(--canvas-bg);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-card);
 }
 /* The canvas frame sits directly in .recon-main's 1fr row; grid-item stretch
    gives it the full row height (the old wrapper div collapsed it to content). */
@@ -4403,10 +5023,12 @@ input.has-error {
 .recon-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 0;
   background: var(--surface);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-card);
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -4418,18 +5040,28 @@ input.has-error {
 .recon-toolbar-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-.recon-toolbar-toggle input { accent-color: var(--primary); }
+.recon-toolbar-toggle .switch {
+  width: 30px;
+  height: 18px;
+}
+.recon-toolbar-toggle .switch .switch-thumb {
+  width: 14px;
+  height: 14px;
+}
+.recon-toolbar-toggle .switch[aria-checked='true'] .switch-thumb {
+  transform: translateX(12px);
+}
 .recon-scope-seg .seg-btn {
   font-size: var(--text-xs);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
 }
 @media (max-width: 1240px) {
-  .recon-scope-seg .seg-btn { padding: 4px 6px; }
+  .recon-scope-seg .seg-btn { padding: var(--space-1) var(--space-1-5); }
   .recon-gene-select { min-width: 100px; max-width: 150px; }
 }
 
@@ -4456,7 +5088,7 @@ input.has-error {
   grid-area: legend;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
 }
 .recon-panes {
   position: relative;
@@ -4481,9 +5113,9 @@ input.has-error {
 .recon-pane-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 40px;
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-2-5);
   border-bottom: 1px solid var(--border);
   background: var(--recon-pane-header-bg);
   overflow: hidden;
@@ -4507,7 +5139,7 @@ input.has-error {
   max-width: 100%;
 }
 .recon-pane-badge {
-  padding: 1px 8px;
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
   font-size: var(--text-xs);
@@ -4564,7 +5196,7 @@ input.has-error {
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 1px 8px;
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
   background: var(--recon-pane-header-bg);
@@ -4598,8 +5230,8 @@ input.has-error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-3);
   border-bottom: 1px solid var(--border);
   background: var(--accent-weak);
   color: var(--muted-foreground);
@@ -4611,8 +5243,8 @@ input.has-error {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 14px;
-  padding: 5px 12px;
+  gap: var(--space-1) var(--space-3-5);
+  padding: var(--space-1) var(--space-3);
   border-top: 1px solid var(--border);
   background: var(--surface);
   font-size: var(--text-xs);
@@ -4621,7 +5253,7 @@ input.has-error {
 .recon-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   white-space: nowrap;
 }
 .recon-legend-swatch {
@@ -4634,7 +5266,15 @@ input.has-error {
 .sw-dup { background: var(--recon-map-dup); }
 .sw-transfer { background: var(--recon-map-transfer); }
 .sw-unresolved {
-  background: repeating-linear-gradient(90deg, var(--recon-map-unresolved) 0 4px, transparent 4px 7px);
+  /* Dashed DATA mark, not a decorative gradient: a mask draws the 4-on/3-off
+     dash pattern over the semantic colour, so the palette stays flat. */
+  background-color: var(--recon-map-unresolved);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='3'%3E%3Crect width='4' height='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='3'%3E%3Crect width='4' height='3'/%3E%3C/svg%3E");
+  -webkit-mask-size: 7px 3px;
+  mask-size: 7px 3px;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
 }
 .sw-tip { background: var(--recon-tip); }
 .sw-internal { background: var(--recon-branch); }
@@ -4648,11 +5288,17 @@ input.has-error {
 .sw-gene {
   background: var(--recon-tip);
   height: 1.5px;
-  margin-top: 3px;
-  margin-bottom: 3.5px;
+  margin-top: var(--space-0-5);
+  margin-bottom: var(--space-1);
 }
 .sw-inferred {
-  background: repeating-linear-gradient(90deg, var(--recon-map-unresolved) 0 3px, transparent 3px 5px);
+  background-color: var(--recon-map-unresolved);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='3'%3E%3Crect width='3' height='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='3'%3E%3Crect width='3' height='3'/%3E%3C/svg%3E");
+  -webkit-mask-size: 5px 3px;
+  mask-size: 5px 3px;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
 }
 
 /* Embedded (nested) reconciliation canvas: single viewport, occupies the
@@ -4678,8 +5324,8 @@ input.has-error {
 .recon-embedded-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
   background: var(--accent-weak);
@@ -4720,7 +5366,7 @@ input.has-error {
 
 /* Recon left panel head + assumption list */
 .recon-panel-head {
-  padding: 10px 12px 6px;
+  padding: var(--space-2-5) var(--space-3) var(--space-1-5);
   border-bottom: 1px solid var(--border);
 }
 .recon-panel-head-title {
@@ -4731,8 +5377,8 @@ input.has-error {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+  gap: var(--space-1-5);
+  margin-top: var(--space-0-5);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
 }
@@ -4745,7 +5391,7 @@ input.has-error {
   white-space: nowrap;
 }
 .recon-readonly-tag {
-  padding: 0 6px;
+  padding: 0 var(--space-1-5);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
   background: var(--accent-soft);
@@ -4759,14 +5405,14 @@ input.has-error {
 .recon-action-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
   min-width: 0;
 }
 .recon-action-stack .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   width: 100%;
   min-height: 30px;
   text-align: center;
@@ -4777,14 +5423,14 @@ input.has-error {
 .recon-action-links {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 2px 0;
+  gap: var(--space-3-5);
+  padding: var(--space-0-5) 0;
 }
 .link-btn {
   appearance: none;
   border: none;
   background: transparent;
-  padding: 2px 0;
+  padding: var(--space-0-5) 0;
   color: var(--muted-foreground);
   font-size: var(--text-xs);
   cursor: pointer;
@@ -4800,14 +5446,14 @@ input.has-error {
 .recon-action-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .recon-action-select {
   width: 100%;
   height: 32px;
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
-  padding: 0 7px;
+  padding: 0 var(--space-1-5);
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--foreground);
@@ -4818,13 +5464,13 @@ input.has-error {
 .recon-cost-numbers {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
 }
 .recon-cost-numbers .field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 88px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 0;
 }
 .recon-cost-numbers .field > label {
@@ -4836,18 +5482,18 @@ input.has-error {
 }
 .recon-list-search {
   width: 100%;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
   height: 32px;
   box-sizing: border-box;
 }
 .recon-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1-5);
 }
 .chip-btn {
-  padding: 2px 9px;
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-inner);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -4866,15 +5512,15 @@ input.has-error {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-0-5);
   max-height: 340px;
   overflow: auto;
 }
 .recon-assumption-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 7px;
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-1-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
@@ -4906,7 +5552,7 @@ input.has-error {
 }
 .recon-row-loss { color: var(--recon-loss); font-weight: 700; }
 .recon-row-flag {
-  padding: 0 6px;
+  padding: 0 var(--space-1-5);
   border-radius: var(--radius-inner);
   background: var(--accent-soft);
   font-size: var(--text-xs);
@@ -4922,20 +5568,20 @@ input.has-error {
 .recon-ov-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 3px 10px;
+  gap: var(--space-0-5) var(--space-2-5);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .recon-ov-grid b { color: var(--foreground); font-weight: 600; }
 /* 用户反馈: the legend flows into ONE tidy column or TWO by width. */
 .recon-insp-legend {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 4px 12px;
-  padding: 10px 12px;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2-5) var(--space-3);
   border-top: 1px solid var(--border);
-  margin-top: 8px;
+  margin-top: var(--space-2);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
 }
@@ -4954,7 +5600,7 @@ input.has-error {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-2-5);
   min-height: 0;
   min-width: 0;
   padding: var(--space-6);
@@ -4970,12 +5616,14 @@ input.has-error {
 .recon-left.overlay,
 .recon-right.overlay {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: var(--space-2);
+  bottom: var(--space-2);
   z-index: var(--z-recon-overlay);
+  border: 0;
+  box-shadow: var(--shadow-float-lg);
 }
-.recon-left.overlay { left: 0; border-right: 1px solid var(--border-popover); }
-.recon-right.overlay { right: 0; border-left: 1px solid var(--border-popover); }
+.recon-left.overlay { left: var(--space-2); }
+.recon-right.overlay { right: var(--space-2); }
 
 /* Screen-reader-only live region (announces recon selection changes) */
 .visually-hidden {
@@ -4998,14 +5646,14 @@ input.has-error {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .gene-builder-name {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 180px;
   color: var(--muted-foreground);
   font-size: var(--text-xs);
@@ -5015,7 +5663,7 @@ input.has-error {
   box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   background: var(--surface);
   color: var(--foreground);
   font-size: var(--text-sm);
@@ -5029,19 +5677,19 @@ input.has-error {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   color: var(--muted-foreground);
   font-size: var(--text-xs);
 }
 .gene-builder-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: var(--space-3-5);
+  margin-bottom: var(--space-3-5);
 }
 .gene-builder-outline-title,
 .gene-builder-editor-title {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
   color: var(--muted-foreground);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -5057,11 +5705,11 @@ input.has-error {
 .gene-tree-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   width: 100%;
   border: 0;
   border-bottom: 1px solid var(--border);
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   background: transparent;
   color: var(--foreground);
   font-size: var(--text-sm);
@@ -5099,7 +5747,7 @@ input.has-error {
 .gene-builder-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .gene-builder-editor .field {
   margin-bottom: 0;
@@ -5116,10 +5764,13 @@ input.has-error {
 .seg {
   display: inline-flex;
   align-items: stretch;
-  gap: 2px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  gap: var(--space-0-5);
+  /* 2 px inset + 6 px thumb = 8 px outer radius: concentric, not merely
+     "similar". */
+  padding: var(--space-0-5);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 0;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 /* Same rule as .toolbar > .group and .theme-toggle: a toolbar child never
@@ -5146,10 +5797,10 @@ input.has-error {
 .seg-btn {
   appearance: none;
   border: none;
-  border-radius: calc(var(--radius-md) - 2px);
+  border-radius: var(--radius-inset);
   background: transparent;
   color: var(--muted-foreground);
-  padding: 4px 14px 5px;
+  padding: var(--space-1) var(--space-3-5) var(--space-1);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
@@ -5164,7 +5815,7 @@ input.has-error {
   background: var(--primary);
   color: var(--primary-foreground);
   font-weight: 600;
-  border-radius: calc(var(--radius-md) - 2px);
+  border-radius: var(--radius-inset);
 }
 
 /* Narrow-screen bottom module bar: 6 modules scroll horizontally ---------- */
@@ -5180,7 +5831,7 @@ input.has-error {
    its module name via the title/accessible name. */
 @media (max-width: 480px) {
   .bottom-tab {
-    padding: 11px 0;
+    padding: var(--space-2-5) 0;
   }
   .bottom-tab-label {
     display: none;
@@ -5200,7 +5851,7 @@ input.has-error {
 .label-position-pad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
+  gap: var(--space-0-5);
   width: 100%;
   max-width: 120px;
 }
@@ -5247,7 +5898,7 @@ input.has-error {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-2);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
   cursor: pointer;
   background: var(--surface-2);
 }
@@ -5256,7 +5907,7 @@ input.has-error {
 .layer-card-head {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: baseline;
 }
 .layer-card-name { font-size: var(--text-sm); }
@@ -5267,18 +5918,18 @@ input.has-error {
   color: var(--muted-foreground);
 }
 .layer-card-statement,
-.layer-card-counts { margin-top: 2px; }
+.layer-card-counts { margin-top: var(--space-0-5); }
 
 /* Character list filter + drag reorder (ID-18). */
 .char-search {
   width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--foreground);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .char-item.dragging { opacity: 0.5; }
 
@@ -5286,19 +5937,19 @@ input.has-error {
 .history-dialog { width: min(480px, 92vw); }
 .history-list {
   list-style: none;
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
   padding: 0;
   max-height: 60vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .history-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-2);
   border: 1px solid var(--border);
   background: var(--surface-2);
   font-size: var(--text-sm);
@@ -5313,7 +5964,7 @@ input.has-error {
 .history-time { color: var(--muted-foreground); font-size: var(--text-xs); }
 .history-current {
   display: flex;
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   font-weight: 600;
   color: var(--primary);
 }
@@ -5321,9 +5972,24 @@ input.has-error {
 /* Find & replace (OP-02). */
 .find-replace-dialog { width: min(620px, 92vw); }
 .find-replace-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  /* A form the user fills in sequence: name above the input, input full width.
+     Side-by-side labels squeezed two ~280 px boxes into ~170 px each. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.field.stacked {
+  display: block;
+}
+.field.stacked > label {
+  display: block;
+  max-width: none;
+  margin-bottom: var(--space-1);
+}
+.field.stacked > input,
+.field.stacked > textarea,
+.field.stacked > select {
+  width: 100%;
 }
 .find-replace-fields,
 .find-replace-scope { border: 0; padding: 0; margin: 0 0 10px; }
@@ -5332,29 +5998,29 @@ input.has-error {
   font-size: var(--text-2xs);
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 .find-replace-field-list {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px 10px;
+  gap: var(--space-1) var(--space-2-5);
 }
 .find-replace-preview {
   border-top: 1px solid var(--border);
   padding-top: var(--space-2);
-  margin-top: 4px;
+  margin-top: var(--space-1);
   max-height: 34vh;
   overflow-y: auto;
 }
 .find-replace-list {
   list-style: none;
-  margin: 6px 0 0;
+  margin: var(--space-1-5) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
-.find-replace-row { display: flex; gap: 10px; font-size: var(--text-xs); }
+.find-replace-row { display: flex; gap: var(--space-2-5); font-size: var(--text-xs); }
 .find-replace-target {
   flex: 1;
   color: var(--muted-foreground);
@@ -5370,7 +6036,7 @@ input.has-error {
 .tree-distance-table th,
 .tree-distance-table td {
   border: 1px solid var(--border);
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   text-align: left;
 }
 
@@ -5378,30 +6044,30 @@ input.has-error {
 .sample-library-dialog { width: min(560px, 92vw); }
 .sample-library-list {
   list-style: none;
-  margin: 10px 0;
+  margin: var(--space-2-5) 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sample-library-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   background: var(--surface-2);
 }
 .sample-library-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   min-width: 0;
 }
 .sample-library-name { font-weight: 600; }
 .sample-library-desc { font-size: var(--text-xs); color: var(--muted-foreground); }
-.sample-library-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.sample-library-actions { display: flex; gap: var(--space-1-5); flex-shrink: 0; }
 
 /* Project information & provenance (P-3 / OP-09 / FN-5). */
 .project-info-dialog {
@@ -5412,7 +6078,7 @@ input.has-error {
 .project-info-grid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
 }
 .project-info-path {
@@ -5423,7 +6089,7 @@ input.has-error {
 
 /* Help menu group headings (ID-01). */
 .menu-heading {
-  padding: 6px 10px 3px;
+  padding: var(--space-1-5) var(--space-2-5) var(--space-0-5);
   font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -5433,16 +6099,16 @@ input.has-error {
 /* Export presets (P-7). */
 .export-preset-list {
   list-style: none;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .export-preset-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-sm);
 }
 .export-preset-name {
@@ -5452,7 +6118,7 @@ input.has-error {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.export-preset-save { display: flex; align-items: flex-end; gap: 8px; }
+.export-preset-save { display: flex; align-items: flex-end; gap: var(--space-2); }
 .export-preset-save .field { flex: 1; }
 
 /* Searchable event-type picker (FN-2). Inline, not a floating popup: the
@@ -5464,32 +6130,32 @@ input.has-error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
   background: var(--surface);
   color: var(--foreground);
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   font-size: var(--text-sm);
 }
 .event-type-combo-caret { color: var(--muted-foreground); }
 .event-type-combo-panel {
-  margin-top: 4px;
+  margin-top: var(--space-1);
   border: 1px solid var(--border);
   background: var(--popover);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
   max-height: 220px;
   overflow-y: auto;
-  padding: 6px;
+  padding: var(--space-1-5);
 }
 .event-type-combo-search {
   width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-inner);
-  padding: 5px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
   background: var(--surface);
   color: var(--foreground);
 }
@@ -5497,17 +6163,17 @@ input.has-error {
   font-size: var(--text-2xs);
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  padding: 4px 2px 2px;
+  padding: var(--space-1) var(--space-0-5) var(--space-0-5);
 }
 .event-type-combo-option {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   width: 100%;
   text-align: left;
   border: 0;
   background: none;
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
   font-size: var(--text-sm);
   color: var(--foreground);
   cursor: pointer;
@@ -5531,8 +6197,8 @@ input.has-error {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  margin: 0 0 12px;
-  padding: 12px 16px;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   background: var(--surface-2);
   /* S18: rendered Markdown, not a monospace pre — reading typography, real
@@ -5545,33 +6211,33 @@ input.has-error {
 .manual-body h3,
 .manual-body h4,
 .manual-body h5 {
-  margin: 18px 0 6px;
+  margin: var(--space-4) 0 var(--space-1-5);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .manual-body p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 .manual-body ul,
 .manual-body ol {
-  margin: 0 0 8px;
-  padding-left: 22px;
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
 }
 .manual-body li {
-  margin: 2px 0;
+  margin: var(--space-0-5) 0;
 }
 .manual-body code {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   background: var(--muted);
   border-radius: var(--radius-sm);
-  padding: 1px 5px;
+  padding: var(--space-0-5) var(--space-1);
 }
 .manual-body pre.manual-code {
   background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   overflow-x: auto;
   font-size: var(--text-xs);
 }
@@ -5586,13 +6252,13 @@ input.has-error {
 .manual-table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-2-5);
   font-size: var(--text-xs);
 }
 .manual-table th,
 .manual-table td {
   border: 1px solid var(--border);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   text-align: left;
   vertical-align: top;
 }
@@ -5602,21 +6268,21 @@ input.has-error {
 }
 .manual-toolbar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 /* S15/m5: collapsible method notes — the summary line stays visible, the
    methodology paragraph is one click away but no longer a wall of text. */
 details.hint-details > summary.hint {
   cursor: pointer;
   list-style: revert;
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 details.hint-details > summary.hint:hover {
   color: var(--foreground);
 }
 details.hint-details[open] > summary.hint {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-0-5);
 }
 .manual-toc {
   display: flex;
@@ -5625,14 +6291,14 @@ details.hint-details[open] > summary.hint {
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2-5);
   background: var(--surface);
 }
 .manual-toc-item {
   border: none;
   background: transparent;
   text-align: left;
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-sm);
   color: var(--foreground);
   cursor: pointer;
@@ -5645,26 +6311,23 @@ details.hint-details[open] > summary.hint {
   outline-offset: -2px;
 }
 
-/* Preferences: current undo depth (OP-07). */
-.prefs-history-depth { padding: 4px 10px 8px; }
-
 /* Operation log (OP-22). */
 .operation-log-dialog { width: min(640px, 92vw); }
 .operation-log-list {
   list-style: none;
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
   padding: 0;
   max-height: 56vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .operation-log-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-xs);
-  padding: 5px 7px;
+  padding: var(--space-1) var(--space-1-5);
   border: 1px solid var(--border);
   background: var(--surface-2);
 }
@@ -5695,8 +6358,8 @@ details.hint-details[open] > summary.hint {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1-5);
 }
 .event-type-combo-frequent .hint { color: var(--muted-foreground); }
 .event-type-combo-frequent button {
@@ -5705,7 +6368,7 @@ details.hint-details[open] > summary.hint {
   color: var(--foreground);
   font-size: var(--text-xs);
   font-weight: 700;
-  padding: 1px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   cursor: pointer;
 }
 .event-type-combo-frequent button:hover { background: var(--accent-weak); }
@@ -5731,7 +6394,7 @@ details.hint-details[open] > summary.hint {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1-5);
 }
 .textarea-field:focus {
   outline: none;
@@ -5761,16 +6424,16 @@ details.hint-details[open] > summary.hint {
 .inspector-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 10px 0;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2-5) 0;
   font-size: var(--text-xs, 11px);
   color: var(--muted-foreground);
 }
 .inspector-empty-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--space-1-5);
+  margin-top: var(--space-1);
 }
 
 /* M6: second-level heading inside a command-palette category. */
@@ -5778,7 +6441,7 @@ details.hint-details[open] > summary.hint {
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--muted-foreground);
-  padding: 6px 12px 2px;
+  padding: var(--space-1-5) var(--space-3) var(--space-0-5);
   opacity: 0.85;
 }
 
@@ -5794,20 +6457,13 @@ details.hint-details[open] > summary.hint {
      导入物种树 / 导入基因树). */
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: stretch;
   min-width: 320px;
-  margin-top: 14px;
+  margin-top: var(--space-3-5);
 }
 
 /* ── Mature-product polish pass (2026-11-15): icons over glyphs ─────────────── */
-
-/* Selected-state tick in the preferences menu: the SVG icon inherits the font
-   size; keep it optically centred in the 12px check column. */
-.prefs-check svg {
-  display: block;
-  margin: 0 auto;
-}
 
 /* 3×3 label-position pad: pure-geometry indicator. Each cell draws a 4px dot
    at its own position inside a 12px box; "auto" is the hollow centre dot. */
@@ -5872,7 +6528,7 @@ details.hint-details[open] > summary.hint {
 .recon-status-zoom {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 .recon-status-zoom input[type='range'] {
   width: 90px;

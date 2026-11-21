@@ -45,7 +45,7 @@ import {
 } from '../model/types';
 import {
   BranchShapeSelect,
-  CheckboxField,
+  SwitchField,
   ColorField,
   DashSelect,
   Field,
@@ -578,7 +578,7 @@ function NodePanel({
         favoritable
         keywords={NODE_SECTION_KEYWORDS.labelSection}
       >
-        <CheckboxField
+        <SwitchField
           label={S.node.showLabel}
           checked={style.showLabel}
           onChange={(v) => ns({ showLabel: v })}
@@ -608,12 +608,12 @@ function NodePanel({
             recipe={(v) => (d) => setNodeStyle(d, id, { labelRotation: v })}
           />
         </Field>
-        <CheckboxField
+        <SwitchField
           label={S.node.italic}
           checked={style.fontStyle === 'italic'}
           onChange={(v) => ns({ fontStyle: v ? 'italic' : 'normal' })}
         />
-        <CheckboxField
+        <SwitchField
           label={S.node.bold}
           checked={weight >= 600}
           onChange={(v) => ns({ fontWeight: v ? 700 : 400 })}
@@ -921,7 +921,7 @@ function EdgePanel({ edge, apply, search }: { edge: CustomEdge; apply: Apply; se
       <Field label={S.edge.dash}>
         <DashSelect value={edge.style.dash} onChange={(v) => es({ dash: v })} />
       </Field>
-      <CheckboxField
+      <SwitchField
         label={S.edge.arrow}
         checked={edge.style.arrow}
         onChange={(v) => es({ arrow: v })}

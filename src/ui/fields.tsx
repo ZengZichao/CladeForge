@@ -96,6 +96,48 @@ export function CheckboxField({
   );
 }
 
+// Switch field: a boolean that takes effect IMMEDIATELY.
+//
+// Review rule: immediate settings are switches (click = applied), while a form
+// whose choices are committed by a later Save keeps checkboxes. A switch also
+// reads as a state, not as an unticked task, so the on/off position is visible
+// without parsing a tick.
+export function SwitchField({
+  label,
+  title,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  /** Hover text for a label shortened for a narrow panel. */
+  title?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="field switch-row">
+      <label htmlFor={id} title={title}>
+        {label}
+      </label>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        className="switch"
+        onClick={() => onChange(!checked)}
+      >
+        <span className="switch-thumb" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 // Color field with inline hex value display.
 //
 // `onChange` keeps its name but its cadence is deliberate: a native colour

@@ -111,7 +111,7 @@ const zh = {
     // quota-full or blocked localStorage never reads "已保存".
     savedTitle: '自动保存已写入本地恢复区（重启后可恢复）；项目文件仍需用「文件 › 保存项目」写入磁盘',
     saveFailed: '自动保存失败',
-    saveFailedTitle: '自动保存未写入！最新改动只在内存中，请立即用「文件 › 保存项目」写入磁盘',
+    saveFailedTitle: '自动保存未写入。最新改动只在内存中，请立即用「文件 › 保存项目」写入磁盘',
     savingTitle: '正在写入本地恢复区…',
     // m7: the preferences lecture does not belong in a button tooltip — the
     // undo limit lives in 偏好, and the tooltip says only what the button does.

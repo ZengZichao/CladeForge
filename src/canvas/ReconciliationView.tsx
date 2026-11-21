@@ -589,7 +589,7 @@ export function ReconciliationView({
             as the standard empty state, plus the reconciliation sample as a
             rounded card (the standard samples live on the standard page). */}
         <div className="empty-masthead">
-          <div className="empty-wordmark">{S.app.name}</div>
+          <h1 className="empty-wordmark">{S.app.name}</h1>
         </div>
         <div className="recon-empty-note">{S.recon.emptyReconTitle}</div>
         <div className="recon-empty-actions">

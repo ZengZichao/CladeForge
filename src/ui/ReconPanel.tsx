@@ -14,7 +14,7 @@ import type { ReconEventType } from '../model/types';
 import { type ReconIssue } from '../model/reconciliation';
 import { geneTreeRows } from './reconStats';
 import { Field } from './fields';
-import { CheckboxField } from './fields';
+import { SwitchField } from './fields';
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { isImeComposing } from './imeGuard';
@@ -127,22 +127,22 @@ export function ReconPanel() {
             <option value="unresolved">{S.recon.filterUnresolved}</option>
           </select>
         </Field>
-        <CheckboxField
+        <SwitchField
           label={S.recon.showMappings}
           checked={options.showMappings}
           onChange={(v) => setReconViewOptions({ showMappings: v })}
         />
-        <CheckboxField
+        <SwitchField
           label={S.recon.showLabels}
           checked={options.showLabels}
           onChange={(v) => setReconViewOptions({ showLabels: v })}
         />
-        <CheckboxField
+        <SwitchField
           label={S.recon.showEventGlyphs}
           checked={options.showEventGlyphs}
           onChange={(v) => setReconViewOptions({ showEventGlyphs: v })}
         />
-        <CheckboxField
+        <SwitchField
           label={S.recon.showLosses}
           checked={options.showLosses}
           onChange={(v) => setReconViewOptions({ showLosses: v })}
@@ -183,27 +183,27 @@ export function ReconPanel() {
                 aria-label={S.recon.optTubeOpacity}
               />
             </Field>
-            <CheckboxField
+            <SwitchField
               label={S.recon.optTubeGradient}
               checked={options.embeddedTubeGradient}
               onChange={(v) => setReconViewOptions({ embeddedTubeGradient: v })}
             />
-            <CheckboxField
+            <SwitchField
               label={S.recon.optFamilyColors}
               checked={options.embeddedFamilyColors}
               onChange={(v) => setReconViewOptions({ embeddedFamilyColors: v })}
             />
-            <CheckboxField
+            <SwitchField
               label={S.recon.optGeneHalo}
               checked={options.embeddedGeneHalo}
               onChange={(v) => setReconViewOptions({ embeddedGeneHalo: v })}
             />
-            <CheckboxField
+            <SwitchField
               label={S.recon.showTransfers}
               checked={options.embeddedShowTransfers}
               onChange={(v) => setReconViewOptions({ embeddedShowTransfers: v })}
             />
-            <CheckboxField
+            <SwitchField
               label={S.recon.showLossStubs}
               checked={options.embeddedShowLossStubs}
               onChange={(v) => setReconViewOptions({ embeddedShowLossStubs: v })}
@@ -211,7 +211,7 @@ export function ReconPanel() {
           </>
         ) : (
           <>
-            <CheckboxField
+            <SwitchField
               label={S.recon.optTubeStyle}
               checked={options.speciesTubeStyle}
               onChange={(v) => setReconViewOptions({ speciesTubeStyle: v })}
@@ -240,14 +240,14 @@ export function ReconPanel() {
                     aria-label={S.recon.optTubeOpacity}
                   />
                 </Field>
-                <CheckboxField
+                <SwitchField
                   label={S.recon.optTubeGradient}
                   checked={options.speciesTubeGradient}
                   onChange={(v) => setReconViewOptions({ speciesTubeGradient: v })}
                 />
               </>
             )}
-            <CheckboxField
+            <SwitchField
               label={S.recon.optGeneCurve}
               checked={options.geneCurveStyle}
               onChange={(v) => setReconViewOptions({ geneCurveStyle: v })}
@@ -265,14 +265,14 @@ export function ReconPanel() {
                     aria-label={S.recon.optGeneThickness}
                   />
                 </Field>
-                <CheckboxField
+                <SwitchField
                   label={S.recon.optGeneHalo}
                   checked={options.geneLineHalo}
                   onChange={(v) => setReconViewOptions({ geneLineHalo: v })}
                 />
               </>
             )}
-            <CheckboxField
+            <SwitchField
               label={S.recon.syncZoom}
               checked={options.syncZoom}
               onChange={(v) => setReconViewOptions({ syncZoom: v })}

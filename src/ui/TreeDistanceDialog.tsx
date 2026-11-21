@@ -14,6 +14,7 @@ import { writeClipboardText } from '../io/clipboardIO';
 import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 interface Comparison {
   key: string;
@@ -38,9 +39,13 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
   const activeTabId = useStore((s) => s.activeTabId);
   const tabStore = useStore((s) => s.tabStore);
   const ref = useDialogFocus(open, onClose);
+  // Presence must be known BEFORE the open-gated memo below, otherwise the
+  // content empties out during the 240 ms exit and the dialog visibly flashes.
+  const presence = usePresence(open);
 
   const { comparisons, skipped } = useMemo(() => {
-    if (!open) return { comparisons: [] as Comparison[], skipped: [] as SkippedComparison[] };
+    if (!presence.mounted)
+      return { comparisons: [] as Comparison[], skipped: [] as SkippedComparison[] };
     const others: { key: string; name: string; doc: Project }[] = [];
     for (const id of tabs) {
       if (id === activeTabId) continue;
@@ -77,9 +82,9 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
       }
     }
     return { comparisons: out, skipped: skippedOut };
-  }, [open, project, tabs, activeTabId, tabStore]);
+  }, [presence.mounted, project, tabs, activeTabId, tabStore]);
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
 
   const copyAll = () => {
     const lines = comparisons.map(
@@ -96,10 +101,10 @@ export function TreeDistanceDialog({ open, onClose }: { open: boolean; onClose: 
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog tree-distance-dialog"
+        className="dialog tree-distance-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.treeDistanceTitle}

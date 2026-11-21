@@ -14,6 +14,7 @@ import { useLanguage } from './i18n';
 import { useDialogFocus } from './useDialogFocus';
 import { parseMarkdown, renderBlocks, tocOf } from './markdown';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 export function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const lang = useLanguage();
@@ -26,7 +27,8 @@ export function ManualDialog({ open, onClose }: { open: boolean; onClose: () => 
     const blocks = parseMarkdown(text);
     return { blocks, toc: tocOf(blocks) };
   }, [lang]);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   const jumpTo = (id: string) => {
     const el = bodyRef.current?.querySelector(`#${CSS.escape(id)}`);
@@ -34,10 +36,10 @@ export function ManualDialog({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog manual-dialog"
+        className="dialog manual-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.menu.manual}

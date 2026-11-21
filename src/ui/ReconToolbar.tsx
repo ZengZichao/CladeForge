@@ -146,14 +146,20 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
 
       {/* syncZoom only means something with two panes. */}
       {!embedded && (
-        <label className="recon-toolbar-toggle" title={S.recon.syncZoom}>
-          <input
-            type="checkbox"
-            checked={options.syncZoom}
-            onChange={(e) => setReconViewOptions({ syncZoom: e.target.checked })}
-          />
+        /* A state that applies on click is a switch, not a form checkbox. */
+        <span className="recon-toolbar-toggle" title={S.recon.syncZoom}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={options.syncZoom}
+            aria-label={S.recon.syncZoom}
+            className="switch switch-sm"
+            onClick={() => setReconViewOptions({ syncZoom: !options.syncZoom })}
+          >
+            <span className="switch-thumb" aria-hidden="true" />
+          </button>
           {S.recon.syncZoom}
-        </label>
+        </span>
       )}
 
       <div className="seg recon-scope-seg" role="tablist" aria-label={S.recon.scopeLabel}>
