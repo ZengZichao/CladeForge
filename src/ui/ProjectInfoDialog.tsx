@@ -72,14 +72,14 @@ export function ProjectInfoDialog({ open, onClose }: { open: boolean; onClose: (
           <Field label={S.review.provAuthor}>
             <TextField
               value={prov.author ?? ''}
-              placeholder={tr('文档作者 / 团队', 'Document author / team')}
+              placeholder={tr('项目作者 / 团队', 'Project author / team')}
               onCommit={(v) => setProv({ author: v })}
             />
           </Field>
           <Field label={tr('描述', 'Description')}>
             <TextField
               value={prov.description ?? ''}
-              placeholder={tr('这份文档要说明什么', 'What this document asserts')}
+              placeholder={tr('这个项目要说明什么', 'What this project asserts')}
               onCommit={(v) => setProv({ description: v })}
             />
           </Field>

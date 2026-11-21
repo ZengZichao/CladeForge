@@ -271,7 +271,7 @@ export function EventEditor({
             apply((d) => addEvent(d, newEvent('custom', target, node.id)));
           }}
         >
-          ＋ {tr('添加事件', 'Add event')}
+          + {tr('添加事件', 'Add event')}
         </button>
       </div>
     </Section>

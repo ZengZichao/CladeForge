@@ -269,7 +269,7 @@ export function buildReconciliationReport(project: Project): string {
     L.push('');
 
     // Annotated topology
-    L.push(`### ${tr('注释拓扑 (Newick + NHX)', 'Annotated topology (Newick + NHX)')}`);
+    L.push(`### ${tr('注记拓扑 (Newick + NHX)', 'Annotated topology (Newick + NHX)')}`);
     L.push('```newick');
     L.push(geneTreeNhk(project, g.doc, g.assumptions));
     L.push('```');

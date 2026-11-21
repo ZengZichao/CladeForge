@@ -258,7 +258,7 @@ export function CanvasLegend({ unmeasuredBranches = false }: { unmeasuredBranche
     // State colouring: shown whenever a character is active — the sample tree
     // colours leaf markers by state (e.g. 陆行 / 飞行), and users found those
     // coloured dots unexplained because this entry only appeared with ASR.
-    // The swatch follows the node/branch target chosen in the Traits module.
+    // The swatch follows the node/branch target chosen in the Characters module.
     {
       kind: characterColorTarget === 'branch' ? 'stateBranch' : 'state',
       color: stateColor,

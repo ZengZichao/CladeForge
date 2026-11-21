@@ -32,7 +32,7 @@ export function rerootAtSelection(): void {
   }
   if (id === st.project.rootId) {
     import('./toast').then(({ notify }) =>
-      notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead')),
+      notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node is the root: use a reroot command to move the root instead')),
     );
     return;
   }

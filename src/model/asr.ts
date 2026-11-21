@@ -593,7 +593,7 @@ export function reconstructMk(
       kind: 'no-usable-observations',
       message: tr(
         `本性状只有 ${scoredTipCount} 个末端带有可用观测（需要 ≥ 2）：Mk 重建已被拒绝。一个观测约束不了一个替换速率，此时运行只会输出网格起点的伪影而非估计值。请先在性状模块为末端赋值。`,
-        `Only ${scoredTipCount} tip${scoredTipCount === 1 ? '' : 's'} carry a usable observation (≥ 2 required): the Mk reconstruction was refused. One observation cannot constrain a substitution rate, and running anyway would print grid-start artefacts, not an estimate. Assign states to tips in the Traits module first.`,
+        `Only ${scoredTipCount} tip${scoredTipCount === 1 ? '' : 's'} carry a usable observation (≥ 2 required): the Mk reconstruction was refused. One observation cannot constrain a substitution rate, and running anyway would print grid-start artefacts, not an estimate. Assign states to tips in the Characters module first.`,
       ),
       count: scoredTipCount,
       nodeIds: [],
@@ -718,8 +718,8 @@ export function reconstructMk(
   pushNodeWarning(
     'zero-branch-length',
     zeroBranch,
-    (n) => `${n} 个节点枝长为 0（同期分化），已按 0 参与计算`,
-    (n) => `${n} node${n === 1 ? '' : 's'} have a branch length of 0 (synchronous divergence) and were used as 0`,
+    (n) => `${n} 个节点枝长为 0（零枝长），已按 0 参与计算`,
+    (n) => `${n} node${n === 1 ? '' : 's'} have a branch length of 0 (zero branch length) and were used as 0`,
   );
   pushNodeWarning(
     'negative-branch-length',

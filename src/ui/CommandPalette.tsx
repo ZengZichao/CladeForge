@@ -258,7 +258,7 @@ export function CommandPalette({
             // M17: the SAME confirm + refit the context menu always showed.
             file.actionRerootAtNode(id);
           } else {
-            notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node IS the root: use a reroot command to move the root instead'));
+            notify.info(tr('选中的就是根节点：请改用「定根」类命令改变根的位置', 'The selected node is the root: use a reroot command to move the root instead'));
           }
         },
       },
@@ -315,7 +315,7 @@ export function CommandPalette({
       },
       {
         id: 'selectLeaves',
-        label: tr('选中全部末端节点','Select all tip nodes'),
+        label: tr('选中全部末端','Select all tips'),
         category: tr('树操作','Tree'),
         icon: <FrameIcon />,
         aliases: ['leaves', 'tips', 'select', 'moduan'],
@@ -350,7 +350,7 @@ export function CommandPalette({
         icon: <FrameIcon />,
         aliases: ['collapse all', 'zhedie'],
         run: () =>
-          appliedChange(() => apply((d) => void collapseAll(d)), tr('已折叠全部枝', 'Collapsed all clades')),
+          appliedChange(() => apply((d) => void collapseAll(d)), tr('已折叠全部支系', 'Collapsed all clades')),
       },
       {
         id: 'expandAll',
@@ -359,7 +359,7 @@ export function CommandPalette({
         icon: <FrameIcon />,
         aliases: ['expand all', 'zhangkai'],
         run: () =>
-          appliedChange(() => apply((d) => void expandAll(d)), tr('已展开全部枝', 'Expanded all clades')),
+          appliedChange(() => apply((d) => void expandAll(d)), tr('已展开全部支系', 'Expanded all clades')),
       },
       { id: 'deriveLens', label: S.review.cmdDeriveBranchLengths, category: tr('树操作','Tree'), icon: <MagicWandIcon />, aliases: ['branch length', 'ages', 'zhichang'], run: () => { const r = deriveBranchLengthsFromAgesSnapshot(); if (r) notify.info(r); } },
       { id: 'fitCalib', label: S.review.cmdEstimateCalibratedAges, category: tr('树操作','Tree'), icon: <MagicWandIcon />, aliases: ['calibration', 'isotonic', 'jiaozhun'], run: () => { const r = fitCalibratedAgesSnapshot(); if (r) notify.info(r); } },

@@ -260,7 +260,7 @@ describe('UI copy quality', () => {
     expect(ZH_STRINGS.recon.lossSplit(1, 2)).toContain('末端枝');
     expect(ZH_STRINGS.recon.lossSplit(1, 2)).not.toContain('入枝');
 
-    expect(ZH_STRINGS.nexusExport.includeHypothesis).toContain('步矩阵');
+    expect(ZH_STRINGS.nexusExport.includeHypothesis).toContain('代价矩阵');
     expect(ZH_STRINGS.nexusExport.includeBeast).toContain('非 BEAST XML');
     expect(EN_STRINGS.nexusExport.includeBeast).toContain('not BEAST XML');
     expect(ZH_STRINGS.nexusExport.includeMrBayes).toContain('命令模板');

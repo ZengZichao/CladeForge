@@ -36,9 +36,9 @@ describe('layoutTypeName — the quoted layout name is never an empty string', (
     setLanguage('en');
     expect(layoutTypeName('rectangular-cladogram')).toBe(S.layoutType.cladogram);
     expect(layoutTypeName('rectangular-cladogram')).toContain('Rectangular');
-    expect(layoutTypeName('circular')).toBe('Circular');
+    expect(layoutTypeName('circular')).toBe('Circular tree');
     setLanguage('zh');
-    expect(layoutTypeName('circular')).toBe('环形图');
+    expect(layoutTypeName('circular')).toBe('环形树');
   });
 
   it('echoes an unknown / legacy id instead of blanking it', () => {

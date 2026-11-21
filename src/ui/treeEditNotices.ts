@@ -46,7 +46,7 @@ export function outgroupFailureText(reason: OutgroupRerootFailure | null): strin
     case 'outgroup-is-root':
       return tr(
         '选定支系的最近共同祖先就是当前的根：外群已经挂在根上了，没有可以重新定根的枝。',
-        'The most recent common ancestor of the selection IS the current root: the outgroup already hangs off the root, so there is no branch to move it onto.',
+        'The most recent common ancestor of the selection is the current root: the outgroup already hangs off the root, so there is no branch to move it onto.',
       );
     case 'not-monophyletic':
       return tr(

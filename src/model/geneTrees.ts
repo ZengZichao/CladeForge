@@ -162,8 +162,8 @@ export function setReconCosts(project: Project, patch: Partial<ReconCosts>): str
   if (cur.dup <= 0 && cur.transfer <= 0) {
     problems.push(
       tr(
-        '加倍与转移代价不能同时为 0（此时任何放置方案代价相同）',
-        'duplication and transfer cannot both be 0 (every placement is then equally optimal)',
+        '基因重复与水平转移代价不能同时为 0（此时任何放置方案代价相同）',
+        'gene duplication and horizontal transfer costs cannot both be 0 (every placement is then equally optimal)',
       ),
     );
     cur.dup = DEFAULT_RECON_COSTS.dup;

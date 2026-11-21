@@ -78,7 +78,7 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
           {character.model === 'dollo' && (
             <div className="hint">
               {tr(
-                '该性状标记为 Dollo 模型：二态（2 状态）性状按真正的“单次获得”Dollo 动态规划打分（整树只允许一次 0→1 获得），此处的代价矩阵被忽略；多态性状的 Dollo 无法表达为矩阵，按 Camin–Sokal 式不可逆近似打分（每枝都允许重新获得）。',
+                '该性状标记为 Dollo 模型：二态（2 状态）性状按真正的“单次获得”Dollo 动态规划打分（整树只允许一次 0→1 获得），此处的代价矩阵被忽略；多态性状的 Dollo 无法表达为矩阵，按 Camin–Sokal 式不可逆近似打分（各枝可独立获得，禁止丢失/逆转）。',
                 'This character is tagged the Dollo model: a binary (2-state) character is scored by the true single-gain Dollo DP (one 0→1 gain per whole tree), which ignores the matrix here; for multi-state characters Dollo is not expressible as a matrix, so the Camin–Sokal-style irreversible approximation applies (a fresh gain allowed on every branch).',
               )}
             </div>
@@ -345,7 +345,7 @@ function CharacterEditor({
               key: 'delete-character',
               title: S.character.deleteCharacter,
               message: tr(
-                `将删除性状「${character.name}」及其全部末端赋值、假说层副本与步矩阵。该操作可通过 ⌘Z 撤销。`,
+                `将删除性状「${character.name}」及其全部末端赋值、假说层副本与代价矩阵。该操作可通过 ⌘Z 撤销。`,
                 `This deletes the character “${character.name}” with every tip assignment, hypothesis-layer copy and its step matrix. Undoable via ⌘Z.`,
               ),
               confirmLabel: S.character.deleteCharacter,

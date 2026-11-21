@@ -308,8 +308,8 @@ export function buildSVG(project: Project, opts: ExportOptions = {}): BuiltSVG {
         legendRows.push({
           kind: 'needsData',
           label: tr(
-            `待补数据：端点未赋值（${unknown} 枝，不计入变化）`,
-            `needs data: endpoint unassigned (${unknown} branch${unknown === 1 ? '' : 'es'}, not counted as changes)`,
+            `数据缺失：末端状态未赋值（${unknown} 枝，不计入变化）`,
+            `missing data: tip state unassigned (${unknown} branch${unknown === 1 ? '' : 'es'}, not counted as changes)`,
           ),
         });
       }

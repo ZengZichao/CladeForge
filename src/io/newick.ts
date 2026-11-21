@@ -649,8 +649,8 @@ function parseSegment(
       const shown = dupes.slice(0, 3).map(([l, c]) => `${l}×${c}`).join(', ');
       issues.push(
         tr(
-          `树中存在重复末端名（${dupes.length} 个，如 ${shown}）：性状表连接与注释表只会命中其中一个。建议先重命名或用 NEXUS 导出的重名处理`,
-          `The tree has duplicate tip labels (${dupes.length}, e.g. ${shown}): character/annotation table joins will hit only one of each. Rename them first, or use the NEXUS export's deduplication`,
+          `树中存在重复末端名（${dupes.length} 个，如 ${shown}）：性状表连接与注记表只会命中其中一个。建议先重命名或用 NEXUS 导出的重名处理`,
+          `The tree has duplicate tip labels (${dupes.length}, e.g. ${shown}): character/notes table joins will hit only one of each. Rename them first, or use the NEXUS export's deduplication`,
         ),
       );
     }
@@ -890,8 +890,8 @@ export function parseNewickTrees(
     if (numericSupports.length > 0 && convention === 'fraction') {
       issues.push(
         tr(
-          `支持度全部 ≤ 1，已按 0–1 后验概率（fraction）解释；若实际是 0–100 百分比（如 bootstrap=1 表示 1%），这一解释会相差 100 倍，请在使用支持度做阈值过滤/折叠/导出前先行校正`,
-          `All support values are ≤ 1 and were interpreted as 0–1 posteriors (fraction). If they are actually 0–100 percentages (e.g. bootstrap=1 meaning 1%), this reading is off by 100×; correct the scale before using support for thresholds, collapsing or export`,
+          `支持度全部 ≤ 1，已按 0–1 比例型支持度（fractional support）解释；若实际是 0–100 百分比（如 bootstrap=1 表示 1%），这一解释会相差 100 倍，请在使用支持度做阈值过滤/折叠/导出前先行校正`,
+          `All support values are ≤ 1 and were interpreted as 0–1 fractional support values. If they are actually 0–100 percentages (e.g. bootstrap=1 meaning 1%), this reading is off by 100×; correct the scale before using support for thresholds, collapsing or export`,
         ),
       );
     }

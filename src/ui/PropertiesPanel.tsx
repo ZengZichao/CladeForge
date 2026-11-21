@@ -87,7 +87,7 @@ type NodeSectionKey =
 const NODE_SECTION_KEYWORDS: Record<NodeSectionKey, string[]> = {
   section: ['名称', '枝长', '支持度', '年龄', '时间', '假说', '标注', 'name', 'branch length', 'support', 'age', 'hypothesis', 'note', 'annotation'],
   timeConstraintSection: ['时间约束', '校准', '区间', '最小年代', '最大年代', 'calibration', 'constraint', 'min age', 'max age'],
-  styleSection: ['填充色', '描边色', '大小', '形状', '描边', '颜色', '字号', 'fill', 'stroke', 'size', 'shape', 'colour', 'color'],
+  styleSection: ['填充颜色', '描边颜色', '填充色', '描边色', '大小', '形状', '描边', '颜色', '字号', 'fill', 'stroke', 'size', 'shape', 'colour', 'color'],
   labelSection: ['标签', '字号', '字体', '颜色', '旋转', '斜体', '加粗', '字重', '位置', '方位', '偏移', 'label', 'font', 'size', 'colour', 'color', 'rotate', 'italic', 'bold', 'position', 'offset'],
   branchSection: ['分支', '颜色', '线宽', '线型', '粗细', '形状', 'branch', 'colour', 'color', 'width', 'dash', 'shape'],
 };
@@ -417,7 +417,7 @@ function NodePanel({
         <div className="hint" title={tr('演化事件引用性状状态，故需先定义性状', 'Evolutionary events reference character states, so define a character first')}>
           {tr(
             '演化事件需引用性状状态：先在左侧「性状」模块新建至少一个性状，此处即可添加事件。',
-            'Evolutionary events reference character states: create at least one character in the Traits module first, then events become available here.',
+            'Evolutionary events reference character states: create at least one character in the Characters module first, then events become available here.',
           )}
         </div>
       )}

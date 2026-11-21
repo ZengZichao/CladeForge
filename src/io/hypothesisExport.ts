@@ -120,7 +120,7 @@ export function buildNarrative(project: Project): string {
             L.push(tr(`  - 分支「${nl(t.nodeId)}」：${md(t.fromLabel)} → ${md(t.toLabel)}`, `  - Branch “${nl(t.nodeId)}”: ${md(t.fromLabel)} → ${md(t.toLabel)}`));
           }
         } else {
-          L.push(tr('- 未标注明确的状态变化。', '- No explicit state changes annotated.'));
+          L.push(tr('- 未记录明确的状态变化。', '- No explicit state changes recorded.'));
         }
         // Branches the transition finder could not report at all — BOTH endpoints
         // carry no observation, so there is no change to draw — but where one of
@@ -170,7 +170,7 @@ export function buildNarrative(project: Project): string {
 
   const annotated = Object.values(project.nodes).filter((n) => n.hypothesisNote?.trim());
   if (annotated.length) {
-    L.push(tr('## 假说标注', '## Hypothesis annotations'), '');
+    L.push(tr('## 假说注记', '## Hypothesis notes'), '');
     for (const n of annotated) {
       L.push(`- **${md(nodeLabel(project, n.id))}**：${md(n.hypothesisNote!.trim())}`);
     }

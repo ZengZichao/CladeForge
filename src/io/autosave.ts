@@ -79,8 +79,8 @@ export function failureMessage(failure: AutosaveFailure, bytes?: number): string
       );
     case 'serialize':
       return tr(
-        '自动保存失败：工程数据无法序列化（可能含循环引用）。请立即用「文件 › 保存项目」重试并查看错误详情。',
-        'Autosave failed: the document could not be serialised (a cyclic reference is the usual cause). Use File › Save project now and check the error detail.',
+        '自动保存失败：项目数据无法序列化（可能含循环引用）。请立即用「文件 › 保存项目」重试并查看错误详情。',
+        'Autosave failed: the project data could not be serialised (a cyclic reference is the usual cause). Use File › Save project now and check the error detail.',
       );
     case 'write':
     default:

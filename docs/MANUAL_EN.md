@@ -95,7 +95,7 @@ To start immediately, you can:
 
 - **Language** — Follows your operating system's language on the first run, then remembers your choice. Switch between English and Chinese at any time from the **Preferences** menu; the UI remounts immediately, including node labels that ship with the built-in samples.
 - **Theme** — Defaults to System. Choose Light, Dark, or System in the same **Preferences** menu.
-- **Header layout** — From left to right: app name, **File** and **Recent** menus, the toolbar (Standard view / Reconciliation view switch, **+ Add children**, undo / redo, Save), **Preferences** and the **?** Help menu. The document name lives on its **tab** in the tab bar (hover shows the path and disk state), not in the header. Language, theme, UI scale, colour-vision mode, undo depth and similar settings are all in **Preferences**; shortcuts, tours, feedback and About live in the **?** menu. Structural editing lives in the node context menu and the command palette, not in the header.
+- **Header layout** — From left to right: app name, **File** and **Recent** menus, the toolbar (Standard view / Reconciliation view switch, **+ Add children**, undo / redo, Save), **Preferences** and the **?** Help menu. The project name lives on its **tab** in the tab bar (hover shows the path and disk state), not in the header. Language, theme, UI scale, colour-vision mode, undo depth and similar settings are all in **Preferences**; shortcuts, tours, feedback and About live in the **?** menu. Structural editing lives in the node context menu and the command palette, not in the header.
 
 ---
 
@@ -177,7 +177,7 @@ The palette also keeps a few entries found nowhere else: extract the selected su
 
 CladeForge supports multiple tabs, each holding an independent project. Click a tab to switch to it, use its × button to close it, and use the **+** button at the end of the tab bar to open a new tab. Tabs are auto-restored on the next launch; corrupt tabs are skipped with a notification.
 
-A tab's tooltip shows three lines: document name, disk path (or "not saved to disk yet"), and disk state (unsaved changes / last save time). **File › Save all tabs** writes the active tab and every parked tab that already has a disk path, then reports how many were written and how many were never saved anywhere. Use **File › Project information…** to rename the document and to fill in author, description and the topology / branch-length / dating / trait sources; the same dialog shows created, modified and on-disk times.
+A tab's tooltip shows three lines: project name, disk path (or "not saved to disk yet"), and disk state (unsaved changes / last save time). **File › Save all tabs** writes the active tab and every parked tab that already has a disk path, then reports how many were written and how many were never saved anywhere. Use **File › Project information…** to rename the project and to fill in author, description and the topology / branch-length / dating / trait sources; the same dialog shows created, modified and on-disk times.
 
 ---
 
@@ -235,7 +235,7 @@ Open the search field with the magnifier button in the canvas controls, or press
 | **Rectangular cladogram** | Equal-depth steps; branch lengths ignored. Classic publication style. |
 | **Rectangular phylogram** | Branch lengths determine horizontal position; tips are not aligned. |
 | **Time-calibrated tree (chronogram)** | Nodes positioned on a real time axis by their recorded ages; geological era bands and environmental events overlay it. The layout is internal id `time-calibrated`. |
-| **Circular** | Radial layout; equal-angle or branch-length-based. |
+| **Circular tree** | Radial layout; equal-angle or branch-length-based. |
 
 ### Orientations
 
@@ -419,7 +419,7 @@ Branch-length problems are **reported per class, not silently patched**, because
 | Degradation reported by the result summary | How ASR handles it |
 |-------------------------------------------|--------------------|
 | No branch length recorded | imputed as 1 |
-| Branch length recorded as 0 | kept as 0 — a genuine synchronous divergence |
+| Branch length recorded as 0 | kept as 0 — a genuine zero-length branch |
 | Negative branch length | invalid, imputed as 1 |
 | Non-finite branch length (NaN / ∞) | invalid, imputed as 1 |
 | Posterior collapse (all log-likelihoods −∞) | falls back to a uniform distribution |
@@ -479,7 +479,7 @@ By default 999 permutations run, so the smallest reportable value is printed as 
 
 ### Continuous Characters
 
-- **Blomberg’s K** — a *point estimate* relative to Brownian motion, where BM equals 1: K > 1 means the character is more clustered than BM predicts, K < 1 more dispersed. A seeded Brownian-motion simulation on the same tree (button "Simulate BM null") gives a two-sided p-value; without it, the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly. A real zero-length branch (synchronous divergence) is used AS zero and reported separately from imputed ones. Separately: a tree that is not fully binary inflates CI/RI, and the panel says so.
+- **Blomberg’s K** — a *point estimate* relative to Brownian motion, where the BM expectation is K = 1: K > 1 means the character is more clustered than BM predicts, K < 1 more dispersed. A seeded Brownian-motion simulation on the same tree (button "Simulate BM null") gives a two-sided p-value; without it, the distance between K and 1 may sit entirely inside what a random draw would produce, and the panel states that explicitly. A real zero-length branch is used as zero and reported separately from imputed ones. Separately: a tree that is not fully binary inflates CI/RI, and the panel says so.
 - **Branch-length coverage** travels with every K. A fully measured tree reports that all branches use the supplied lengths; a partially measured one warns that the remaining branches were imputed as 1, which makes the value a *topological* (cladogram-scale) K rather than a time-scaled one — a difference that matters when comparing K across trees.
 - A K is only produced when at least one continuous character is scored. When it cannot be computed, the panel names the reason instead of showing a number.
 
@@ -516,7 +516,7 @@ The module holds **several gene trees at once**. Each entry shows its name, how 
 
 After creating or importing, you can manually refine the reconciliation:
 - Select a gene node in the reconciliation view.
-- In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch; in the embedded view you can also set the **branch position** (where the lineage sits along its host branch) and the **transfer donor** (τ only; auto-derived from "the child outside the recipient subtree" by default).
+- In the inspector, set its **species-tree mapping**, **event type** (speciation σ, duplication δ, transfer τ), and **losses** on the incoming branch; in the embedded view you can also set the **branch position** (where the lineage sits along its host branch) and the **transfer donor** (τ only; auto-derived from "a species node outside the recipient subtree" by default).
 - Use **Suggest via MRCA** to automatically map unmapped internal gene nodes to their most recent common ancestor in the species tree.
 - The consistency checker reports mapping conflicts and event inconsistencies.
 
@@ -560,7 +560,7 @@ The **Side-by-side / Embedded** segmented control in the toolbar switches the ca
 
 - **Reading the figure**: σ speciation = children enter different sub-tubes; δ duplication = parallel lanes within one tube; τ transfer = a cross-tube transfer arc from the donor tube to the recipient tube (dashed = time-infeasible; without node ages the legend says "topological transfer"); λ loss = a loss stub at the fork where lineages die (hollow/dashed = inferred structural loss; `λ!` = the asserted count is below the structural minimum). Tube width adapts to how many gene lanes coexist on that branch (capped; an overflow badge appears) — it reflects gene copy number, not support or time.
 - **Honest display**: an internal gene node with no usable assumption whose children are *all* placed is DISPLAY-INFERRED to its children's MRCA (dashed) and never written into the project file; truly unmapped nodes land in a labelled orphan gutter (unmapped gene nodes) connected by a dashed line to their nearest placed ancestor. Trees without node ages/lengths are labelled "topological sketch" in the header.
-- **Building an evolutionary path**: select a gene node, then **Alt + click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The first time you enter the nested view, a one-time hint bar under the header states this gesture (dismissible; it disappears automatically after the first Alt + click and remembers the dismissal). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "the child outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
+- **Building an evolutionary path**: select a gene node, then **Alt + click** a species tube — the node is mapped onto that branch and the clicked within-branch position is recorded (`branchFraction`, 0 = parent end, 1 = the mapped node's end). The first time you enter the nested view, a one-time hint bar under the header states this gesture (dismissible; it disappears automatically after the first Alt + click and remembers the dismissal). The inspector offers a branch-position slider (with a one-click "Auto" reset) and a transfer-donor select (shown for τ only; auto-derived from "a species node outside the recipient subtree" by default, explicitly overridable). Both fields persist in the project file, and the reconciliation report / NHX output carry them as a branch-position column and `BF=` / `TD=` tags.
 - **Export the figure**: in the embedded mode the toolbar gains "Export figure", writing the nested reconciliation drawing as a standalone vector SVG (with legend and version metadata) for hypothesis documents.
 - Switching layout modes never touches selections, mappings or undo history; "Reset view settings" no longer kicks you out of the embedded mode. The status bar shows a single zoom readout there, and the sync-zoom toggle hides.
 
@@ -730,7 +730,7 @@ The dialog lets you include:
 
 ### Export Options & Named Presets
 
-**File › Export options…** (or the **Export options…** button in the Export module) opens the export-settings dialog. The mode (follow view / fixed preset), DPI, transparent background, support-value printing, legend, scale bar, grayscale and white background all **persist across restarts**. **Named presets** save the current combination under a name for one-click switching (e.g. "Journal halftone 600dpi"). Presets are global preferences; they are not written into project files.
+**File › Export options…** (or the **Export options…** button in the Export module) opens the export-settings dialog. The mode (follow view / fixed preset), DPI, transparent background, support-value printing, legend, scale bar, grayscale and white background all **persist across restarts**. **Named presets** save the current combination under a name for one-click switching (e.g. "Journal halftone 600 DPI"). Presets are global preferences; they are not written into project files.
 
 ### NeXML Import
 

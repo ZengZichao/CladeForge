@@ -423,7 +423,7 @@ export function LayoutPanel() {
             <option value="bottom-right">{tr('右下', 'Bottom-right')}</option>
           </select>
         </Field>
-        <Field label={tr('项目排列', 'Item arrangement')}>
+        <Field label={tr('图例项排列', 'Legend item arrangement')}>
           <select
             value={legendLayout}
             onChange={(e) => setLegendLayout(e.target.value as LegendLayout)}
