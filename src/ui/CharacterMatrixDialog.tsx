@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Character matrix editor: a spreadsheet of tips (rows) × characters (columns).
 //
 // Editing a cell writes the tip's observed state and the canvas recolours
@@ -6,6 +7,7 @@
 // matrix stays a clean taxon × character table.
 
 import { useMemo } from 'react';
+import { usePresence } from './motion';
 import { useStore } from '../model/store';
 import { setNodeState } from '../model/treeOps';
 import type { Project, TreeNode } from '../model/types';
@@ -86,14 +88,16 @@ export function CharacterMatrixDialog({ open, onClose }: { open: boolean; onClos
   // Focus trap + Esc close + initial focus.
   const ref = useDialogFocus(open, onClose);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
   const characters = project.characters;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog matrix-dialog"
+        className="dialog matrix-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.matrix.title}

@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDialogFocus } from './useDialogFocus';
 import { S } from './strings';
+import { usePresence } from './motion';
 
 export interface ConfirmRequest {
   /** Stable key used for the "don't ask again" opt-out (e.g. 'delete-large'). */
@@ -74,6 +75,12 @@ export function ConfirmDialog() {
   // cancel the previous one even under React StrictMode (state updaters run
   // twice there — a side effect inside the updater would cancel twice).
   const reqRef = useRef<ConfirmRequest | null>(null);
+  // Keep the request visible through the short exit so the backdrop and card
+  // fade/lift instead of vanishing; `shown` is the last request while closing.
+  const lastShown = useRef<ConfirmRequest | null>(null);
+  if (req) lastShown.current = req;
+  const presence = usePresence(Boolean(req));
+  const shown = req ?? lastShown.current;
   const ref = useDialogFocus(Boolean(req), () => {
     const cancel = req?.onCancel;
     setReq(null);
@@ -95,16 +102,17 @@ export function ConfirmDialog() {
   // on every render, never unregisters, and makes rendering a side effect.
   useEffect(() => registerConfirmHandler(open), [open]);
 
-  if (!req) return null;
+  if (!presence.mounted || !shown) return null;
 
   const dismiss = () => {
-    const cancel = req.onCancel;
+    const cancel = req?.onCancel;
     setReq(null);
     reqRef.current = null;
     cancel?.();
   };
 
   const confirm = () => {
+    if (!req) return;
     if (skip) {
       try {
         localStorage.setItem('cladeforge:confirm:skip:' + req.key, 'true');
@@ -119,18 +127,23 @@ export function ConfirmDialog() {
   };
 
   return (
-    <div className="dialog-backdrop confirm-backdrop" onMouseDown={dismiss}>
+    <div
+      className="dialog-backdrop confirm-backdrop"
+      data-state={presence.state}
+      onMouseDown={dismiss}
+    >
       <div
         ref={ref}
         className="dialog confirm-dialog"
+        data-state={presence.state}
         role="alertdialog"
         aria-modal="true"
-        aria-label={req.title}
+        aria-label={shown.title}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2>{req.title}</h2>
-        <p className="confirm-message">{req.message}</p>
-        {!req.danger && (
+        <h2>{shown.title}</h2>
+        <p className="confirm-message">{shown.message}</p>
+        {!shown.danger && (
           <label className="confirm-skip">
             <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} />
             {S.confirm.dontAskAgain}
@@ -139,8 +152,9 @@ export function ConfirmDialog() {
         <div className="actions">
           <button
             className="btn"
+            disabled={!req}
             onClick={() => {
-              const cancel = req.onCancel;
+              const cancel = req?.onCancel;
               setReq(null);
               reqRef.current = null;
               cancel?.();
@@ -148,21 +162,26 @@ export function ConfirmDialog() {
           >
             {S.confirm.cancel}
           </button>
-          {req.alternate && (
+          {shown.alternate && (
             <button
               className="btn primary"
+              disabled={!req}
               onClick={() => {
-                const act = req.alternate!.onAction;
+                const act = req?.alternate?.onAction;
                 setReq(null);
                 reqRef.current = null;
-                act();
+                act?.();
               }}
             >
-              {req.alternate.label}
+              {shown.alternate.label}
             </button>
           )}
-          <button className={`btn ${req.danger ? 'danger' : 'primary'}`} onClick={confirm}>
-            {req.confirmLabel}
+          <button
+            className={`btn ${shown.danger ? 'danger' : 'primary'}`}
+            disabled={!req}
+            onClick={confirm}
+          >
+            {shown.confirmLabel}
           </button>
         </div>
       </div>

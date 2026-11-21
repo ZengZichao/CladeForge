@@ -1,28 +1,31 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// Preferences dialog: language, theme, UI scale and the undo-history limit.
+// Preferences PAGE: language, theme, UI scale and the undo-history limit.
 // 用户反馈: the CVD mode, diagnostics copy and restore-confirmation-prompts
 // entries were removed together with their functionality; the undo-limit
 // consumption note is gone too.
 //
-// BUG-10 caps the header at ten clickable targets. The two segmented controls
-// that used to live here cost five of them (中, EN, light, dark, system) while
-// being low-frequency chrome; they move into one menu that keeps the exact same
-// behaviour — same i18n swap, same persisted theme choice (see ui/theme.ts and
-// ui/i18n.ts), same live "system" tracking while the OS preference changes.
+// 2026-11 design review: the compact segmented-button dialog became a full-page
+// settings surface — one row per setting, name and explanation on the left,
+// a single small control on the right, group headings, and the destructive
+// action alone at the bottom. The page replaces the workspace in place (no
+// outer card) and keeps the modal contract: focus trap, Escape, focus return.
 //
-// The panel is portalled to <body> with fixed positioning and right-aligned to
-// the trigger: this menu opens from the right edge of the toolbar, where the
-// left-aligned flyout used by the file menu would run off the viewport.
+// BUG-10 caps the header at ten clickable targets. The two segmented controls
+// that used to live in the header cost five of them (中, EN, light, dark,
+// system) while being low-frequency chrome; they now live in one entry that
+// keeps the same behaviour — same i18n swap, same persisted theme choice (see
+// ui/theme.ts and ui/i18n.ts), same live "system" tracking while the OS
+// preference changes.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../model/store';
 import { createPortal } from 'react-dom';
 import {
   ChevronDownIcon,
+  Cross2Icon,
   GearIcon,
-  LaptopIcon,
-  MoonIcon,
-  SunIcon,
+  MinusIcon,
+  PlusIcon,
 } from '@radix-ui/react-icons';
 import { changeLanguage, useLanguagePref } from './i18n';
 import { setTheme, storedTheme, type Theme } from './theme';
@@ -30,8 +33,13 @@ import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
 import { requestConfirm } from './confirmDialog';
 import { notify } from './toast';
+import { usePresence } from './motion';
 
 const UI_SCALE_KEY = 'cladeforge:uiScale';
+// Small, precise range: 85 %–160 % in 5 % steps (the stepper's domain).
+const SCALE_MIN = 0.85;
+const SCALE_MAX = 1.6;
+const SCALE_STEP = 0.05;
 
 function storedUiScale(): number {
   try {
@@ -52,12 +60,6 @@ function applyUiScale(scale: number): void {
   window.dispatchEvent(new CustomEvent('cladeforge:ui-scale-change', { detail: scale }));
 }
 
-interface ThemeOption {
-  value: Theme;
-  icon: ReactNode;
-  label: string;
-}
-
 export function PreferencesMenu({
   open: openProp,
   onOpenChange,
@@ -72,6 +74,9 @@ export function PreferencesMenu({
   const historyLimit = useStore((s) => s.historyLimit);
   const [pref, setPref] = useState<Theme>(storedTheme);
   const [uiScale, setUiScaleState] = useState<number>(storedUiScale);
+  // Stepper clicks can arrive faster than React commits; read the committed
+  // value from a ref so two quick presses advance two steps, not one.
+  const scaleRef = useRef(uiScale);
   const [internalOpen, setInternalOpen] = useState(false);
   const open = openProp ?? internalOpen;
   const setOpen = (next: boolean | ((o: boolean) => boolean)) => {
@@ -80,11 +85,14 @@ export function PreferencesMenu({
     else setInternalOpen(value);
   };
   const boxRef = useRef<HTMLDivElement>(null);
-  // M2: the dialog contract — focus trap + Escape + focus return (replaces the
-  // flyout's hand-rolled dismissal listeners; a centered dialog needs no
-  // positioning math, which also retires the S02 zoom-space conversion).
+  // M2: the dialog contract — focus trap + Escape + focus return. A full-page
+  // surface needs no trigger positioning math, which also retires the old S02
+  // zoom-space conversion.
   const dialogRef = useDialogFocus(open, () => setOpen(false));
   const btnRef = useRef<HTMLButtonElement>(null);
+  // The settings page leaves with a short fade/scale/blur instead of vanishing
+  // between frames; reopening mid-exit reverses it in place.
+  const presence = usePresence(open);
 
   // Track OS changes so the "system" row's active state stays honest even
   // without reopening the menu (same rule as the former toggle components).
@@ -119,6 +127,7 @@ export function PreferencesMenu({
   };
 
   const chooseUiScale = (value: number) => {
+    scaleRef.current = value;
     setUiScaleState(value);
     applyUiScale(value);
     try {
@@ -126,6 +135,13 @@ export function PreferencesMenu({
     } catch {
       /* storage unavailable — session-only */
     }
+  };
+
+  /** Nudge the scale by one step, clamped to the supported range. */
+  const stepUiScale = (dir: 1 | -1) => {
+    const next = Math.round((scaleRef.current + dir * SCALE_STEP) * 100) / 100;
+    const clamped = Math.min(SCALE_MAX, Math.max(SCALE_MIN, next));
+    if (clamped !== scaleRef.current) chooseUiScale(clamped);
   };
 
   const clearLocalData = () => {
@@ -155,12 +171,6 @@ export function PreferencesMenu({
     });
   };
 
-  const themeOptions: ThemeOption[] = [
-    { value: 'light', icon: <SunIcon />, label: S.theme.light },
-    { value: 'dark', icon: <MoonIcon />, label: S.theme.dark },
-    { value: 'system', icon: <LaptopIcon />, label: S.theme.system },
-  ];
-
   return (
     <div className="dropdown prefs-menu" ref={boxRef}>
       <button
@@ -176,114 +186,190 @@ export function PreferencesMenu({
         <span className="prefs-trigger-label">{tr('偏好', 'Preferences')}</span>
         <ChevronDownIcon className="prefs-caret" />
       </button>
-      {/* M2 (UI_UX_REVIEW): a 12-radio + destructive-action settings page is a
-          DIALOG, not a dropdown — the flyout scrolled 896px of content in a
-          420px window and anchored off-screen at 130% zoom. The centered dialog
-          gives the real modal contract (focus trap, Escape, backdrop dismiss)
-          and the widest layout the content needs. */}
-      {open &&
+      {/* Full-page settings surface. It still owns the modal contract (focus
+          trap, Escape, focus return) but paints as a page, not a card: no
+          border, radius or shadow of its own. */}
+      {presence.mounted &&
         createPortal(
-          <div className="dialog-backdrop" onMouseDown={() => setOpen(false)}>
+          <div
+            className="dialog-backdrop prefs-backdrop"
+            data-state={presence.state}
+            onMouseDown={() => setOpen(false)}
+          >
             <div
               ref={dialogRef}
               className="dialog prefs-dialog"
+              data-state={presence.state}
               role="dialog"
               aria-modal="true"
               aria-label={tr('偏好设置', 'Preferences')}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <h2>{tr('偏好设置', 'Preferences')}</h2>
-              {/* 用户反馈：each group is a rounded segmented BUTTON ROW — equal
-                  size, equal weight, comparable label lengths — instead of one
-                  full-width row per option with a check glyph. */}
-              <div className="menu-section-label">{S.lang.label}</div>
-              {/* 用户反馈: 跟随系统 joins 中文 / English — the stored preference
-                  may be 'system', resolved against the OS locale. */}
-              <div className="prefs-seg-group" role="radiogroup" aria-label={S.lang.label}>
-                <button
-                  className={`prefs-seg${langPref === 'zh' ? ' active' : ''}`}
-                  role="radio"
-                  aria-checked={langPref === 'zh'}
-                  onClick={() => chooseLanguage('zh')}
-                >
-                  中文
-                </button>
-                <button
-                  className={`prefs-seg${langPref === 'en' ? ' active' : ''}`}
-                  role="radio"
-                  aria-checked={langPref === 'en'}
-                  onClick={() => chooseLanguage('en')}
-                >
-                  English
-                </button>
-                <button
-                  className={`prefs-seg${langPref === 'system' ? ' active' : ''}`}
-                  role="radio"
-                  aria-checked={langPref === 'system'}
-                  onClick={() => chooseLanguage('system')}
-                >
-                  {S.lang.system}
-                </button>
-              </div>
-              <div className="menu-section-label">{S.theme.label}</div>
-              <div className="prefs-seg-group" role="radiogroup" aria-label={S.theme.label}>
-                {themeOptions.map((opt) => (
+              <header className="prefs-page-header">
+                <div className="prefs-page-header-inner">
+                  <h2>{tr('偏好设置', 'Preferences')}</h2>
                   <button
-                    key={opt.value}
-                    className={`prefs-seg${pref === opt.value ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={pref === opt.value}
-                    onClick={() => chooseTheme(opt.value)}
+                    className="btn icon ghost prefs-close"
+                    aria-label={S.shortcuts.close}
+                    title={S.shortcuts.close}
+                    onClick={() => setOpen(false)}
                   >
-                    {opt.label}
+                    <Cross2Icon />
                   </button>
-                ))}
-              </div>
-              <div className="menu-section-label">{S.review.preferencesUiScale}</div>
-              <div className="prefs-seg-group" role="radiogroup" aria-label={S.review.preferencesUiScale}>
-                {[1, 1.15, 1.3].map((v) => (
-                  <button
-                    key={v}
-                    className={`prefs-seg${Math.abs(uiScale - v) < 0.01 ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={Math.abs(uiScale - v) < 0.01}
-                    onClick={() => chooseUiScale(v)}
-                  >
-                    {v === 1 ? tr('100%', '100%') : `${Math.round(v * 100)}%`}
-                  </button>
-                ))}
-              </div>
-            <div className="menu-section-label">{tr('撤销步数上限', 'Undo history limit')}</div>
-            <div className="prefs-seg-group" role="radiogroup" aria-label={tr('撤销步数上限', 'Undo history limit')}>
-              {[100, 300, 1000].map((v) => (
-                <button
-                  key={v}
-                  className={`prefs-seg${historyLimit === v ? ' active' : ''}`}
-                  role="radio"
-                  aria-checked={historyLimit === v}
-                  title={
-                    v === 100
-                      ? tr('默认', 'Default')
-                      : tr('更大内存占用，适合超长编辑', 'More memory, for very long sessions')
-                  }
-                  onClick={() => useStore.getState().setHistoryLimit(v)}
-                >
-                  {v === 100 ? tr('100 步', '100 steps') : tr(`${v} 步`, `${v} steps`)}
-                </button>
-              ))}
-            </div>
-            <div className="menu-sep" />
-            {/* 用户反馈: a long rounded rectangle wrapping the destructive row. */}
-            <button className="menu-item prefs-item prefs-reset-btn" onClick={clearLocalData} style={{ color: 'var(--danger)' }}>
-              <span className="prefs-item-label">
-                <span className="prefs-check" aria-hidden="true" />
-                <span>{S.review.clearLocalData}</span>
-              </span>
-            </button>
-              <div className="actions">
-                <button className="btn primary" onClick={() => setOpen(false)}>
-                  {S.shortcuts.close}
-                </button>
+                </div>
+              </header>
+
+              <div className="prefs-page-body">
+                <div className="prefs-page-inner">
+                  {/* --- Language ------------------------------------------- */}
+                  <section className="prefs-group" aria-labelledby="prefs-group-language">
+                    <h3 id="prefs-group-language" className="prefs-group-title">
+                      {S.lang.label}
+                    </h3>
+                    <div className="prefs-row">
+                      <div className="prefs-row-label">
+                        <span className="prefs-label">{tr('界面语言', 'Interface language')}</span>
+                        <span className="prefs-desc">
+                          {tr('切换后界面立即更新，打开中的文档保持不动。', 'The interface updates immediately; open documents are untouched.')}
+                        </span>
+                      </div>
+                      <div className="prefs-row-control">
+                        {/* Three options, one choice: a menu is the smallest control
+                            that shows the current value without a row of tabs. */}
+                        <select
+                          className="prefs-select"
+                          data-autofocus
+                          aria-label={tr('界面语言', 'Interface language')}
+                          value={langPref}
+                          onChange={(e) =>
+                            chooseLanguage(e.target.value as 'zh' | 'en' | 'system')
+                          }
+                        >
+                          <option value="zh">中文</option>
+                          <option value="en">English</option>
+                          <option value="system">{S.lang.system}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* --- Appearance ----------------------------------------- */}
+                  <section className="prefs-group" aria-labelledby="prefs-group-appearance">
+                    <h3 id="prefs-group-appearance" className="prefs-group-title">
+                      {tr('外观', 'Appearance')}
+                    </h3>
+                    <div className="prefs-row">
+                      <div className="prefs-row-label">
+                        <span className="prefs-label">{S.theme.label}</span>
+                        <span className="prefs-desc">
+                          {tr('跟随系统会随操作系统的明暗设置切换。', 'Follow system tracks the operating system light or dark setting.')}
+                        </span>
+                      </div>
+                      <div className="prefs-row-control">
+                        <select
+                          className="prefs-select"
+                          aria-label={S.theme.label}
+                          value={pref}
+                          onChange={(e) => chooseTheme(e.target.value as Theme)}
+                        >
+                          <option value="light">{S.theme.light}</option>
+                          <option value="dark">{S.theme.dark}</option>
+                          <option value="system">{S.theme.system}</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="prefs-row">
+                      <div className="prefs-row-label">
+                        <span className="prefs-label">{S.review.preferencesUiScale}</span>
+                        <span className="prefs-desc">
+                          {tr('同时放大文字、控件与点击区域。', 'Scales text, controls and hit targets together.')}
+                        </span>
+                      </div>
+                      <div className="prefs-row-control">
+                        {/* A bounded numeric setting: a stepper is more precise
+                            than a slider and needs no popup to read the value. */}
+                        <div
+                          className="prefs-stepper"
+                          role="group"
+                          aria-label={S.review.preferencesUiScale}
+                        >
+                          <button
+                            type="button"
+                            className="prefs-step-btn"
+                            aria-label={tr('减小界面缩放', 'Decrease interface scale')}
+                            disabled={uiScale <= SCALE_MIN + 1e-6}
+                            onClick={() => stepUiScale(-1)}
+                          >
+                            <MinusIcon />
+                          </button>
+                          <span className="prefs-step-value" aria-live="polite">
+                            {Math.round(uiScale * 100)}%
+                          </span>
+                          <button
+                            type="button"
+                            className="prefs-step-btn"
+                            aria-label={tr('增大界面缩放', 'Increase interface scale')}
+                            disabled={uiScale >= SCALE_MAX - 1e-6}
+                            onClick={() => stepUiScale(1)}
+                          >
+                            <PlusIcon />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* --- Editing -------------------------------------------- */}
+                  <section className="prefs-group" aria-labelledby="prefs-group-editing">
+                    <h3 id="prefs-group-editing" className="prefs-group-title">
+                      {tr('编辑', 'Editing')}
+                    </h3>
+                    <div className="prefs-row">
+                      <div className="prefs-row-label">
+                        <span className="prefs-label">{tr('撤销步数上限', 'Undo history limit')}</span>
+                        <span className="prefs-desc">
+                          {tr('更大的上限占用更多内存，适合超长编辑。', 'A larger limit uses more memory; useful for very long sessions.')}
+                        </span>
+                      </div>
+                      <div className="prefs-row-control">
+                        <select
+                          className="prefs-select"
+                          aria-label={tr('撤销步数上限', 'Undo history limit')}
+                          value={String(historyLimit)}
+                          onChange={(e) =>
+                            useStore.getState().setHistoryLimit(Number(e.target.value))
+                          }
+                        >
+                          {[100, 300, 1000].map((v) => (
+                            <option key={v} value={v}>
+                              {v === 100 ? tr('100 步', '100 steps') : tr(`${v} 步`, `${v} steps`)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* --- Data (destructive, away from everyday settings) ----- */}
+                  <section className="prefs-group prefs-group-danger" aria-labelledby="prefs-group-data">
+                    <h3 id="prefs-group-data" className="prefs-group-title">
+                      {tr('数据', 'Data')}
+                    </h3>
+                    <div className="prefs-row">
+                      <div className="prefs-row-label">
+                        <span className="prefs-label">{S.review.clearLocalData}</span>
+                        <span className="prefs-desc">
+                          {tr('清除本地恢复区与偏好设置；磁盘上的项目文件不受影响。', 'Clears the local recovery area and preferences; project files on disk are untouched.')}
+                        </span>
+                      </div>
+                      <div className="prefs-row-control">
+                        <button className="btn prefs-reset-btn" onClick={clearLocalData}>
+                          {S.review.clearLocalData}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
               </div>
             </div>
           </div>,

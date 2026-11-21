@@ -20,6 +20,7 @@
 // statistics pass nobody was reading.
 
 import { useMemo, useRef, useState } from 'react';
+import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
 import { findCharacter, isObservedState } from '../model/characters';
 import { parsimony } from '../model/parsimony';
@@ -390,8 +391,9 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
         {/* Conditional-on-topology statement: the methodological boundary every
             reader of these numbers has to know, ON SCREEN, not just in a manual
             chapter nobody opens. */}
-        <div className="hint" style={{ borderColor: 'var(--c-warn)' }}>
-          ⚠ {S.review.analysisTopologyWarning}
+        <div className="hint hint-callout" role="note">
+          <ExclamationTriangleIcon className="hint-callout-icon" aria-hidden="true" />
+          <span>{S.review.analysisTopologyWarning}</span>
         </div>
 
         {/* Section jump-nav (A-07/M1): the dialog is a long single page, and
@@ -1173,7 +1175,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                 <li key={r.id} className="issue issue-info">
                   <div>
                     {r.title ?? r.kind}; {new Date(r.createdAt).toLocaleString()}; v{r.version}
-                    {r.pinned ? '; 📌' : ''}
+                    {r.pinned ? `; ${tr('已固定', 'pinned')}` : ''}
                   </div>
                   <div className="hint">{r.method}</div>
                 </li>

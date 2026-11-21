@@ -606,24 +606,29 @@ export function App() {
         <HeaderActions prefsOpen={prefsOpen} onPrefsOpenChange={setPrefsOpen} />
       </div>
 
-      {reconMode ? (
-        <ErrorBoundary scope={tr('协调工作区', 'Reconciliation workspace')}>
-          <ReconWorkspace
-            panelsHidden={panelsHidden}
-            onShowPanels={() => setPanelsHidden(false)}
-            onCopySpeciesTree={copySpeciesTreeToGene}
-            onAddChildrenDialog={openAddForNode}
-          />
-        </ErrorBoundary>
-      ) : (
-        <ErrorBoundary scope={tr('标准工作区', 'Standard workspace')}>
-          <StandardWorkspace
-            panelsHidden={panelsHidden}
-            onShowPanels={() => setPanelsHidden(false)}
-            onAddChildrenDialog={openAddForNode}
-          />
-        </ErrorBoundary>
-      )}
+      {/* The mode switch cross-fades the whole workspace (fade + a whisper of
+          scale and blur) instead of swapping the canvas between frames. The
+          key remounts the wrapper so @starting-style runs on every switch. */}
+      <div className="workspace-swap" key={reconMode ? 'recon' : 'standard'}>
+        {reconMode ? (
+          <ErrorBoundary scope={tr('协调工作区', 'Reconciliation workspace')}>
+            <ReconWorkspace
+              panelsHidden={panelsHidden}
+              onShowPanels={() => setPanelsHidden(false)}
+              onCopySpeciesTree={copySpeciesTreeToGene}
+              onAddChildrenDialog={openAddForNode}
+            />
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary scope={tr('标准工作区', 'Standard workspace')}>
+            <StandardWorkspace
+              panelsHidden={panelsHidden}
+              onShowPanels={() => setPanelsHidden(false)}
+              onAddChildrenDialog={openAddForNode}
+            />
+          </ErrorBoundary>
+        )}
+      </div>
 
       <AddChildrenDialog open={addOpen} targetId={addTarget} onCancel={() => setAddOpen(false)} />
       <CommandPalette

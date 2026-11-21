@@ -1,8 +1,10 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // NEXUS export options dialog (6.1): lets the user choose which extra blocks
 // to include in the exported NEXUS file — character matrix, assumption sets,
 // MrBayes MCMC block, and BEAST calibration block.
 
 import { useState } from 'react';
+import { usePresence } from './motion';
 import { useDialogFocus } from './useDialogFocus';
 import { CheckboxField } from './fields';
 import { S } from './strings';
@@ -36,7 +38,9 @@ export function NexusExportDialog({
   const [includeBeast, setIncludeBeast] = useState(Boolean(DEFAULT_NEXUS_OPTIONS.includeBeast));
   const ref = useDialogFocus(open, onClose);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
 
   const handleExport = () => {
     onExport({ includeCharacters, includeHypothesis, includeMrBayes, includeBeast });
@@ -44,10 +48,10 @@ export function NexusExportDialog({
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog"
+        className="dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.nexusExport.title}

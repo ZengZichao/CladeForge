@@ -15,6 +15,7 @@ import { requestConfirm } from './confirmDialog';
 import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 function SampleRow({
   sample,
@@ -46,13 +47,14 @@ function SampleRow({
 export function SampleLibraryDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const loadProject = useStore((s) => s.loadProject);
   const ref = useDialogFocus(open, onClose);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog sample-library-dialog"
+        className="dialog sample-library-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.sampleLibraryTitle}

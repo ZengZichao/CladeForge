@@ -22,7 +22,7 @@ import {
 import { newCharacter, newCharacterState, stateColorLimitWarning } from '../model/characters';
 import { uniformCostMatrix } from '../model/parsimony';
 import type { Character, Project } from '../model/types';
-import { Field, TextField, CheckboxField, ColorField } from './fields';
+import { Field, TextField, SwitchField, ColorField } from './fields';
 import { Section } from './Section';
 import { S, tr } from './strings';
 import { notify } from './toast';
@@ -91,7 +91,7 @@ function StepMatrixEditor({ character, apply }: { character: Character; apply: A
               )}
             </div>
           )}
-          <CheckboxField
+          <SwitchField
             label={S.characterExtra.symmetric}
             checked={symmetric}
             onChange={setSymmetric}
@@ -456,7 +456,7 @@ export function CharacterPanel({
         </span>
       </Field>
 
-      <CheckboxField
+      <SwitchField
         label={S.character.showTransitions}
         title={S.character.showTransitionsHint}
         checked={showTransitions && !transitionsDisabled}

@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // About box (Help → 关于 CladeForge). Shows the app identity and version read
 // from the native host (`app_info`, sourced from CARGO_PKG_VERSION), so the
 // packaged app can never disagree with the tauri.conf.json / package.json
@@ -9,6 +10,7 @@ import { getAppInfo, isTauri, type AppInfo } from '../io/native';
 import { PROJECT_VERSION } from '../model/types';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 import { notify } from './toast';
 import pkg from '../../package.json';
 
@@ -24,7 +26,9 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
     void getAppInfo().then(setInfo);
   }, [open]);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
 
   const version = info?.version ?? pkg.version;
   const runtime = isTauri()
@@ -32,10 +36,10 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
     : `${tr('浏览器预览', 'Browser preview')}`;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog about-dialog"
+        className="dialog about-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.about.title}

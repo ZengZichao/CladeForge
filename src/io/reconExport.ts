@@ -1,3 +1,4 @@
+// AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
 // Reconciliation report exports.
 //
 // buildReconciliationReport(): human-readable Markdown covering every embedded
@@ -253,7 +254,7 @@ export function buildReconciliationReport(project: Project): string {
       }
       L.push('');
     } else {
-      L.push(`> ✓ ${tr('校验通过：无不一致。', 'Validation passed with no inconsistencies.')}`);
+      L.push(`> ${tr('校验通过：无不一致。', 'Validation passed with no inconsistencies.')}`);
       L.push('');
     }
 

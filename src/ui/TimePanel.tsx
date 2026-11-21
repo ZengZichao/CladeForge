@@ -58,9 +58,11 @@ import {
   ColorField,
   Field,
   NumberField,
+  SwitchField,
   TextField,
 } from './fields';
 import { Section } from './Section';
+import { IconSwap } from './IconSwap';
 import { S, tr } from './strings';
 import { timeUnitSymbol } from './units';
 import { notify } from './toast';
@@ -165,7 +167,7 @@ function EnvItem({
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
         >
-          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          <IconSwap active={open} on={<ChevronDownIcon />} off={<ChevronRightIcon />} />
         </button>
         <button
           className="btn icon ghost-danger"
@@ -469,24 +471,18 @@ export function TimePanel() {
             </div>
           </Field>
         )}
-        <Field label={S.layoutPanel.showEras}>
-          {/* 用户反馈：rounded dropdown (显示 / 隐藏) instead of a checkbox. */}
-          <select
-            value={showEras ? 'show' : 'hide'}
-            disabled={!timeReady}
-            onChange={(e) => {
-              const v = e.target.value === 'show';
-              // An EXPLICIT choice is remembered across sessions (BUG-7
-              // follow-up); the automatic first-entry enable records nothing.
-              rememberErasToggle(v);
-              setShowEras(v);
-              if (v) requestFit();
-            }}
-          >
-            <option value="show">{tr('显示', 'Show')}</option>
-            <option value="hide">{tr('隐藏', 'Hide')}</option>
-          </select>
-        </Field>
+        <SwitchField
+          label={S.layoutPanel.showEras}
+          checked={showEras}
+          disabled={!timeReady}
+          onChange={(v) => {
+            // An EXPLICIT choice is remembered across sessions (BUG-7
+            // follow-up); the automatic first-entry enable records nothing.
+            rememberErasToggle(v);
+            setShowEras(v);
+            if (v) requestFit();
+          }}
+        />
         <Field label={S.layoutPanel.eraLevelLabel}>
           <select
             value={eraLevel}

@@ -24,6 +24,7 @@ import { addChildrenSpaced } from '../model/treeOps';
 import { useDialogFocus } from './useDialogFocus';
 import { isImeComposing } from './imeGuard';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 import { notify } from './toast';
 
 interface AddChildrenDialogProps {
@@ -50,7 +51,9 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
     }
   }, [open]);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
 
   const targetNode = targetId ? project.nodes[targetId] : undefined;
   const rootNode = project.nodes[project.rootId];
@@ -109,10 +112,10 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onCancel}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onCancel}>
       <div
         ref={ref}
-        className="dialog"
+        className="dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.addDialog.title}

@@ -16,7 +16,7 @@
 //     synonyms). Supplied by the owning panel for each section.
 //   - `count`: when given, a small "N 项" badge shows next to the title so
 // collapsed sections still hint at their contents.
-//   - `favoritable`: when true, a star (★) button appears next to the title.
+//   - `favoritable`: when true, a star button appears next to the title.
 //     Favorited sections persist to localStorage and can be shown first.
 //   - `pinable`: when true, a pushpin button appears next to the title.
 //     Pinned sections stay expanded — clicking the header does not collapse
@@ -31,13 +31,9 @@
 //     `summaryTitle` is the optional hover/tooltip text for that preview.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  StarIcon,
-  StarFilledIcon,
-  PinLeftIcon,
-  ChevronRightIcon,
-} from '@radix-ui/react-icons';
+import { StarIcon, PinLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import { S, titleKey } from './strings';
+import { usePresence } from './motion';
 
 const LS_PREFIX = 'cladeforge:section:';
 const LS_FAV_PREFIX = 'cladeforge:fav:';
@@ -181,6 +177,9 @@ export function Section({
   // forced open) and when pinned (ditto). Purely presentational — it adds no
   // Hook, so the hidden-section Hook-count contract below still holds.
   const showSummary = !effectiveOpen && summary !== undefined && summary !== null;
+  // Exit needs the body to stay mounted for one short transition: collapse is
+  // a fade + slight lift + blur, not an instant disappearance.
+  const body = usePresence(effectiveOpen);
 
   // Reveal the section body when the query matches but the section was closed.
   useEffect(() => {
@@ -232,13 +231,6 @@ export function Section({
           aria-expanded={effectiveOpen}
           onClick={toggle}
         >
-          {/* Disclosure caret: a collapsed section and a static divider used to
-              look identical, so the panel read as a list of dead headings.
-              It rotates rather than swapping glyphs, and `aria-expanded` on the
-              button carries the state for assistive tech. */}
-          <span className="section-caret" aria-hidden="true">
-            <ChevronRightIcon />
-          </span>
           <span className="section-title">{title}</span>
           {count !== undefined && !effectiveOpen && (
             <span className="section-count">{count} {S.section.items}</span>
@@ -248,6 +240,14 @@ export function Section({
               {summary}
             </span>
           )}
+          {/* Disclosure caret: a collapsed section and a static divider used to
+              look identical, so the panel read as a list of dead headings.
+              It rotates rather than swapping glyphs, and `aria-expanded` on the
+              button carries the state for assistive tech. Trailing placement
+              keeps every section title on the module title's left edge. */}
+          <span className="section-caret" aria-hidden="true">
+            <ChevronRightIcon />
+          </span>
         </button>
         {pinable && (
           <button
@@ -269,11 +269,19 @@ export function Section({
             title={fav ? S.section.unfavorite : S.section.favorite}
             aria-pressed={fav}
           >
-            {fav ? <StarFilledIcon /> : <StarIcon />}
+            {/* One linear icon family: the active state is ink + a filled
+                hover surface, never a second (solid) glyph. */}
+            <StarIcon />
           </button>
         )}
       </div>
-      {effectiveOpen && <div className="section-body">{children}</div>}
+      {body.mounted && (
+        <div className="section-body-reveal" data-state={body.state}>
+          <div className="section-body-clip">
+            <div className="section-body">{children}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -319,6 +327,7 @@ export function GroupSection({
     }
   };
   const effectiveOpen = pin || open;
+  const body = usePresence(effectiveOpen);
   return (
     <div className="group-section">
       <div className="group-toggle-row">
@@ -328,10 +337,10 @@ export function GroupSection({
           aria-expanded={effectiveOpen}
           onClick={toggle}
         >
+          {title}
           <span className="section-caret" aria-hidden="true">
             <ChevronRightIcon />
           </span>
-          {title}
         </button>
         {pinable && (
           <button
@@ -346,7 +355,13 @@ export function GroupSection({
           </button>
         )}
       </div>
-      {effectiveOpen && <div className="group-body">{children}</div>}
+      {body.mounted && (
+        <div className="section-body-reveal" data-state={body.state}>
+          <div className="section-body-clip">
+            <div className="group-body">{children}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

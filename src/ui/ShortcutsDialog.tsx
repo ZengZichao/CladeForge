@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 import { MagnifyingGlassIcon } from '@radix-ui/react-icons';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 /**
  * The one shortcut table. `⌘` rows also accept Ctrl on Windows/Linux (the
@@ -108,13 +109,15 @@ export function ShortcutsDialog({
       .filter((g) => g.rows.length > 0);
   }, [q]);
 
-  if (!open) return null;
+  const presence = usePresence(open);
+
+  if (!presence.mounted) return null;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog shortcuts-dialog"
+        className="dialog shortcuts-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.shortcuts.title}

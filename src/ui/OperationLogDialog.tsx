@@ -15,6 +15,7 @@ import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
 import { writeClipboardText } from '../io/clipboardIO';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 function formatTime(at: number): string {
   const d = new Date(at);
@@ -28,7 +29,8 @@ export function OperationLogDialog({ open, onClose }: { open: boolean; onClose: 
   const ref = useDialogFocus(open, onClose);
 
   useEffect(() => subscribeOperationLog(setEntries), []);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   const copyAll = () => {
     const text = entries
@@ -41,10 +43,10 @@ export function OperationLogDialog({ open, onClose }: { open: boolean; onClose: 
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog operation-log-dialog"
+        className="dialog operation-log-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.operationLogTitle}

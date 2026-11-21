@@ -953,7 +953,13 @@ export function TreeCanvas() {
       : project.canvas.background;
   // A#9: expose a canvas-appropriate text ink as a custom property so the SVG
   // overlays (TimeAxis env/era labels) can follow a user-chosen dark canvas.
-  const canvasInk = inkOnBackground(project.canvas.background);
+  // The DEFAULT canvas follows the UI theme (canvasBg above), so its ink must
+  // come from the theme too — computing it from the stored default colour
+  // (#ffffff) painted #202020 labels on the dark canvas.
+  const canvasInk =
+    project.canvas.background === DEFAULT_CANVAS.background
+      ? null
+      : inkOnBackground(project.canvas.background);
 
   return (
     <div
@@ -1360,7 +1366,7 @@ export function TreeCanvas() {
       {isEmpty && (
         <div className="empty-state">
           <div className="empty-masthead">
-            <div className="empty-wordmark">{S.app.name}</div>
+            <h1 className="empty-wordmark">{S.app.name}</h1>
             <div className="empty-hint">{S.empty.hint}</div>
           </div>
           <div className="empty-actions">

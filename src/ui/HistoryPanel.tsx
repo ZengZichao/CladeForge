@@ -12,6 +12,7 @@ import { useStore } from '../model/store';
 import type { HistoryEntry } from '../model/history';
 import { useDialogFocus } from './useDialogFocus';
 import { S } from './strings';
+import { usePresence } from './motion';
 
 function stepTime(at: number): string {
   const d = new Date(at);
@@ -46,7 +47,8 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
   const undoSteps = useStore((s) => s.undoSteps);
   const redoSteps = useStore((s) => s.redoSteps);
   const ref = useDialogFocus(open, onClose);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   // Newest first: the step the user is most likely to want is the last edit.
   const undoRows = past
@@ -54,10 +56,10 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
     .reverse();
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog history-dialog"
+        className="dialog history-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.historyTitle}

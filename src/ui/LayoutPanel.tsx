@@ -26,7 +26,7 @@ import { STYLE_PRESETS, applyStylePreset } from '../model/presets';
 import { Section } from './Section';
 import {
   BranchShapeSelect,
-  CheckboxField,
+  SwitchField,
   ColorField,
   DashSelect,
   DismissibleHint,
@@ -337,18 +337,15 @@ export function LayoutPanel() {
             recipe={(v) => (d) => void (d.defaults.node.labelOffsetY = v)}
           />
         </Field>
-        {/* 用户反馈：rounded dropdown instead of a checkbox. */}
-        <Field label={S.layoutPanel.italic}>
-          <select
-            value={node.fontStyle === 'italic' ? 'italic' : 'normal'}
-            onChange={(e) => set((d) => void (d.defaults.node.fontStyle = e.target.value === 'italic' ? 'italic' : 'normal'))}
-          >
-            <option value="normal">{tr('正常', 'Normal')}</option>
-            <option value="italic">{tr('倾斜（斜体）', 'Italic')}</option>
-          </select>
-        </Field>
+        <SwitchField
+          label={S.layoutPanel.italic}
+          checked={node.fontStyle === 'italic'}
+          onChange={(v) =>
+            set((d) => void (d.defaults.node.fontStyle = v ? 'italic' : 'normal'))
+          }
+        />
         {/* PhyloRecViewer label halo (用户反馈 2026-11-16). */}
-        <CheckboxField
+        <SwitchField
           label={S.layoutPanel.labelHalo}
           checked={node.labelHalo ?? false}
           onChange={(v) => set((d) => void (d.defaults.node.labelHalo = v))}
@@ -359,16 +356,11 @@ export function LayoutPanel() {
             onChange={(v) => set((d) => void (d.defaults.node.labelColor = v))}
           />
         </Field>
-        {/* 用户反馈：rounded dropdown instead of a checkbox. */}
-        <Field label={S.layoutPanel.showLabel}>
-          <select
-            value={node.showLabel ? 'show' : 'hide'}
-            onChange={(e) => set((d) => void (d.defaults.node.showLabel = e.target.value === 'show'))}
-          >
-            <option value="show">{tr('显示', 'Show')}</option>
-            <option value="hide">{tr('隐藏', 'Hide')}</option>
-          </select>
-        </Field>
+        <SwitchField
+          label={S.layoutPanel.showLabel}
+          checked={node.showLabel}
+          onChange={(v) => set((d) => void (d.defaults.node.showLabel = v))}
+        />
       </Section>
 
       {/* 用户反馈: the tree-structure operations moved OUT of the 文件 menu into

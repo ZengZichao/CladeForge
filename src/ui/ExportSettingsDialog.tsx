@@ -15,6 +15,7 @@ import { RangeField } from './fields';
 import { Field, TextField, CheckboxField } from './fields';
 import { notify } from './toast';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 export function ExportSettingsDialog({
   open,
@@ -37,13 +38,14 @@ export function ExportSettingsDialog({
   const deleteExportPreset = useStore((s) => s.deleteExportPreset);
   const [presetName, setPresetName] = useState('');
   const ref = useDialogFocus(open, onClose);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog export-dialog"
+        className="dialog export-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.exportDialogTitle}

@@ -17,6 +17,7 @@ import type { ProjectProvenance } from '../model/types';
 import { Field, TextField } from './fields';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
+import { usePresence } from './motion';
 
 /** Local wall-clock rendering of an ISO timestamp (never raw UTC "Z" text). */
 function formatTime(iso: string | undefined): string {
@@ -33,7 +34,8 @@ export function ProjectInfoDialog({ open, onClose }: { open: boolean; onClose: (
   const setProvenance = useStore((s) => s.setProvenance);
   const sessionModifiedAt = useStore((s) => s.modifiedAt);
   const ref = useDialogFocus(open, onClose);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
 
   const prov = project.provenance ?? {};
   const setProv = (patch: Partial<ProjectProvenance>) => setProvenance(patch);
@@ -45,10 +47,10 @@ export function ProjectInfoDialog({ open, onClose }: { open: boolean; onClose: (
       : project.modifiedAt;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" data-state={presence.state} onMouseDown={onClose}>
       <div
         ref={ref}
-        className="dialog project-info-dialog"
+        className="dialog project-info-dialog" data-state={presence.state}
         role="dialog"
         aria-modal="true"
         aria-label={S.review.projectInfoTitle}
