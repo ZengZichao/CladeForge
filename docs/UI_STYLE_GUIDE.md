@@ -15,7 +15,7 @@
 
 | 控件类型 | 规则 | 示例 |
 |---|---|---|
-| 菜单项 | Title Case | `Import Tree…`、`Keyboard Shortcuts` |
+| 菜单项 | Sentence case | `Import tree…`、`Keyboard shortcuts` |
 | 对话框标题 | 名词短语；Title Case | `Export Options`、`Delete Hypothesis Layer` |
 | 分区标题 | Sentence case | `Tree summary`、`ASR model settings` |
 | 按钮 | Sentence case；动词开头 | `Add children`、`Fit to window` |

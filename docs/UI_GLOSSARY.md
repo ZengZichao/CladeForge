@@ -60,7 +60,7 @@
 | midpoint rooting | midpoint rooting（概念/算法名）；Midpoint reroot（动作按钮标签，见下方裁决） | 中点定根 | 中点生根、中点重根 |
 | ladderize | ladderize | 阶梯化 | 梯形化、层次化、阶梯排序 |
 | outgroup | outgroup | 外群 | 外类群 |
-| clade | clade | 支系 | 类群、分支（与 branch 混淆）、单系群（未经检验时）；RF 语境应作 split「分裂」 |
+| clade | clade | 支系 | 类群、分支（与 branch 混淆）、单系群（未经检验时）；RF 语境应作 split「分割」 |
 | MRCA | most recent common ancestor (MRCA) | 最近共同祖先（MRCA） | 最近共祖（单独使用）、LCA（裸缩写，界面与正文统一写 MRCA） |
 | ASR | ancestral-state reconstruction (ASR) | 祖先状态重建（ASR） | 概率重建、概率推断 |
 | Mk | Mk model | Mk 模型 | MK |
@@ -76,7 +76,7 @@
 | permutation test | permutation test | 置换检验 | — |
 | Holm–Bonferroni | Holm–Bonferroni | Holm–Bonferroni | 无 en dash |
 | Robinson–Foulds | Robinson–Foulds (RF) | Robinson–Foulds（RF） | RF（不解释） |
-| split | split | 分裂（拓扑二分所诱导的末端集合划分；RF、二分分割、位点模式语境专用） | clade（应作「支系」，见 clade 行）、分支（构词除外） |
+| split | split | 分割（拓扑二分所诱导的末端集合划分；RF、二分划分、位点模式语境专用） | clade（应作「支系」，见 clade 行）、分支（构词除外） |
 | NEXUS | NEXUS | NEXUS | Nexus |
 | Newick | Newick | Newick | — |
 | NeXML | NeXML | NeXML | — |
@@ -100,7 +100,7 @@
   不视为术语不一致。
 - **ladderize**：统一「阶梯化」（`S.toolbar.ladderize*`、`S.cmd.ladderize*`）；禁止「梯形化」「层次化」。
 - **clade 与 split 的分工**：`clade`＝支系，指一个共同祖先及其全部后代，用于
-  「选中支系」「提取子树」等面向用户的对象；`split`＝分裂，指一条枝删除后末端
+  「选中支系」「提取子树」等面向用户的对象；`split`＝分割，指一条枝删除后末端
   集合产生的二分划分，只在 Robinson–Foulds、二分分割、位点模式等计算语境出现。
   两者不得互换：RF 语境不得写 clade，面向用户的对象不得写 split；「类群」不作为任何
   概念的译名。

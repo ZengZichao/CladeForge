@@ -32,7 +32,7 @@
 | midpoint rooting / 按钮 | **中点定根**（概念名 midpoint rooting，动作按钮标签 Midpoint reroot；裁决见 UI_GLOSSARY:60） | midpoint rooting / Midpoint reroot | 中点生根、中点重根 |
 | MRCA | **最近共同祖先（MRCA）** | most recent common ancestor (MRCA) | 裸缩写 MRCA（首次出现须带全称） |
 | clade | **支系**（历史表原缺条目；现行规范见 UI_GLOSSARY:63，禁「类群」，「分支」让给 branch） | clade | 类群、分支（构词除外）、单系群（未经检验时） |
-| split | **分裂**（RF、二分分割语境专用；与 clade「支系」不得互换，见 UI_GLOSSARY:79） | split | clade（RF 语境误用） |
+| split | **分割**（RF、二分划分语境专用；与 clade「支系」不得互换，见 UI_GLOSSARY:79） | split | clade（RF 语境误用） |
 | ladderize | **阶梯化**（历史表原缺条目；现行规范见 UI_GLOSSARY:61） | ladderize | 梯形化、层次化、阶梯排序 |
 | reticulation | **网状关系**（历史表原缺条目；用户画出的那条线仍叫「自定义连线」，见 UI_GLOSSARY:23） | reticulation | 网格关系、网络化、横向关系 |
 | binary / polytomy | **二叉 / 多歧分支** | binary / polytomy | 二分分支、多叉、多分叉 |
