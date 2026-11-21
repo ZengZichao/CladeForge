@@ -244,7 +244,7 @@ function keptSelection(project: Project, selection: NodeId[]): NodeId[] {
  *  per field; nodes compare per node id and report add/rename/delete counts). */
 function autoEditLabel(prev: Project, next: Project): string | undefined {
   const fields: [keyof Project, string][] = [
-    ['name', tr('文档名', 'Document name')],
+    ['name', tr('项目名', 'Project name')],
     ['provenance', tr('来源信息', 'Provenance')],
     ['layout', tr('布局设置', 'Layout settings')],
     ['defaults', tr('全局样式', 'Global styles')],

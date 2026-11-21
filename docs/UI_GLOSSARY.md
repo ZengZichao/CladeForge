@@ -29,7 +29,7 @@
 | node age | node age | 节点年龄 | 年代（仅地质年代） |
 | time unit | time unit | 时间单位 | 原始小写枚举 |
 | hypothesis layer | hypothesis layer | 假说层 | 假设层 |
-| hypothesis note | hypothesis note | 假说标注 | 注释（泛称） |
+| hypothesis note | hypothesis note | 假说注记 | 注释（泛称） |
 | DTL mapping assumption | DTL mapping assumption | DTL 映射假设（本行即“假设”的授权用法：指基因节点上被映射的那条可竞争假定） | DTL 假设（过泛） |
 | scenario | scenario | 场景 | 把 scenario 译作“假设/假说”（本栏只禁止这一种对应译法；“假设”二字本身未被禁用，仍用于「DTL 映射假设」） |
 | reconciliation | reconciliation | 协调（名词概念，首次出现写全「基因树–物种树协调」）；协调重建 / DTL 协调（动作与算法语境的授权派生形，见下方说明） | 协同重建、协同（会被读成多人协作）、Reconcile（名词） |

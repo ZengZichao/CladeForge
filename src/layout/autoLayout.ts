@@ -343,8 +343,8 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
             kind: 'phylogram-no-lengths',
             count: unknownDepth.size,
             message: tr(
-              '工程内没有任何可用枝长（缺失、0 或负值），分支图已退化为等长枝序图，比例尺不显示。',
-              'No usable branch length exists in this document (missing, zero or negative), so the phylogram degraded to an equal-length cladogram and the scale bar is hidden.',
+              '项目内没有任何可用枝长（缺失、0 或负值），系统发育图已退化为等长分支图，比例尺不显示。',
+              'No usable branch length exists in this project (missing, zero or negative), so the phylogram degraded to an equal-length cladogram and the scale bar is hidden.',
             ),
           });
         }

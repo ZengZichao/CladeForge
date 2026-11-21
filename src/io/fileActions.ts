@@ -484,7 +484,7 @@ function openProjectFromText(text: string, name: string, path?: string): void {
       notify.info(
         tr(
           `该文件已在标签页中打开，已切换到那一页（未创建重复副本）`,
-          `That file is already open in a tab — focused it instead of creating a duplicate`,
+          `That file is already open in a tab — switched to that tab instead of creating a duplicate`,
         ),
       );
       return;
@@ -555,7 +555,7 @@ export async function actionSaveProject(): Promise<'in-place' | 'downloaded' | '
               key: 'save-overwrite-external-change',
               title: tr('文件已在磁盘上被修改', 'The file changed on disk'),
               message: tr(
-                `「${target}」在本应用之外被修改过（例如同事或脚本改写了它）。仍然保存会覆盖那份修改（可先用「文件 › 打开工程」查看）。`,
+                `「${target}」在本应用之外被修改过（例如同事或脚本改写了它）。仍然保存会覆盖那份修改（可先用「文件 › 打开项目」查看）。`,
                 `"${target}" was modified outside this app (e.g. by a colleague or a script). Saving now overwrites that version (use File › Open project to inspect it first).`,
               ),
               confirmLabel: tr('仍然保存', 'Save anyway'),
@@ -1270,8 +1270,8 @@ function warnHeaderlessTable(text: string): void {
   if (!matchesTip) return;
   notify.error(
     tr(
-      '表格首行被当作表头读取：它的名称与当前树的一个末端标签一致，因此首行很可能本应是数据——可能丢失了一行数据。建议在首行补上表头（如 taxon,性状…）后重新导入。',
-      'The first table row was read as the header: its label matches a tip of the current tree, so it was almost certainly data — one data row may have been lost. Add a header row (e.g. taxon,trait…) and import again.',
+      '表格首行被当作表头读取：它的名称与当前树的一个末端标签一致，因此首行很可能本应是数据——可能丢失了一行数据。建议在首行补上表头（如 taxon, character…）后重新导入。',
+      'The first table row was read as the header: its label matches a tip of the current tree, so it was almost certainly data — one data row may have been lost. Add a header row (e.g. taxon, character…) and import again.',
     ),
   );
 }
@@ -1339,7 +1339,7 @@ export async function actionImportTable(mode: TableImportMode = 'matrix'): Promi
       });
       notify.success(
         tr(
-          `已为 ${applied} 个末端写入注释（未匹配 ${report.unmatched.length} 行）`,
+          `已为 ${applied} 个末端写入注记（未匹配 ${report.unmatched.length} 行）`,
           `Annotated ${applied} tip${applied === 1 ? '' : 's'} (${report.unmatched.length} unmatched row${report.unmatched.length === 1 ? '' : 's'})`,
         ),
       );
@@ -1430,7 +1430,7 @@ export async function actionExportAnnotationsCsv(): Promise<void> {
     );
     if (saved) notify.success(S.notify.exported);
   } catch (e) {
-    reportError(tr('导出注释表失败', 'Failed to export the annotations CSV'), e);
+    reportError(tr('导出注记表失败', 'Failed to export the annotations CSV'), e);
   }
 }
 

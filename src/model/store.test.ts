@@ -593,7 +593,7 @@ describe('history label punctuation follows the UI language (D-P18)', () => {
       d.name = 'Renamed';
       addChildren(d, d.rootId, 1);
     });
-    expect(s().past[s().past.length - 1].label ?? '').toContain('Document name, Nodes (1 added)');
+    expect(s().past[s().past.length - 1].label ?? '').toContain('Project name, Nodes (1 added)');
   });
 });
 

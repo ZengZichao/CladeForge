@@ -23,7 +23,7 @@ Built on **Tauri v2 + React 18 + TypeScript + Vite** with a Rust backend.
 
 - **Interactive tree editing** — Rooted trees with binary/ternary/polytomy branching, node and branch styling, collapse/expand, rerooting, ladderize.
 - **Multiple layouts** — Rectangular cladogram, rectangular phylogram, time-calibrated (with geological era bands), and circular; four orientations (LR/RL/TB/BT); auto and manual layout modes.
-- **Character/state system** — Discrete and continuous characters with colour-blind-friendly palettes; Sankoff step matrices for asymmetric evolutionary costs.
+- **Character/state system** — Discrete and continuous characters with colour-blind-friendly palettes; Sankoff cost (step) matrices for asymmetric evolutionary costs.
 - **Evolutionary events** — 27 built-in event types across nine groups (26 predefined + 1 custom): Speciation (4), Extinction (2), Evolutionary innovations (3), Gene flow (2), Biogeography (3), Microbial (9), Gene family evolution (2), Deep time (1), General (1). Each type has a unique two-letter code; the palette may reuse colours. Events link into causal chains.
 - **Hypothesis layers** — Manage multiple competing hypotheses on a shared topology; tip states shared, internal-node hypotheses diverge.
 - **Inference assistant (advisory)** — Sankoff parsimony suggestions, Mk-model probabilistic ASR (log-space numerically stable), consistency checks, character-correlation hints (Jaccard co-change).

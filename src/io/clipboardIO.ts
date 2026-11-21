@@ -33,7 +33,7 @@ export async function writeClipboardText(text: string): Promise<boolean> {
 /** The user-facing message for "the clipboard is not reachable here". */
 export function clipboardUnavailableMessage(): string {
   return tr(
-    '无法读取剪贴板（权限不可用或浏览器不支持）。请改用「文件」菜单中的导入功能（打开工程 / 导入树 / 导入表格）。',
+    '无法读取剪贴板（权限不可用或浏览器不支持）。请改用「文件」菜单中的导入功能（打开项目 / 导入树 / 导入表格）。',
     'The clipboard could not be read (permission unavailable or not supported). Use the import entries in the File menu instead (open project / import trees / import table).',
   );
 }

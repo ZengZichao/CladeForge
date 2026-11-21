@@ -1228,7 +1228,7 @@ export function TreeCanvas() {
                   >
                     ?
                   </text>
-                  <title>{`${t.fromLabel} → ${t.toLabel}：${tr('端点未赋值，提示补数据，不计入演化转变', 'endpoint unassigned; a prompt for data, not an evolutionary change')}`}</title>
+                  <title>{`${t.fromLabel} → ${t.toLabel}：${tr('末端状态未赋值，需要补数据，不计入状态变化', 'tip state unassigned; needs data, not counted as a change')}`}</title>
                 </g>
               );
             }

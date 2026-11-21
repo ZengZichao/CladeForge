@@ -98,7 +98,7 @@ describe('GUI report C contracts', () => {
 
   it('OBS-1: the status bar states both the total and the tip count', () => {
     expect(ZH_STRINGS.status.tips).toBe('末端');
-    expect(EN_STRINGS.status.tips).toBe('tips');
+    expect(EN_STRINGS.status.tips).toBe('Tips');
     expect(src('StandardWorkspace.tsx')).toContain('${S.status.tips} ${tipCount}');
   });
 });

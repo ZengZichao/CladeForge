@@ -545,8 +545,8 @@ function kAnalysis(project: Project, character: Character): {
     return {
       result: null,
       reason: tr(
-        '协方差矩阵奇异（枝长全为 0 或存在重合末端），K 无法估计',
-        'The phylogenetic covariance matrix is singular (zero-length or coincident tips); K is not estimable',
+        '协方差矩阵奇异（零枝长或多歧，末端间无分化路径），K 无法估计',
+        'The phylogenetic covariance matrix is singular (zero-length branches or polytomies, leaving tips without a divergent path); K is not estimable',
       ),
     };
   }
@@ -1004,7 +1004,7 @@ export function rootToTipRegression(project: Project): RootToTipRegression | nul
     excludedNoLength,
     points,
     method: tr(
-      '根到尖回归（路径长度 vs 根后时间；p 为正态近似）',
+      '根到末端回归（路径长度 vs 根后时间；p 为正态近似）',
       'Root-to-tip regression (path length vs time since root; normal-approximation p)',
     ),
   };

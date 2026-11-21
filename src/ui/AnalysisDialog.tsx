@@ -756,7 +756,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                           {' '}
                          ;{' '}
                           {tr(
-                            `${result.zeroBranches} 条真实零枝长（同期分化，按 0 计入）`,
+                            `${result.zeroBranches} 条真实零枝长（按 0 计入）`,
                             `${result.zeroBranches} real zero-length branch${result.zeroBranches === 1 ? '' : 'es'} (synchronous divergence, used as 0)`,
                           )}
                         </span>
@@ -807,12 +807,12 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                 (n) => n.childrenIds.length === 0 && n.age !== undefined && n.branchLength !== undefined,
               ).length;
               if (usable === 0) {
-                return { blocked: tr('没有任何末端同时具有校准年龄与枝长：根到尖回归需要两者。请先在时间模块校准年龄。', 'No tip has BOTH a calibrated age and a branch length: root-to-tip regression needs both. Calibrate ages in the Time module first.') };
+                return { blocked: tr('没有任何末端同时具有校准年龄与枝长：根到末端回归需要两者。请先在时间模块校准年龄。', 'No tip has BOTH a calibrated age and a branch length: root-to-tip regression needs both. Calibrate ages in the Time module first.') };
               }
               const r = rootToTipRegression(live);
               return r ?? { blocked: tr('可用末端不足，无法拟合回归。', 'Not enough usable tips to fit the regression.') };
             })}>
-              {extraBusy === 'rtt' ? S.analysis.asrRunningLabel : tr('根到尖回归', 'Root-to-tip regression')}
+              {extraBusy === 'rtt' ? S.analysis.asrRunningLabel : tr('根到末端回归', 'Root-to-tip regression')}
             </button>
             <button className="btn ghost" disabled={extraBusy !== null} onClick={() => runExtra('yule', () => {
               const live = useStore.getState().project;
@@ -900,7 +900,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
               const b = blockedOf(rtt);
               rows.push(
                 <div className="field" key="rtt">
-                  <label>{tr('根到尖回归', 'Root-to-tip regression')}</label>
+                  <label>{tr('根到末端回归', 'Root-to-tip regression')}</label>
                   <span>
                     {b ?? (
                       <>
@@ -957,7 +957,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                   <label>{tr("Faith 系统发育多样性", "Faith’s PD")}</label>
                   <span>
                     {extra.faith.map((f) => `${f.state}: ${f.pd === null ? tr('无末端', 'no tips') : f.pd.toFixed(3)}`).join('; ')}
-                    <span className="hint">{tr('被该状态覆盖的最小 spanning 枝长总和（不含根路径）。', 'total length of the minimum spanning branches covered by each state (root path excluded).')}</span>
+                    <span className="hint">{tr('被该状态覆盖的最小生成枝长总和（不含根路径）。', 'total length of the minimum spanning branches covered by each state (root path excluded).')}</span>
                   </span>
                 </div>,
               );
@@ -973,7 +973,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                         ? `${c.state}: ${b}`
                         : `${c.state}: NRI ${(c.stats as CommunityPhyloStats).nri.toFixed(3)} / NTI ${(c.stats as CommunityPhyloStats).nti.toFixed(3)}`;
                     }).join('; ')}
-                    <span className="hint">{tr('正值 = 该状态的末端比随机更聚集；NRI 用平均对间距离，NTI 用最近邻距离。', 'positive = the state\u2019s tips are more clustered than random; NRI uses mean pairwise distance, NTI nearest-neighbour.')}</span>
+                    <span className="hint">{tr('正值 = 该状态的末端比随机更聚集；NRI 使用平均对间距离，NTI 使用最近邻距离。', 'positive = the state\u2019s tips are more clustered than random; NRI uses mean pairwise distance; NTI uses nearest-neighbour distance.')}</span>
                   </span>
                 </div>,
               );
@@ -987,7 +987,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                     {b ?? (
                       <>
                         {tr(`在 ${extra.mpr && typeof extra.mpr === 'object' && 'samples' in extra.mpr ? extra.mpr.samples : 0} 次等价最优 MPR 抽样中，${extra.mpr && typeof extra.mpr === 'object' && 'changedBranches' in extra.mpr ? extra.mpr.changedBranches : 0} 条枝至少一次发生状态变化`, `across ${extra.mpr && typeof extra.mpr === 'object' && 'samples' in extra.mpr ? extra.mpr.samples : 0} equally-optimal MPR draws, ${extra.mpr && typeof extra.mpr === 'object' && 'changedBranches' in extra.mpr ? extra.mpr.changedBranches : 0} branches change at least once`)}
-                        <span className="hint">{tr('变化支数的分布即是简约重建对该性状的不确定度。', 'the spread of change branches IS the parsimony uncertainty for this character.')}</span>
+                        <span className="hint">{tr('变化枝数的分布即是简约重建对该性状的不确定度。', 'the spread of change branches is the parsimony uncertainty for this character.')}</span>
                       </>
                     )}
                   </span>

@@ -411,8 +411,8 @@ export function importAnnotationsTable(
   if (table.header.length < 2) {
     throw new Error(
       tr(
-        '注释表至少需要两列：第 1 列为分类单元名，其后每列一个注释字段',
-        'An annotation table needs at least two columns: column 1 = taxon label, then one column per field',
+        '注记表至少需要两列：第 1 列为分类单元名，其后每列一个注记字段',
+        'A notes table needs at least two columns: column 1 = taxon label, then one column per note field',
       ),
     );
   }
