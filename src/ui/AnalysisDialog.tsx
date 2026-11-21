@@ -757,7 +757,7 @@ export function AnalysisDialog({ open, onClose }: { open: boolean; onClose: () =
                          ;{' '}
                           {tr(
                             `${result.zeroBranches} 条真实零枝长（按 0 计入）`,
-                            `${result.zeroBranches} real zero-length branch${result.zeroBranches === 1 ? '' : 'es'} (synchronous divergence, used as 0)`,
+                            `${result.zeroBranches} real zero-length branch${result.zeroBranches === 1 ? '' : 'es'} (no elapsed time, used as 0)`,
                           )}
                         </span>
                       )}

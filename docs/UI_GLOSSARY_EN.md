@@ -63,7 +63,7 @@
 | midpoint rooting | midpoint rooting (concept/algorithm name); Midpoint reroot (action-button label, see the ruling below) | 中点定根 | avoid 中点生根, 中点重根 |
 | ladderize | ladderize | 阶梯化 | avoid 梯形化, 层次化, 阶梯排序 |
 | outgroup | outgroup | 外群 | avoid 外类群 |
-| clade | clade | 支系 | avoid 类群, 分支 (confusable with branch), 单系群 ("monophyletic group") when untested; in RF contexts use split「分裂」 |
+| clade | clade | 支系 | avoid 类群, 分支 (confusable with branch), 单系群 ("monophyletic group") when untested; in RF contexts use split「分割」 |
 | MRCA | most recent common ancestor (MRCA) | 最近共同祖先（MRCA） | avoid 最近共祖 used alone, and bare LCA (use MRCA in UI and prose) |
 | ASR | ancestral-state reconstruction (ASR) | 祖先状态重建（ASR） | avoid 概率重建, 概率推断 |
 | Mk | Mk model | Mk 模型 | avoid MK |
@@ -79,7 +79,7 @@
 | permutation test | permutation test | 置换检验 | — |
 | Holm–Bonferroni | Holm–Bonferroni | Holm–Bonferroni | avoid spellings without the en dash |
 | Robinson–Foulds | Robinson–Foulds (RF) | Robinson–Foulds（RF） | avoid bare RF (unexplained) |
-| split | split | 分裂（拓扑二分所诱导的末端集合划分；RF、二分分割、位点模式语境专用） | avoid clade (should be「支系」, see the clade row), 分支 (except in word-formation) |
+| split | split | 分割（拓扑二分所诱导的末端集合划分；RF、二分划分、位点模式语境专用） | avoid clade (should be「支系」, see the clade row), 分支 (except in word-formation) |
 | NEXUS | NEXUS | NEXUS | avoid Nexus |
 | Newick | Newick | Newick | — |
 | NeXML | NeXML | NeXML | — |
@@ -103,7 +103,7 @@
   are one concept in two registers, not a terminology inconsistency.
 - **ladderize**: always 「阶梯化」 (`S.toolbar.ladderize*`, `S.cmd.ladderize*`); 梯形化 and 层次化 are banned.
 - **clade vs split**: `clade` = 支系, a group made of an ancestor and all of its 后代 (descendants),
-  used for user-facing objects such as 「选中支系」 or 「提取子树」; `split` = 分裂, the bipartition of the
+  used for user-facing objects such as 「选中支系」 or 「提取子树」; `split` = 分割, the bipartition of the
   tip set induced by deleting one branch, used only in computational contexts (Robinson–Foulds,
   bipartition, site patterns). They are never interchangeable: no clade in RF contexts, no split for
   user-facing objects; 类群 is not the translation of any concept.
