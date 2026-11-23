@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from '../model/store';
 import { computeLayout, type LayoutResult } from '../layout/autoLayout';
+import { computeEmbeddedSpeciesLayout, prepareEmbeddedSpeciesDoc } from '../layout/embeddedRecon';
 import { fitView, zoomAt } from './coords';
 import { getLiveView, resetLiveView, setLiveView, viewTransformAttr } from './liveView';
 import { SelectedCustomEdgeDelete, SnapGuide } from './ViewOverlays';
@@ -109,12 +110,17 @@ export function TreeCanvas() {
   // editing THIS tab's species/gene tree — the sample cards would open the
   // sample in another tab and pull the user out of the reconciliation.
   const reconMode = useStore((s) => s.reconMode);
+  const reconSpeciesEdit = useStore(
+    (s) => s.reconMode && s.reconEditTarget === 'species' && !s.geneEditBackup,
+  );
   const project = useMemo(
-    () =>
-      geneTreeEdit
-        ? { ...projectRaw, layout: { ...projectRaw.layout, type: 'rectangular-cladogram' as const } }
-        : projectRaw,
-    [projectRaw, geneTreeEdit],
+    () => {
+      if (geneTreeEdit) {
+        return { ...projectRaw, layout: { ...projectRaw.layout, type: 'rectangular-cladogram' as const } };
+      }
+      return reconSpeciesEdit ? prepareEmbeddedSpeciesDoc(projectRaw) : projectRaw;
+    },
+    [projectRaw, geneTreeEdit, reconSpeciesEdit],
   );
   // Deliberately NO `useStore((s) => s.view)` subscription: the view transform
   // is painted imperatively (see the layout effect and handleWheel below), so a
@@ -331,10 +337,12 @@ export function TreeCanvas() {
         issues: base.issues,
       };
     }
-    const full = computeLayout(project, { showEras, eraLevel }, { alignTips: geneTreeEdit });
+    const full = reconSpeciesEdit
+      ? computeEmbeddedSpeciesLayout(project)
+      : computeLayout(project, { showEras, eraLevel }, { alignTips: geneTreeEdit });
     baseLayoutRef.current = full;
     return full;
-  }, [project, draggingId, interactionActive, showEras, eraLevel, geneTreeEdit]);
+  }, [project, draggingId, interactionActive, showEras, eraLevel, geneTreeEdit, reconSpeciesEdit]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
