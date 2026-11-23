@@ -23,6 +23,14 @@ import { ReconciliationView } from './ReconciliationView';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+    configurable: true,
+    get: () => 800,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    configurable: true,
+    get: () => 600,
+  });
   if (!('requestAnimationFrame' in globalThis)) {
     (globalThis as unknown as { requestAnimationFrame: (cb: (t: number) => void) => number }).requestAnimationFrame =
       (cb) => setTimeout(() => cb(0), 0) as unknown as number;
@@ -45,6 +53,12 @@ function mount(ui: unknown): HTMLElement {
   root = createRoot(host);
   act(() => root!.render(ui as never));
   return host;
+}
+
+async function flushFrame(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
 }
 
 afterEach(() => {
@@ -109,6 +123,59 @@ describe('EmbeddedReconCanvas (component)', () => {
       (b.getAttribute('aria-label') ?? '').includes('S'),
     );
     expect(labelled).toBe(true);
+  });
+
+  it('keeps fixed geometry and viewport scale when the longest path is edited', async () => {
+    const project = createEmptyProject('species-lengths');
+    const [longId, shortId] = addChildren(project, project.rootId, 2);
+    project.nodes[longId].label = 'Long';
+    project.nodes[shortId].label = 'Short';
+    project.nodes[longId].branchLength = 100;
+    project.nodes[shortId].branchLength = 1;
+    const gene = createEmptyProject('gene');
+    const [geneLong, geneShort] = addChildren(gene, gene.rootId, 2);
+    gene.nodes[geneLong].label = 'Long';
+    gene.nodes[geneShort].label = 'Short';
+    const entry = { id: 'g1', name: 'G', doc: gene, assumptions: {} };
+    const props = {
+      geneEntry: entry,
+      options: { ...DEFAULT_RECON_VIEW_OPTIONS, layoutMode: 'embedded' as const },
+      geneSelection: [],
+      speciesSelection: [],
+      hoveredGeneId: null,
+      focusTarget: null,
+      onGeneNodeClick: () => {},
+      onSpeciesNodeClick: () => {},
+      onTubeClick: () => {},
+      onGeneHover: () => {},
+    };
+    let el = mount(createElement(EmbeddedReconCanvas, { ...props, speciesDoc: project }));
+    await flushFrame();
+    const tubePath = (id: string) =>
+      el.querySelector(`[data-tube-id="${id}"] path`)!.getAttribute('d');
+    const initialTransform = el.querySelector('svg > g')!.getAttribute('transform');
+
+    expect(tubePath(longId)).toBe('M 0 0 L 800 0');
+    expect(tubePath(shortId)).toBe('M 0 88 L 8 88');
+
+    const edited = {
+      ...project,
+      nodes: {
+        ...project.nodes,
+        [longId]: { ...project.nodes[longId], branchLength: 50 },
+      },
+    };
+    act(() => root!.render(createElement(EmbeddedReconCanvas, { ...props, speciesDoc: edited })));
+    await flushFrame();
+
+    expect(tubePath(longId)).toBe('M 0 0 L 400 0');
+    expect(tubePath(shortId)).toBe('M 0 88 L 8 88');
+    expect(el.querySelector('svg > g')!.getAttribute('transform')).toBe(initialTransform);
+
+    act(() => root!.unmount());
+    el = mount(createElement(EmbeddedReconCanvas, { ...props, speciesDoc: edited }));
+    await flushFrame();
+    expect(el.querySelector('svg > g')!.getAttribute('transform')).toBe(initialTransform);
   });
 
   it('reports the clicked tube (branch id + within-branch t) on Alt+click', () => {

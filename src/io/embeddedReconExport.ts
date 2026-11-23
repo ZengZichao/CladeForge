@@ -10,11 +10,10 @@
 
 import type { GeneTreeEntry, Project, ReconViewOptions } from '../model/types';
 import { APP_VERSION } from '../model/types';
-import { computeLayout } from '../layout/autoLayout';
 import {
   computeEmbeddedReconLayout,
+  computeEmbeddedSpeciesLayout,
   defaultEmbeddedLayoutOptions,
-  prepareEmbeddedSpeciesDoc,
 } from '../layout/embeddedRecon';
 
 export interface EmbeddedExportOptions {
@@ -100,7 +99,7 @@ export function buildEmbeddedReconSVG(
 ): EmbeddedExportResult {
   const palette = exportOptions.dark ? PALETTES.dark : PALETTES.light;
   const margin = exportOptions.marginPx ?? 24;
-  const speciesLayout = computeLayout(prepareEmbeddedSpeciesDoc(project));
+  const speciesLayout = computeEmbeddedSpeciesLayout(project);
   const scene = computeEmbeddedReconLayout({
     speciesDoc: project,
     speciesLayout,

@@ -39,6 +39,9 @@ export interface LayoutComputeOptions {
    * computes that geometry as `hn.y`, so this option just reads it.
    */
   alignTips?: boolean;
+  /** Fixed world units per measured branch-length unit. When omitted, the
+   *  phylogram fits its longest root-to-node path to the topological depth. */
+  branchLengthScale?: number;
 }
 
 /**
@@ -339,7 +342,10 @@ export function computeLayout(
       for (const v of cum.values()) if (Number.isFinite(v) && v > maxCum) maxCum = v;
       const maxDepthPx = root.height * depthGap;
       if (maxCum > 0) {
-        const scale = maxDepthPx / maxCum;
+        const scale =
+          computeOpts?.branchLengthScale !== undefined && computeOpts.branchLengthScale > 0
+            ? computeOpts.branchLengthScale
+            : maxDepthPx / maxCum;
         depthScale = scale;
         depthCoord = (hn) => {
           const c = cum.get(hn.data.id);
