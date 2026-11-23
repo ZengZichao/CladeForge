@@ -59,6 +59,30 @@ function pathPoints(d: string): { x: number; y: number }[] {
   return pts;
 }
 
+describe('prepareEmbeddedSpeciesDoc — the nested layout is purely data-driven (用户反馈 2026-11-23)', () => {
+  it('strips manual pins so edited branch lengths, not stale canvas coordinates, place the nodes', () => {
+    const project = createReconciliationSample();
+    const tip = Object.values(project.nodes).find((n) => n.childrenIds.length === 0)!;
+    // A drag in the standard species editor parks absolute world coordinates
+    // on the node — in the standard layout's coordinate system.
+    tip.position = { x: 99999, y: 99999 };
+    tip.pinned = true;
+
+    const prepared = prepareEmbeddedSpeciesDoc(project);
+    expect(prepared.nodes[tip.id].position).toBeUndefined();
+    expect(prepared.nodes[tip.id].pinned).toBeUndefined();
+    // Everything else about the node survives.
+    expect(prepared.nodes[tip.id].label).toBe(tip.label);
+    expect(prepared.nodes[tip.id].branchLength).toBe(tip.branchLength);
+
+    // The embedded layout therefore places the node from the document data.
+    const layout = computeLayout(prepared);
+    const p = layout.positions.get(tip.id)!;
+    expect(p.x).not.toBe(99999);
+    expect(p.y).not.toBe(99999);
+  });
+});
+
 describe('computeEmbeddedReconLayout — sample α (full σ/δ/τ/λ scenario)', () => {
   const project = createReconciliationSample();
   const { scene, geneIdByName } = layoutFor(project, 'α');

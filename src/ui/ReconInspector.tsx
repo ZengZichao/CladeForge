@@ -128,8 +128,6 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
   const geneSelection = useStore((s) => s.geneSelection);
   const selectGeneNode = useStore((s) => s.selectGeneNode);
   const focusGeneNode = useStore((s) => s.focusGeneNode);
-  const setReconClickTarget = useStore((s) => s.setReconClickTarget);
-
   const node = project.nodes[nodeId];
   const entry = project.geneTrees?.find((g) => g.id === activeGeneTreeId);
   const lineages = useMemo(() => {
@@ -190,15 +188,15 @@ function SpeciesNodeInspector({ nodeId }: { nodeId: NodeId }) {
         )}
         <div className="field row-actions">
           {/* 用户反馈: never a disabled button with a cryptic refusal — with
-              no gene node selected, ONE click switches the canvas to
-              gene-clicking and says exactly what to do next. */}
+              no gene node selected, ONE click says exactly what to do next.
+              Plain clicks now land on either pane directly, so there is no
+              click-target to switch any more. */}
           <button
             className="btn"
             title={S.recon.mapSelectedHere}
             onClick={() => {
               if (!geneSelected || !entry) {
-                setReconClickTarget('gene');
-                notify.info(S.recon.mapHereSwitchHint);
+                notify.info(S.recon.mapSelectedHereNeedGene);
                 return;
               }
               const gid = geneSelection[0];

@@ -151,10 +151,13 @@ export function reconPaneBounds(
     const p = layout.positions.get(id);
     if (!node || !p) continue;
     touched = true;
-    if (node.label) {
-      const tip = node.childrenIds.length === 0;
+    // Internal nodes fall back to a short id on the canvas (用户反馈 2026-11-23)
+    // so every name the left-panel mapping list shows is visible on the tree.
+    const tip = node.childrenIds.length === 0;
+    const effLabel = node.label || (tip ? '' : node.id.slice(0, 6));
+    if (effLabel) {
       const fontSize = tip ? 11.5 : 10.5;
-      const w = estimateLabelWidth(node.label, fontSize) * 1.05;
+      const w = estimateLabelWidth(effLabel, fontSize) * 1.05;
       const x0 = tip
         ? (mirrored ? p.x - 9 - w : p.x + 9)
         : (mirrored ? p.x + 10.5 : p.x - 10.5 - w);
@@ -495,9 +498,11 @@ const PaneNode = memo(function PaneNode({
         </text>
       )}
       {showInternalLabel && (
+        /* Screen-space font floor, same treatment as the tip labels: the
+           internal name stays readable at fit-zoom instead of shrinking away
+           (the switch, not the zoom, decides whether it shows). */
         <text
-          x={mirrored ? x + r + 4 : x - r - 4}
-          y={y + 4}
+          transform={`translate(${x + (mirrored ? r + 4 : -r - 4) * inv}, ${y + 4 * inv}) scale(${inv})`}
           textAnchor={mirrored ? 'start' : 'end'}
           fontSize={10.5}
           opacity={0.65}
@@ -791,7 +796,9 @@ export const ReconPane = memo(function ReconPane({
     [doc],
   );
   const RECON_READABLE_TIP_LIMIT = 30;
-  const hideInternalLabels = options.showLabels && transform.scale * 10.5 < 8;
+  // 用户反馈 (2026-11-23): internal names answer to their own switch
+  // (options.showInternalLabels) — no zoom LOD hides them any more. Tip labels
+  // keep the density LOD (a fitted 1000-tip tree is unreadable otherwise).
   const hideTipLabels =
     options.showLabels && tipCount > RECON_READABLE_TIP_LIMIT && transform.scale * 11.5 < 7;
   const boxW = box.w;
@@ -973,7 +980,9 @@ export const ReconPane = memo(function ReconPane({
                   : meta?.fill ?? 'var(--recon-node-stroke)';
               const label = n.label || n.id.slice(0, 6);
               const showTipLabel = isTip && !!n.label && options.showLabels && !hideTipLabels;
-              const showInternalLabel = !isTip && !!n.label && options.showLabels && !hideInternalLabels;
+              // 用户反馈: internal names have their own switch and fall back to
+              // the short id — the same name the left-panel list shows.
+              const showInternalLabel = !isTip && options.showLabels && options.showInternalLabels;
               const selected = !!meta?.selected;
               const hovered = !!meta?.hovered;
               const glyph = meta?.glyph;
@@ -983,13 +992,13 @@ export const ReconPane = memo(function ReconPane({
               // `invScale` is the only transform-dependent prop, and only rows
               // that draw screen-space chrome receive it — a zoom frame leaves
               // every plain node's props unchanged.
-              const needsInv = selected || hovered || showEventGlyph || showLoss;
+              const needsInv = selected || hovered || showEventGlyph || showLoss || showInternalLabel;
               return (
                 <PaneNode
                   key={id}
                   nodeId={id}
                   label={label}
-                  rawLabel={n.label ?? ''}
+                  rawLabel={isTip ? (n.label ?? '') : label}
                   x={p.x}
                   y={p.y}
                   isTip={isTip}
@@ -1005,7 +1014,7 @@ export const ReconPane = memo(function ReconPane({
                   showTipLabel={showTipLabel}
                   showInternalLabel={showInternalLabel}
                   showLodTooltip={
-                    options.showLabels && !showTipLabel && !showInternalLabel && !!n.label
+                    options.showLabels && !showTipLabel && !showInternalLabel && !!label
                   }
                   invScale={needsInv ? invScale : undefined}
                   mirrored={mirrored}

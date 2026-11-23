@@ -99,7 +99,19 @@ export function TreeCanvas() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- spaceHeld is a ref, so .current is not a reactive dependency; the grab cursor is painted imperatively by useCanvasGestures and this effect only covers the resting state.
   }, [spaceHeld.current]);
 
-  const project = useStore((s) => s.project);
+  const projectRaw = useStore((s) => s.project);
+  // 用户反馈 (2026-11-23): the gene tree always lives INSIDE the species tree,
+  // so its own branch lengths / node positions carry no meaning. While
+  // 「基因树编辑」 has the gene doc swapped into `project`, present it as the
+  // tip-aligned rectangular cladogram and let useDrag refuse position drags.
+  const geneTreeEdit = useStore((s) => s.geneEditBackup !== null);
+  const project = useMemo(
+    () =>
+      geneTreeEdit
+        ? { ...projectRaw, layout: { ...projectRaw.layout, type: 'rectangular-cladogram' as const } }
+        : projectRaw,
+    [projectRaw, geneTreeEdit],
+  );
   // Deliberately NO `useStore((s) => s.view)` subscription: the view transform
   // is painted imperatively (see the layout effect and handleWheel below), so a
   // wheel burst never re-renders the tree.

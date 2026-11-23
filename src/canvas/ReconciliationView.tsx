@@ -79,14 +79,13 @@ export function ReconciliationView({
   const geneSelection = useStore((s) => s.geneSelection);
   const speciesSelection = useStore((s) => s.selection);
   const options = useStore((s) => s.reconViewOptions);
-  // 用户反馈: the edit-mode toggle in the recon toolbar decides which pane
-  // carries the 编辑中 badge.
+  // 用户反馈: the edit-target switch in the recon toolbar decides which pane
+  // carries the 编辑中 badge (only meaningful on the coordination canvas).
   const reconEditTarget = useStore((s) => s.reconEditTarget);
-  // 用户反馈: the two panes overlap visually — the 点选目标 toggle decides
-  // which tree receives plain clicks, so a press lands where it is aimed.
-  const reconClickTarget = useStore((s) => s.reconClickTarget);
-  const clickSpecies = reconClickTarget === 'species';
-  const clickGene = reconClickTarget === 'gene';
+  // 用户反馈 (2026-11-23): plain clicks land on whichever pane they fall in —
+  // the species pane selects species nodes, the gene pane selects gene nodes.
+  // The old 点选目标 toggle is gone; mapping still uses Alt+click (species
+  // node or tube) or the inspector's 「把所选基因节点映射到这里」.
   const hoveredGeneId = useStore((s) => s.reconHoverGeneId);
   const focusTarget = useStore((s) => s.reconFocusTarget);
   const setReconHoverGene = useStore((s) => s.setReconHoverGene);
@@ -656,9 +655,9 @@ export function ReconciliationView({
             speciesSelection={speciesSelection}
             hoveredGeneId={hoveredGeneId}
             focusTarget={focusTarget}
-            onGeneNodeClick={clickGene ? onGeneNodeClick : undefined}
-            onSpeciesNodeClick={clickSpecies ? onSpeciesNodeClick : undefined}
-            onTubeClick={clickSpecies ? assignSelectedToTube : undefined}
+            onGeneNodeClick={onGeneNodeClick}
+            onSpeciesNodeClick={onSpeciesNodeClick}
+            onTubeClick={assignSelectedToTube}
             onGeneHover={setReconHoverGene}
             onZoomChange={onEmbeddedZoomChange}
           />
@@ -696,7 +695,7 @@ export function ReconciliationView({
               side="species"
               ariaLabel={S.recon.ariaSpeciesPane}
               options={options}
-              onNodeClick={clickSpecies ? onSpeciesNodeClick : undefined}
+              onNodeClick={onSpeciesNodeClick}
               badge={reconEditTarget === 'species' ? S.recon.editingBadge : undefined}
               badgeTone={reconEditTarget === 'species' ? 'editing' : 'neutral'}
             />
@@ -722,8 +721,8 @@ export function ReconciliationView({
               side="gene"
               ariaLabel={S.recon.ariaGenePane}
               options={options}
-              onNodeClick={clickGene ? onGeneNodeClick : undefined}
-              /* Hover stays live in both click modes — it only drives the
+              onNodeClick={onGeneNodeClick}
+              /* Hover stays live across both panes — it only drives the
                  mapping-line highlight, it never selects. */
               onNodeHover={setReconHoverGene}
             />

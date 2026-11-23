@@ -2,11 +2,12 @@
 // The reconciliation WORKSPACE.
 //
 // 用户反馈 (2026-11-16): the toolbar is a FULL-WIDTH row at the top of the
-// workspace — the gene picker and the 物种树编辑 / 基因树编辑 / 协调树编辑
-// switch keep the exact same left edge in every mode, and the side panels
-// start BELOW it. Below the toolbar:
-//   协调树编辑: ONE plain left panel (视图 + 节点映射), the coordination
-//     canvas in the middle, the inspector on the right.
+// workspace — the gene picker and the 物种树编辑 / 基因树编辑 / 协调映射编辑 /
+// 协调嵌套预览 switch keep the exact same left edge in every mode, and the
+// side panels start BELOW it. Below the toolbar:
+//   协调映射编辑: ONE plain left panel (视图 + 节点映射), the side-by-side
+//     coordination canvas in the middle, the inspector on the right.
+//   协调嵌套预览: the same panel + the embedded nested figure.
 //   物种树编辑 / 基因树编辑: the STANDARD workspace (same panels and mouse
 //     gestures as 标准视图) under the same toolbar. The gene tree reaches it
 //     through a document swap (store.enterGeneDocEdit); the species tree is
@@ -94,8 +95,8 @@ export function ReconWorkspace({
     ? (geneEditBackup.project.geneTrees?.length ?? 0)
     : geneTreeCount;
   // 用户反馈: 物种树编辑 / 基因树编辑 render the STANDARD workspace — same
-  // side panels, same mouse gestures as 标准视图. 协调树编辑 is the mapping
-  // canvas below.
+  // side panels, same mouse gestures as 标准视图. 协调映射编辑 / 协调嵌套预览
+  // render the coordination canvas below (side-by-side / embedded respectively).
   const reconEditTarget = useStore((s) => s.reconEditTarget);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
@@ -139,10 +140,10 @@ export function ReconWorkspace({
 
   // --- tree-edit surfaces (物种树编辑 / 基因树编辑) -----------------------------
   // The full standard workspace under the SAME full-width toolbar, so the
-  // switch row keeps one fixed position across all three modes. Species needs
+  // switch row keeps one fixed position across all four modes. Species needs
   // no swap (the project IS the species tree); the gene tree was swapped into
   // `project` by setReconEditTarget before this branch rendered.
-  if (reconEditTarget !== 'recon' && !reconEmpty) {
+  if ((reconEditTarget === 'species' || reconEditTarget === 'gene') && !reconEmpty) {
     return (
       <div className="body recon-workspace recon-editing">
         <ReconToolbar />

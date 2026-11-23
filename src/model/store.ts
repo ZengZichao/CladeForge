@@ -158,12 +158,13 @@ export type Recipe = (draft: Project) => void;
 export type LegendPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /** 用户反馈: how legend items flow — one/two vertical columns or one/two horizontal rows. */
 export type LegendLayout = 'one-column' | 'two-columns' | 'one-row' | 'two-rows';
-/** 用户反馈: which tree the reconciliation edit gestures target. */
 /** 用户反馈: which editing surface the reconciliation workspace shows.
  *  'species' / 'gene' hand the respective tree to the STANDARD editor (same
  *  side panels, same click / drag / right-click gestures); 'recon' is the
- *  coordination canvas where the species↔gene node mappings are defined. */
-export type ReconEditTarget = 'species' | 'gene' | 'recon';
+ *  side-by-side coordination canvas where the species↔gene node mappings are
+ *  defined; 'embedded' is the nested preview of the same reconciliation
+ *  (gene tree drawn inside the species-branch tubes). */
+export type ReconEditTarget = 'species' | 'gene' | 'recon' | 'embedded';
 
 /**
  * While 「基因树编辑」 is active, the gene tree's standalone document is
@@ -492,7 +493,7 @@ function docStateFor(project: Project): Partial<AppState> {
 }
 
 /** Top-level fields written when an inactive-tab snapshot is swapped in. */
-function restoreState(snap: TabSnapshot): Partial<AppState> {
+function restoreState(snap: TabSnapshot, viewOptions: ReconViewOptions): Partial<AppState> {
   return {
     project: snap.project,
     past: snap.past,
@@ -541,6 +542,14 @@ function restoreState(snap: TabSnapshot): Partial<AppState> {
     // The DP optimum belongs to the document that produced it; a parked tab's
     // result must not resurface when an unrelated tab is swapped in.
     reconDp: null,
+    // 用户反馈 (2026-11-23): the canvas layout follows the edit target, but
+    // reconEditTarget is per-tab while reconViewOptions is session-global —
+    // reconcile the layout mode so a tab restored onto the mapping editor
+    // never inherits a stale embedded mode from another tab's preview.
+    reconViewOptions: {
+      ...viewOptions,
+      layoutMode: (snap.reconEditTarget ?? 'recon') === 'embedded' ? 'embedded' : 'side-by-side',
+    },
   };
 }
 
@@ -716,9 +725,6 @@ export interface UISlice {
   reconEditTarget: ReconEditTarget;
   /** Non-null exactly while 「基因树编辑」 has the gene doc swapped into `project`. */
   geneEditBackup: GeneEditBackup | null;
-  /** 用户反馈: which tree plain clicks target in the coordination canvas — the
-   *  two panes overlap visually, so an explicit toggle beats missed clicks. */
-  reconClickTarget: 'species' | 'gene';
   /** Transient reconciliation canvas display options (UI state only). */
   reconViewOptions: ReconViewOptions;
   /** Gene node currently hovered (mapping-line highlight); null = none. */
@@ -787,7 +793,6 @@ export interface UISlice {
   exitGeneDocEdit: () => void;
   setReconViewOptions: (patch: Partial<ReconViewOptions>) => void;
   setReconHoverGene: (id: NodeId | null) => void;
-  setReconClickTarget: (t: 'species' | 'gene') => void;
   focusGeneNode: (id: NodeId) => void;
   /** Store / clear the shared DTL optimum for a gene tree. */
   setReconDp: (v: { geneId: string; scenario: DtlScenario } | null) => void;
@@ -1336,7 +1341,6 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   reconSection: 'trees',
   reconEditTarget: 'recon',
   geneEditBackup: null,
-  reconClickTarget: 'species',
   reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
   reconHoverGeneId: null,
   reconFocusTarget: null,
@@ -1586,7 +1590,16 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
     // else renders, enter it when the mode demands.
     if (s.reconEditTarget === 'gene' && t !== 'gene') get().exitGeneDocEdit();
     if (t === 'gene' && s.reconEditTarget !== 'gene') get().enterGeneDocEdit();
-    set({ reconEditTarget: t });
+    // 用户反馈: the canvas layout is no longer a free toggle — 「协调映射编辑」
+    // IS the side-by-side canvas and 「协调嵌套预览」 IS the embedded canvas,
+    // so the layout mode follows the edit target.
+    set({
+      reconEditTarget: t,
+      reconViewOptions: {
+        ...s.reconViewOptions,
+        layoutMode: t === 'embedded' ? 'embedded' : 'side-by-side',
+      },
+    });
   },
 
   enterGeneDocEdit: () =>
@@ -1663,8 +1676,6 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
 
   setReconHoverGene: (id) =>
     set((s) => (s.reconHoverGeneId === id ? {} : { reconHoverGeneId: id })),
-
-  setReconClickTarget: (t) => set({ reconClickTarget: t }),
 
   focusGeneNode: (id) =>
     set((s) => ({ reconFocusTarget: { id, seq: (s.reconFocusTarget?.seq ?? 0) + 1 } })),
@@ -1752,7 +1763,7 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
       delete tabStore[id];
       // Preserve the tab's saved view (no auto-fit); the layout recomputes from
       // the swapped-in project reference.
-      return { tabStore, activeTabId: id, ...restoreState(snap), loadCounter: s.loadCounter + 1 };
+      return { tabStore, activeTabId: id, ...restoreState(snap, s.reconViewOptions), loadCounter: s.loadCounter + 1 };
     });
   },
 
@@ -1777,7 +1788,7 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
         tabs,
         tabStore,
         activeTabId: neighbourId,
-        ...(snap ? restoreState(snap) : {}),
+        ...(snap ? restoreState(snap, s.reconViewOptions) : {}),
         loadCounter: s.loadCounter + 1,
       };
     });

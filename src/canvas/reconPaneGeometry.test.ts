@@ -39,18 +39,22 @@ describe('reconciliation pane geometry', () => {
 
   it('reserves label space on the outside of the mirrored gene pane', () => {
     const { doc, root } = twoTipTree();
-    // Isolate the tip-label side: the root carries no label of its own.
+    // Isolate the tip-label side: the root carries no label of its own. Since
+    // 2026-11-23 an unlabelled INTERNAL node still draws a short-id fallback
+    // name on the canvas (用户反馈: the mapping list names must be visible on
+    // the tree), so its label reserves room too — outside on both panes.
     doc.nodes[root].label = '';
     const speciesLayout = computeLayout(horizontal(doc, 'LR'));
     const geneLayout = computeLayout(horizontal(doc, 'RL'));
     const species = reconPaneBounds(doc, speciesLayout, DEFAULT_RECON_VIEW_OPTIONS, 'species');
     const gene = reconPaneBounds(doc, geneLayout, DEFAULT_RECON_VIEW_OPTIONS, 'gene');
     // Species tips face right, so their labels extend maxX; gene tips face
-    // left, so the same labels extend minX instead. The shared 6px selection
-    // ring padding is present on both panes.
+    // left, so the same labels extend minX instead. The root's fallback name
+    // extends minX on the species pane and maxX on the mirrored gene pane.
+    // The shared 6px selection ring padding is present on both panes.
     expect(species.maxX).toBeGreaterThan(speciesLayout.bounds.maxX + 6);
-    expect(species.minX).toBe(speciesLayout.bounds.minX - 6);
+    expect(species.minX).toBeLessThan(speciesLayout.bounds.minX - 6);
     expect(gene.minX).toBeLessThan(geneLayout.bounds.minX - 6);
-    expect(gene.maxX).toBe(geneLayout.bounds.maxX + 6);
+    expect(gene.maxX).toBeGreaterThan(geneLayout.bounds.maxX + 6);
   });
 });
