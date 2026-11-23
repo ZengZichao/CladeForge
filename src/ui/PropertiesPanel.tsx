@@ -206,6 +206,9 @@ function NodePanel({
   search: string;
 }) {
   const clearSelection = useStore((s) => s.clearSelection);
+  const reconSpeciesEdit = useStore(
+    (s) => s.reconMode && s.reconEditTarget === 'species' && !s.geneEditBackup,
+  );
   // ID-11: copy/paste style between nodes — cloning a carefully styled node
   // used to mean re-dialing every field by hand.
   const styleClipboard = useStore((s) => s.styleClipboard);
@@ -305,6 +308,9 @@ function NodePanel({
             onCommit={(v) =>
               apply((d) => {
                 setBranchLength(d, id, v);
+                if (reconSpeciesEdit && v !== undefined && d.layout.type === 'rectangular-cladogram') {
+                  d.layout.type = 'rectangular-phylogram';
+                }
                 // 随动: age ← parent.age − branchLength.
                 const n = d.nodes[id];
                 if (!n || v === undefined) return;

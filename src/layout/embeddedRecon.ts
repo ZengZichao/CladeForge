@@ -32,7 +32,6 @@ import {
   speciesPathBetween,
   type EffectivePlacements,
 } from '../model/reconPlacements';
-import { knownLength } from '../model/treeOps';
 import { estimateLabelWidth } from '../canvas/labelBounds';
 
 // --- tunables -----------------------------------------------------------------
@@ -66,40 +65,14 @@ export function defaultEmbeddedLayoutOptions(
 
 /** Force the geometry the nested view needs: horizontal, generous spacing. */
 export function prepareEmbeddedSpeciesDoc(doc: Project): Project {
-  // 用户反馈 (2026-11-23): branch lengths edited in 物种树编辑 must show up
-  // here. Cladograms ignore lengths and time trees prioritise ages, so whenever
-  // the document carries usable lengths the nested figure switches to the
-  // phylogram — every tube then reflects the measured branch. Without any
-  // usable length the figure stays the document's own rectangular type.
-  const hasLengths = Object.values(doc.nodes).some(
-    (n) => (knownLength(n.branchLength) ?? 0) > 0,
-  );
-  const type = hasLengths
-    ? 'rectangular-phylogram'
-    : doc.layout.type === 'circular'
-      ? 'rectangular-cladogram'
-      : doc.layout.type;
-  // 用户反馈 (2026-11-23): manual (pinned) positions are a STANDARD-canvas
-  // editing artifact stored in the standard layout's world coordinates. The
-  // nested figure lays the species tree out with its own forced gaps, so
-  // honouring those pins would freeze nodes at stale coordinates — the edited
-  // branch lengths would stop being reflected and the drawn topology would
-  // distort. The embedded layout is therefore purely data-driven: pins are
-  // stripped and every node is placed from the document's lengths / ages.
-  const nodes: Project['nodes'] = {};
-  for (const [id, n] of Object.entries(doc.nodes)) {
-    if (n.position === undefined && n.pinned === undefined) {
-      nodes[id] = n;
-      continue;
-    }
-    const copy = { ...n };
-    delete copy.position;
-    delete copy.pinned;
-    nodes[id] = copy;
-  }
+  // The species editor and nested preview share one geometry. Keep the
+  // document's layout and manual depth positions: equal-depth, time-calibrated,
+  // measured-length and hand-adjusted trees must not be silently converted to
+  // a different presentation when they enter the nested preview.
+  const type = doc.layout.type === 'circular' ? 'rectangular-cladogram' : doc.layout.type;
   return {
     ...doc,
-    nodes,
+    nodes: doc.nodes,
     layout: {
       ...doc.layout,
       type,

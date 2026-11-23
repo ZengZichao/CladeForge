@@ -195,8 +195,8 @@ export function LayoutPanel() {
               if (newType === 'time-calibrated') enterTimeChartLayout();
             }}
           >
-            {/* 用户反馈：only the two layouts the tool actually services. */}
             <option value="rectangular-cladogram">{S.layoutType.cladogram}</option>
+            <option value="rectangular-phylogram">{S.layoutType.phylogram}</option>
             <option value="time-calibrated">{S.layoutType.timeCalibrated}</option>
           </select>
         </Field>

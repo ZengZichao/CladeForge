@@ -60,57 +60,51 @@ function pathPoints(d: string): { x: number; y: number }[] {
   return pts;
 }
 
-describe('prepareEmbeddedSpeciesDoc — the nested layout is purely data-driven (用户反馈 2026-11-23)', () => {
-  it('strips manual pins so edited branch lengths, not stale canvas coordinates, place the nodes', () => {
+describe('prepareEmbeddedSpeciesDoc — shared species-editor geometry', () => {
+  it('preserves the depth positions assigned by dragging in the species editor', () => {
     const project = createReconciliationSample();
     const tip = Object.values(project.nodes).find((n) => n.childrenIds.length === 0)!;
-    // A drag in the standard species editor parks absolute world coordinates
-    // on the node — in the standard layout's coordinate system.
     tip.position = { x: 99999, y: 99999 };
     tip.pinned = true;
 
     const prepared = prepareEmbeddedSpeciesDoc(project);
-    expect(prepared.nodes[tip.id].position).toBeUndefined();
-    expect(prepared.nodes[tip.id].pinned).toBeUndefined();
-    // Everything else about the node survives.
+    expect(prepared.nodes[tip.id].position).toEqual({ x: 99999, y: 99999 });
+    expect(prepared.nodes[tip.id].pinned).toBe(true);
     expect(prepared.nodes[tip.id].label).toBe(tip.label);
     expect(prepared.nodes[tip.id].branchLength).toBe(tip.branchLength);
 
-    // The embedded layout therefore places the node from the document data.
     const layout = computeLayout(prepared);
     const p = layout.positions.get(tip.id)!;
-    expect(p.x).not.toBe(99999);
+    expect(p.x).toBe(99999);
     expect(p.y).not.toBe(99999);
   });
 
-  it('uses edited species branch lengths instead of ages when the source is a time tree', () => {
+  it('uses the linked branch length and age when the source is a time tree', () => {
     const project = createReconciliationSample();
     project.layout.type = 'time-calibrated';
     const tip = Object.values(project.nodes).find((n) => n.label === 'Taxon_A')!;
+    const parent = project.nodes[tip.parentId!];
     tip.branchLength = 24;
+    tip.age = parent.age! - 24;
 
     const { scene } = layoutFor(project, 'α');
     const tube = scene.tubes.get(tip.id)!;
+    const axis = scene.speciesLayout.timeAxis!;
 
-    expect(scene.speciesLayout.depthScale).toBeGreaterThan(0);
-    expect(tube.x1 - tube.x0).toBeCloseTo(24 * scene.speciesLayout.depthScale!, 6);
+    expect(tube.x1 - tube.x0).toBeCloseTo(
+      Math.abs(axis.ageToCoord(parent.age!) - axis.ageToCoord(tip.age)),
+      6,
+    );
   });
 
-  it('switches a cladogram document to the phylogram when usable branch lengths exist (用户反馈 2026-11-23)', () => {
+  it('keeps the document layout so the editor and nested preview share the same geometry', () => {
     const project = createReconciliationSample();
-    // The sample species tree is a rectangular cladogram with lengths on its
-    // branches — exactly the "edited lengths must show" case.
     expect(project.layout.type).toBe('rectangular-cladogram');
-    const withLength = Object.values(project.nodes).find(
-      (n) => typeof n.branchLength === 'number' && n.branchLength > 0,
-    );
-    expect(withLength).toBeTruthy();
 
     const prepared = prepareEmbeddedSpeciesDoc(project);
-    expect(prepared.layout.type).toBe('rectangular-phylogram');
+    expect(prepared.layout.type).toBe('rectangular-cladogram');
     expect(prepared.layout.orientation).toBe('LR');
 
-    // Without any usable length the document type is kept (cladogram stays).
     const bare = createReconciliationSample();
     for (const n of Object.values(bare.nodes)) delete n.branchLength;
     expect(prepareEmbeddedSpeciesDoc(bare).layout.type).toBe('rectangular-cladogram');

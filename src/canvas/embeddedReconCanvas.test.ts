@@ -127,6 +127,7 @@ describe('EmbeddedReconCanvas (component)', () => {
 
   it('keeps fixed geometry and viewport scale when the longest path is edited', async () => {
     const project = createEmptyProject('species-lengths');
+    project.layout.type = 'rectangular-phylogram';
     const [longId, shortId] = addChildren(project, project.rootId, 2);
     project.nodes[longId].label = 'Long';
     project.nodes[shortId].label = 'Short';
