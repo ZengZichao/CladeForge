@@ -561,6 +561,54 @@ describe('gene document edit swap (基因树编辑)', () => {
   });
 });
 
+// 用户反馈 (2026-11-23): the canvas layout is not a free toggle any more —
+// 「协调映射编辑」 IS the side-by-side canvas and 「协调嵌套预览」 IS the
+// embedded canvas, so setReconEditTarget drives reconViewOptions.layoutMode.
+describe('reconciliation edit targets drive the canvas layout', () => {
+  beforeEach(() => {
+    useStore.getState().loadProject(createEmptyProject('species'));
+  });
+
+  it('embedded ⇄ recon switch the layout mode; tree-edit targets keep it side-by-side', () => {
+    expect(s().reconEditTarget).toBe('recon');
+    expect(s().reconViewOptions.layoutMode).toBe('side-by-side');
+
+    s().setReconEditTarget('embedded');
+    expect(s().reconEditTarget).toBe('embedded');
+    expect(s().reconViewOptions.layoutMode).toBe('embedded');
+
+    s().setReconEditTarget('recon');
+    expect(s().reconViewOptions.layoutMode).toBe('side-by-side');
+
+    // Leaving the nested preview for a tree-edit surface must not leave the
+    // coordination canvas stuck in the embedded mode on return.
+    s().setReconEditTarget('embedded');
+    s().setReconEditTarget('species');
+    expect(s().reconViewOptions.layoutMode).toBe('side-by-side');
+  });
+
+  it('restoring a tab reconciles the session-global layout mode with that tab’s target', () => {
+    // Park the mapping-editor tab, then preview the nested canvas on a new tab.
+    // (Use the active-tab ids — the store keeps tabs from earlier tests.)
+    const reconTab = s().activeTabId;
+    useStore.getState().openInNewTab(createEmptyProject('preview'));
+    const previewTab = s().activeTabId;
+    s().setReconEditTarget('embedded');
+    expect(s().reconViewOptions.layoutMode).toBe('embedded');
+
+    // Back to the mapping-editor tab: it must not inherit the stale embedded
+    // mode (reconEditTarget is per-tab, reconViewOptions is session-global).
+    useStore.getState().switchTab(reconTab);
+    expect(s().reconEditTarget).toBe('recon');
+    expect(s().reconViewOptions.layoutMode).toBe('side-by-side');
+
+    // And the parked nested-preview tab restores its embedded mode.
+    useStore.getState().switchTab(previewTab);
+    expect(s().reconEditTarget).toBe('embedded');
+    expect(s().reconViewOptions.layoutMode).toBe('embedded');
+  });
+});
+
 describe('history label punctuation follows the UI language (D-P18)', () => {
   const startLang = currentLanguage();
   afterEach(() => changeLanguage(startLang));

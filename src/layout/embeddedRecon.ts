@@ -65,8 +65,27 @@ export function defaultEmbeddedLayoutOptions(
 /** Force the geometry the nested view needs: horizontal, generous spacing. */
 export function prepareEmbeddedSpeciesDoc(doc: Project): Project {
   const type = doc.layout.type === 'circular' ? 'rectangular-cladogram' : doc.layout.type;
+  // 用户反馈 (2026-11-23): manual (pinned) positions are a STANDARD-canvas
+  // editing artifact stored in the standard layout's world coordinates. The
+  // nested figure lays the species tree out with its own forced gaps, so
+  // honouring those pins would freeze nodes at stale coordinates — the edited
+  // branch lengths would stop being reflected and the drawn topology would
+  // distort. The embedded layout is therefore purely data-driven: pins are
+  // stripped and every node is placed from the document's lengths / ages.
+  const nodes: Project['nodes'] = {};
+  for (const [id, n] of Object.entries(doc.nodes)) {
+    if (n.position === undefined && n.pinned === undefined) {
+      nodes[id] = n;
+      continue;
+    }
+    const copy = { ...n };
+    delete copy.position;
+    delete copy.pinned;
+    nodes[id] = copy;
+  }
   return {
     ...doc,
+    nodes,
     layout: {
       ...doc.layout,
       type,

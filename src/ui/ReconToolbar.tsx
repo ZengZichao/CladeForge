@@ -1,13 +1,20 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-// The reconciliation workspace's own top toolbar row: active gene tree, Fit
-// both, sync-zoom toggle, mapping-scope quick switch, exit. Layout row — never
-// an absolutely-positioned floating bar over the panes (§5.5). No topology
+// The reconciliation workspace's own top toolbar row: active gene tree, the
+// FOUR edit-target surfaces (物种树编辑 / 基因树编辑 / 协调映射编辑 / 协调嵌套预览),
+// Fit, sync-zoom toggle, mapping-scope quick switch. Layout row — never an
+// absolutely-positioned floating bar over the panes (§5.5). No topology
 // editing actions exist here by design: the gene tree is read-only and the
 // species tree belongs to the standard workspace.
+//
+// 用户反馈 (2026-11-23): the old 「点选目标」(species|gene click toggle) and the
+// 「并排对照|嵌套视图」 layout toggle are gone. Plain clicks land on whichever
+// pane they fall in; the nested preview is a first-class edit target beside
+// the mapping editor, so the canvas layout follows the edit target (set in
+// the store's setReconEditTarget).
 
 import { FrameIcon, DownloadIcon } from '@radix-ui/react-icons';
 import { useStore } from '../model/store';
-import type { MappingScope, ReconLayoutMode } from '../model/types';
+import type { MappingScope } from '../model/types';
 import { actionExportEmbeddedSvg } from '../io/fileActions';
 import { S, tr } from './strings';
 
@@ -20,20 +27,15 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
   const setReconViewOptions = useStore((s) => s.setReconViewOptions);
   const reconEditTarget = useStore((s) => s.reconEditTarget);
   const setReconEditTarget = useStore((s) => s.setReconEditTarget);
-  const reconClickTarget = useStore((s) => s.reconClickTarget);
-  const setReconClickTarget = useStore((s) => s.setReconClickTarget);
 
   const scopes: { id: MappingScope; label: string }[] = [
     { id: 'tips', label: S.recon.scopeTips },
     { id: 'internal', label: S.recon.scopeInternal },
     { id: 'all', label: S.recon.scopeAll },
   ];
-  const layouts: { id: ReconLayoutMode; label: string; title: string }[] = [
-    // 用户反馈: the pane keeps the document's own layout type now, so the
-    // tooltip must not promise a forced cladogram any more.
-    { id: 'side-by-side', label: S.recon.layoutSideBySide, title: S.recon.layoutSideBySideTitle },
-    { id: 'embedded', label: S.recon.layoutEmbedded, title: S.recon.embeddedAria },
-  ];
+  // 协调映射编辑 keeps the side-by-side panes; 协调嵌套预览 keeps the
+  // embedded figure. The layout mode itself follows the edit target.
+  const coordination = reconEditTarget === 'recon' || reconEditTarget === 'embedded';
   const embedded = options.layoutMode === 'embedded';
   // While 「基因树编辑」 is swapped the gene trees live on the backup — the
   // toolbar must stay visible in the edit modes or the user could not switch
@@ -72,14 +74,16 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
         ))}
       </select>
 
-      {/* 用户反馈: three edit surfaces — 物种树编辑 and 基因树编辑 hand the
-          tree to the STANDARD editor (same panels and mouse gestures); 协调树编辑
-          is the coordination canvas where the node mappings live. */}
+      {/* 用户反馈 (2026-11-23): FOUR peer edit surfaces — 物种树编辑 and 基因树编辑
+          hand one tree to the STANDARD editor; 协调映射编辑 is the side-by-side
+          coordination canvas where the node mappings live; 协调嵌套预览 is the
+          nested figure of the same reconciliation. */}
       <div className="seg recon-edit-seg" role="tablist" aria-label={tr('编辑目标', 'Edit target')}>
         {([
           ['species', S.recon.editTargetSpecies],
           ['gene', S.recon.editTargetGene],
           ['recon', S.recon.editTargetRecon],
+          ['embedded', S.recon.editTargetEmbedded],
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -93,49 +97,10 @@ export function ReconToolbar({ onToggleRightPanel }: { onToggleRightPanel?: () =
         ))}
       </div>
 
-      {/* 用户反馈: the two panes overlap visually — this toggle decides which
-          tree receives plain clicks, so a press stops landing on the wrong
-          tree. Coordination canvas only. */}
-      {reconEditTarget === 'recon' && (
-      <div className="seg recon-click-seg" role="tablist" aria-label={S.recon.clickTargetLabel}>
-        {([
-          ['species', S.recon.paneSpecies],
-          ['gene', S.recon.paneGene],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            className={`seg-btn${reconClickTarget === id ? ' active' : ''}`}
-            onClick={() => setReconClickTarget(id)}
-            aria-selected={reconClickTarget === id}
-            role="tab"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      )}
-
-      {/* Canvas layout mode: the two-pane comparison or the nested embedded
-          figure. Switching never touches selections or mappings. Only the
-          coordination canvas consumes these — the tree-edit surfaces render
-          the standard workspace instead. */}
-      {reconEditTarget === 'recon' && (
+      {/* Canvas controls — only the two coordination canvases consume these;
+          the tree-edit surfaces render the standard workspace instead. */}
+      {coordination && (
       <>
-      <div className="seg recon-layout-seg" role="tablist" aria-label={S.recon.layoutLabel}>
-        {layouts.map((ly) => (
-          <button
-            key={ly.id}
-            className={`seg-btn${options.layoutMode === ly.id ? ' active' : ''}`}
-            onClick={() => setReconViewOptions({ layoutMode: ly.id })}
-            aria-selected={options.layoutMode === ly.id}
-            role="tab"
-            title={ly.title}
-          >
-            {ly.label}
-          </button>
-        ))}
-      </div>
-
       <button
         className="btn"
         title={embedded ? S.recon.fitEmbedded : S.recon.fitBoth}

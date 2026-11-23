@@ -549,6 +549,9 @@ export type ReconLayoutMode = 'side-by-side' | 'embedded';
 export interface ReconViewOptions {
   mappingScope: MappingScope;
   showLabels: boolean;
+  /** Draw internal-node names on the coordination canvas (unlabelled nodes
+   *  fall back to a short id, matching the left-panel mapping list). */
+  showInternalLabels: boolean;
   showEventGlyphs: boolean;
   showLosses: boolean;
   showMappings: boolean;
@@ -596,6 +599,7 @@ export interface ReconViewOptions {
 export const DEFAULT_RECON_VIEW_OPTIONS: ReconViewOptions = {
   mappingScope: 'tips',
   showLabels: true,
+  showInternalLabels: true,
   showEventGlyphs: true,
   showLosses: true,
   showMappings: true,

@@ -5539,9 +5539,12 @@ input.has-error {
   overflow: auto;
 }
 .recon-assumption-row {
-  display: flex;
+  /* 用户反馈 (2026-11-23): a fixed three-column grid — gene node | arrow |
+     species target — so both node columns align vertically across rows. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-1-5);
+  column-gap: var(--space-1-5);
   padding: var(--space-1) var(--space-1-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -5555,17 +5558,35 @@ input.has-error {
 }
 .recon-assumption-row.unresolved { opacity: 0.75; }
 .recon-assumption-row.has-error { border-color: var(--danger); }
+.recon-assumption-head {
+  border: none;
+  background: transparent;
+  cursor: default;
+  color: var(--muted-foreground);
+  font-size: var(--text-2xs);
+  padding-top: 0;
+  padding-bottom: 2px;
+}
+.recon-assumption-head:hover {
+  background: transparent;
+  border-color: transparent;
+}
 .recon-row-glyph { font-weight: 700; width: 14px; text-align: center; }
 .recon-row-label {
   font-weight: 600;
-  max-width: 38%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .recon-row-arrow { color: var(--muted-foreground); }
+.recon-row-target-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
 .recon-row-target {
-  flex: 1;
   min-width: 0;
   color: var(--muted-foreground);
   overflow: hidden;

@@ -40,7 +40,7 @@ import { S, skippedTabs } from './ui/strings';
 import { useLanguage, onLanguageChange, currentLanguage } from './ui/i18n';
 import { tr } from './ui/strings';
 import { buildConsensusTree } from './model/consensus';
-import { addBuiltGeneTree, createGeneDocFromSpecies } from './model/geneTreeBuild';
+import { addBuiltGeneTree, createBlankGeneDoc, createGeneDocFromSpecies } from './model/geneTreeBuild';
 import { AboutDialog } from './ui/AboutDialog';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { ExportSettingsDialog } from './ui/ExportSettingsDialog';
@@ -231,39 +231,55 @@ export function App() {
   const [nexusExportOpen, setNexusExportOpen] = useState(false);
 
   /**
-   * One-click "copy the species topology as a gene tree". This is the direct
-   * construction path for users who do not have a gene tree file at hand; the
-   * tip labels are identical, so every tip maps and the view opens populated.
+   * 「新建协调视图」: enter the reconciliation workspace immediately.
+   * With ≥2 species tips the species topology is copied into a gene tree whose
+   * identical tip labels map instantly; with fewer tips a BLANK gene tree is
+   * created instead — the workspace opens with (near-)empty trees and the user
+   * builds both via 物种树编辑 / 基因树编辑, then maps them in 协调映射编辑.
+   * Either way the view opens populated enough to work with, never a dead end.
    */
   const copySpeciesTreeToGene = () => {
     const st = useStore.getState();
     const tips = Object.values(st.project.nodes).filter((n) => n.childrenIds.length === 0).length;
-    if (tips < 2) {
-      notify.info(S.recon.needSpeciesTips);
-      return;
-    }
     let id: string | null = null;
-    let mapped = 0;
-    let total = 0;
-    st.apply((d) => {
-      const doc = createGeneDocFromSpecies(
-        d,
-        tr(`${d.name}：基因树`, `${d.name}: gene tree`),
+    if (tips >= 2) {
+      let mapped = 0;
+      let total = 0;
+      st.apply((d) => {
+        const doc = createGeneDocFromSpecies(
+          d,
+          tr(`${d.name}：基因树`, `${d.name}: gene tree`),
+        );
+        const built = addBuiltGeneTree(d, doc);
+        id = built.id;
+        mapped = built.scenario.mappedTips;
+        total = built.scenario.totalTips;
+      });
+      if (!id) return;
+      notify.success(
+        tr(
+          `已从物种树创建基因树：${mapped}/${total} 个末端已自动映射`,
+          `Gene tree created from the species tree: ${mapped}/${total} tips auto-mapped`,
+        ),
       );
-      const built = addBuiltGeneTree(d, doc);
-      id = built.id;
-      mapped = built.scenario.mappedTips;
-      total = built.scenario.totalTips;
-    });
-    if (!id) return;
+    } else {
+      st.apply((d) => {
+        const doc = createBlankGeneDoc(
+          tr(`${d.name}：基因树`, `${d.name}: gene tree`),
+        );
+        const built = addBuiltGeneTree(d, doc);
+        id = built.id;
+      });
+      if (!id) return;
+      notify.success(
+        tr(
+          '已创建空的协调视图：请用「物种树编辑」「基因树编辑」分别搭建两棵树，再在「协调映射编辑」中建立节点映射',
+          'Blank reconciliation view created: build both trees with “Edit species tree” / “Edit gene tree”, then map the nodes in “Reconciliation mapping”',
+        ),
+      );
+    }
     st.setActiveGeneTree(id);
     st.enterReconWorkspace();
-    notify.success(
-      tr(
-        `已从物种树创建基因树：${mapped}/${total} 个末端已自动映射`,
-        `Gene tree created from the species tree: ${mapped}/${total} tips auto-mapped`,
-      ),
-    );
   };
 
   // P-03: the preferences dialog's open state lives HERE, above the
@@ -368,7 +384,7 @@ export function App() {
         // hidden standard canvas. The tree-edit surfaces (物种树编辑 /
         // 基因树编辑) render the standard canvas, so only the coordination
         // canvas answers the recon events.
-        if (s.reconMode && s.reconEditTarget === 'recon') {
+        if (s.reconMode && (s.reconEditTarget === 'recon' || s.reconEditTarget === 'embedded')) {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
         } else {
           s.requestFit();
@@ -398,7 +414,7 @@ export function App() {
           // ⌘⇧F fits the ACTIVE workspace: the standard canvas listens for
           // `requestFit`, the reconciliation canvas for its own event. The
           // tree-edit surfaces render the standard canvas.
-          if (s.reconMode && s.reconEditTarget === 'recon') {
+          if (s.reconMode && (s.reconEditTarget === 'recon' || s.reconEditTarget === 'embedded')) {
             window.dispatchEvent(new CustomEvent('cladeforge:recon-fit'));
           } else {
             s.requestFit();
@@ -407,7 +423,7 @@ export function App() {
           // Read the LIVE store, not a render-scope value: this handler is
           // registered once with `[]` deps, so a closed-over boolean would be
           // frozen at its initial value and the branch could never be taken.
-          if (s.reconMode && s.reconEditTarget === 'recon') {
+          if (s.reconMode && (s.reconEditTarget === 'recon' || s.reconEditTarget === 'embedded')) {
             // The reconciliation canvas has no node-search field; the left
             // panel's assumption list is the locator here. Say so instead of
             // silently swallowing the chord. (Tree-edit surfaces render the
@@ -434,14 +450,14 @@ export function App() {
       } else if (k === '=' || k === '+') {
         e.preventDefault();
         // S11: zoom keys route to the active workspace.
-        if (s.reconMode && s.reconEditTarget === 'recon') {
+        if (s.reconMode && (s.reconEditTarget === 'recon' || s.reconEditTarget === 'embedded')) {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-in'));
         } else {
           s.zoomBy(1.2);
         }
       } else if (k === '-' || k === '_') {
         e.preventDefault();
-        if (s.reconMode && s.reconEditTarget === 'recon') {
+        if (s.reconMode && (s.reconEditTarget === 'recon' || s.reconEditTarget === 'embedded')) {
           window.dispatchEvent(new CustomEvent('cladeforge:recon-zoom-out'));
         } else {
           s.zoomBy(1 / 1.2);

@@ -205,7 +205,6 @@ const zh = {
   recon: {
     section: '基因树–物种树协调（DTL）',
     importFile: '从文件导入基因树',
-    needSpeciesTips: '物种树至少需要 2 个末端，才能复制为基因树。',
     activeGene: '当前基因树',
     mappedCount: '已映射内部节点',
     cntSpeciation: '物种形成 S',
@@ -252,6 +251,7 @@ const zh = {
     eventFilterLabel: '事件过滤',
     syncZoom: '同步缩放',
     showLabels: '显示标签',
+    showInternalLabels: '显示内部节点名称',
     showEventGlyphs: '显示事件符号',
     showLosses: '显示丢失标记',
     showMappings: '显示映射线',
@@ -288,23 +288,22 @@ const zh = {
     // reuses buildGeneTree / copySpeciesTree / importFile instead.
     emptyReconTitle: '还没有基因树',
     // 用户反馈（2026-11-16）：the empty stage carries TWO entries — 新建协调视图
-    // seeds a reconciliation from the current species tree; 导入协调视图 opens a
-    // saved CladeForge project (species tree + gene trees + mappings).
+    // seeds a reconciliation from the species tree (or a blank gene tree when
+    // the species tree has <2 tips); 导入协调视图 opens a saved CladeForge
+    // project (species tree + gene trees + mappings).
     newReconView: '新建协调视图',
-    newReconViewTitle: '以当前物种树为起点创建基因树，进入协调视图后可建立节点映射',
+    newReconViewTitle: '进入协调视图：物种树末端充足时复制为基因树，否则创建空基因树；之后可分别编辑两棵树并建立映射',
     importReconView: '导入协调视图',
     importReconViewTitle: '打开包含物种树、基因树与映射假设的 CladeForge 项目文件',
-    // Edit-target modes of the reconciliation toolbar (物种 / 基因 / 协调树).
+    // Edit-target modes of the reconciliation toolbar — four peer surfaces
+    // (用户反馈 2026-11-23): the two tree editors, the side-by-side mapping
+    // editor (was 「编辑协调映射」, now named 协调映射编辑) and the nested
+    // preview (was the 「嵌套视图」 half of a layout toggle), now a
+    // first-class target beside the other three.
     editTargetSpecies: '物种树编辑',
     editTargetGene: '基因树编辑',
-    editTargetRecon: '编辑协调映射',
-    // 用户反馈: the two panes overlap visually — an explicit toggle decides
-    // which tree receives plain clicks, so a press lands where the user aims.
-    clickTargetLabel: '点选目标',
-    // One-click mapping guidance: pressing 「把所选基因节点映射到这里」 with
-    // no gene node selected switches the click target to the gene tree and
-    // says exactly what to do next, instead of a disabled button.
-    mapHereSwitchHint: '已切换到「基因树」点选：请在基因树中点选一个基因节点，然后再次点击「把所选基因节点映射到这里」完成映射',
+    editTargetRecon: '协调映射编辑',
+    editTargetEmbedded: '协调嵌套预览',
     ariaSpeciesPane: '物种树窗格',
     ariaGenePane: '基因树窗格',
     ariaGeneNode: (label: string, mapped: string, event: string, losses: number) =>
@@ -314,10 +313,9 @@ const zh = {
     hoverLineHint: '悬停映射行可临时高亮对应映射线',
     tipUnmapped: '未映射',
     // --- embedded (nested) layout mode ---------------------------------------
-    layoutLabel: '布局',
-    layoutSideBySide: '并排对照',
-    layoutSideBySideTitle: '两窗格并排对照',
-    layoutEmbedded: '嵌套视图',
+    // 「协调映射编辑」 IS the side-by-side canvas and 「协调嵌套预览」 IS the
+    // embedded canvas now — the old 并排对照|嵌套视图 toggle is gone, so the
+    // layout-mode label strings went with it.
     fitEmbedded: '适配视图',
     embeddedAria: '嵌套协调视图：基因树嵌套于物种枝管道内部',
     tubeWidth: '物种枝粗细',
@@ -1245,7 +1243,6 @@ const en: Strings = {
   recon: {
     section: 'Reconciliation (DTL)',
     importFile: 'Import gene tree from file',
-    needSpeciesTips: 'The species tree needs at least 2 tips to be copied as a gene tree.',
     activeGene: 'Active gene tree',
     mappedCount: 'Mapped internal nodes',
     cntSpeciation: 'Speciation events S',
@@ -1292,6 +1289,7 @@ const en: Strings = {
     eventFilterLabel: 'Event filter',
     syncZoom: 'Sync zoom',
     showLabels: 'Show labels',
+    showInternalLabels: 'Show internal-node names',
     showEventGlyphs: 'Show event glyphs',
     showLosses: 'Show loss markers',
     showMappings: 'Show mapping lines',
@@ -1326,16 +1324,19 @@ const en: Strings = {
     // Removed with their zh twins (2026-11-15) — see the zh note.
     emptyReconTitle: 'No gene tree yet',
     // The empty stage carries TWO entries — 新建协调视图 seeds a reconciliation
-    // from the current species tree; 导入协调视图 opens a saved project.
+    // from the species tree (or a blank gene tree when it has <2 tips);
+    // 导入协调视图 opens a saved project.
     newReconView: 'New reconciliation view',
-    newReconViewTitle: 'Create a gene tree from the current species tree, then map nodes in the reconciliation view',
+    newReconViewTitle: 'Enter the reconciliation view: copies the species tree as a gene tree when it has enough tips, otherwise creates a blank gene tree; edit each tree and map the nodes afterwards',
     importReconView: 'Import reconciliation view',
     importReconViewTitle: 'Open a saved CladeForge project (species tree + gene trees + mappings)',
+    // Edit-target modes of the reconciliation toolbar — four peer surfaces:
+    // the two tree editors, the side-by-side mapping editor and the nested
+    // preview (both formerly halves of a layout toggle).
     editTargetSpecies: 'Edit species tree',
     editTargetGene: 'Edit gene tree',
-    editTargetRecon: 'Edit reconciliation mapping',
-    clickTargetLabel: 'Click target',
-    mapHereSwitchHint: 'Switched to clicking the GENE tree: pick one gene node, then press “Map the selected gene node here” again to finish',
+    editTargetRecon: 'Reconciliation mapping',
+    editTargetEmbedded: 'Nested reconciliation preview',
     ariaSpeciesPane: 'Species tree pane',
     ariaGenePane: 'Gene tree pane',
     ariaGeneNode: (label: string, mapped: string, event: string, losses: number) =>
@@ -1345,10 +1346,9 @@ const en: Strings = {
     hoverLineHint: 'Hover a mapping row to highlight its mapping line',
     tipUnmapped: 'Unmapped',
     // --- embedded (nested) layout mode ---------------------------------------
-    layoutLabel: 'Layout',
-    layoutSideBySide: 'Side-by-side',
-    layoutSideBySideTitle: 'Two panes side by side',
-    layoutEmbedded: 'Embedded',
+    // 「协调映射编辑」 IS the side-by-side canvas and 「协调嵌套预览」 IS the
+    // embedded canvas now — the old side-by-side|embedded toggle is gone, so
+    // the layout-mode label strings went with it.
     fitEmbedded: 'Fit view',
     embeddedAria: 'Embedded reconciliation view: the gene tree nested inside the species-branch tubes',
     tubeWidth: 'Species branch thickness',

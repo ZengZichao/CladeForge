@@ -145,6 +145,10 @@ export function useCanvasGestures(
   const select = useStore((s) => s.select);
   const clearSelection = useStore((s) => s.clearSelection);
   const selectEdge = useStore((s) => s.selectEdge);
+  // 用户反馈 (2026-11-23): while 「基因树编辑」 has the gene doc swapped in,
+  // the gene tree's geometry belongs to the reconciliation — a pointer drag
+  // must not rewrite branch lengths or node positions (useDrag gates on this).
+  const geneTreeEdit = useStore((s) => s.geneEditBackup !== null);
 
   const gestureRef = useRef<Gesture>({ kind: 'none' });
   /**
@@ -437,7 +441,10 @@ export function useCanvasGestures(
         break;
       case 'press-node': {
         const dist = Math.hypot(screen.x - g.startScreen.x, screen.y - g.startScreen.y);
-        if (!g.moved && dist > MOVE_THRESHOLD) {
+        // 基因树编辑: position drags are meaningless (the gene tree is always
+        // nested inside the species tree), so the press never becomes a drag —
+        // clicks, double-click rename and the port-drag connector stay live.
+        if (!geneTreeEdit && !g.moved && dist > MOVE_THRESHOLD) {
           g.moved = true;
           // The press that is now a drag must not be remembered as the first
           // half of a double-click.

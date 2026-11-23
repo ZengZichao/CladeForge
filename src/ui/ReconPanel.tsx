@@ -138,6 +138,11 @@ export function ReconPanel() {
           onChange={(v) => setReconViewOptions({ showLabels: v })}
         />
         <SwitchField
+          label={S.recon.showInternalLabels}
+          checked={options.showInternalLabels}
+          onChange={(v) => setReconViewOptions({ showInternalLabels: v })}
+        />
+        <SwitchField
           label={S.recon.showEventGlyphs}
           checked={options.showEventGlyphs}
           onChange={(v) => setReconViewOptions({ showEventGlyphs: v })}
@@ -295,6 +300,7 @@ export function ReconPanel() {
                 mappingScope: 'tips',
                 eventFilter: 'all',
                 showLabels: true,
+                showInternalLabels: true,
                 showEventGlyphs: true,
                 showLosses: true,
                 showMappings: true,
@@ -348,6 +354,16 @@ export function ReconPanel() {
             <div className="hint">{S.recon.noAssumptions}</div>
           ) : (
             <ul className="recon-assumption-list">
+              {/* 用户反馈 (2026-11-23): the two node columns line up vertically —
+                  gene nodes in the left column, their species targets in the
+                  right — so a name in the list can be found on the tree. */}
+              <li className="recon-assumption-row recon-assumption-head" aria-hidden="true">
+                <span className="recon-row-label">{S.recon.paneGene}</span>
+                <span className="recon-row-arrow" />
+                <span className="recon-row-target-wrap">
+                  <span className="recon-row-target">{S.recon.paneSpecies}</span>
+                </span>
+              </li>
               {listRows.map((row) => (
                 <li
                   key={row.gid}
@@ -372,28 +388,30 @@ export function ReconPanel() {
                 >
                   <span className="recon-row-label" title={row.label}>{row.label}</span>
                   <span className="recon-row-arrow"><ArrowRightIcon /></span>
-                  <span
-                    className={`recon-row-target${row.mappingSource === 'auto' ? ' auto' : ''}`}
-                    title={
-                      row.mappingSource === 'explicit'
-                        ? tr('显式假设', 'Explicit assumption')
-                        : row.mappingSource === 'auto'
-                          ? tr('按名称自动匹配', 'Matched automatically by label')
-                          : tr('无匹配', 'No match')
-                    }
-                  >
-                    {row.target || S.recon.tipUnmapped}
-                  </span>
-                  {/* S07: say WHERE the mapping came from — an auto-matched
-                      tip is not "未映射", and an explicit one should not look
-                      identical to an automatic one. */}
-                  {row.mappingSource === 'auto' && (
-                    <span className="recon-row-flag" title={tr('按名称自动匹配', 'Matched automatically by label')}>
-                      {tr('自动', 'auto')}
+                  <span className="recon-row-target-wrap">
+                    <span
+                      className={`recon-row-target${row.mappingSource === 'auto' ? ' auto' : ''}`}
+                      title={
+                        row.mappingSource === 'explicit'
+                          ? tr('显式假设', 'Explicit assumption')
+                          : row.mappingSource === 'auto'
+                            ? tr('按名称自动匹配', 'Matched automatically by label')
+                            : tr('无匹配', 'No match')
+                      }
+                    >
+                      {row.target || S.recon.tipUnmapped}
                     </span>
-                  )}
-                  {row.unresolved && <span className="recon-row-flag">{S.recon.filterUnresolved}</span>}
-                  {row.hasError && <span className="recon-row-flag bad">{S.recon.severityError}</span>}
+                    {/* S07: say WHERE the mapping came from — an auto-matched
+                        tip is not "未映射", and an explicit one should not look
+                        identical to an automatic one. */}
+                    {row.mappingSource === 'auto' && (
+                      <span className="recon-row-flag" title={tr('按名称自动匹配', 'Matched automatically by label')}>
+                        {tr('自动', 'auto')}
+                      </span>
+                    )}
+                    {row.unresolved && <span className="recon-row-flag">{S.recon.filterUnresolved}</span>}
+                    {row.hasError && <span className="recon-row-flag bad">{S.recon.severityError}</span>}
+                  </span>
                 </li>
               ))}
             </ul>
