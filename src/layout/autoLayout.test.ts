@@ -38,6 +38,28 @@ describe('computeLayout', () => {
     expect(new Set(ys).size).toBe(3);
   });
 
+  it('aligns every tip on one vertical line when alignTips is set (基因树编辑)', () => {
+    // A ragged-tip cladogram by default (one shallow leaf + a deeper clade);
+    // the gene-tree edit surface needs all tips on ONE line so the tree reads
+    // as nested inside the species tubes.
+    const p = createEmptyProject();
+    const [shallow, internal] = addChildren(p, p.rootId, 2);
+    addChildren(p, internal, 2);
+    const plain = computeLayout(p);
+    const aligned = computeLayout(p, undefined, { alignTips: true });
+    const tips = Object.values(p.nodes).filter((n) => n.childrenIds.length === 0).map((n) => n.id);
+    const plainXs = tips.map((id) => plain.positions.get(id)!.x);
+    const alignedXs = tips.map((id) => aligned.positions.get(id)!.x);
+    // Default cladogram: the shallow leaf sits closer to the root (ragged).
+    expect(new Set(plainXs).size).toBeGreaterThan(1);
+    expect(plain.positions.get(shallow)!.x).toBeLessThan(
+      plain.positions.get(tips.find((t) => t !== shallow)!)!.x,
+    );
+    // alignTips: every tip shares the deepest x (≥ the ragged maximum).
+    expect(new Set(alignedXs).size).toBe(1);
+    for (const x of alignedXs) expect(x).toBeGreaterThanOrEqual(Math.max(...plainXs));
+  });
+
   it('never shares a row between a shallow leaf and a deeper cousin (no "box" for multifurcations)', () => {
     // In a trifurcation whose MIDDLE child is itself a clade, d3.tree() would
     // place the two sibling leaves on the same rows as the middle clade's outer

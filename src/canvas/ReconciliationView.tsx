@@ -23,6 +23,10 @@ import { isImeComposing } from '../ui/imeGuard';
 import { modalIsOpen } from '../ui/useDialogFocus';
 import { geneTreeRows } from '../ui/reconStats';
 import { layoutTypeName } from '../ui/layoutTypeName';
+import { addChildrenSpaced, collectSubtree, deleteNode, toggleCollapse } from '../model/treeOps';
+import { deleteGeneSubtree, pruneAssumptionsForSpeciesNodes } from '../model/geneTrees';
+import { requestDeletion } from '../ui/deleteGuard';
+import { RenameNodeDialog, type RenamePaneTarget } from '../ui/RenameNodeDialog';
 import * as file from '../io/fileActions';
 import { SAMPLE_PROJECTS } from '../model/sampleTree';
 import { openSample } from '../ui/sampleOpener';
@@ -66,6 +70,8 @@ export function ReconciliationView({
   onZoomChange,
   onEmbeddedZoomChange,
   onCopySpeciesTree,
+  onAddChildrenDialog,
+  onAddChildrenDialogGene,
 }: {
   /** Reported when a pane's zoom scale changes (status-bar readouts). */
   onZoomChange?: (species: number, gene: number) => void;
@@ -73,6 +79,11 @@ export function ReconciliationView({
   onEmbeddedZoomChange?: (zoom: number) => void;
   /** Empty state: 新建协调视图 — seeds the reconciliation from the species tree. */
   onCopySpeciesTree?: () => void;
+  /** 用户反馈 (2026-11-23): the mapping editor edits BOTH trees — the shared
+   *  add-children dialog, targeted at the species project. */
+  onAddChildrenDialog?: (parentId: string) => void;
+  /** Same dialog targeted at a gene tree's document. */
+  onAddChildrenDialogGene?: (geneId: string, parentId: string) => void;
 }) {
   const project = useStore((s) => s.project);
   const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
@@ -551,6 +562,150 @@ export function ReconciliationView({
     if (st.selection.length > 0) st.clearSelection();
   }, []);
 
+  // --- pane editing (用户反馈 2026-11-23): the mapping editor edits BOTH trees —
+  // species-pane recipes target `project`, gene-pane recipes target the active
+  // gene tree's document (its assumptions are cleaned on delete). Plain clicks
+  // keep their selection/mapping meaning; double-click renames; right-click
+  // opens this edit menu.
+  const apply = useStore((s) => s.apply);
+  const [paneMenu, setPaneMenu] = useState<{
+    x: number;
+    y: number;
+    side: 'species' | 'gene';
+    nodeId: NodeId;
+  } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenamePaneTarget | null>(null);
+
+  const onSpeciesNodeDblClick = useCallback((id: NodeId) => {
+    setRenameTarget({ side: 'species', geneTreeId: null, nodeId: id });
+  }, []);
+  const onGeneNodeDblClick = useCallback((id: NodeId) => {
+    const gid = useStore.getState().activeGeneTreeId;
+    if (!gid) return;
+    setRenameTarget({ side: 'gene', geneTreeId: gid, nodeId: id });
+  }, []);
+  const onSpeciesNodeContextMenu = useCallback((id: NodeId, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPaneMenu({ x: e.clientX, y: e.clientY, side: 'species', nodeId: id });
+  }, []);
+  const onGeneNodeContextMenu = useCallback((id: NodeId, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPaneMenu({ x: e.clientX, y: e.clientY, side: 'gene', nodeId: id });
+  }, []);
+
+  useEffect(() => {
+    if (!paneMenu) return;
+    const close = () => setPaneMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isImeComposing(e)) close();
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [paneMenu]);
+
+  const menuEntry = entry ?? null;
+  const menuNode = paneMenu
+    ? paneMenu.side === 'species'
+      ? project.nodes[paneMenu.nodeId]
+      : menuEntry?.doc.nodes[paneMenu.nodeId]
+    : undefined;
+
+  // The edit menu's item list for the open paneMenu (null when no menu). The
+  // recipes choose their document by side; deletes route through the shared
+  // delete guard so the tip-threshold confirm and the bound Undo toast behave
+  // exactly like the standard editor.
+  const paneMenuModel = useMemo(() => {
+    if (!paneMenu || !menuNode) return null;
+    const { side, nodeId, x, y } = paneMenu;
+    const geneId = side === 'gene' ? (menuEntry?.id ?? null) : null;
+    const isRoot =
+      nodeId === (side === 'species' ? project.rootId : menuEntry?.doc.rootId);
+    const hasChildren = menuNode.childrenIds.length > 0;
+    const editDoc = (recipe: (doc: Project) => void) => {
+      if (side === 'gene') {
+        apply((d) => {
+          const g = d.geneTrees?.find((t) => t.id === geneId);
+          if (g) recipe(g.doc);
+        });
+      } else {
+        apply(recipe);
+      }
+    };
+    const items: { label?: string; danger?: boolean; sep?: boolean; onClick?: () => void }[] = [
+      {
+        label: S.context.addBinary,
+        onClick: () => editDoc((doc) => void addChildrenSpaced(doc, nodeId, 2)),
+      },
+      {
+        label: S.context.addTernary,
+        onClick: () => editDoc((doc) => void addChildrenSpaced(doc, nodeId, 3)),
+      },
+      {
+        label: S.context.addMulti,
+        onClick: () => {
+          if (side === 'gene') {
+            if (geneId) onAddChildrenDialogGene?.(geneId, nodeId);
+          } else {
+            onAddChildrenDialog?.(nodeId);
+          }
+        },
+      },
+      { sep: true },
+      {
+        label: tr('重命名…', 'Rename…'),
+        onClick: () => setRenameTarget({ side, geneTreeId: geneId, nodeId }),
+      },
+    ];
+    if (hasChildren) {
+      items.push({ sep: true });
+      items.push({
+        label: menuNode.collapsed ? S.context.expandSubtree : S.context.collapseSubtree,
+        onClick: () => editDoc((doc) => toggleCollapse(doc, nodeId)),
+      });
+    }
+    if (!isRoot) {
+      items.push({ sep: true });
+      items.push({
+        label: S.context.deleteNode,
+        danger: true,
+        onClick: () => {
+          if (side === 'gene') {
+            if (!geneId || !menuEntry) return;
+            const doc = menuEntry.doc;
+            requestDeletion(doc, [nodeId], 'recon-pane', () => {
+              apply((d) => {
+                const removed = deleteGeneSubtree(d, geneId, nodeId);
+                if (removed.size > 0) {
+                  const st = useStore.getState();
+                  if (st.geneSelection.some((gid) => removed.has(gid))) {
+                    st.clearGeneSelection();
+                  }
+                }
+              });
+            });
+          } else {
+            requestDeletion(project, [nodeId], 'recon-pane', () => {
+              apply((d) => {
+                const removed = collectSubtree(d, nodeId);
+                if (deleteNode(d, nodeId, true)) {
+                  pruneAssumptionsForSpeciesNodes(d, removed);
+                }
+              });
+              useStore.getState().clearSelection();
+            });
+          }
+        },
+      });
+    }
+    return { items, x, y, side };
+  }, [paneMenu, menuNode, menuEntry, project, apply, onAddChildrenDialog, onAddChildrenDialogGene]);
+
   // The active row's cached summary replaces the per-render scenarioSummary.
   const summary = activeRow?.summary ?? null;
 
@@ -696,6 +851,8 @@ export function ReconciliationView({
               ariaLabel={S.recon.ariaSpeciesPane}
               options={options}
               onNodeClick={onSpeciesNodeClick}
+              onNodeDblClick={onSpeciesNodeDblClick}
+              onNodeContextMenu={onSpeciesNodeContextMenu}
               badge={reconEditTarget === 'species' ? S.recon.editingBadge : undefined}
               badgeTone={reconEditTarget === 'species' ? 'editing' : 'neutral'}
             />
@@ -722,6 +879,8 @@ export function ReconciliationView({
               ariaLabel={S.recon.ariaGenePane}
               options={options}
               onNodeClick={onGeneNodeClick}
+              onNodeDblClick={onGeneNodeDblClick}
+              onNodeContextMenu={onGeneNodeContextMenu}
               /* Hover stays live across both panes — it only drives the
                  mapping-line highlight, it never selects. */
               onNodeHover={setReconHoverGene}
@@ -751,6 +910,51 @@ export function ReconciliationView({
           </div>
         </>
       )}
+      {/* Pane edit menu (用户反馈 2026-11-23): right-click a node in either pane
+          of the mapping editor — species items edit the project, gene items
+          edit the active gene tree's document. */}
+      {paneMenuModel && (
+        <div
+          className="context-menu"
+          role="menu"
+          aria-label={paneMenuModel.side === 'gene' ? S.recon.paneGene : S.recon.paneSpecies}
+          style={{
+            left: Math.min(paneMenuModel.x, window.innerWidth - 190),
+            top: Math.min(
+              paneMenuModel.y,
+              window.innerHeight - (paneMenuModel.items.length * 34 + 12),
+            ),
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-label">
+            {paneMenuModel.side === 'gene' ? S.recon.paneGene : S.recon.paneSpecies}
+          </div>
+          {paneMenuModel.items.map((it, i) =>
+            it.sep ? (
+              <div key={`sep-${i}`} className="menu-sep" />
+            ) : (
+              <button
+                key={it.label}
+                className="menu-item"
+                role="menuitem"
+                style={it.danger ? { color: 'var(--danger)' } : undefined}
+                onClick={() => {
+                  setPaneMenu(null);
+                  it.onClick?.();
+                }}
+              >
+                <span>{it.label}</span>
+              </button>
+            ),
+          )}
+        </div>
+      )}
+      <RenameNodeDialog
+        open={renameTarget !== null}
+        target={renameTarget}
+        onClose={() => setRenameTarget(null)}
+      />
       <div className="visually-hidden" aria-live="polite">{announcement}</div>
     </div>
   );

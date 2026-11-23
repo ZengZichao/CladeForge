@@ -27,6 +27,19 @@ export interface AxisOverlayOptions {
   eraLevel: EraLevel;
 }
 
+/** Per-call display tweaks that do NOT belong to the document's layout
+ *  settings (they are render-time choices, never persisted). */
+export interface LayoutComputeOptions {
+  /**
+   * Cladogram tip alignment (用户反馈 2026-11-23): the document cladogram
+   * deliberately keeps the ragged-tip look (each leaf at its own topological
+   * depth). Some surfaces — the gene-tree edit inside the reconciliation
+   * workspace — need every tip on ONE vertical line instead; cluster() already
+   * computes that geometry as `hn.y`, so this option just reads it.
+   */
+  alignTips?: boolean;
+}
+
 /**
  * A data problem the layout has to work around. Inventing what is missing — an
  * absent branch length read as 1, an absent age read as "present" — would draw an
@@ -157,7 +170,11 @@ function computeBounds(positions: Iterable<Point>): Bounds {
   return { minX, minY, maxX, maxY };
 }
 
-export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions): LayoutResult {
+export function computeLayout(
+  project: Project,
+  axisOverlay?: AxisOverlayOptions,
+  computeOpts?: LayoutComputeOptions,
+): LayoutResult {
   const { layout } = project;
   const rootData = project.nodes[project.rootId];
   const positions = new Map<NodeId, Point>();
@@ -304,6 +321,11 @@ export function computeLayout(project: Project, axisOverlay?: AxisOverlayOptions
     // at its own depth). hn.depth * depthGap is what a d3 tree layout would
     // assign (y = depth * depthGap), so only the row assignment differs.
     let depthCoord: (hn: HierarchyNode<TreeNode>) => number = (hn) => hn.depth * depthGap;
+    // 用户反馈 (2026-11-23): the gene-tree edit surface needs every tip on ONE
+    // vertical line; cluster() already computed that arrangement as hn.y.
+    if (computeOpts?.alignTips) {
+      depthCoord = (hn) => hn.y ?? hn.depth * depthGap;
+    }
     // Grid row for a node the layout cannot place from data: its topological
     // depth. Used for unmeasured branches and undated nodes alike, so a gap in
     // the data shifts nothing but stays visibly flagged instead of being drawn

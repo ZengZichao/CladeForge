@@ -71,6 +71,7 @@ export function ReconWorkspace({
   onShowPanels,
   onCopySpeciesTree,
   onAddChildrenDialog,
+  onAddChildrenDialogGene,
 }: {
   panelsHidden: boolean;
   /** A#2: restores both panels after the header / ⌘. double-hide. */
@@ -80,6 +81,9 @@ export function ReconWorkspace({
   /** Opens the shared add-children dialog (owned by App) — the tree-edit
       surfaces reuse it exactly like the standard workspace does. */
   onAddChildrenDialog: (parentId: string) => void;
+  /** Same dialog targeted at a gene tree's document (协调映射编辑 pane
+      editing, 用户反馈 2026-11-23). */
+  onAddChildrenDialogGene: (geneId: string, parentId: string) => void;
 }) {
   const [leftWidth, setLeftWidth] = useState(() => readReconWidth(LS_RECON_LEFT_WIDTH, 260));
   const [rightWidth, setRightWidth] = useState(() => readReconWidth(LS_RECON_RIGHT_WIDTH, 300));
@@ -227,6 +231,7 @@ export function ReconWorkspace({
               and in narrow mode it is the only reachable one. */}
           <ReconWorkspacePanel
             onCopySpeciesTree={onCopySpeciesTree}
+            onAddChildrenDialogGene={onAddChildrenDialogGene}
           />
         </div>
 
@@ -279,8 +284,10 @@ export function ReconWorkspace({
  */
 function ReconWorkspacePanel({
   onCopySpeciesTree,
+  onAddChildrenDialogGene,
 }: {
   onCopySpeciesTree?: () => void;
+  onAddChildrenDialogGene?: (geneId: string, parentId: string) => void;
 }) {
   const [zoom, setZoom] = useState({ species: 1, gene: 1 });
   const [embeddedZoom, setEmbeddedZoom] = useState(1);
@@ -298,6 +305,7 @@ function ReconWorkspacePanel({
         onZoomChange={onZoomChange}
         onEmbeddedZoomChange={onEmbeddedZoomChange}
         onCopySpeciesTree={onCopySpeciesTree}
+        onAddChildrenDialogGene={onAddChildrenDialogGene}
       />
       <ReconStatusBar
         speciesZoom={zoom.species}
