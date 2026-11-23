@@ -135,9 +135,10 @@ export function ReconciliationView({
     setGeneBox((prev) => (prev.w === w && prev.h === h && prev.top === top ? prev : { w, h, top }));
   }, []);
 
-  // Keyed on the entry id, NOT []: `.recon-panes` does not exist while the
-  // empty state is up, so an always-on effect would observe nothing on the
-  // first render and never re-arm after the sample/gene tree appears.
+  // Keyed on the entry id and canvas mode, NOT []: `.recon-panes` does not
+  // exist in the empty state or embedded preview. The observer must re-arm
+  // when a tree appears or the side-by-side canvas remounts, otherwise the
+  // mapping layer keeps its initial 0×0 box and paints no lines.
   useEffect(() => {
     const el = panesRef.current;
     if (!el) return;
@@ -150,7 +151,7 @@ export function ReconciliationView({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [entry?.id]);
+  }, [entry?.id, embedded]);
 
   const bridge = hostSize.w >= 1200 ? 96 : 64;
   const paneW = Math.max(0, (hostSize.w - bridge) / 2);

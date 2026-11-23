@@ -3,9 +3,10 @@
 //
 // Produces world-space positions for every *visible* node (collapsed subtrees
 // are skipped). Supports rectangular cladogram / phylogram and circular
-// layouts, four orientations, and honours manual (pinned) node positions which
-// override the computed coordinates. This is the "hybrid" model: structure
-// reflows automatically, but anything the user has dragged stays put.
+// layouts, four orientations, and honours manual (pinned) depth positions.
+// Rectangular sibling rows/columns always reflow with the computed layout;
+// circular placements keep both coordinates. This is the "hybrid" model:
+// structure reflows automatically, but the user-adjusted depth stays put.
 //
 // The node tree is built by `buildHierarchy` rather than d3's `hierarchy()`.
 // Both produce identical nodes, depths and heights, but d3's height pass costs
@@ -474,7 +475,11 @@ export function computeLayout(
     positions.set(id, { x: p.x + shiftX, y: p.y + shiftY });
   }
 
-  // Manual/pinned positions (absolute world coords) override the auto result.
+  // Manual/pinned positions override only the DEPTH axis in rectangular
+  // layouts. Their cross-axis is always recomputed: rectangular drags lock the
+  // row/column, so persisting that coordinate would freeze some tips while
+  // sibling spacing reflows the others and invert the visible clade order.
+  // Circular drags remain free 2D placements.
   // A non-finite x/y — from a hand-edited or foreign document — must not be
   // written straight through, because that renders `translate(NaN NaN)`: one
   // node, silently invisible and unselectable, while `bounds` stays finite so
@@ -488,7 +493,14 @@ export function computeLayout(
       badPins += 1;
       continue;
     }
-    positions.set(id, { x: pin.x, y: pin.y });
+    if (layout.type === 'circular') {
+      positions.set(id, { x: pin.x, y: pin.y });
+      continue;
+    }
+    const auto = positions.get(id);
+    if (!auto) continue;
+    const horizontal = layout.orientation === 'LR' || layout.orientation === 'RL';
+    positions.set(id, horizontal ? { x: pin.x, y: auto.y } : { x: auto.x, y: pin.y });
   }
   if (badPins > 0) {
     issues.push({

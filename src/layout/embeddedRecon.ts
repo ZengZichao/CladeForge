@@ -66,19 +66,18 @@ export function defaultEmbeddedLayoutOptions(
 /** Force the geometry the nested view needs: horizontal, generous spacing. */
 export function prepareEmbeddedSpeciesDoc(doc: Project): Project {
   // 用户反馈 (2026-11-23): branch lengths edited in 物种树编辑 must show up
-  // here. A cladogram IGNORES lengths entirely, so whenever the document
-  // actually carries usable lengths the nested figure switches to the
+  // here. Cladograms ignore lengths and time trees prioritise ages, so whenever
+  // the document carries usable lengths the nested figure switches to the
   // phylogram — every tube then reflects the measured branch. Without any
   // usable length the figure stays the document's own rectangular type.
   const hasLengths = Object.values(doc.nodes).some(
     (n) => (knownLength(n.branchLength) ?? 0) > 0,
   );
-  const type =
-    doc.layout.type === 'circular'
+  const type = hasLengths
+    ? 'rectangular-phylogram'
+    : doc.layout.type === 'circular'
       ? 'rectangular-cladogram'
-      : hasLengths && doc.layout.type === 'rectangular-cladogram'
-        ? 'rectangular-phylogram'
-        : doc.layout.type;
+      : doc.layout.type;
   // 用户反馈 (2026-11-23): manual (pinned) positions are a STANDARD-canvas
   // editing artifact stored in the standard layout's world coordinates. The
   // nested figure lays the species tree out with its own forced gaps, so

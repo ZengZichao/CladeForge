@@ -22,12 +22,27 @@ describe('computeLayout', () => {
     expect(visible.has(grandchild)).toBe(false);
   });
 
-  it('lets a manual position override the computed one', () => {
+  it('lets a manual depth override keep its place without freezing the sibling row', () => {
     const p = createSampleProject();
+    p.layout.type = 'rectangular-cladogram';
     p.nodes[p.rootId].position = { x: 999, y: 777 };
     p.nodes[p.rootId].pinned = true;
     const { positions } = computeLayout(p);
-    expect(positions.get(p.rootId)).toEqual({ x: 999, y: 777 });
+    expect(positions.get(p.rootId)!.x).toBe(999);
+    expect(positions.get(p.rootId)!.y).not.toBe(777);
+  });
+
+  it('moves every tip row with sibling spacing even after depth-axis drags pinned some tips', () => {
+    const p = createSampleProject();
+    const tips = Object.values(p.nodes).filter((n) => n.childrenIds.length === 0);
+    for (const [index, tip] of tips.entries()) {
+      tip.position = { x: 500 + index * 20, y: 900 - index * 100 };
+      tip.pinned = true;
+    }
+    p.layout.vGap = 100;
+
+    const { positions } = computeLayout(p);
+    expect(tips.map((tip) => positions.get(tip.id)!.y)).toEqual([0, 100, 200, 300]);
   });
 
   it('produces distinct leaf positions in a cladogram', () => {

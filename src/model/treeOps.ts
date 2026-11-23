@@ -1614,24 +1614,28 @@ export function setSubtreeBranchColor(project: Project, id: NodeId, color: strin
  * Set (or clear) the length of the branch entering `node`.
  * A negative / non-finite length is stored as "unset" rather than as a number:
  * it would invert the accumulated depth of a phylogram, and `validateTimeData`
- * reports the difference.
+ * reports the difference. Editing the measured value also releases stale
+ * manual coordinates throughout the affected subtree.
  */
 export function setBranchLength(project: Project, id: NodeId, length: number | undefined): void {
   const n = project.nodes[id];
   if (!n) return;
   n.branchLength =
     typeof length === 'number' && Number.isFinite(length) && length >= 0 ? length : undefined;
+  for (const subtreeId of collectSubtree(project, id)) unpinNode(project, subtreeId);
 }
 
 /**
  * Set (or clear) a node's age for the time-calibrated layout. Non-finite or
  * negative ages are stored as unset: a negative age would be drawn beyond the
- * present-day end of the axis and never checked.
+ * present-day end of the axis and never checked. The edited subtree reflows
+ * from data rather than retaining stale manual coordinates.
  */
 export function setNodeAge(project: Project, id: NodeId, age: number | undefined): void {
   const n = project.nodes[id];
   if (!n) return;
   n.age = typeof age === 'number' && Number.isFinite(age) && age >= 0 ? age : undefined;
+  for (const subtreeId of collectSubtree(project, id)) unpinNode(project, subtreeId);
 }
 
 /** `node.meta` key holding a node's topological depth (edge count) — the raw

@@ -82,6 +82,19 @@ describe('prepareEmbeddedSpeciesDoc — the nested layout is purely data-driven 
     expect(p.y).not.toBe(99999);
   });
 
+  it('uses edited species branch lengths instead of ages when the source is a time tree', () => {
+    const project = createReconciliationSample();
+    project.layout.type = 'time-calibrated';
+    const tip = Object.values(project.nodes).find((n) => n.label === 'Taxon_A')!;
+    tip.branchLength = 24;
+
+    const { scene } = layoutFor(project, 'α');
+    const tube = scene.tubes.get(tip.id)!;
+
+    expect(scene.speciesLayout.depthScale).toBeGreaterThan(0);
+    expect(tube.x1 - tube.x0).toBeCloseTo(24 * scene.speciesLayout.depthScale!, 6);
+  });
+
   it('switches a cladogram document to the phylogram when usable branch lengths exist (用户反馈 2026-11-23)', () => {
     const project = createReconciliationSample();
     // The sample species tree is a rectangular cladogram with lengths on its
