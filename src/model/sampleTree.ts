@@ -425,25 +425,25 @@ export function createFeatureTourSample(): Project {
   project.environmentalEvents = [
     {
       id: newId(),
-      label: tr('环境标记 A', 'Environmental marker A'),
+      label: tr('地质事件 A', 'Geological event A'),
       from: 33.9,
       to: 33.9,
-      color: '#ef4444',
-      note: tr('示例环境标记', 'Illustrative environmental marker'),
+      color: '#ab6400',
+      note: tr('示例地质事件', 'Illustrative geological event'),
     },
     {
       id: newId(),
-      label: tr('环境标记 B', 'Environmental marker B'),
+      label: tr('地质事件 B', 'Geological event B'),
       from: 14,
       to: 14,
-      color: '#ef4444',
+      color: '#ce2c31',
     },
     {
       id: newId(),
-      label: tr('环境标记 C', 'Environmental marker C'),
+      label: tr('地质事件 C', 'Geological event C'),
       from: 5.3,
       to: 5.3,
-      color: '#0284c7',
+      color: '#0d74ce',
     },
   ];
 
@@ -452,7 +452,31 @@ export function createFeatureTourSample(): Project {
   // cladogram whose first screen was a yellow "当前布局不显示时间轴" warning —
   // the name and the layout contradicted each other. The chronogram IS the
   // feature being toured.
-  project.layout = { ...project.layout, type: 'time-calibrated', orientation: 'LR' };
+  project.layout = {
+    ...project.layout,
+    type: 'time-calibrated',
+    orientation: 'LR',
+    vGap: 72,
+    timeAxisLength: 560,
+  };
+  project.canvas.background = '#f8fafc';
+  project.defaults.branch = {
+    ...project.defaults.branch,
+    color: '#646464',
+    width: 2,
+    shape: 'rounded',
+  };
+  project.defaults.node = {
+    ...project.defaults.node,
+    size: 5,
+    stroke: '#202020',
+    fontWeight: 500,
+  };
+  for (const node of Object.values(project.nodes)) {
+    if (node.childrenIds.length > 0) {
+      node.style = { ...node.style, labelPosition: 'top-right' };
+    }
+  }
   return project;
 }
 
@@ -851,8 +875,8 @@ export const SAMPLE_PROJECTS: SampleDescriptor[] = [
     id: 'feature-tour',
     label: '时间树示例',
     labelEn: 'Time-tree example',
-    desc: '性状、假说层与事件',
-    descEn: 'A time tree with characters, hypothesis layers and events',
+    desc: '时间校准 · 校准点 · 地质事件（演示数据）',
+    descEn: 'Time calibration, calibration points, geological events (demo data)',
     build: createFeatureTourSample,
   },
   {

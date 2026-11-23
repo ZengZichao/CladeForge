@@ -63,13 +63,14 @@ function reconciledProject(): { project: Project; geneId: string; tipId: string 
   return { project: species, geneId: entry.id, tipId: tip.id };
 }
 
-function mount(): { box: HTMLElement; tipId: string } {
+function mount(layoutMode: 'side-by-side' | 'embedded' = 'side-by-side'): { box: HTMLElement; tipId: string } {
   cleanup();
   const { project, geneId, tipId } = reconciledProject();
   act(() => {
     useStore.getState().loadProject(project);
     useStore.getState().setActiveGeneTree(geneId);
     useStore.getState().setReconHoverGene(null);
+    useStore.getState().setReconViewOptions({ layoutMode });
   });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -109,6 +110,16 @@ async function flushFrame(): Promise<void> {
 }
 
 describe('reconciliation canvas hover integration', () => {
+  it('remeasures the mapping layer when returning from the embedded preview', async () => {
+    const { box } = mount('embedded');
+    expect(bridgePaths(box)).toHaveLength(0);
+
+    act(() => useStore.getState().setReconViewOptions({ layoutMode: 'side-by-side' }));
+    await flushFrame();
+
+    expect(bridgePaths(box)).toHaveLength(4);
+  });
+
   it('emphasises exactly the hovered node\'s bridge line and mutes the rest', async () => {
     const { box, tipId } = mount();
     await flushFrame(); // let the first-paint Fit settle

@@ -38,6 +38,8 @@ import {
   sequentialIdGenerator,
   setCharacterCostMatrix,
   setIdGenerator,
+  setBranchLength,
+  setNodeAge,
   setNodeState,
   tipCountBelow,
   topologicalNeighbour,
@@ -838,6 +840,41 @@ describe('treeOps topology and time guards', () => {
     expect(p.nodes[m1].pinned).toBe(false);
     expect(p.nodes[m].pinned).toBe(false); // the touched parent re-centres
     expect(p.nodes[p.rootId].pinned).toBe(false); // …and so do its ancestors
+  });
+
+  it('setBranchLength releases stale manual coordinates throughout the edited subtree', () => {
+    const p = createEmptyProject();
+    const [child, untouched] = addChildren(p, p.rootId, 2);
+    const [grandchild] = addChildren(p, child, 1);
+    for (const id of [child, grandchild, untouched]) {
+      p.nodes[id].position = { x: 999, y: 888 };
+      p.nodes[id].pinned = true;
+    }
+
+    setBranchLength(p, child, 12);
+
+    for (const id of [child, grandchild]) {
+      expect(p.nodes[id].position).toBeUndefined();
+      expect(p.nodes[id].pinned).toBe(false);
+    }
+    expect(p.nodes[untouched].position).toEqual({ x: 999, y: 888 });
+  });
+
+  it('setNodeAge releases stale manual coordinates throughout the edited subtree', () => {
+    const p = createEmptyProject();
+    const [child] = addChildren(p, p.rootId, 1);
+    const [grandchild] = addChildren(p, child, 1);
+    for (const id of [child, grandchild]) {
+      p.nodes[id].position = { x: 999, y: 888 };
+      p.nodes[id].pinned = true;
+    }
+
+    setNodeAge(p, child, 12);
+
+    for (const id of [child, grandchild]) {
+      expect(p.nodes[id].position).toBeUndefined();
+      expect(p.nodes[id].pinned).toBe(false);
+    }
   });
 
   it('validateTimeData reports branch/age conflicts and calibration violations', () => {
