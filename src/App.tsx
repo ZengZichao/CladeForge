@@ -226,6 +226,9 @@ export function App() {
   const macosTitlebar = isTauri() && /Mac/i.test(navigator.userAgent);
   const [addOpen, setAddOpen] = useState(false);
   const [addTarget, setAddTarget] = useState<string | null>(null);
+  // 用户反馈 (2026-11-23): the coordination canvas can edit the GENE tree too,
+  // so the shared add-children dialog needs an optional gene-tree target.
+  const [addGeneId, setAddGeneId] = useState<string | null>(null);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [nexusExportOpen, setNexusExportOpen] = useState(false);
@@ -328,6 +331,13 @@ export function App() {
   }, []);
 
   const openAddForNode = useCallback((parentId: string) => {
+    setAddTarget(parentId);
+    setAddOpen(true);
+  }, []);
+
+  // 基因树目标：同一个共享对话框，但把子节点加进指定基因树的文档。
+  const openAddForGeneNode = useCallback((geneId: string, parentId: string) => {
+    setAddGeneId(geneId);
     setAddTarget(parentId);
     setAddOpen(true);
   }, []);
@@ -633,6 +643,7 @@ export function App() {
               onShowPanels={() => setPanelsHidden(false)}
               onCopySpeciesTree={copySpeciesTreeToGene}
               onAddChildrenDialog={openAddForNode}
+              onAddChildrenDialogGene={openAddForGeneNode}
             />
           </ErrorBoundary>
         ) : (
@@ -646,7 +657,15 @@ export function App() {
         )}
       </div>
 
-      <AddChildrenDialog open={addOpen} targetId={addTarget} onCancel={() => setAddOpen(false)} />
+      <AddChildrenDialog
+        open={addOpen}
+        targetId={addTarget}
+        geneTreeId={addGeneId}
+        onCancel={() => {
+          setAddOpen(false);
+          setAddGeneId(null);
+        }}
+      />
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

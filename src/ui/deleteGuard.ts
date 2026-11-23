@@ -30,7 +30,7 @@ import { notify } from './toast';
 import { S, deletedCount, tr } from './strings';
 
 /** Where the delete was requested from — decides the "don't ask again" key. */
-export type DeleteEntry = 'keyboard' | 'context-menu' | 'inspector-node' | 'inspector-multi';
+export type DeleteEntry = 'keyboard' | 'context-menu' | 'inspector-node' | 'inspector-multi' | 'recon-pane';
 
 export interface DeletionRisk {
   /** Nodes removed (the union of the selected subtrees; overlaps counted once). */
@@ -102,6 +102,8 @@ export function confirmKeyFor(entry: DeleteEntry): string {
       return 'delete-node-inspector';
     case 'inspector-multi':
       return 'delete-multi-inspector';
+    case 'recon-pane':
+      return 'delete-node-recon-pane';
   }
 }
 

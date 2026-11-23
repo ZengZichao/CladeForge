@@ -30,10 +30,14 @@ import { notify } from './toast';
 interface AddChildrenDialogProps {
   open: boolean;
   targetId: string | null;
+  /** 用户反馈 (2026-11-23): when set, the children are added to THIS gene
+   *  tree's document (coordination-canvas editing) instead of the species
+   *  project. */
+  geneTreeId?: string | null;
   onCancel: () => void;
 }
 
-export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialogProps) {
+export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddChildrenDialogProps) {
   const apply = useStore((s) => s.apply);
   const project = useStore((s) => s.project);
   const selection = useStore((s) => s.selection);
@@ -55,20 +59,28 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
 
   if (!presence.mounted) return null;
 
-  const targetNode = targetId ? project.nodes[targetId] : undefined;
-  const rootNode = project.nodes[project.rootId];
+  // The document the children land in: the species project, or the targeted
+  // gene tree's standalone document.
+  const geneEntry = geneTreeId ? project.geneTrees?.find((g) => g.id === geneTreeId) : undefined;
+  const doc = geneEntry?.doc ?? project;
+  const targetNode = targetId ? doc.nodes[targetId] : undefined;
+  const rootNode = doc.nodes[doc.rootId];
   // The toolbar button falls back to the ROOT when nothing is selected; say so
   // instead of pretending the user aimed at the root. A context-menu target is
   // explicit even when the selection is empty, so only the root + empty
   // selection combination is the fallback case.
-  const rootFallback = targetId === project.rootId && selection.length === 0;
+  const rootFallback = targetId === doc.rootId && selection.length === 0;
   const unnamed = tr('未命名节点', 'Unnamed node');
   const targetLabel = targetNode ? targetNode.label || unnamed : '';
 
   const confirm = () => {
     // Re-validate the target at submit time: the node could have been deleted
     // (or the project replaced) between opening the dialog and pressing Add.
-    if (!targetId || !useStore.getState().project.nodes[targetId]) {
+    const live = useStore.getState().project;
+    const liveDoc = geneTreeId
+      ? live.geneTrees?.find((g) => g.id === geneTreeId)?.doc
+      : live;
+    if (!targetId || !liveDoc?.nodes[targetId]) {
       notify.error(S.addDialog.targetMissing);
       onCancel();
       return;
@@ -97,11 +109,17 @@ export function AddChildrenDialog({ open, targetId, onCancel }: AddChildrenDialo
     }
     const n = Math.round(count);
     apply((d) => {
-      const ids = addChildrenSpaced(d, targetId, n);
+      // 用户反馈 (2026-11-23): gene-tree target → edit the gene doc; otherwise
+      // the species project as before.
+      const target = geneTreeId
+        ? d.geneTrees?.find((g) => g.id === geneTreeId)?.doc
+        : d;
+      if (!target) return;
+      const ids = addChildrenSpaced(target, targetId, n);
       // Store polytomy type in each new child's meta for ≥3 children.
       if (n >= 3) {
         for (const id of ids) {
-          const node = d.nodes[id];
+          const node = target.nodes[id];
           if (node) {
             node.meta = { ...node.meta, polytomyType };
           }

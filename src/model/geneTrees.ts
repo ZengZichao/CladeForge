@@ -3,10 +3,11 @@
 //
 // A GeneTreeEntry embeds a full standalone mini-Project so Newick/NEXUS
 // parsing, the topology helpers and computeLayout all work on it unchanged.
-// The embedded topology is treated as read-only: assumptions key by gene node
-// id and structural edits would invalidate them silently. All exports are
-// immer recipes mutating a project draft, so callers go through store.apply()
-// and inherit undo/redo + autosave for free.
+// Topology edits are safe only through the helpers that keep the assumptions
+// consistent (`deleteGeneSubtree`, the add-children dialog's gene path):
+// assumptions key by gene node id, so a raw structural edit would leave them
+// dangling. All exports are immer recipes mutating a project draft, so
+// callers go through store.apply() and inherit undo/redo + autosave for free.
 
 import { tr } from '../ui/strings';
 import type {
@@ -17,7 +18,7 @@ import type {
   ReconCosts,
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
-import { newId, rerootAtNode } from './treeOps';
+import { collectSubtree, deleteNode, newId, rerootAtNode } from './treeOps';
 import {
   dtlScenarioToAssumptions,
   solveDtl,
@@ -398,4 +399,46 @@ export function applyTipMappingTable(
     unknownGeneLabels: [...new Set(unknownGeneLabels)],
     unknownSpeciesNodes: [...new Set(unknownSpeciesNodes)],
   };
+}
+
+/**
+ * Delete a subtree from a gene tree's own document (协调映射编辑 pane
+ * editing, 用户反馈 2026-11-23) and drop every assumption that referenced a
+ * removed node — assumptions key by node id and would otherwise dangle.
+ * Returns the removed ids so the caller can prune its selection.
+ */
+export function deleteGeneSubtree(
+  project: Project,
+  geneTreeId: string,
+  nodeId: NodeId,
+): Set<NodeId> {
+  const entry = findGeneTree(project, geneTreeId);
+  if (!entry) return new Set();
+  if (!entry.doc.nodes[nodeId] || nodeId === entry.doc.rootId) return new Set();
+  const removed = collectSubtree(entry.doc, nodeId);
+  deleteNode(entry.doc, nodeId, true);
+  for (const rid of removed) {
+    delete entry.assumptions[rid];
+  }
+  return removed;
+}
+
+/**
+ * Drop every species-node mapping target that no longer exists (the species
+ * side of 协调映射编辑 pane editing): deleting species nodes used to leave
+ * assumptions pointing at ghosts, which the validation then reported as
+ * dangling — cleaning them here keeps the hypothesis consistent with the tree.
+ */
+export function pruneAssumptionsForSpeciesNodes(
+  project: Project,
+  removed: ReadonlySet<NodeId>,
+): void {
+  if (removed.size === 0) return;
+  for (const g of project.geneTrees ?? []) {
+    for (const [gid, a] of Object.entries(g.assumptions)) {
+      if (a.speciesNode && removed.has(a.speciesNode)) {
+        delete g.assumptions[gid];
+      }
+    }
+  }
 }

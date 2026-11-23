@@ -118,6 +118,11 @@ interface ReconPaneProps {
   ariaLabel: string;
   options: ReconViewOptions;
   onNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
+  /** 用户反馈 (2026-11-23): the mapping editor edits both trees — double-click
+   *  opens the rename dialog for the pane's tree. */
+  onNodeDblClick?: (id: NodeId, e: React.MouseEvent) => void;
+  /** Right-click opens the pane's edit menu (add children / rename / delete). */
+  onNodeContextMenu?: (id: NodeId, e: React.MouseEvent) => void;
   onNodeHover?: (id: NodeId | null) => void;
   onNodeKeyDown?: (id: NodeId, e: React.KeyboardEvent) => void;
   /** Which column this pane occupies (species = left, gene = right). */
@@ -372,6 +377,8 @@ interface PaneNodeProps {
   interactive: boolean;
   paneAriaLabel: string;
   onNodeClick?: (id: NodeId, e: React.MouseEvent) => void;
+  onNodeDblClick?: (id: NodeId, e: React.MouseEvent) => void;
+  onNodeContextMenu?: (id: NodeId, e: React.MouseEvent) => void;
   onNodeHover?: (id: NodeId | null) => void;
   onNodeKeyDown?: (id: NodeId, e: React.KeyboardEvent) => void;
 }
@@ -400,6 +407,8 @@ const PaneNode = memo(function PaneNode({
   interactive,
   paneAriaLabel,
   onNodeClick,
+  onNodeDblClick,
+  onNodeContextMenu,
   onNodeHover,
   onNodeKeyDown,
 }: PaneNodeProps) {
@@ -408,6 +417,14 @@ const PaneNode = memo(function PaneNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => onNodeClick?.(nodeId, e),
     [onNodeClick, nodeId],
+  );
+  const handleDblClick = useCallback(
+    (e: React.MouseEvent) => onNodeDblClick?.(nodeId, e),
+    [onNodeDblClick, nodeId],
+  );
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => onNodeContextMenu?.(nodeId, e),
+    [onNodeContextMenu, nodeId],
   );
   const handleEnter = useCallback(() => onNodeHover?.(nodeId), [onNodeHover, nodeId]);
   const handleLeave = useCallback(() => onNodeHover?.(null), [onNodeHover]);
@@ -428,6 +445,8 @@ const PaneNode = memo(function PaneNode({
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? `${paneAriaLabel} ${label}` : undefined}
       onClick={handleClick}
+      onDoubleClick={handleDblClick}
+      onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}
       onPointerEnter={handleEnter}
       onPointerLeave={handleLeave}
@@ -537,6 +556,8 @@ export const ReconPane = memo(function ReconPane({
   ariaLabel,
   options,
   onNodeClick,
+  onNodeDblClick,
+  onNodeContextMenu,
   onNodeHover,
   onNodeKeyDown,
   side,
@@ -1021,6 +1042,8 @@ export const ReconPane = memo(function ReconPane({
                   interactive={!!onNodeClick}
                   paneAriaLabel={ariaLabel}
                   onNodeClick={onNodeClick}
+                  onNodeDblClick={onNodeDblClick}
+                  onNodeContextMenu={onNodeContextMenu}
                   onNodeHover={onNodeHover}
                   onNodeKeyDown={onNodeKeyDown}
                 />

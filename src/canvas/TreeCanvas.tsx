@@ -105,6 +105,10 @@ export function TreeCanvas() {
   // 「基因树编辑」 has the gene doc swapped into `project`, present it as the
   // tip-aligned rectangular cladogram and let useDrag refuse position drags.
   const geneTreeEdit = useStore((s) => s.geneEditBackup !== null);
+  // 用户反馈 (2026-11-23): inside the reconciliation workspace the canvas is
+  // editing THIS tab's species/gene tree — the sample cards would open the
+  // sample in another tab and pull the user out of the reconciliation.
+  const reconMode = useStore((s) => s.reconMode);
   const project = useMemo(
     () =>
       geneTreeEdit
@@ -327,10 +331,10 @@ export function TreeCanvas() {
         issues: base.issues,
       };
     }
-    const full = computeLayout(project, { showEras, eraLevel });
+    const full = computeLayout(project, { showEras, eraLevel }, { alignTips: geneTreeEdit });
     baseLayoutRef.current = full;
     return full;
-  }, [project, draggingId, interactionActive, showEras, eraLevel]);
+  }, [project, draggingId, interactionActive, showEras, eraLevel, geneTreeEdit]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
@@ -1400,7 +1404,11 @@ export function TreeCanvas() {
           </div>
           {/* 用户反馈：samples as a 2×2 grid of rounded cards — the big title
               only (the description stays as the hover tooltip), no gray body
-              copy competing with the actions above. */}
+              copy competing with the actions above.
+              用户反馈 (2026-11-23): NOT inside the reconciliation workspace —
+              there the canvas edits the current tab's tree, and a sample card
+              would open another tab and strand the reconciliation. */}
+          {!reconMode && (
           <div className="sample-picker">
             <div className="sample-picker-title">{S.empty.samplePickerTitle}</div>
             <div className="sample-card-grid">
@@ -1419,6 +1427,7 @@ export function TreeCanvas() {
               ))}
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

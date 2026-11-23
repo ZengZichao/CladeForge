@@ -81,6 +81,26 @@ describe('prepareEmbeddedSpeciesDoc — the nested layout is purely data-driven 
     expect(p.x).not.toBe(99999);
     expect(p.y).not.toBe(99999);
   });
+
+  it('switches a cladogram document to the phylogram when usable branch lengths exist (用户反馈 2026-11-23)', () => {
+    const project = createReconciliationSample();
+    // The sample species tree is a rectangular cladogram with lengths on its
+    // branches — exactly the "edited lengths must show" case.
+    expect(project.layout.type).toBe('rectangular-cladogram');
+    const withLength = Object.values(project.nodes).find(
+      (n) => typeof n.branchLength === 'number' && n.branchLength > 0,
+    );
+    expect(withLength).toBeTruthy();
+
+    const prepared = prepareEmbeddedSpeciesDoc(project);
+    expect(prepared.layout.type).toBe('rectangular-phylogram');
+    expect(prepared.layout.orientation).toBe('LR');
+
+    // Without any usable length the document type is kept (cladogram stays).
+    const bare = createReconciliationSample();
+    for (const n of Object.values(bare.nodes)) delete n.branchLength;
+    expect(prepareEmbeddedSpeciesDoc(bare).layout.type).toBe('rectangular-cladogram');
+  });
 });
 
 describe('computeEmbeddedReconLayout — sample α (full σ/δ/τ/λ scenario)', () => {
