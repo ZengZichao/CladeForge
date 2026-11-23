@@ -28,13 +28,12 @@ import {
   useState,
 } from 'react';
 import type { GeneTreeEntry, NodeId, Project, ReconViewOptions } from '../model/types';
-import { computeLayout } from '../layout/autoLayout';
 import {
   computeEmbeddedReconLayout,
+  computeEmbeddedSpeciesLayout,
   defaultEmbeddedLayoutOptions,
   fitEmbeddedBounds,
   hitTestTube,
-  prepareEmbeddedSpeciesDoc,
   EMBEDDED_MIN_SCALE,
   EMBEDDED_MAX_SCALE,
   type EmbeddedHub,
@@ -49,6 +48,7 @@ import { useStore } from '../model/store';
 
 const IDENTITY: { tx: number; ty: number; scale: number } = { tx: 40, ty: 40, scale: 1 };
 type Transform = { tx: number; ty: number; scale: number };
+const embeddedViewTransforms = new Map<string, Transform>();
 
 /** Event-class colour — the same CSS variables the bridge view uses. */
 function eventColor(event: string | null, kind: 'tip' | 'internal'): string {
@@ -94,8 +94,11 @@ export function EmbeddedReconCanvas({
 }: EmbeddedReconCanvasProps) {
   const svgBoxRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [transform, setTransformState] = useState<Transform>(IDENTITY);
-  const fitMode = useRef(true);
+  const viewportKey = `${speciesDoc.id}:${geneEntry.id}`;
+  const [transform, setTransformState] = useState<Transform>(
+    () => embeddedViewTransforms.get(viewportKey) ?? IDENTITY,
+  );
+  const fitMode = useRef(!embeddedViewTransforms.has(viewportKey));
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
 
   // --- size measurement ----------------------------------------------------------
@@ -118,7 +121,7 @@ export function EmbeddedReconCanvas({
 
   // --- scene (layout pass — independent of pan/zoom) -------------------------------
   const speciesLayout = useMemo(
-    () => computeLayout(prepareEmbeddedSpeciesDoc(speciesDoc)),
+    () => computeEmbeddedSpeciesLayout(speciesDoc),
     [speciesDoc],
   );
   const scene = useMemo(
@@ -155,6 +158,9 @@ export function EmbeddedReconCanvas({
 
   // --- pan/zoom (coalesced commit, same pattern as ReconPane) ----------------------
   const transformRef = useRef(transform);
+  useEffect(() => {
+    embeddedViewTransforms.set(viewportKey, transform);
+  }, [viewportKey, transform]);
   const gestureRef = useRef(false);
   const dirtyRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -292,12 +298,16 @@ export function EmbeddedReconCanvas({
     });
   }, [box.w, box.h]);
 
-  // Fit on entry/size change while in fit mode.
+  // Fit on entry/size change while in fit mode. Scene edits deliberately keep
+  // the current viewport: re-fitting a shortened longest branch would zoom the
+  // tree back to the same screen length and hide the user's measured edit.
   useEffect(() => {
-    if (box.w <= 0 || box.h <= 0) return;    if (!fitMode.current) return;
+    if (box.w <= 0 || box.h <= 0) return;
+    if (!fitMode.current) return;
     const t = requestAnimationFrame(fit);
     return () => cancelAnimationFrame(t);
-  }, [box.w, box.h, geneEntry.id, fit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fit reads the latest scene; this effect is only for entry and resize, not geometry edits.
+  }, [box.w, box.h, geneEntry.id]);
 
   // ⌘⇧F reaches the canvas through this event (the side-by-side listener is
   // unmounted with its view, so exactly one handler is active per mode).

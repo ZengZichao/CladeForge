@@ -17,6 +17,7 @@ import { createReconciliationSample } from '../model/sampleTree';
 import { computeLayout } from './autoLayout';
 import {
   computeEmbeddedReconLayout,
+  computeEmbeddedSpeciesLayout,
   defaultEmbeddedLayoutOptions,
   fitEmbeddedBounds,
   hitTestTube,
@@ -35,7 +36,7 @@ function layoutFor(
   overrides: Partial<ReturnType<typeof defaultEmbeddedLayoutOptions>> = {},
 ): { scene: EmbeddedReconLayout; geneIdByName: Map<string, NodeId> } {
   const entry = (project.geneTrees ?? []).find((g) => g.name.includes(geneName))!;
-  const speciesLayout = computeLayout(prepareEmbeddedSpeciesDoc(project));
+  const speciesLayout = computeEmbeddedSpeciesLayout(project);
   const opts = { ...defaultEmbeddedLayoutOptions(), ...overrides };
   const scene = computeEmbeddedReconLayout({
     speciesDoc: project,
@@ -358,7 +359,7 @@ describe('computeEmbeddedReconLayout — unmapped nodes and infeasible paths', (
       (n) => n.childrenIds.length === 0 && n.label === 'Taxon_A',
     )!;
     tip.label = 'Totally_unknown';
-    const speciesLayout = computeLayout(prepareEmbeddedSpeciesDoc(project));
+    const speciesLayout = computeEmbeddedSpeciesLayout(project);
     const scene2 = computeEmbeddedReconLayout({
       speciesDoc: project,
       speciesLayout,
@@ -434,7 +435,7 @@ describe('computeEmbeddedReconLayout — lane overflow', () => {
     for (const id of newTips) huge[id] = { speciesNode: bSpecies.id };
     void tipA;
     void tipB;
-    const speciesLayout = computeLayout(prepareEmbeddedSpeciesDoc(project));
+    const speciesLayout = computeEmbeddedSpeciesLayout(project);
     const scene = computeEmbeddedReconLayout({
       speciesDoc: project,
       speciesLayout,

@@ -24,7 +24,7 @@ import type {
   ReconEventType,
   TreeNode,
 } from '../model/types';
-import type { LayoutResult } from './autoLayout';
+import { computeLayout, type LayoutResult } from './autoLayout';
 import {
   lossesAlongSpeciesPath,
   resolveEffectiveGenePlacements,
@@ -39,6 +39,7 @@ import { estimateLabelWidth } from '../canvas/labelBounds';
 
 export const EMBEDDED_MIN_SCALE = 0.15;
 export const EMBEDDED_MAX_SCALE = 4;
+export const EMBEDDED_BRANCH_LENGTH_SCALE = 8;
 
 export interface EmbeddedLayoutOptions {
   tubeWidth: number;
@@ -107,6 +108,15 @@ export function prepareEmbeddedSpeciesDoc(doc: Project): Project {
       hGap: Math.max(doc.layout.hGap, 180),
     },
   };
+}
+
+/** Species geometry shared by the nested canvas and its SVG exporter. A fixed
+ *  scale keeps an edited longest branch visible: fitting the longest path to a
+ *  constant depth would otherwise rescale every branch and cancel the edit. */
+export function computeEmbeddedSpeciesLayout(doc: Project): LayoutResult {
+  return computeLayout(prepareEmbeddedSpeciesDoc(doc), undefined, {
+    branchLengthScale: EMBEDDED_BRANCH_LENGTH_SCALE,
+  });
 }
 
 // --- scene types ----------------------------------------------------------------
