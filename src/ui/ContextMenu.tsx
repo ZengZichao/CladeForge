@@ -190,7 +190,7 @@ export function ContextMenu({
             return;
           }
           // `applyMidpointReroot` splits the branch at the TRUE patristic
-          // midpoint — `midpointTarget` + `rerootAtNode` would put the root on a
+          // midpoint — `midpointTarget` + `rerootOnBranch` would put the root on a
           // node instead — and it reports the measured diameter plus how many
           // branches have to be excluded for want of a usable length. Both facts
           // go to the user.
@@ -198,8 +198,10 @@ export function ContextMenu({
           apply((d) => {
             box.result = applyMidpointReroot(d);
           });
-          if (box.result) notify.info(midpointText(box.result));
-          requestFit();
+          if (box.result) {
+            notify.info(midpointText(box.result));
+            if (box.result.ok) requestFit();
+          }
         }),
       });
       // Outgroup rooting: use all selected nodes as outgroup.

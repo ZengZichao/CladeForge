@@ -41,8 +41,8 @@ let root: Root | null = null;
 let commits = 0;
 let lastTransform: PaneTransform = { tx: 0, ty: 0, scale: 1 };
 
-function Harness() {
-  const [t, setT] = useState<PaneTransform>({ tx: 0, ty: 0, scale: 1 });
+function Harness({ initialScale = 1 }: { initialScale?: number }) {
+  const [t, setT] = useState<PaneTransform>({ tx: 0, ty: 0, scale: initialScale });
   const [hovered, setHovered] = useState<NodeId | null>(null);
   const handle = useCallback((next: PaneTransform) => {
     lastTransform = next;
@@ -83,7 +83,7 @@ function cleanup(): void {
   box?.remove();
 }
 
-function mount(): { pane: HTMLElement; group: SVGGElement } {
+function mount(initialScale = 1): { pane: HTMLElement; group: SVGGElement } {
   cleanup();
   commits = 0;
   lastTransform = { tx: 0, ty: 0, scale: 1 };
@@ -92,7 +92,11 @@ function mount(): { pane: HTMLElement; group: SVGGElement } {
   root = createRoot(host);
   act(() =>
     root!.render(
-      createElement(Profiler, { id: 'pane', onRender: () => { commits += 1; } }, createElement(Harness)),
+      createElement(
+        Profiler,
+        { id: 'pane', onRender: () => { commits += 1; } },
+        createElement(Harness, { initialScale }),
+      ),
     ),
   );
   const pane = host.querySelector('.recon-pane-svg') as HTMLElement | null;
@@ -203,6 +207,13 @@ describe('reconciliation pane coalesces input gestures', () => {
     pointer(pane, 'pointerup', 300, 200);
     // The release flushes the painted transform (a no-op re-publish is fine).
     expect(lastTransform).toEqual({ tx: 200, ty: 100, scale: 1 });
+  });
+
+  it('keeps a fitted whole-percent zoom valid in the typed number field', () => {
+    mount(0.22);
+    const input = host!.querySelector<HTMLInputElement>('.recon-zoom-input')!;
+    expect(input.value).toBe('22');
+    expect(input.checkValidity()).toBe(true);
   });
 });
 

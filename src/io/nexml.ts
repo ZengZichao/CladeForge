@@ -51,7 +51,7 @@ export function serializeNexml(project: Project, notes?: string[]): string {
   const lines: string[] = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push(
-    '<nex:nexml xmlns:nex="http://www.nexml.org/2009" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="0.9" generator="CladeForge">',
+    '<nex:nexml xmlns="http://www.nexml.org/2009" xmlns:nex="http://www.nexml.org/2009" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="0.9" generator="CladeForge">',
   );
   lines.push(`  <otus id="otus1" label="${xmlEscape(project.name || 'tree')}">`);
   for (const t of tips) {
@@ -213,13 +213,39 @@ interface ParsedTree {
   eventsByNode: Map<number, unknown[]>;
 }
 
+/** XML prefixes are aliases: compare the local name, not `tagName`. */
+function localName(el: Element): string {
+  return el.localName || el.tagName.split(':').pop() || '';
+}
+
+/** Only a NeXML root establishes the namespace used by scientific elements. */
+function resolveNexmlNamespace(xml: Document): string | null {
+  const namespaceURI = xml.documentElement?.namespaceURI;
+  return namespaceURI === NEXML_NAMESPACE ? namespaceURI : null;
+}
+
+/** Scientific elements must belong to NeXML, regardless of their prefix. */
+function descendants(el: Document | Element, name: string, namespaceURI: string | null): Element[] {
+  if (!namespaceURI) return [];
+  return Array.from(el.getElementsByTagNameNS(namespaceURI, name));
+}
+
+/** Ordinary NeXML attributes are unqualified; namespaced lookalikes do not match. */
 function attr(el: Element, name: string): string | null {
   return el.getAttribute(name);
 }
 
+const XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance';
+const NEXML_NAMESPACE = 'http://www.nexml.org/2009';
+
+/** Resolve a qualified attribute by namespace URI and local name, not by prefix. */
+function namespacedAttr(el: Element, namespaceURI: string, name: string): string | null {
+  return el.getAttributeNS(namespaceURI, name);
+}
+
 function parseJsonMeta(el: Element | null): unknown {
   if (!el) return undefined;
-  const content = el.getAttribute('content');
+  const content = attr(el, 'content');
   if (!content) return undefined;
   try {
     return JSON.parse(content) as unknown;
@@ -228,22 +254,22 @@ function parseJsonMeta(el: Element | null): unknown {
   }
 }
 
-function metaChildren(el: Element, rel: string): Element[] {
+function metaChildren(el: Element, rel: string, namespaceURI: string | null): Element[] {
   return Array.from(el.children).filter(
-    (c) => c.tagName === 'meta' && c.getAttribute('rel') === rel,
+    (c) => c.namespaceURI === namespaceURI && localName(c) === 'meta' && attr(c, 'rel') === rel,
   );
 }
 
 /** Parse OTU labels and the cladeforge: hypothesis/provenance annotations. */
-function parseOtus(xml: Document): {
+function parseOtus(xml: Document, namespaceURI: string | null): {
   otuLabel: Map<string, string>;
   layers: Project['layers'];
   provenance: Project['provenance'];
 } {
-  const otusEl = xml.getElementsByTagName('otus')[0];
+  const otusEl = descendants(xml, 'otus', namespaceURI)[0];
   const otuLabel = new Map<string, string>();
   if (otusEl) {
-    for (const o of Array.from(otusEl.getElementsByTagName('otu'))) {
+    for (const o of descendants(otusEl, 'otu', namespaceURI)) {
       const id = attr(o, 'id');
       // `label` may legitimately be the empty string (an unnamed tip); storing
       // it keeps the round-trip honest instead of substituting the otu id.
@@ -254,11 +280,11 @@ function parseOtus(xml: Document): {
   let layers: Project['layers'] = [];
   let provenance: Project['provenance'];
   if (otusEl) {
-    for (const m of metaChildren(otusEl, 'cladeforge:hypothesis-layers')) {
+    for (const m of metaChildren(otusEl, 'cladeforge:hypothesis-layers', namespaceURI)) {
       const v = parseJsonMeta(m);
       if (Array.isArray(v)) layers = v as Project['layers'];
     }
-    for (const m of metaChildren(otusEl, 'cladeforge:provenance')) {
+    for (const m of metaChildren(otusEl, 'cladeforge:provenance', namespaceURI)) {
       const v = parseJsonMeta(m);
       if (v && typeof v === 'object') provenance = v as Project['provenance'];
     }
@@ -267,15 +293,15 @@ function parseOtus(xml: Document): {
 }
 
 /** Parse `<characters>` blocks (StandardCells and ContinuousCells). */
-function parseCharacters(xml: Document): ParsedCharacter[] {
+function parseCharacters(xml: Document, namespaceURI: string | null): ParsedCharacter[] {
   const out: ParsedCharacter[] = [];
-  for (const charsEl of Array.from(xml.getElementsByTagName('characters'))) {
-    const typeAttr = charsEl.getAttribute('xsi:type') ?? '';
+  for (const charsEl of descendants(xml, 'characters', namespaceURI)) {
+    const typeAttr = namespacedAttr(charsEl, XSI_NAMESPACE, 'type') ?? '';
     const continuous = /continuous/i.test(typeAttr);
 
     // char definitions (ContinuousCells has no <states>).
     const defs: { id: string; name: string; statesRef: string | null }[] = [];
-    for (const charEl of Array.from(charsEl.getElementsByTagName('char'))) {
+    for (const charEl of descendants(charsEl, 'char', namespaceURI)) {
       defs.push({
         id: attr(charEl, 'id') ?? `c${defs.length + 1}`,
         name: attr(charEl, 'label') || attr(charEl, 'id') || `Character ${defs.length + 1}`,
@@ -285,10 +311,10 @@ function parseCharacters(xml: Document): ParsedCharacter[] {
 
     // state catalogue per <states> element.
     const statesById = new Map<string, { id: string; label: string }[]>();
-    for (const stEl of Array.from(charsEl.getElementsByTagName('states'))) {
+    for (const stEl of descendants(charsEl, 'states', namespaceURI)) {
       const sid = attr(stEl, 'id') ?? '';
       const list: { id: string; label: string }[] = [];
-      for (const s of Array.from(stEl.getElementsByTagName('state'))) {
+      for (const s of descendants(stEl, 'state', namespaceURI)) {
         list.push({
           id: attr(s, 'id') ?? `s${list.length + 1}`,
           label: attr(s, 'label') || attr(s, 'symbol') || `State ${list.length + 1}`,
@@ -299,11 +325,11 @@ function parseCharacters(xml: Document): ParsedCharacter[] {
 
     // matrix rows: otu -> cell map.
     const byOtu = new Map<string, Map<string, string>>();
-    for (const row of Array.from(charsEl.getElementsByTagName('row'))) {
+    for (const row of descendants(charsEl, 'row', namespaceURI)) {
       const otu = attr(row, 'otu') ?? '';
       const cells = new Map<string, string>();
       for (const cell of Array.from(row.children)) {
-        if (cell.tagName !== 'cell') continue;
+        if (cell.namespaceURI !== namespaceURI || localName(cell) !== 'cell') continue;
         const cid = attr(cell, 'char');
         const state = attr(cell, 'state');
         if (cid && state) cells.set(cid, state);
@@ -338,10 +364,10 @@ function parseCharacters(xml: Document): ParsedCharacter[] {
 }
 
 /** Parse every `<tree>` into raw nodes (NeXML ids kept on the side). */
-function parseTrees(xml: Document): { trees: ParsedTree[]; nodeErrors: string[] } {
+function parseTrees(xml: Document, namespaceURI: string | null): { trees: ParsedTree[]; nodeErrors: string[] } {
   const trees: ParsedTree[] = [];
   const nodeErrors: string[] = [];
-  for (const treeEl of Array.from(xml.getElementsByTagName('tree'))) {
+  for (const treeEl of descendants(xml, 'tree', namespaceURI)) {
     interface Raw {
       el: Element;
       children: string[];
@@ -353,14 +379,14 @@ function parseTrees(xml: Document): { trees: ParsedTree[]; nodeErrors: string[] 
     // walking the edges (the node attributes carry only label/support/otu).
     const edgeLengths = new Map<string, number>();
     const order: string[] = [];
-    for (const n of Array.from(treeEl.getElementsByTagName('node'))) {
+    for (const n of descendants(treeEl, 'node', namespaceURI)) {
       const id = attr(n, 'id');
       if (!id) continue;
       raws.set(id, { el: n, children: [], parent: null, events: [] });
       order.push(id);
     }
     const targets = new Set<string>();
-    for (const e of Array.from(treeEl.getElementsByTagName('edge'))) {
+    for (const e of descendants(treeEl, 'edge', namespaceURI)) {
       const src = attr(e, 'source');
       const tgt = attr(e, 'target');
       if (!src || !tgt) continue;
@@ -378,7 +404,7 @@ function parseTrees(xml: Document): { trees: ParsedTree[]; nodeErrors: string[] 
         const len = Number(lenRaw);
         if (Number.isFinite(len)) edgeLengths.set(tgt, len);
       }
-      const ev = metaChildren(e, 'cladeforge:events');
+      const ev = metaChildren(e, 'cladeforge:events', namespaceURI);
       for (const m of ev) {
         const v = parseJsonMeta(m);
         if (Array.isArray(v)) raws.get(tgt)!.events.push(...(v as unknown[]));
@@ -448,15 +474,18 @@ export function parseNexml(text: string, name: string): NexmlParseResult {
       { cause: e },
     );
   }
-  if (xml.getElementsByTagName('parsererror').length > 0) {
+  // DOMParser reports malformed XML in its own parsererror namespace. Keep this
+  // diagnostic separate from the NeXML-only scientific element lookups below.
+  if (xml.getElementsByTagNameNS('*', 'parsererror').length > 0) {
     throw new Error(
       tr('NeXML 解析失败：文件不是格式良好的 XML', 'Failed to parse NeXML: the file is not well-formed XML'),
     );
   }
 
-  const { otuLabel, layers, provenance } = parseOtus(xml);
-  const parsedChars = parseCharacters(xml);
-  const { trees, nodeErrors } = parseTrees(xml);
+  const namespaceURI = resolveNexmlNamespace(xml);
+  const { otuLabel, layers, provenance } = parseOtus(xml, namespaceURI);
+  const parsedChars = parseCharacters(xml, namespaceURI);
+  const { trees, nodeErrors } = parseTrees(xml, namespaceURI);
   issues.push(...nodeErrors);
 
   const projects: Project[] = trees.map((tree, ti) => {

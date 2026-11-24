@@ -887,7 +887,7 @@ export const ReconPane = memo(function ReconPane({
             type="number"
             min={Math.round(RECON_MIN_SCALE * 100)}
             max={Math.round(RECON_MAX_SCALE * 100)}
-            step={5}
+            step={1}
             value={zoomInput}
             aria-label={tr('缩放百分比', 'Zoom percentage')}
             onChange={(e) => setZoomInput(e.target.value)}

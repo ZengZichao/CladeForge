@@ -23,6 +23,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# Opens the About dialog's repository URL in the user's default browser.
+tauri-plugin-opener = "2"
 # Folds a second launch (double-click on an associated file while the app is
 # already open) into the running instance: its document paths arrive as events
 # and the existing window comes to the front. Registered first in `run()`.

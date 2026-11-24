@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { getAppInfo, isTauri, type AppInfo } from '../io/native';
+import { writeClipboardText } from '../io/clipboardIO';
 import { PROJECT_VERSION } from '../model/types';
 import { useDialogFocus } from './useDialogFocus';
 import { S, tr } from './strings';
@@ -16,6 +17,46 @@ import pkg from '../../package.json';
 
 /** The author record: language-neutral, shown verbatim in the About box. */
 const AUTHOR_LINE = '曾子超，ORCID iD 0000-0001-6553-970X';
+const REPOSITORY_URL = 'https://github.com/zengzichao/CladeForge';
+
+/** Copy through the shared clipboard helper and report its actual result. */
+async function copyRepository(openingFailed = false): Promise<void> {
+  if (await writeClipboardText(REPOSITORY_URL)) {
+    if (openingFailed) {
+      notify.info(tr('无法打开浏览器，仓库地址已复制', 'Could not open the repository; URL copied'));
+    } else {
+      notify.success(tr('仓库地址已复制', 'Repository URL copied'));
+    }
+  } else {
+    notify.error(
+      openingFailed
+        ? tr('无法打开仓库地址或复制链接', 'Could not open the repository or copy its URL')
+        : tr('无法复制仓库地址', 'Could not copy repository URL'),
+    );
+  }
+}
+
+/** Open externally on both builds; thrown opener failures fall back to copying. */
+async function openRepository(): Promise<void> {
+  try {
+    const native = isTauri();
+    if (native) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(REPOSITORY_URL);
+    } else {
+      // With `noopener`, a successful window.open legitimately returns null.
+      // Its return value cannot distinguish success from a blocked popup.
+      window.open(REPOSITORY_URL, '_blank', 'noopener,noreferrer');
+    }
+    if (native) {
+      notify.success(tr('正在打开仓库地址', 'Opening repository URL'));
+    } else {
+      notify.info(tr('已请求打开仓库地址', 'Repository open requested'));
+    }
+  } catch {
+    await copyRepository(true);
+  }
+}
 
 export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -88,9 +129,9 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
               <dt>{S.about.license}</dt>
               <dd>MIT License（© 2026 曾子超）</dd>
             </div>
-            {/* Documentation / repository / issue links, copyable: the About box
-                used to answer none of "what is this / where are the docs / how
-                do I cite or complain". */}
+            {/* Repository navigation: opens the system browser (or an isolated
+                browser tab). The explicit copy action stays available because a
+                blocked popup and a successful `noopener` open both return null. */}
             <div className="about-row wide">
               <dt>{tr('仓库地址', 'Repository URL')}</dt>
               <dd>
@@ -98,13 +139,19 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
                   className="btn"
                   style={{ fontSize: 12 }}
                   onClick={() => {
-                    void import('../io/clipboardIO').then(({ writeClipboardText }) =>
-                      writeClipboardText('https://github.com/zengzichao/CladeForge'),
-                    );
-                    notify.success(tr('仓库地址已复制', 'Repository URL copied'));
+                    void openRepository();
                   }}
                 >
                   github.com/zengzichao/CladeForge
+                </button>
+                <button
+                  className="btn"
+                  style={{ marginLeft: 8, fontSize: 12 }}
+                  onClick={() => {
+                    void copyRepository();
+                  }}
+                >
+                  {tr('复制仓库地址', 'Copy repository URL')}
                 </button>
               </dd>
             </div>

@@ -18,7 +18,7 @@ import type {
   ReconCosts,
 } from './types';
 import { DEFAULT_RECON_COSTS } from './types';
-import { collectSubtree, deleteNode, newId, rerootAtNode } from './treeOps';
+import { collectSubtree, deleteNode, newId, rerootOnBranch } from './treeOps';
 import {
   dtlScenarioToAssumptions,
   solveDtl,
@@ -344,10 +344,9 @@ export function solveDtlWithPolytomies(
 // --- gene-tree reroot -----------------------------------------------------------
 // DTL event counts are notoriously sensitive to the gene tree's root position,
 // yet the embedded topology used to be frozen: no reroot entry point existed.
-// Rerooting PRESERVES every node id (only parent/child links move), so the
-// assumption records stay keyed correctly and only need re-validation — the
-// same `rerootAtNode` used on the main canvas carries the branch-length/age
-// bookkeeping.
+// Surviving node ids keep their assumption records and only need re-validation.
+// This fraction-based API uses the same `rerootOnBranch` operation as midpoint
+// and outgroup rooting, including its branch-length/age bookkeeping.
 
 export function rerootGeneTree(
   project: Project,
@@ -357,7 +356,7 @@ export function rerootGeneTree(
 ): boolean {
   const g = findGeneTree(project, geneTreeId);
   if (!g) return false;
-  return rerootAtNode(g.doc, targetGeneNodeId, fraction);
+  return rerootOnBranch(g.doc, targetGeneNodeId, fraction);
 }
 
 /**

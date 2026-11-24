@@ -34,7 +34,7 @@ import { buildRScript } from './scriptExport';
 import { buildReconciliationReport } from './reconExport';
 import { buildEmbeddedReconSVG } from './embeddedReconExport';
 import { openText, saveBinary, saveText, saveTextWithResult, isTauri, decodeBytesWithFallback, type DialogFilter, type OpenedText } from './fileService';
-import { readBinaryFileNative, readTextFileNative, statFileMtimeNative, writeTextFileNative } from './native';
+import { readBinaryFileNative, readTextFileNative, statFileMtimeNative } from './native';
 import { requestConfirm } from '../ui/confirmDialog';
 import { serializeNexml, parseNexml } from './nexml';
 import {
@@ -146,7 +146,17 @@ export function actionRerootAtNode(id: string): void {
     message,
     confirmLabel: S.confirm.rerootConfirm,
     onConfirm: () => {
-      useStore.getState().apply((d) => rerootAtNode(d, id));
+      let ok = false;
+      useStore.getState().apply((d) => {
+        ok = rerootAtNode(d, id);
+      });
+      if (!ok) {
+        notify.info(tr(
+          '无法重新定根：结果会违反父子年龄或校准约束。',
+          'Reroot rejected: the resulting parent ages or calibration constraints would be inconsistent.',
+        ));
+        return;
+      }
       useStore.getState().requestFit();
     },
   });
@@ -534,12 +544,44 @@ export async function openPathFromShell(path: string): Promise<void> {
  * File binding every desktop editor owes its user: twenty ⌘S presses in a
  * twenty-minute session must not be twenty dialog boxes.
  */
-export async function actionSaveProject(): Promise<'in-place' | 'downloaded' | 'none'> {
+export type SaveProjectOutcome = 'in-place' | 'downloaded' | 'none' | 'failed' | 'stale';
+
+let projectSaveInProgress = false;
+
+async function withProjectSaveGuard<T>(run: () => Promise<T>, busyOutcome: T): Promise<T> {
+  if (projectSaveInProgress) {
+    notify.info(tr('保存正在进行中，请稍候', 'A save is already in progress'));
+    return busyOutcome;
+  }
+  projectSaveInProgress = true;
+  try {
+    return await run();
+  } finally {
+    projectSaveInProgress = false;
+  }
+}
+
+/** A completed write whose document changed before its save stamp was applied. */
+function reportStaleSave(): void {
+  notify.info(tr(
+    '保存期间文档或标签页已变化；磁盘写入已完成，但当前修改仍未标记为已保存',
+    'The document or tab changed during saving; the disk write completed, but the current changes remain unsaved',
+  ));
+}
+
+export async function actionSaveProject(): Promise<SaveProjectOutcome> {
+  return withProjectSaveGuard(saveProject, 'none');
+}
+
+async function saveProject(): Promise<SaveProjectOutcome> {
   const st = useStore.getState();
+  const tabId = st.activeTabId;
+  const revision = st.revision;
   // While 「基因树编辑」 is swapped, the file on disk is the species project
   // with the edited gene doc merged back — never the bare gene doc.
   const project = persistedProject(st);
   try {
+    const content = serializeProject(project);
     const target = project.sourcePath;
     if (target && isTauri()) {
       // M12: an external edit since the file was opened must not be silently
@@ -570,11 +612,15 @@ export async function actionSaveProject(): Promise<'in-place' | 'downloaded' | '
       // In-place write via the native writer; the store pins the revision so
       // the dirty flag clears exactly here.
       const { writeTextFileNative } = await import('./native');
-      await writeTextFileNative(target, serializeProject(project));
+      await writeTextFileNative(target, content);
       await recordSourceMtime(target);
-      // M21: save stamps no longer push an undo step.
-      st.stampSaved();
-      useStore.getState().markSaved();
+      // Pin only the exact tab/revision/document serialized above. A tab switch
+      // or edit while the native write was pending must not clear another dirty
+      // document or adopt this write's path on it.
+      if (!useStore.getState().markTabSaved(tabId, { revision, project: st.project })) {
+        reportStaleSave();
+        return 'stale';
+      }
       // P-16: saving records the file in Recent too — the menu must list the
       // projects the user actually works on, not only files opened by hand.
       pushRecent({ name: baseName(target), path: target, kind: 'project' });
@@ -588,65 +634,97 @@ export async function actionSaveProject(): Promise<'in-place' | 'downloaded' | '
     }
     const saved = await saveTextWithResult(
       outName(project.name, 'cladeforge.json'),
-      serializeProject(project),
+      content,
       PROJECT_FILTERS,
     );
     if (saved.ok) {
-      // M21: save stamps no longer push an undo step.
-      st.stampSaved({ sourcePath: saved.path });
-      useStore.getState().markSaved();
-      await recordSourceMtime(saved.path);
+      if (isTauri()) {
+        await recordSourceMtime(saved.path);
+        if (!useStore.getState().markTabSaved(
+          tabId,
+          { revision, project: st.project },
+          { sourcePath: saved.path },
+        )) {
+          reportStaleSave();
+          return 'stale';
+        }
+      }
+      // In a browser, ok means only that a download click was dispatched.
+      // Blocked multi-downloads do not throw and provide no persistence receipt,
+      // so the originating tab deliberately stays dirty and path-unbound.
       // P-16: a browser download has no absolute path, but the name still
       // belongs in Recent; clicking it falls back to the open dialog, which is
       // the honest browser semantic.
       pushRecent({
         name: outName(project.name, 'cladeforge.json'),
-        path: saved.path,
+        path: isTauri() ? saved.path : undefined,
         kind: 'project',
       });
-      // C#19: in a browser "saved" means downloaded — say so instead of
-      // implying a path-bound file the app can reopen.
-      notify.success(
-        isTauri()
-          ? S.notify.projectSaved
-          : tr(
-              `已下载 ${outName(project.name, 'cladeforge.json')}（浏览器下载目录）`,
-              `Downloaded ${outName(project.name, 'cladeforge.json')} (browser download folder)`,
-            ),
-      );
-      return 'downloaded';
+      // Browser dispatch is not a persistence receipt: the browser may block
+      // the download silently, so report only the request and keep the tab dirty.
+      if (isTauri()) {
+        notify.success(S.notify.projectSaved);
+      } else {
+        notify.info(tr(
+          `已请求下载 ${outName(project.name, 'cladeforge.json')}；文档仍标记为未保存`,
+          `Download requested for ${outName(project.name, 'cladeforge.json')}; document remains unsaved`,
+        ));
+      }
+      // A native Save As has adopted a real path just like an in-place save;
+      // callers must not report it as a browser download.
+      return isTauri() ? 'in-place' : 'downloaded';
     }
   } catch (e) {
     reportError(S.notify.saveProjectFail, e);
+    return 'failed';
   }
   return 'none';
 }
 
-/** ⌘⇧S — always ask where to put the file (and adopt that path). */
+/** ⌘⇧S — always ask where to put the file; native saves adopt that path. */
 export async function actionSaveProjectAs(): Promise<void> {
+  return withProjectSaveGuard(saveProjectAs, undefined);
+}
+
+async function saveProjectAs(): Promise<void> {
   const st = useStore.getState();
+  const tabId = st.activeTabId;
+  const revision = st.revision;
   const project = persistedProject(st);
   try {
+    const content = serializeProject(project);
     const saved = await saveTextWithResult(
       outName(project.name, 'cladeforge.json'),
-      serializeProject(project),
+      content,
       PROJECT_FILTERS,
     );
     if (saved.ok) {
-      // M21: save stamps no longer push an undo step.
-      st.stampSaved({ sourcePath: saved.path });
-      useStore.getState().markSaved();
+      if (isTauri()) {
+        if (!useStore.getState().markTabSaved(
+          tabId,
+          { revision, project: st.project },
+          { sourcePath: saved.path },
+        )) {
+          reportStaleSave();
+          return;
+        }
+      }
+      // A browser result is a download request, not a durable Save As receipt.
+      // Keep the tab dirty and never adopt a browser-supplied path.
       // P-16: 另存为 produces a real file the user chose — record it.
       pushRecent({
         name: outName(project.name, 'cladeforge.json'),
-        path: saved.path,
+        path: isTauri() ? saved.path : undefined,
         kind: 'project',
       });
-      notify.success(
-        saved.path
-          ? tr(`已另存为 ${saved.path}`, `Saved as ${saved.path}`)
-          : S.notify.projectSaved,
-      );
+      if (isTauri() && saved.path) {
+        notify.success(tr(`已另存为 ${saved.path}`, `Saved as ${saved.path}`));
+      } else {
+        notify.info(tr(
+          `已请求下载 ${outName(project.name, 'cladeforge.json')}；文档仍标记为未保存`,
+          `Download requested for ${outName(project.name, 'cladeforge.json')}; document remains unsaved`,
+        ));
+      }
     }
   } catch (e) {
     reportError(S.notify.saveProjectFail, e);
@@ -654,38 +732,115 @@ export async function actionSaveProjectAs(): Promise<void> {
 }
 
 /**
- * 保存全部标签页 (2026-11-15 OP-10). The active tab goes through the normal
- * save path; every parked tab with a remembered disk path is written in place.
- * Tabs that were never saved anywhere cannot be written without inventing a
- * filename, so they are COUNTED and reported rather than silently skipped.
+ * 保存全部标签页 (2026-11-15 OP-10; BUG-004). Every MODIFIED tab is attempted,
+ * including never-saved background tabs. Native tabs use the normal save path
+ * (in-place, Save As, overwrite guard and mtime tracking); browser tabs each
+ * trigger their own download. A browser download trigger is NOT proof of
+ * persistence, so web tabs remain dirty regardless of the dispatch result.
  */
+/** Serialize user-initiated project saves; a second trigger is not a second write. */
 export async function actionSaveAllProjects(): Promise<void> {
-  // BUG-09 / P-17: the old summary counted only in-place writes and never
-  // mentioned the ACTIVE tab's download, so "wrote 0" appeared next to a file
-  // the browser had just downloaded. Count every distinct outcome instead.
-  const activeOutcome = await actionSaveProject();
-  const downloaded = activeOutcome === 'downloaded' ? 1 : 0;
-  let saved = activeOutcome === 'in-place' ? 1 : 0;
-  let failed = 0;
-  let skipped = 0;
-  for (const [tabId, snap] of Object.entries(useStore.getState().tabStore)) {
-    const p = snap.project;
-    if (!p.sourcePath || !isTauri()) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      await writeTextFileNative(p.sourcePath, serializeProject(p));
-      useStore.getState().markTabSaved(tabId);
-      saved += 1;
-    } catch {
-      failed += 1;
+  return withProjectSaveGuard(saveAllProjects, undefined);
+}
+
+async function saveAllProjects(): Promise<void> {
+  const initial = useStore.getState();
+  const originalActiveId = initial.activeTabId;
+  const tabIds = [...initial.tabs];
+  const modifiedIds = tabIds.filter((tabId) => {
+    if (tabId === originalActiveId) return initial.revision !== initial.lastSavedRevision;
+    const snap = initial.tabStore[tabId];
+    return snap ? snap.revision !== snap.lastSavedRevision : false;
+  });
+  if (modifiedIds.length === 0) {
+    notify.info(tr('保存全部标签页：没有修改过的标签页', 'Save all tabs: no modified tabs'));
+    return;
+  }
+
+  if (!isTauri()) {
+    // Browsers may block automatic multi-downloads. Explain the one-file-per-tab
+    // behavior BEFORE triggering anything, and offer Cancel without side effects.
+    const proceed = await new Promise<boolean>((resolve) => {
+      requestConfirm({
+        key: 'save-all-tabs-web-downloads',
+        title: tr('下载全部已修改标签页？', 'Download all modified tabs?'),
+        message: tr(
+          `将分别触发 ${modifiedIds.length} 个项目下载（每个标签页一个文件）。浏览器可能阻止自动批量下载；若出现提示，请允许此网站下载多个文件。下载仅表示已请求下载，不能确认文件已写入磁盘，因此所有标签页都会保持未保存状态。`,
+          `This will trigger ${modifiedIds.length} separate project downloads (one file per tab). Your browser may block automatic multiple downloads; if prompted, allow this site to download multiple files. A download request does not confirm a disk write, so every tab will remain unsaved.`,
+        ),
+        confirmLabel: tr('下载全部', 'Download all'),
+        danger: true,
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!proceed) {
+      notify.info(tr('已取消保存全部标签页；没有下载任何文件', 'Save all tabs canceled; no files were downloaded'));
+      return;
     }
   }
+
+  let downloaded = 0;
+  let saved = 0;
+  let failed = 0;
+  let canceled = 0;
+  let skipped = 0;
+  let stale = 0;
+  try {
+    for (const tabId of modifiedIds) {
+      const st = useStore.getState();
+      if (!st.tabs.includes(tabId)) {
+        skipped += 1;
+        continue;
+      }
+      let outcome: Awaited<ReturnType<typeof actionSaveProject>>;
+      if (isTauri()) {
+        // Reuse the full native save path for parked documents too, then restore
+        // the user's original tab. switchTab captures each attempted save/failure
+        // in that tab's snapshot, so canceled writes stay dirty.
+        focusTab(tabId);
+        outcome = await saveProject();
+      } else if (tabId === st.activeTabId) {
+        outcome = await saveProject();
+      } else {
+        const project = st.tabStore[tabId].project;
+        const name = outName(project.name, 'cladeforge.json');
+        try {
+          const content = serializeProject(project);
+          const result = await saveTextWithResult(name, content, PROJECT_FILTERS);
+          if (!result.ok) {
+            outcome = 'none';
+          } else {
+            // A browser click is not proof of persistence. Keep both active and
+            // background tabs dirty; only the download count advances.
+            pushRecent({ name, kind: 'project' });
+            notify.info(
+              tr(`已请求下载 ${name}（浏览器下载目录；文档仍标记为未保存）`, `Download requested for ${name} (browser download folder; document remains unsaved)`),
+            );
+            outcome = 'downloaded';
+          }
+        } catch (e) {
+          reportError(S.notify.saveProjectFail, e);
+          outcome = 'failed';
+        }
+      }
+      if (outcome === 'downloaded') downloaded += 1;
+      else if (outcome === 'in-place') saved += 1;
+      else if (outcome === 'failed') failed += 1;
+      else if (outcome === 'stale') stale += 1;
+      else canceled += 1;
+    }
+  } finally {
+    if (isTauri()) {
+      const st = useStore.getState();
+      if (st.tabs.includes(originalActiveId)) focusTab(originalActiveId);
+    }
+  }
+
   notify.info(
     tr(
-      `保存全部标签页：下载 ${downloaded} 个，写入磁盘 ${saved} 个，跳过 ${skipped} 个（从未保存过），失败 ${failed} 个`,
-      `Save all tabs: downloaded ${downloaded}, written in place ${saved}, skipped ${skipped} (never saved), failed ${failed}`,
+      `保存全部标签页：触发下载 ${downloaded} 个，写入磁盘 ${saved} 个，未修改 ${tabIds.length - modifiedIds.length} 个，取消 ${canceled} 个，失败 ${failed} 个，已变化 ${stale} 个，跳过 ${skipped} 个（标签页已关闭）`,
+      `Save all tabs: download triggered ${downloaded}, written in place ${saved}, unchanged ${tabIds.length - modifiedIds.length}, canceled ${canceled}, failed ${failed}, stale ${stale}, skipped ${skipped} (tab closed)`,
     ),
   );
 }

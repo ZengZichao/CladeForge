@@ -242,6 +242,36 @@ describe('AddChildrenDialog — over-max is refused like under-min (GUI-A P2)', 
   });
 });
 
+describe('AddChildrenDialog — child count must be an integer (CF-B-006)', () => {
+  it('disables Add, explains the integer rule inline, and makes Enter a no-op for 2.5', () => {
+    freshProject();
+    const childId = addNamedChild('Taxon_B');
+    let cancelled = 0;
+    mount(
+      createElement(AddChildrenDialog, {
+        open: true,
+        targetId: childId,
+        onCancel: () => {
+          cancelled += 1;
+        },
+      }),
+    );
+    setNumber('2.5');
+    const addBtn = [...document.querySelectorAll('.dialog .actions button')].find(
+      (b) => b.textContent?.trim() === 'Add',
+    ) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(true);
+    expect(dialogEl().textContent).toMatch(/integer|整数/);
+    expect(dialogEl().textContent).toMatch(/1\D{0,8}50/);
+    const before = nodeCount();
+    act(() => addBtn.click());
+    const ev = pressOnInput('Enter');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(nodeCount()).toBe(before);
+    expect(cancelled).toBe(0);
+  });
+});
+
 describe('AddChildrenDialog — Enter and Add are the same path (BUG-1)', () => {
   it('Enter prevents its default action, adds the children and closes', () => {
     freshProject();

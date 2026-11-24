@@ -20,7 +20,7 @@
 
 import { PlusIcon, ResetIcon, ReloadIcon, ViewVerticalIcon, MagnifyingGlassIcon, ClockIcon } from '@radix-ui/react-icons';
 import { documentHasTree } from './documentContent';
-import { useStore } from '../model/store';
+import { useStore, workspaceHasPanels } from '../model/store';
 import { PreferencesMenu } from './PreferencesMenu';
 import * as file from '../io/fileActions';
 import { S, modKey, tr } from './strings';
@@ -149,12 +149,21 @@ export function Toolbar({ onAddChildrenDialog }: { onAddChildrenDialog: () => vo
 export function HeaderActions({
   prefsOpen,
   onPrefsOpenChange,
+  onResetLocalData,
 }: {
   /** P-03: owned by App so the dialog stays open across the locale remount.
    *  Optional so isolated component tests can mount the header bare. */
   prefsOpen?: boolean;
   onPrefsOpenChange?: (v: boolean) => void;
+  onResetLocalData?: () => void;
 }) {
+  const hasPanels = useStore(workspaceHasPanels);
+  const panelToggleLabel = hasPanels
+    ? tr(`显示 / 隐藏两侧面板（${modKey()}.）`, `Show / hide both side panels (${modKey()}.)`)
+    : tr(
+        '显示 / 隐藏两侧面板：当前工作区没有树内容，没有可显示的面板',
+        'Show / hide side panels unavailable: this workspace has no tree content or panels',
+      );
   return (
     <div className="header-actions">
       {/* The workspace switch is a document-level mode change, not an editing
@@ -165,8 +174,9 @@ export function HeaderActions({
           nothing visible offered it. A header button toggles both panels. */}
       <button
         className="btn icon"
-        title={tr(`显示 / 隐藏两侧面板（${modKey()}.）`, `Show / hide both side panels (${modKey()}.)`)}
-        aria-label={tr('显示 / 隐藏两侧面板', 'Show / hide side panels')}
+        disabled={!hasPanels}
+        title={panelToggleLabel}
+        aria-label={panelToggleLabel}
         onClick={() => window.dispatchEvent(new CustomEvent('cladeforge:toggle-panels'))}
       >
         <ViewVerticalIcon />
@@ -182,7 +192,11 @@ export function HeaderActions({
         <span className="header-save-full">{S.menu.save}</span>
         <span className="header-save-short">{S.menu.saveShort}</span>
       </button>
-      <PreferencesMenu open={prefsOpen} onOpenChange={onPrefsOpenChange} />
+      <PreferencesMenu
+        open={prefsOpen}
+        onOpenChange={onPrefsOpenChange}
+        onResetLocalData={onResetLocalData}
+      />
     </div>
   );
 }

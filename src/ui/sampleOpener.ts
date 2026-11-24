@@ -12,7 +12,10 @@ import { useStore } from '../model/store';
 import { documentHasTree } from './documentContent';
 import type { SampleDescriptor } from '../model/sampleTree';
 
-export function openSample(descriptor: SampleDescriptor): void {
+export function openSample(
+  descriptor: SampleDescriptor,
+  { openInNewTab = false }: { openInNewTab?: boolean } = {},
+): void {
   const project = descriptor.build();
   const st = useStore.getState();
   // GUI-B BUG-08: clicking a sample card on an UNTOUCHED blank tab used to open
@@ -31,7 +34,9 @@ export function openSample(descriptor: SampleDescriptor): void {
     st.project.calibrationPoints.length === 0 &&
     (st.project.geneTrees?.length ?? 0) === 0 &&
     st.revision === 0;
-  if (blank) st.loadProject(project);
+  // Ordinary sample cards keep that reuse. An explicit "Open in a new tab"
+  // action opts out so even an untouched Untitled document is preserved.
+  if (blank && !openInNewTab) st.loadProject(project);
   else st.openInNewTab(project);
   if (descriptor.entryView === 'recon' && project.geneTrees?.length) {
     useStore.getState().enterReconWorkspace();

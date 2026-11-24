@@ -9,6 +9,7 @@ import {
 } from './autosave';
 import { useToasts } from '../ui/toast';
 import { createEmptyProject } from '../model/sampleTree';
+import { captureWorkspace, useStore } from '../model/store';
 
 // Controllable localStorage for the node test environment: a real quota error
 // cannot be provoked in jsdom, so the shim can be told to throw one.
@@ -142,6 +143,83 @@ describe('workspace autosave status', () => {
     expect(cm?.[0]?.[1]).toBe(Infinity);
     expect(cm?.[1]?.[0]).toBe(1);
     expect(cm?.[0]?.[0]).toBe(0);
+  });
+
+  it('round-trips per-tab reconciliation view state for workspace reload', () => {
+    const species = createEmptyProject('species');
+    species.geneTrees = [
+      { id: 'g1', name: 'gene 1', doc: createEmptyProject(), assumptions: {} },
+      { id: 'g2', name: 'gene 2', doc: createEmptyProject(), assumptions: {} },
+    ];
+    const tabStates = [
+      { reconMode: true, reconEditTarget: 'recon' as const, activeGeneTreeId: 'g2' },
+      { reconMode: true, reconEditTarget: 'embedded' as const, activeGeneTreeId: 'g1' },
+    ];
+    expect(writeWorkspace([species, createEmptyProject('standard')], 0, tabStates).ok).toBe(true);
+    const restored = readWorkspace();
+    expect(restored?.tabStates).toEqual(tabStates);
+    expect(restored?.projects.map((p) => p.name)).toEqual(['species', 'standard']);
+  });
+
+  it('CF-B-005: captures, reloads and switches the actual store workspace view state', () => {
+    const species = createEmptyProject('species');
+    species.geneTrees = [
+      { id: 'g1', name: 'gene 1', doc: createEmptyProject('gene 1'), assumptions: {} },
+      { id: 'g2', name: 'gene 2', doc: createEmptyProject('gene 2'), assumptions: {} },
+    ];
+    const store = useStore.getState();
+    store.loadWorkspace([species, createEmptyProject('other')], 0, [
+      { reconMode: true, reconEditTarget: 'recon', activeGeneTreeId: 'g2' },
+      { reconMode: true, reconEditTarget: 'embedded', activeGeneTreeId: null },
+    ]);
+    const captured = captureWorkspace(useStore.getState());
+    expect(captured.tabStates[0].activeGeneTreeId).toBe('g2');
+    expect(writeWorkspace(captured.projects, captured.activeIndex, captured.tabStates).ok).toBe(true);
+
+    useStore.getState().loadProject(createEmptyProject('discarded'));
+    const restored = readWorkspace()!;
+    useStore.getState().loadWorkspace(restored.projects, restored.activeIndex, restored.tabStates);
+    expect(useStore.getState().reconMode).toBe(true);
+    expect(useStore.getState().reconEditTarget).toBe('recon');
+    expect(useStore.getState().activeGeneTreeId).toBe('g2');
+
+    useStore.getState().switchTab(useStore.getState().tabs[1]);
+    expect(useStore.getState().reconEditTarget).toBe('embedded');
+    useStore.getState().switchTab(useStore.getState().tabs[0]);
+    expect(useStore.getState().reconEditTarget).toBe('recon');
+    expect(useStore.getState().activeGeneTreeId).toBe('g2');
+  });
+
+  it('ignores malformed per-tab view state without shifting valid tab state', () => {
+    const good = createEmptyProject('good');
+    storage.raw.set(
+      'cladeforge:workspace',
+      JSON.stringify({
+        projects: [good, { ...good, id: 'broken', nodes: null }, good],
+        activeIndex: 0,
+        tabStates: [
+          { reconMode: true, reconEditTarget: ['recon'], activeGeneTreeId: null },
+          { reconMode: true, reconEditTarget: 'recon', activeGeneTreeId: null },
+          { reconMode: true, reconEditTarget: 'embedded', activeGeneTreeId: null },
+        ],
+      }),
+    );
+    const restored = readWorkspace();
+    expect(restored?.skipped).toBe(1);
+    expect(restored?.tabStates).toEqual([
+      undefined,
+      { reconMode: true, reconEditTarget: 'embedded', activeGeneTreeId: null },
+    ]);
+  });
+
+  it('loads old workspaces without view state using standard-editor defaults', () => {
+    storage.raw.set(
+      'cladeforge:workspace',
+      JSON.stringify({ projects: [createEmptyProject('legacy')], activeIndex: 0 }),
+    );
+    const restored = readWorkspace();
+    expect(restored?.projects.map((p) => p.name)).toEqual(['legacy']);
+    expect(restored?.tabStates).toBeUndefined();
   });
 
   it('repairs a null cost-matrix cell on restore and reports it', () => {

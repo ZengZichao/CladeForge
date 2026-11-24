@@ -144,6 +144,7 @@ import { S, tr } from '../ui/strings';
 import '../ui/i18n';
 import type { EraLevel } from '../layout/timescale';
 import { notify } from '../ui/toast';
+import { documentHasTree } from '../ui/documentContent';
 
 // History keeps immutable Project snapshots by reference (no per-edit clone),
 // which is only safe if every retained state is frozen. Immer freezes the
@@ -165,6 +166,13 @@ export type LegendLayout = 'one-column' | 'two-columns' | 'one-row' | 'two-rows'
  *  defined; 'embedded' is the nested preview of the same reconciliation
  *  (gene tree drawn inside the species-branch tubes). */
 export type ReconEditTarget = 'species' | 'gene' | 'recon' | 'embedded';
+
+/** Per-tab workspace view state persisted alongside the project documents. */
+export interface WorkspaceTabState {
+  reconMode: boolean;
+  reconEditTarget: ReconEditTarget;
+  activeGeneTreeId: string | null;
+}
 
 /**
  * While 「基因树编辑」 is active, the gene tree's standalone document is
@@ -207,8 +215,93 @@ export function persistedProject(s: Pick<AppState, 'project' | 'geneEditBackup'>
   });
 }
 
+/**
+ * Whether the reconciliation workspace has the same usable active gene tree
+ * that its canvas uses to choose content versus the empty state. While the gene
+ * document is swapped into `project`, both live on the species-tree backup.
+ */
+export function reconWorkspaceHasContent(
+  s: Pick<AppState, 'project' | 'geneEditBackup' | 'activeGeneTreeId'>,
+): boolean {
+  return hasActiveGeneTree({
+    project: s.geneEditBackup?.project ?? s.project,
+    activeGeneTreeId: s.activeGeneTreeId,
+  });
+}
+
+/**
+ * Whether the ACTIVE workspace can render side panels. The standard workspace
+ * needs tree content; every reconciliation surface needs the effective active
+ * gene tree, including species/gene editing. Shared by the header, its keyboard
+ * shortcut and the reconciliation workspace so they cannot drift.
+ */
+export function workspaceHasPanels(s: AppState): boolean {
+  if (!s.reconMode) return documentHasTree(s.project);
+  if (!reconWorkspaceHasContent(s)) return false;
+  // The tree-edit surfaces embed StandardWorkspace, whose panels also require
+  // content in the document actually being edited (species backup or gene doc).
+  if (s.reconEditTarget === 'species') {
+    return documentHasTree(s.geneEditBackup?.project ?? s.project);
+  }
+  if (s.reconEditTarget === 'gene') return documentHasTree(s.project);
+  return true;
+}
+
+/** Capture documents and per-tab view state through the one autosave path. */
+export function captureWorkspace(s: AppState): {
+  projects: Project[];
+  activeIndex: number;
+  tabStates: WorkspaceTabState[];
+} {
+  const projects: Project[] = [];
+  const tabStates: WorkspaceTabState[] = [];
+  for (const id of s.tabs) {
+    if (id === s.activeTabId) {
+      projects.push(persistedProject(s));
+      tabStates.push({
+        reconMode: s.reconMode,
+        reconEditTarget: s.reconEditTarget,
+        activeGeneTreeId: s.activeGeneTreeId,
+      });
+    } else {
+      const snap = s.tabStore[id];
+      if (!snap) continue;
+      projects.push(snap.project);
+      tabStates.push({
+        reconMode: snap.reconMode,
+        reconEditTarget: snap.reconEditTarget,
+        activeGeneTreeId: snap.activeGeneTreeId,
+      });
+    }
+  }
+  return { projects, activeIndex: Math.max(0, s.tabs.indexOf(s.activeTabId)), tabStates };
+}
+
 const LS_LEGEND_POSITION = 'cladeforge:legendPosition';
 const LS_LEGEND_LAYOUT = 'cladeforge:legendLayout';
+const LS_HISTORY_LIMIT = 'cladeforge:historyLimit';
+
+function normalizeHistoryLimit(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? Math.max(10, Math.min(5000, Math.round(n))) : HISTORY_LIMIT;
+}
+
+function loadHistoryLimit(): number {
+  try {
+    const raw = localStorage.getItem(LS_HISTORY_LIMIT);
+    return raw === null ? HISTORY_LIMIT : normalizeHistoryLimit(raw);
+  } catch {
+    return HISTORY_LIMIT;
+  }
+}
+
+function persistHistoryLimit(value: number): void {
+  try {
+    localStorage.setItem(LS_HISTORY_LIMIT, String(value));
+  } catch {
+    /* storage blocked / quota — the in-memory setting still works */
+  }
+}
 
 function readLegendPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -418,8 +511,26 @@ function captureTab(s: AppState): TabSnapshot {
   };
 }
 
+/** Validate persisted view pointers against the document being restored. */
+function workspaceTabState(project: Project, state?: WorkspaceTabState): WorkspaceTabState {
+  const trees = project.geneTrees ?? [];
+  const activeGeneTreeId = state?.activeGeneTreeId && trees.some((g) => g.id === state.activeGeneTreeId)
+    ? state.activeGeneTreeId
+    : trees[0]?.id ?? null;
+  const requestedTarget = state?.reconEditTarget ?? 'recon';
+  return {
+    reconMode: state?.reconMode === true,
+    // A restored gene-edit surface without a gene document cannot perform its
+    // swap. Keep the tab on the coordination surface instead of claiming an
+    // impossible editor; valid saved gene targets still restore below.
+    reconEditTarget: requestedTarget === 'gene' && !activeGeneTreeId ? 'recon' : requestedTarget,
+    activeGeneTreeId,
+  };
+}
+
 /** A fresh snapshot for a project parked as an inactive tab. */
-function snapshotFor(project: Project): TabSnapshot {
+function snapshotFor(project: Project, viewState?: WorkspaceTabState): TabSnapshot {
+  const view = workspaceTabState(project, viewState);
   return {
     project: freeze(project, true),
     past: [],
@@ -439,15 +550,16 @@ function snapshotFor(project: Project): TabSnapshot {
     // A parked tab has no reconstruction yet; a fresh snapshot starts clean.
     asr: null as AsrResult | null,
     asrOptions: DEFAULT_ASR_OPTIONS,
-    reconMode: false,
-    reconEditTarget: 'recon',
-    activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
+    reconMode: view.reconMode,
+    reconEditTarget: view.reconEditTarget,
+    activeGeneTreeId: view.activeGeneTreeId,
     geneSelection: [],
   };
 }
 
 /** Top-level fields written when a project becomes the active tab (fresh doc). */
-function docStateFor(project: Project): Partial<AppState> {
+function docStateFor(project: Project, viewState?: WorkspaceTabState): Partial<AppState> {
+  const view = workspaceTabState(project, viewState);
   return {
     project: freeze(project, true),
     past: [] as HistoryEntry[],
@@ -475,15 +587,17 @@ function docStateFor(project: Project): Partial<AppState> {
     searchQuery: '',
     asr: null,
     asrRunning: false,
-    historyLimit: HISTORY_LIMIT,
     asrOptions: DEFAULT_ASR_OPTIONS,
-    reconMode: false,
-    activeGeneTreeId: project.geneTrees?.[0]?.id ?? null,
+    reconMode: view.reconMode,
+    activeGeneTreeId: view.activeGeneTreeId,
     geneSelection: [] as NodeId[],
     reconSection: 'trees' as ReconSection,
-    reconEditTarget: 'recon' as ReconEditTarget,
+    reconEditTarget: view.reconEditTarget as ReconEditTarget,
     geneEditBackup: null as GeneEditBackup | null,
-    reconViewOptions: { ...DEFAULT_RECON_VIEW_OPTIONS },
+    reconViewOptions: {
+      ...DEFAULT_RECON_VIEW_OPTIONS,
+      layoutMode: view.reconEditTarget === 'embedded' ? 'embedded' : 'side-by-side',
+    },
     reconHoverGeneId: null as NodeId | null,
     reconFocusTarget: null,
     /** Last DTL optimum for the active gene tree — shared by the panel and
@@ -523,7 +637,6 @@ function restoreState(snap: TabSnapshot, viewOptions: ReconViewOptions): Partial
     // Mk result with no notice (review finding 14).
     asr: snap.asr ?? null,
     asrRunning: false,
-    historyLimit: HISTORY_LIMIT,
     // Old in-session snapshots (pre-M8) may lack the field; fall back cleanly.
     asrOptions: snap.asrOptions ?? DEFAULT_ASR_OPTIONS,
     reconMode: snap.reconMode,
@@ -781,6 +894,8 @@ export interface UISlice {
   setAsrOptions: (opts: Partial<AsrOptions>) => void;
 
   setHistoryLimit: (n: number) => void;
+  /** Clear the stored preference and restore the default (local-data reset). */
+  resetHistoryLimit: () => void;
   setReconMode: (v: boolean) => void;
   setActiveGeneTree: (id: string | null) => void;
   selectGeneNode: (id: NodeId | null, additive?: boolean) => void;
@@ -825,14 +940,17 @@ export interface TabsSlice {
   /** Close a tab; the last remaining tab cannot be closed. */
   closeTab: (id: string) => void;
   /** Replace all tabs with the given projects (used to restore a workspace). */
-  loadWorkspace: (projects: Project[], activeIndex: number) => void;
+  loadWorkspace: (projects: Project[], activeIndex: number, tabStates?: WorkspaceTabState[]) => void;
   /**
-   * Pin a parked tab as saved to disk after an explicit "save all" write.
-   * Without this the tab kept reporting unsaved changes even though its file
-   * was current — the dirty flag compares revisions, and the write happened
-   * outside the store's own save path.
+   * Atomically stamp and pin the exact active or parked document that was
+   * written. Optional identity guards make a deferred save harmless after a tab
+   * switch, edit, close, or workspace replacement. Returns false when stale.
    */
-  markTabSaved: (tabId: string) => void;
+  markTabSaved: (
+    tabId: string,
+    expected?: { revision: number; project: Project },
+    adopt?: { sourcePath?: string },
+  ) => boolean;
   /**
    * Rebuild every UNTOUCHED sample document in the current UI language.
    *
@@ -1328,7 +1446,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   focusTarget: null,
   asr: null,
   asrRunning: false,
-  historyLimit: HISTORY_LIMIT,
+  historyLimit: loadHistoryLimit(),
   asrOptions: DEFAULT_ASR_OPTIONS,
   exportSettings: loadExportSettings(),
   exportPresets: loadExportPresets(),
@@ -1556,8 +1674,16 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
       return { asrOptions, asr };
     }),
 
-  setHistoryLimit: (n) =>
-    set({ historyLimit: Math.max(10, Math.min(5000, Math.round(n))) }),
+  setHistoryLimit: (n) => {
+    const historyLimit = normalizeHistoryLimit(n);
+    persistHistoryLimit(historyLimit);
+    set({ historyLimit });
+  },
+
+  resetHistoryLimit: () => {
+    try { localStorage.removeItem(LS_HISTORY_LIMIT); } catch { /* ignore */ }
+    set({ historyLimit: HISTORY_LIMIT });
+  },
 
   setReconMode: (v) => {
     // Leaving the workspace from 「基因树编辑」 must write the gene doc back
@@ -1765,6 +1891,7 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
       // the swapped-in project reference.
       return { tabStore, activeTabId: id, ...restoreState(snap, s.reconViewOptions), loadCounter: s.loadCounter + 1 };
     });
+    if (get().reconEditTarget === 'gene') get().enterGeneDocEdit();
   },
 
   closeTab: (id) => {
@@ -1792,9 +1919,10 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
         loadCounter: s.loadCounter + 1,
       };
     });
+    if (get().reconEditTarget === 'gene') get().enterGeneDocEdit();
   },
 
-  loadWorkspace: (projects, activeIndex) => {
+  loadWorkspace: (projects, activeIndex, tabStates) => {
     get().exitGeneDocEdit();
     set((s) => {
       if (!projects.length) return {};
@@ -1802,35 +1930,71 @@ const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) =>
       const ids = projects.map(() => newTabId());
       const tabStore: Record<string, TabSnapshot> = {};
       projects.forEach((p, i) => {
-        if (i !== clamped) tabStore[ids[i]] = snapshotFor(p);
+        if (i !== clamped) tabStore[ids[i]] = snapshotFor(p, tabStates?.[i]);
       });
       return {
         tabs: ids,
         activeTabId: ids[clamped],
         tabStore,
-        ...docStateFor(projects[clamped]),
+        ...docStateFor(projects[clamped], tabStates?.[clamped]),
         loadCounter: s.loadCounter + 1,
         fitRequests: s.fitRequests + 1,
       };
     });
+    if (get().reconEditTarget === 'gene') get().enterGeneDocEdit();
   },
 
-  markTabSaved: (tabId) =>
+  markTabSaved: (tabId, expected, adopt) => {
+    let saved = false;
     set((s) => {
-      const snap = s.tabStore[tabId];
-      if (!snap) return {};
-      const project = produce(snap.project, (d) => {
+      if (!s.tabs.includes(tabId)) return {};
+      const stamp = (project: Project): Project => produce(project, (d) => {
         const now = new Date().toISOString();
         d.savedAt = now;
         d.modifiedAt = now;
+        if (adopt?.sourcePath) d.sourcePath = adopt.sourcePath;
       });
+      if (tabId === s.activeTabId) {
+        if (expected && (s.revision !== expected.revision || s.project !== expected.project)) return {};
+        // Preserve the gene-edit contract: the merged document was written, so
+        // leaving that mode restores a clean species tab without an undo step.
+        if (s.geneEditBackup) {
+          const project = stamp(s.project);
+          saved = true;
+          return {
+            project,
+            modifiedAt: project.modifiedAt,
+            geneEditBackup: { ...s.geneEditBackup, savedInMode: true },
+          };
+        }
+        const project = stamp(s.project);
+        saved = true;
+        return {
+          project,
+          modifiedAt: project.modifiedAt,
+          lastSavedRevision: expected?.revision ?? s.revision,
+          savedProject: project,
+        };
+      }
+      const snap = s.tabStore[tabId];
+      if (!snap) return {};
+      if (expected && (snap.revision !== expected.revision || snap.project !== expected.project)) return {};
+      const project = stamp(snap.project);
+      saved = true;
       return {
         tabStore: {
           ...s.tabStore,
-          [tabId]: { ...snap, project, lastSavedRevision: snap.revision, savedProject: project },
+          [tabId]: {
+            ...snap,
+            project,
+            lastSavedRevision: expected?.revision ?? snap.revision,
+            savedProject: project,
+          },
         },
       };
-    }),
+    });
+    return saved;
+  },
 
   relocalizeSamples: () =>
     set((s) => {

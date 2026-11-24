@@ -11,12 +11,13 @@ const src = (file: string): string =>
 const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
 
 describe('GUI report A contracts', () => {
-  it('P2: Add-children refuses both ends of the declared 1–50 range', () => {
+  it('CF-B-006: Add-children accepts only integer counts in the declared 1–50 range', () => {
     const dlg = src('AddChildrenDialog.tsx');
-    expect(dlg).toContain('if (count > 50)');
-    expect(dlg).toContain('disabled={!targetNode || !(count >= 1 && count <= 50)}');
-    // The silent clamp must not come back.
+    expect(dlg).toContain('Number.isInteger(count)');
+    expect(dlg).toContain('disabled={!targetNode || !validCount}');
+    // Neither silent clamping nor decimal rounding may return.
     expect(dlg).not.toContain('Math.min(50, requested)');
+    expect(dlg).not.toContain('Math.round(count)');
   });
 
   it('P6: the CSV import toast calls the imported unit a data column', () => {
@@ -83,7 +84,7 @@ describe('GUI report B contracts', () => {
 
 describe('GUI report C contracts', () => {
   it('DEF-1/DEF-2: the event row reserves width for the name and equalises From/To', () => {
-    expect(css).toContain('grid-template-columns: 32px minmax(48px, 1fr) minmax(0, auto) 32px 32px;');
+    expect(css).toContain('grid-template-columns: auto minmax(48px, 1fr) minmax(0, auto) var(--env-action-track) var(--env-action-track);');
     expect(css).toContain(
       'grid-template-columns: auto minmax(64px, 1fr) auto minmax(64px, 1fr) auto;',
     );

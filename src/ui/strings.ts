@@ -386,7 +386,9 @@ const zh = {
     untitled: '未命名',
     closeConfirmTitle: '关闭标签页',
     closeConfirmMessage: (name: string) => `标签页「${name}」有尚未写入项目文件的更改。关闭后会从工作区移出，本地恢复副本仍保留。`,
+    closeConfirmMessageBrowser: (name: string) => `标签页「${name}」有尚未写入项目文件的更改。浏览器无法确认文件已保存到磁盘；此操作会请求下载，然后关闭标签页。关闭后会从工作区移出，本地恢复副本仍保留。`,
     closeSave: '保存并关闭',
+    closeDownloadAndClose: '下载并关闭',
     closeDiscard: '不保存',
   },
   cmd: {
@@ -1418,7 +1420,9 @@ const en: Strings = {
     untitled: 'Untitled',
     closeConfirmTitle: 'Close tab',
     closeConfirmMessage: (name: string) => `Tab “${name}” has changes not yet written to a project file. Closing removes it from the workspace; the local recovery copy is kept.`,
+    closeConfirmMessageBrowser: (name: string) => `Tab “${name}” has changes not yet written to a project file. The browser cannot confirm that the file was saved to disk; this action requests a download, then closes the tab. Closing removes it from the workspace; the local recovery copy is kept.`,
     closeSave: 'Save and close',
+    closeDownloadAndClose: 'Download and close',
     closeDiscard: 'Don\u2019t save',
   },
   cmd: {

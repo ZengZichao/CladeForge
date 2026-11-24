@@ -14,7 +14,7 @@ const featureTour = SAMPLE_PROJECTS.find((s) => s.id === 'feature-tour')!;
 const largeTree = SAMPLE_PROJECTS.find((s) => s.id === 'large-tree')!;
 
 afterEach(() => {
-  useStore.getState().loadProject(createEmptyProject('Untitled'));
+  useStore.getState().loadWorkspace([createEmptyProject('Untitled')], 0);
 });
 
 describe('openSample — blank-tab reuse (BUG-08)', () => {
@@ -39,5 +39,21 @@ describe('openSample — blank-tab reuse (BUG-08)', () => {
     const before = useStore.getState().tabs.length;
     openSample(largeTree);
     expect(useStore.getState().tabs.length).toBe(before + 1);
+  });
+
+  it('preserves an untouched Untitled tab when a new tab is explicitly requested', () => {
+    act(() => useStore.getState().loadWorkspace([createEmptyProject('Untitled')], 0));
+    const untitledTabId = useStore.getState().activeTabId;
+
+    openSample(featureTour, { openInNewTab: true });
+
+    const st = useStore.getState();
+    expect(st.tabs).toHaveLength(2);
+    expect(st.activeTabId).not.toBe(untitledTabId);
+    expect(st.project.sampleId).toBe('feature-tour');
+    expect(st.tabStore[untitledTabId].project.name).toBe('Untitled');
+    act(() => st.switchTab(untitledTabId));
+    expect(useStore.getState().project.name).toBe('Untitled');
+    expect(useStore.getState().revision).toBe(0);
   });
 });

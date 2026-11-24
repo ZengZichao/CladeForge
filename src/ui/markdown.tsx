@@ -5,9 +5,9 @@
 //
 // Security contract: NO dangerouslySetInnerHTML anywhere — every token becomes
 // a React element with string children, so markup in the manual (or a poisoned
-// build input) can never execute. Links accept http(s) and anchors only; a
-// href with any other scheme renders as plain text. Pure string processing
-// only: no eval, no Function constructor, no dynamic HTML.
+// build input) can never execute. Links accept http(s) and anchors only;
+// relative paths become readable label + path text, and other schemes expose
+// only the label. Pure string processing: no eval, Function or dynamic HTML.
 
 import type { ReactNode } from 'react';
 
@@ -95,7 +95,11 @@ function isHr(line: string): boolean {
 
 /** Parse the document into blocks. Block-level only; inline pass runs later. */
 export function parseMarkdown(src: string): Block[] {
-  const lines = src.split('\n').map((l) => l.replace('\r', ''));
+  // Comments are metadata, not manual content. Remove them before block parsing
+  // so multiline comment bodies cannot become headings, lists or paragraphs.
+  // An unterminated comment is hidden through EOF, matching HTML comment rules.
+  const withoutComments = src.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  const lines = withoutComments.replace(/\r\n?/g, '\n').split('\n');
   const blocks: Block[] = [];
   let i = 0;
   let headingCounter = 0;
@@ -177,7 +181,7 @@ interface InlineToken {
   href?: string;
 }
 
-const INLINE_TOKEN_RE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\((?:https?:\/\/|#)[^)\s]*\))/g;
+const INLINE_TOKEN_RE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\((?:[^()\s]|\([^()\s]*\))+\))/g;
 
 /** Inline pass: tokenise once with matchAll (no exec loop, no HTML output). */
 function tokenizeInline(text: string): InlineToken[] {
@@ -195,7 +199,13 @@ function tokenizeInline(text: string): InlineToken[] {
       const label = tok.slice(1, open);
       const href = tok.slice(open + 2, -1);
       const safe = href.startsWith('https://') || href.startsWith('http://') || href.startsWith('#');
-      tokens.push(safe ? { kind: 'link', text: label, href } : { kind: 'text', text: label });
+      // Manual-relative files are not served beside the app, so show readable
+      // label + path text instead of creating a broken navigation link. Other
+      // non-allow-listed schemes (including javascript:) expose only the label.
+      const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(href);
+      tokens.push(safe
+        ? { kind: 'link', text: label, href }
+        : { kind: 'text', text: hasScheme ? label : `${label} (${href})` });
     }
     last = idx + tok.length;
   }
@@ -209,9 +219,9 @@ function renderInline(text: string): ReactNode[] {
       case 'code':
         return <code key={i}>{t.text}</code>;
       case 'bold':
-        return <strong key={i}>{t.text}</strong>;
+        return <strong key={i}>{renderInline(t.text)}</strong>;
       case 'italic':
-        return <em key={i}>{t.text}</em>;
+        return <em key={i}>{renderInline(t.text)}</em>;
       case 'link':
         // t.href is allow-listed to http(s)/anchors in tokenizeInline.
         return t.href && t.href.startsWith('#') ? (

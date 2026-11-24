@@ -279,13 +279,15 @@ export function CommandPalette({
           // Root at the true patristic midpoint — splitting
           // the branch — and report the measured diameter and the branches that
           // are excluded because they carry no usable length. Rooting at the
-          // nearest NODE via `midpointTarget` + `rerootAtNode` reports nothing.
+          // nearest NODE via `midpointTarget` + `rerootOnBranch` reports nothing.
           const box: { result: MidpointResult | null } = { result: null };
           apply((d) => {
             box.result = applyMidpointReroot(d);
           });
-          if (box.result) notify.info(midpointText(box.result));
-          fit();
+          if (box.result) {
+            notify.info(midpointText(box.result));
+            if (box.result.ok) fit();
+          }
         },
       },
       {

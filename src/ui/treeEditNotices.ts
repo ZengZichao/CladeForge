@@ -71,10 +71,15 @@ export function midpointText(result: MidpointResult): string {
           '树的节点太少（少于 3 个），无法测量末端到末端距离，中点定根未执行。',
           'Fewer than three nodes: no tip-to-tip path can be measured, so midpoint rooting was skipped.',
         )
-      : tr(
-          '树内没有任何可用枝长（缺失、0 或负值），中点定根未执行。',
-          'No usable branch length exists in this tree (missing, zero or negative), so midpoint rooting was skipped.',
-        );
+      : result.failure === 'time-inversion'
+        ? tr(
+            '中点定根未执行：结果会违反父子年龄或校准约束。',
+            'Midpoint rooting was skipped because the resulting ages or calibration constraints would be inconsistent.',
+          )
+        : tr(
+            '树内没有任何可用枝长（缺失、0 或负值），中点定根未执行。',
+            'No usable branch length exists in this tree (missing, zero or negative), so midpoint rooting was skipped.',
+          );
   }
   const p = result.placement;
   if (!p) {

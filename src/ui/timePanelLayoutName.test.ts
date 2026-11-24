@@ -124,3 +124,45 @@ it('the geological time chart shows the axis settings with NO switch prompt', ()
     expect(text).not.toContain('“”');
   });
 });
+
+describe('TimePanel — Time-axis pin (CF-C-005)', () => {
+  function timeAxisSection(): HTMLElement {
+    const toggle = Array.from(host!.querySelectorAll<HTMLButtonElement>('.section-toggle'))
+      .find((button) => button.textContent?.includes(S.layoutPanel.timeSection));
+    if (!toggle) throw new Error('Time-axis section not found');
+    return toggle.closest<HTMLElement>('.panel-section')!;
+  }
+
+  it('pointer pinning persists across a panel remount and keeps the section open', () => {
+    const project = datedProject('pin-pointer', 'time-calibrated');
+    useStore.getState().loadProject(project);
+    mountPanel();
+    const pin = timeAxisSection().querySelector<HTMLButtonElement>('.section-pin')!;
+    expect(pin.getAttribute('aria-pressed')).toBe('false');
+    act(() => pin.click());
+    expect(pin.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem(`cladeforge:pin:${project.id}::layoutPanel.timeSection`)).toBe('true');
+
+    cleanup();
+    mountPanel();
+    const restored = timeAxisSection();
+    expect(restored.querySelector('.section-pin')!.getAttribute('aria-pressed')).toBe('true');
+    expect(restored.querySelector('.section-toggle')!.getAttribute('aria-expanded')).toBe('true');
+    act(() => restored.querySelector<HTMLButtonElement>('.section-toggle')!.click());
+    expect(restored.querySelector('.section-toggle')!.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('Space pins the Time-axis section despite the canvas Space shortcut', () => {
+    useStore.getState().loadProject(datedProject('pin-space', 'time-calibrated'));
+    mountPanel();
+    const pin = timeAxisSection().querySelector<HTMLButtonElement>('.section-pin')!;
+    pin.focus();
+    const event = new KeyboardEvent('keydown', {
+      key: ' ', code: 'Space', bubbles: true, cancelable: true,
+    });
+    act(() => pin.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(pin.getAttribute('aria-pressed')).toBe('true');
+    expect(timeAxisSection().querySelector('.section-toggle')!.getAttribute('aria-expanded')).toBe('true');
+  });
+});

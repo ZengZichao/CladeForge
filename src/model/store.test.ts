@@ -1,5 +1,5 @@
 // AI-PROVENANCE: AI-assisted changes to this file are itemised in docs/AI_PROVENANCE.md.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { useStore, isReconActive, hasActiveGeneTree, persistedProject } from './store';
@@ -201,6 +201,78 @@ describe('store tabs', () => {
     expect(s().canUndo()).toBe(true);
   });
 
+  it('keeps each tab’s reconciliation surface and gene pointer when switching', () => {
+    const first = createEmptyProject('first');
+    first.geneTrees = [
+      { id: 'g1', name: 'gene 1', doc: createEmptyProject(), assumptions: {} },
+      { id: 'g2', name: 'gene 2', doc: createEmptyProject(), assumptions: {} },
+    ];
+    useStore.getState().loadWorkspace([first, createEmptyProject('second')], 0, [
+      { reconMode: true, reconEditTarget: 'recon', activeGeneTreeId: 'g2' },
+      { reconMode: true, reconEditTarget: 'embedded', activeGeneTreeId: null },
+    ]);
+    expect(s().reconMode).toBe(true);
+    expect(s().reconEditTarget).toBe('recon');
+    expect(s().activeGeneTreeId).toBe('g2');
+
+    s().switchTab(s().tabs[1]);
+    expect(s().reconMode).toBe(true);
+    expect(s().reconEditTarget).toBe('embedded');
+    expect(s().activeGeneTreeId).toBeNull();
+
+    s().switchTab(s().tabs[0]);
+    expect(s().reconMode).toBe(true);
+    expect(s().reconEditTarget).toBe('recon');
+    expect(s().activeGeneTreeId).toBe('g2');
+    expect(s().reconViewOptions.layoutMode).toBe('side-by-side');
+  });
+
+  it('restores a saved gene-edit target with the gene document swapped in', () => {
+    const first = createEmptyProject('first');
+    first.geneTrees = [
+      { id: 'g1', name: 'gene 1', doc: createEmptyProject('gene 1'), assumptions: {} },
+      { id: 'g2', name: 'gene 2', doc: createEmptyProject('gene 2'), assumptions: {} },
+    ];
+    useStore.getState().loadWorkspace([first, createEmptyProject('second')], 0, [
+      { reconMode: true, reconEditTarget: 'gene', activeGeneTreeId: 'g2' },
+    ]);
+    expect(s().reconEditTarget).toBe('gene');
+    expect(s().project.name).toBe('gene 2');
+    expect(s().geneEditBackup?.project.name).toBe('first');
+
+    s().switchTab(s().tabs[1]);
+    s().switchTab(s().tabs[0]);
+    expect(s().reconEditTarget).toBe('gene');
+    expect(s().project.name).toBe('gene 2');
+    expect(s().geneEditBackup?.project.name).toBe('first');
+  });
+
+  it('normalizes a restored gene-edit target when the project has no gene tree', () => {
+    const species = createEmptyProject('species');
+    useStore.getState().loadWorkspace([species], 0, [
+      { reconMode: true, reconEditTarget: 'gene', activeGeneTreeId: 'missing-gene' },
+    ]);
+
+    expect(s().reconEditTarget).toBe('recon');
+    expect(s().activeGeneTreeId).toBeNull();
+    expect(s().geneEditBackup).toBeNull();
+    expect(s().project.name).toBe('species');
+  });
+
+  it('keeps the active gene edit swapped when an inactive tab closes', () => {
+    const first = createEmptyProject('first');
+    first.geneTrees = [
+      { id: 'g1', name: 'gene 1', doc: createEmptyProject('gene 1'), assumptions: {} },
+    ];
+    useStore.getState().loadWorkspace([first, createEmptyProject('second')], 0, [
+      { reconMode: true, reconEditTarget: 'gene', activeGeneTreeId: 'g1' },
+    ]);
+    s().closeTab(s().tabs[1]);
+    expect(s().reconEditTarget).toBe('gene');
+    expect(s().project.name).toBe('gene 1');
+    expect(s().geneEditBackup?.project.name).toBe('first');
+  });
+
   it('closeTab activates a neighbour and protects the last tab', () => {
     s().newTab();
     expect(s().tabs).toHaveLength(2);
@@ -211,6 +283,50 @@ describe('store tabs', () => {
     // the final tab cannot be closed
     s().closeTab(s().activeTabId);
     expect(s().tabs).toHaveLength(1);
+  });
+});
+
+describe('persisted undo-history limit (CF-B-002)', () => {
+  function installStorage(initial?: string): void {
+    const values = new Map<string, string>();
+    if (initial !== undefined) values.set('cladeforge:historyLimit', initial);
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, String(value)),
+      removeItem: (key: string) => void values.delete(key),
+      clear: () => values.clear(),
+    } as unknown as Storage);
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('persists 1000 and restores it on a fresh store import', async () => {
+    installStorage();
+    let store = (await import('./store')).useStore;
+    store.getState().setHistoryLimit(1000);
+    expect(localStorage.getItem('cladeforge:historyLimit')).toBe('1000');
+
+    vi.resetModules();
+    store = (await import('./store')).useStore;
+    expect(store.getState().historyLimit).toBe(1000);
+    store.getState().loadProject(createEmptyProject());
+    expect(store.getState().historyLimit).toBe(1000);
+    store.getState().setHistoryLimit(100);
+    expect(store.getState().historyLimit).toBe(100);
+    expect(localStorage.getItem('cladeforge:historyLimit')).toBe('100');
+  });
+
+  it.each([
+    ['-50', 10],
+    ['99999', 5000],
+    ['not-a-number', 100],
+  ])('validates and clamps stored value %s to %i', async (raw, expected) => {
+    installStorage(raw);
+    const store = (await import('./store')).useStore;
+    expect(store.getState().historyLimit).toBe(expected);
   });
 });
 

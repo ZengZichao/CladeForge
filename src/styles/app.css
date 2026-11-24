@@ -712,6 +712,20 @@ input[type='range'] + input,
     left: 48px;
   }
 }
+/* CF-B-007 / CF-C-003: translated labels and enlarged touch targets can need
+   477px at a 390px viewport. Let each header row wrap inside the narrow screen
+   instead of allowing either flex item to widen <body>. */
+@media (max-width: 640px) {
+  .header-bar > .menubar {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .header-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+}
 @media (max-width: 640px) {
   /* The wordmark is the app's identity; keep it and let the toolbar scroll. */
   .brand-name {
@@ -2182,6 +2196,8 @@ body.panel-resizing {
 .status {
   display: flex;
   align-items: center;
+  min-width: 0;
+  overflow-x: auto;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-2-5);
   background: var(--surface);
@@ -3091,6 +3107,9 @@ body.panel-resizing {
   border-radius: var(--radius-lg);
   padding: var(--space-2);
   box-shadow: var(--shadow-card);
+  /* B-X02: compactness follows the event row's real inline space, not the
+     viewport or sidebar breakpoint (the same panel can be resized to 280px). */
+  container-type: inline-size;
 }
 /* 用户反馈：one grid for every env row — the swatch column, the label column
    and the action columns line up vertically across rows, and the fixed columns
@@ -3102,8 +3121,9 @@ body.panel-resizing {
    Explicit minimums + a shrinkable summary give the name ≥48 px and keep the
    row usable down to the narrowest panel. */
 .env-row {
+  --env-action-track: 32px;
   display: grid;
-  grid-template-columns: 32px minmax(48px, 1fr) minmax(0, auto) 32px 32px;
+  grid-template-columns: auto minmax(48px, 1fr) minmax(0, auto) var(--env-action-track) var(--env-action-track);
   align-items: center;
   gap: var(--space-1-5);
 }
@@ -3114,14 +3134,41 @@ body.panel-resizing {
 }
 .env-row .color-field {
   flex: none;
-  width: 32px;
+  width: auto;
 }
 .env-row + .env-row { margin-top: var(--space-1); }
-/* The hex readout needs ~66px next to the swatch; inside a ~200px env row that
-   squeezes the name input until the hex text is overlapped by it (measured:
-   hex right edge 214 px vs input left edge 189 px). The swatch already shows
-   and edits the colour, so the hex text stays for roomier rows only. */
-.env-row .color-hex { display: none; }
+/* B-X02 / CF-C-004: exact #rrggbb entry is part of the compact row. In a
+   narrow event item the swatch + hex editor and both actions share line one;
+   the name and range summary get full-width lines instead of forcing the
+   44px touch targets into 32px tracks. */
+@container (max-width: 360px) {
+  .env-row {
+    grid-template-columns: minmax(108px, 1fr) var(--env-action-track, 32px) var(--env-action-track, 32px);
+    gap: var(--space-0-5);
+  }
+  .env-row > .color-field {
+    grid-column: 1;
+    grid-row: 1;
+    gap: var(--space-1);
+  }
+  .env-row > input[type='text'] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .env-row > .env-summary {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .env-row > .btn.icon {
+    grid-row: 1;
+  }
+  .env-row .color-hex {
+    flex: none;
+    min-width: 60px;
+    width: 60px;
+    padding: var(--space-1) var(--space-0-5);
+  }
+}
 /* Chromium reserves ~15px of layout space for the number spin buttons, which
    in a 46px field clips "33.9" to "33.". These compact cells are keyboard- and
    picker-editable, so the spinners yield their space. */
@@ -6330,8 +6377,12 @@ details.hint-details[open] > summary.hint {
 .manual-toc {
   display: flex;
   flex-direction: column;
-  max-height: 160px;
+  /* A useful reading pane, not a collapsed flex item: reserve a viewport-
+     relative height and let the manual body scroll independently below it. */
+  flex: 0 0 auto;
+  height: clamp(10rem, 38vh, 24rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2-5);
@@ -6576,4 +6627,112 @@ details.hint-details[open] > summary.hint {
 .recon-status-zoom input[type='range'] {
   width: 90px;
   accent-color: var(--primary);
+}
+
+/* CF-C-004: phone-sized touch input gets the WCAG 2.5.5 44px target floor.
+   Pointer-coarse keeps the dense desktop layout unchanged on laptops. Cover
+   native controls and ARIA widgets as well as the app's named button classes,
+   so newly added controls inherit the same floor automatically. */
+@media (max-width: 768px) and (pointer: coarse) {
+  button,
+  input:not([type='hidden']),
+  select,
+  textarea,
+  summary,
+  [role='button'],
+  [role='tab'],
+  [role='switch'],
+  [role='slider'],
+  [role='menuitem'],
+  [role='option'],
+  .btn,
+  .btn.icon,
+  .seg-btn,
+  .cc-btn,
+  .legend-toggle,
+  .panel-toggle-btn,
+  .status-layer,
+  .tab-new,
+  .tab-close,
+  .menu-item,
+  .section-toggle,
+  .section-pin,
+  .section-fav,
+  .group-toggle,
+  .group-pin,
+  .overlay-close,
+  .toast-close,
+  .recon-zoom-presets,
+  .recon-zoom-input,
+  input[type='color'],
+  input[type='range'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .env-row {
+    --env-action-track: 44px;
+  }
+  /* The enlarged close button needs a matching reserved header gutter. */
+  .panel > .panel-header,
+  .panel > .inspector-search {
+    padding-right: calc(44px + var(--space-2) + var(--space-2));
+  }
+  /* A 24px clipping frame cannot contain 44px children. Keep the content box
+     44px tall, let its border make the outer frame 46px, and let narrow pane
+     headers wrap instead of shrinking this cluster to zero width. */
+  .recon-zoom-group {
+    box-sizing: content-box;
+    flex: 0 0 auto;
+    height: 44px;
+    overflow: visible;
+  }
+  .recon-pane-header {
+    flex-wrap: wrap;
+    min-height: 44px;
+    overflow: visible;
+  }
+  /* The node count is repeated in the status row. Dropping that passive chip
+     keeps the wrapped 44px controls inside the available pane height. */
+  .recon-pane-count {
+    display: none;
+  }
+  .recon-pane-title {
+    flex: 1 1 0;
+  }
+  .recon-pane-badge {
+    flex: 0 0 auto;
+  }
+  .recon-pane {
+    grid-template-rows: max-content minmax(0, 1fr);
+  }
+  /* Keep the enlarged toolbar to one scrollable row instead of using the
+     entire phone viewport as wrapped control rows. */
+  .recon-toolbar {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-height: 60px;
+    overflow-x: auto;
+  }
+  .recon-toolbar > * {
+    flex: 0 0 auto;
+  }
+  /* Status readouts stay on one horizontally scrollable line; otherwise their
+     flex items wrap vertically and consume the entire canvas row. */
+  .recon-status > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .recon-status > .spacer {
+    flex: 1 0 var(--space-2);
+  }
+  /* A phone cannot fit the header, 44px pane controls, legend and canvas at
+     once. Reserve a usable pane height and let the workspace scroll vertically
+     rather than clipping the enlarged controls. */
+  .recon-workspace {
+    overflow-y: auto;
+  }
+  .recon-workspace-row {
+    flex: 0 0 auto;
+    min-height: 280px;
+  }
 }

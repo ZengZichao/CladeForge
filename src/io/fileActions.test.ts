@@ -4,25 +4,37 @@
 // identical filename and success toast as the dialog. These tests capture what each
 // entry point actually saves.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const saved: { name: string; content: string }[] = [];
 
 // Hoisted so the module mocks below and the tests share the same spies.
 const mocks = vi.hoisted(() => ({
+  native: false,
   openText: vi.fn(async (): Promise<{ name: string; text: string } | null> => null),
   pushRecent: vi.fn(),
   readClipboardText: vi.fn(async (): Promise<string | null> => null),
+  saveTextWithResult: vi.fn(async (name: string, _content: string, _filters: unknown): Promise<{ ok: boolean; path?: string }> => ({ ok: true, path: `/tmp/${name}` })),
+  writeTextFileNative: vi.fn(async (_path: string, _contents: string) => [] as string[]),
+  statFileMtimeNative: vi.fn(async (_path: string) => 1),
 }));
 
 vi.mock('./fileService', () => ({
-  isTauri: () => false,
+  isTauri: () => mocks.native,
   openText: mocks.openText,
   saveBinary: vi.fn(async () => true),
-  saveText: vi.fn(async (name: string, content: string) => {
-    saved.push({ name, content });
+  saveText: vi.fn(async (_name: string, content: string) => {
+    saved.push({ name: _name, content });
     return true;
   }),
+  saveTextWithResult: mocks.saveTextWithResult,
+}));
+
+vi.mock('./native', () => ({
+  readBinaryFileNative: vi.fn(),
+  readTextFileNative: vi.fn(),
+  statFileMtimeNative: mocks.statFileMtimeNative,
+  writeTextFileNative: mocks.writeTextFileNative,
 }));
 
 // pushRecent is spied so the clipboard/recent contract can be asserted without
@@ -40,12 +52,17 @@ import {
   actionImportTable,
   actionImportTree,
   actionPasteTreeFromClipboard,
+  actionSaveProject,
+  actionSaveProjectAs,
+  actionSaveAllProjects,
+  actionRerootAtNode,
 } from './fileActions';
 import { DEFAULT_NEXUS_OPTIONS, type NexusExportOptions } from './nexus';
 import { useStore } from '../model/store';
 import { createSampleProject } from '../model/sampleTree';
 import { parseNewick } from './newick';
 import { useToasts } from '../ui/toast';
+import { registerConfirmHandler, type ConfirmRequest } from '../ui/confirmDialog';
 
 /** Top-level block names a NEXUS reader will see, in order. */
 function blocks(text: string): string[] {
@@ -205,5 +222,471 @@ describe('import guards', () => {
     mocks.openText.mockResolvedValue({ name: 'tree.nwk', text: '(A,B);' });
     await actionImportTree();
     expect(mocks.pushRecent).toHaveBeenCalledTimes(1);
+  });
+});
+
+// --- BUG-004: Save all tabs must account for every modified document ----------
+
+describe('actionSaveAllProjects', () => {
+  let confirmRequests: ConfirmRequest[];
+  let unregisterConfirm: (() => void) | undefined;
+
+  beforeEach(() => {
+    confirmRequests = [];
+    unregisterConfirm = registerConfirmHandler((req) => confirmRequests.push(req));
+    useToasts.getState().toasts.forEach((t) => useToasts.getState().dismiss(t.id));
+    mocks.native = false;
+    mocks.saveTextWithResult.mockReset();
+    mocks.saveTextWithResult.mockImplementation(async () => ({ ok: true }));
+    mocks.writeTextFileNative.mockReset();
+    mocks.writeTextFileNative.mockResolvedValue([]);
+    mocks.statFileMtimeNative.mockReset();
+    mocks.statFileMtimeNative.mockResolvedValue(1);
+    // Start from one clean tab, then create two independently modified tabs.
+    useStore.getState().loadWorkspace([createSampleProject()], 0);
+  });
+
+  afterEach(() => {
+    unregisterConfirm?.();
+    unregisterConfirm = undefined;
+  });
+
+  function twoModifiedTabs(nativePaths = false, pathSuffix = ''): { activeId: string; inactiveId: string } {
+    useStore.getState().openInNewTab(createSampleProject());
+    const inactiveId = useStore.getState().activeTabId;
+    useStore.getState().apply((d) => {
+      d.name = 'Alpha edited';
+      if (nativePaths) d.sourcePath = `/tmp/alpha${pathSuffix}.cladeforge.json`;
+    });
+    useStore.getState().openInNewTab(createSampleProject());
+    const activeId = useStore.getState().activeTabId;
+    useStore.getState().apply((d) => {
+      d.name = 'Beta edited';
+      if (nativePaths) d.sourcePath = `/tmp/beta${pathSuffix}.cladeforge.json`;
+    });
+    return { activeId, inactiveId };
+  }
+
+  function summary(): string {
+    return useToasts.getState().toasts.map((t) => t.message).join('\n');
+  }
+
+  function expectTabSaved(id: string): void {
+    const st = useStore.getState();
+    if (id === st.activeTabId) {
+      expect(st.revision).toBe(st.lastSavedRevision);
+      expect(st.project.savedAt).toBeTruthy();
+    } else {
+      const snap = st.tabStore[id];
+      expect(snap.revision).toBe(snap.lastSavedRevision);
+      expect(snap.project.savedAt).toBeTruthy();
+    }
+  }
+
+  it('guards concurrent Save All runs instead of duplicating download requests', async () => {
+    twoModifiedTabs();
+    const first = actionSaveAllProjects();
+    const second = actionSaveAllProjects();
+    expect(confirmRequests).toHaveLength(1);
+    expect(summary()).toMatch(/in progress|进行中|正在保存/i);
+    confirmRequests[0].onConfirm();
+    await Promise.all([first, second]);
+    expect(mocks.saveTextWithResult).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not download or rewrite clean tabs', async () => {
+    await actionSaveAllProjects();
+    expect(mocks.saveTextWithResult).not.toHaveBeenCalled();
+    expect(mocks.writeTextFileNative).not.toHaveBeenCalled();
+    expect(confirmRequests).toHaveLength(0);
+    expect(summary()).toMatch(/没有修改|no modified/i);
+  });
+
+  it('downloads both modified never-saved web tabs after explaining browser multi-downloads', async () => {
+    const { inactiveId } = twoModifiedTabs();
+    const pending = actionSaveAllProjects();
+
+    // Nothing is discarded or downloaded before the user understands that the
+    // browser will receive one download request per document.
+    expect(confirmRequests).toHaveLength(1);
+    expect(confirmRequests[0].message).toMatch(/2/);
+    expect(confirmRequests[0].message).toMatch(/multiple|分别|每个/);
+    expect(mocks.saveTextWithResult).not.toHaveBeenCalled();
+
+    confirmRequests[0].onConfirm();
+    await pending;
+
+    expect(mocks.saveTextWithResult.mock.calls.map(([name]) => name)).toEqual([
+      'Alpha edited.cladeforge.json',
+      'Beta edited.cladeforge.json',
+    ]);
+    const documents = mocks.saveTextWithResult.mock.calls.map(([, content]) => JSON.parse(content));
+    expect(documents.map((p) => p.project.name)).toEqual(['Alpha edited', 'Beta edited']);
+    const st = useStore.getState();
+    expect(st.tabStore[inactiveId].revision).not.toBe(st.tabStore[inactiveId].lastSavedRevision);
+    expect(st.tabStore[inactiveId].project.savedAt).toBeUndefined();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.project.savedAt).toBeUndefined();
+    expect(summary()).toMatch(/触发下载 2|download triggered 2/);
+    expect(summary()).not.toMatch(/从未保存过|never saved/);
+    const downloadToasts = useToasts.getState().toasts.filter((toast) =>
+      /Download requested|Download triggered|已请求下载|已触发下载/.test(toast.message),
+    );
+    expect(downloadToasts).toHaveLength(2);
+    expect(downloadToasts.every((toast) => toast.kind === 'info')).toBe(true);
+  });
+
+  it('guards concurrent single-project saves against duplicate native writes', async () => {
+    mocks.native = true;
+    twoModifiedTabs(true);
+    let finishWrite!: () => void;
+    mocks.writeTextFileNative.mockImplementation(() => new Promise<string[]>((resolve) => {
+      finishWrite = () => resolve([]);
+    }));
+
+    const first = actionSaveProject();
+    await vi.waitFor(() => expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1));
+    expect(await actionSaveProject()).toBe('none');
+    expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1);
+    finishWrite();
+    expect(await first).toBe('in-place');
+  });
+
+  it('does not transfer a deferred native save to another active tab', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    let finishWrite!: () => void;
+    mocks.writeTextFileNative.mockImplementation(() => new Promise<string[]>((resolve) => {
+      finishWrite = () => resolve([]);
+    }));
+
+    const pending = actionSaveProject();
+    await vi.waitFor(() => expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1));
+    useStore.getState().switchTab(inactiveId);
+    finishWrite();
+    expect(await pending).toBe('in-place');
+
+    const st = useStore.getState();
+    const savedTab = st.tabStore[activeId];
+    expect(savedTab.revision).toBe(savedTab.lastSavedRevision);
+    expect(savedTab.project.savedAt).toBeTruthy();
+    expect(savedTab.project.sourcePath).toBe('/tmp/beta.cladeforge.json');
+    expect(st.project.name).toBe('Alpha edited');
+    expect(st.project.sourcePath).toBe('/tmp/alpha.cladeforge.json');
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.project.savedAt).toBeUndefined();
+    expect(summary()).not.toMatch(/stale|changed|已变化|已修改/i);
+  });
+
+  it('does not recreate or stamp a tab closed during a native save', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    let finishWrite!: () => void;
+    mocks.writeTextFileNative.mockImplementation(() => new Promise<string[]>((resolve) => {
+      finishWrite = () => resolve([]);
+    }));
+
+    const pending = actionSaveProject();
+    await vi.waitFor(() => expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1));
+    useStore.getState().closeTab(activeId);
+    finishWrite();
+    expect(await pending).toBe('stale');
+
+    const st = useStore.getState();
+    expect(st.tabs).not.toContain(activeId);
+    expect(st.tabStore[activeId]).toBeUndefined();
+    expect(st.activeTabId).toBe(inactiveId);
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.project.savedAt).toBeUndefined();
+    expect(summary()).toMatch(/stale|changed|已变化|已修改/i);
+  });
+
+  it('keeps edits made during a native save dirty and reports the stale completion', async () => {
+    mocks.native = true;
+    const { activeId } = twoModifiedTabs(true);
+    let finishWrite!: () => void;
+    mocks.writeTextFileNative.mockImplementation(() => new Promise<string[]>((resolve) => {
+      finishWrite = () => resolve([]);
+    }));
+
+    const pending = actionSaveProject();
+    await vi.waitFor(() => expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1));
+    useStore.getState().apply((d) => { d.name = 'Beta edited again'; });
+    const written = mocks.writeTextFileNative.mock.calls[0][1];
+    finishWrite();
+    expect(await pending).toBe('stale');
+
+    const st = useStore.getState();
+    expect(st.activeTabId).toBe(activeId);
+    expect(st.project.name).toBe('Beta edited again');
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.project.savedAt).toBeUndefined();
+    expect(JSON.parse(written).project.name).toBe('Beta edited');
+    expect(summary()).toMatch(/stale|changed|已变化|已修改/i);
+    expect(summary()).not.toMatch(/Saved to|已保存到/i);
+  });
+
+  function expectBrowserDownloadRequestToast(): void {
+    expect(useToasts.getState().toasts).toEqual([
+      expect.objectContaining({
+        kind: 'info',
+        message: expect.stringMatching(
+          /^(Download requested for Beta edited\.cladeforge\.json; document remains unsaved|已请求下载 Beta edited\.cladeforge\.json；文档仍标记为未保存)$/,
+        ),
+      }),
+    ]);
+  }
+
+  it.each(['accepted', 'silently blocked'])(
+    'reports browser Save as an informational request when dispatch is %s',
+    async () => {
+      const { activeId } = twoModifiedTabs();
+      // A browser returns the same dispatch-only result whether it accepts the
+      // download or silently blocks it; neither outcome proves a disk write.
+      mocks.saveTextWithResult.mockResolvedValue({ ok: true });
+      expect(await actionSaveProject()).toBe('downloaded');
+
+      const st = useStore.getState();
+      expect(st.activeTabId).toBe(activeId);
+      expect(st.revision).not.toBe(st.lastSavedRevision);
+      expect(st.project.savedAt).toBeUndefined();
+      expect(st.project.sourcePath).toBeUndefined();
+      expectBrowserDownloadRequestToast();
+    },
+  );
+
+  it('does not adopt a Save As path when the originating revision changes before completion', async () => {
+    mocks.native = true;
+    twoModifiedTabs();
+    let finishSave!: (value: { ok: boolean; path: string }) => void;
+    mocks.saveTextWithResult.mockImplementation(() => new Promise((resolve) => {
+      finishSave = resolve;
+    }));
+
+    const pending = actionSaveProjectAs();
+    await vi.waitFor(() => expect(mocks.saveTextWithResult).toHaveBeenCalledTimes(1));
+    useStore.getState().apply((d) => { d.name = 'Beta changed before Save As completed'; });
+    finishSave({ ok: true, path: '/tmp/stale-choice.cladeforge.json' });
+    await pending;
+
+    const st = useStore.getState();
+    expect(st.project.name).toBe('Beta changed before Save As completed');
+    expect(st.project.sourcePath).toBeUndefined();
+    expect(st.project.savedAt).toBeUndefined();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(summary()).toMatch(/stale|changed|已变化|已修改/i);
+    expect(summary()).not.toMatch(/Saved as|已另存为/i);
+  });
+
+  it.each(['accepted', 'silently blocked'])(
+    'reports browser Save As as an informational request when dispatch is %s',
+    async () => {
+      twoModifiedTabs();
+      // Even a path-shaped mock result is not persistence evidence in a browser.
+      mocks.saveTextWithResult.mockResolvedValue({ ok: true, path: '/not/a/browser/path.json' });
+      await actionSaveProjectAs();
+
+      const st = useStore.getState();
+      expect(st.revision).not.toBe(st.lastSavedRevision);
+      expect(st.project.savedAt).toBeUndefined();
+      expect(st.project.sourcePath).toBeUndefined();
+      expectBrowserDownloadRequestToast();
+    },
+  );
+
+  it('does not adopt a deferred Save As path or clean flag on another tab', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    let finishSave!: (value: { ok: boolean; path: string }) => void;
+    mocks.saveTextWithResult.mockImplementation(() => new Promise((resolve) => {
+      finishSave = resolve;
+    }));
+
+    const pending = actionSaveProjectAs();
+    await vi.waitFor(() => expect(mocks.saveTextWithResult).toHaveBeenCalledTimes(1));
+    useStore.getState().switchTab(inactiveId);
+    finishSave({ ok: true, path: '/tmp/chosen.cladeforge.json' });
+    await pending;
+
+    const st = useStore.getState();
+    const savedTab = st.tabStore[activeId];
+    expect(savedTab.revision).toBe(savedTab.lastSavedRevision);
+    expect(savedTab.project.sourcePath).toBe('/tmp/chosen.cladeforge.json');
+    expect(savedTab.project.savedAt).toBeTruthy();
+    expect(st.project.sourcePath).toBe('/tmp/alpha.cladeforge.json');
+    expect(st.project.savedAt).toBeUndefined();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+  });
+
+  it('does not write or mark any tab saved when the web pre-action confirmation is canceled', async () => {
+    const { inactiveId } = twoModifiedTabs();
+    const before = [useStore.getState().project.savedAt, useStore.getState().tabStore[inactiveId].project.savedAt];
+    const pending = actionSaveAllProjects();
+    expect(confirmRequests).toHaveLength(1);
+    confirmRequests[0].onCancel?.();
+    await pending;
+
+    expect(mocks.saveTextWithResult).not.toHaveBeenCalled();
+    expect([useStore.getState().project.savedAt, useStore.getState().tabStore[inactiveId].project.savedAt]).toEqual(before);
+    const st = useStore.getState();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.tabStore[inactiveId].revision).not.toBe(st.tabStore[inactiveId].lastSavedRevision);
+    expect(summary()).toMatch(/取消|canceled/i);
+  });
+
+  it('keeps a web tab dirty when its download trigger is canceled and reports it truthfully', async () => {
+    const { inactiveId } = twoModifiedTabs();
+    mocks.saveTextWithResult.mockImplementation(async (name) => ({ ok: !name.startsWith('Alpha') }));
+    const pending = actionSaveAllProjects();
+    confirmRequests[0].onConfirm();
+    await pending;
+
+    const st = useStore.getState();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.project.savedAt).toBeUndefined();
+    expect(st.tabStore[inactiveId].revision).not.toBe(st.tabStore[inactiveId].lastSavedRevision);
+    expect(summary()).toMatch(/触发下载 1|download triggered 1/);
+    expect(summary()).toMatch(/取消 1|canceled 1/);
+    expect(summary()).not.toMatch(/从未保存过|never saved/);
+  });
+
+  it('downloads only modified web tabs, including a background tab behind a clean active tab', async () => {
+    const { inactiveId } = twoModifiedTabs();
+    useStore.getState().undo();
+    const pending = actionSaveAllProjects();
+    confirmRequests[0].onConfirm();
+    await pending;
+
+    expect(mocks.saveTextWithResult).toHaveBeenCalledTimes(1);
+    expect(mocks.saveTextWithResult.mock.calls[0][0]).toBe('Alpha edited.cladeforge.json');
+    const snap = useStore.getState().tabStore[inactiveId];
+    expect(snap.revision).not.toBe(snap.lastSavedRevision);
+    expect(snap.project.savedAt).toBeUndefined();
+    expect(summary()).toMatch(/触发下载 1|download triggered 1/);
+  });
+
+  it('writes every modified native tab in place, refreshes mtimes and restores the active tab', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    await actionSaveAllProjects();
+
+    expect(mocks.writeTextFileNative.mock.calls.map(([path]) => path)).toEqual([
+      '/tmp/alpha.cladeforge.json',
+      '/tmp/beta.cladeforge.json',
+    ]);
+    expect(mocks.statFileMtimeNative).toHaveBeenCalledWith('/tmp/alpha.cladeforge.json');
+    expect(mocks.statFileMtimeNative).toHaveBeenCalledWith('/tmp/beta.cladeforge.json');
+    expectTabSaved(activeId);
+    expectTabSaved(inactiveId);
+    expect(useStore.getState().activeTabId).toBe(activeId);
+    expect(summary()).toMatch(/写入磁盘 2|written in place 2/);
+    expect(summary()).not.toMatch(/从未保存过|never saved/);
+  });
+
+  it('reports a stale native Save All write without cleaning an edited background tab', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    let finishWrite!: () => void;
+    mocks.writeTextFileNative.mockImplementationOnce(() => new Promise<string[]>((resolve) => {
+      finishWrite = () => resolve([]);
+    }));
+
+    const pending = actionSaveAllProjects();
+    await vi.waitFor(() => expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(1));
+    useStore.getState().apply((d) => { d.name = 'Alpha edited again'; });
+    finishWrite();
+    await pending;
+
+    const st = useStore.getState();
+    const snap = st.tabStore[inactiveId];
+    expect(snap.project.name).toBe('Alpha edited again');
+    expect(snap.revision).not.toBe(snap.lastSavedRevision);
+    expect(snap.project.savedAt).toBeUndefined();
+    expect(st.activeTabId).toBe(activeId);
+    expect(summary()).toMatch(/stale 1|已变化 1/i);
+    expect(summary()).toMatch(/写入磁盘 1|written in place 1/);
+  });
+
+  it('preserves the native external-change overwrite confirmation and mtime refresh', async () => {
+    mocks.native = true;
+    const { activeId } = twoModifiedTabs(true, '-external-check');
+    await actionSaveAllProjects();
+    useStore.getState().apply((d) => { d.name = 'Beta external-edit check'; });
+    mocks.statFileMtimeNative.mockResolvedValue(2);
+
+    const canceled = actionSaveProject();
+    await vi.waitFor(() => expect(confirmRequests).toHaveLength(1));
+    expect(confirmRequests[0].key).toBe('save-overwrite-external-change');
+    confirmRequests[0].onCancel?.();
+    expect(await canceled).toBe('none');
+    expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(2);
+    expect(useStore.getState().revision).not.toBe(useStore.getState().lastSavedRevision);
+
+    const confirmed = actionSaveProject();
+    await vi.waitFor(() => expect(confirmRequests).toHaveLength(2));
+    confirmRequests[1].onConfirm();
+    expect(await confirmed).toBe('in-place');
+    expect(mocks.writeTextFileNative).toHaveBeenCalledTimes(3);
+    expect(mocks.statFileMtimeNative).toHaveBeenLastCalledWith('/tmp/beta-external-check.cladeforge.json');
+    const st = useStore.getState();
+    expect(st.activeTabId).toBe(activeId);
+    expect(st.revision).toBe(st.lastSavedRevision);
+  });
+
+  it('does not mark a native background tab saved when its write fails', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs(true);
+    mocks.writeTextFileNative.mockImplementation(async (path) => {
+      if (path === '/tmp/alpha.cladeforge.json') throw new Error('disk full');
+      return [];
+    });
+    await actionSaveAllProjects();
+
+    expectTabSaved(activeId);
+    const snap = useStore.getState().tabStore[inactiveId];
+    expect(snap.revision).not.toBe(snap.lastSavedRevision);
+    expect(snap.project.savedAt).toBeUndefined();
+    expect(summary()).toMatch(/写入磁盘 1|written in place 1/);
+    expect(summary()).toMatch(/失败 1|failed 1/);
+  });
+
+  it('counts canceled native Save As dialogs without marking those never-saved tabs saved', async () => {
+    mocks.native = true;
+    const { activeId, inactiveId } = twoModifiedTabs();
+    mocks.saveTextWithResult.mockResolvedValue({ ok: false });
+    await actionSaveAllProjects();
+
+    const st = useStore.getState();
+    expect(st.revision).not.toBe(st.lastSavedRevision);
+    expect(st.tabStore[inactiveId].revision).not.toBe(st.tabStore[inactiveId].lastSavedRevision);
+    expect(st.activeTabId).toBe(activeId);
+    expect(summary()).toMatch(/取消 2|canceled 2/);
+    expect(summary()).not.toMatch(/从未保存过|never saved/);
+  });
+});
+
+describe('actionRerootAtNode time-consistency refusal', () => {
+  it('keeps the root unchanged and explains a rejected age inversion', () => {
+    const project = parseNewick('(Y:1,Z:1)R;', 'dated-reroot');
+    const y = Object.values(project.nodes).find((node) => node.label === 'Y')!;
+    const z = Object.values(project.nodes).find((node) => node.label === 'Z')!;
+    y.age = 40;
+    z.age = 80;
+    project.nodes[project.rootId].age = 100;
+    useStore.getState().loadProject(project);
+    const rootBefore = useStore.getState().project.rootId;
+    const requests: ConfirmRequest[] = [];
+    const unregister = registerConfirmHandler((request) => requests.push(request));
+    useToasts.getState().toasts.forEach((toast) => useToasts.getState().dismiss(toast.id));
+
+    actionRerootAtNode(y.id);
+    expect(requests).toHaveLength(1);
+    requests[0].onConfirm();
+    unregister();
+
+    expect(useStore.getState().project.rootId).toBe(rootBefore);
+    expect(useToasts.getState().toasts.some((toast) =>
+      /Reroot rejected|无法重新定根/.test(toast.message),
+    )).toBe(true);
   });
 });

@@ -88,8 +88,8 @@ export function NarrowScreenHint() {
         </div>
         <div className="narrow-hint-desc">
           {tr(
-            'CladeForge 以桌面端为设计目标：建议在 ≥1280px 宽的窗口中使用。窄屏下画布会自动让出空间，左右面板改以覆盖层打开；移动端可用于查看与演示，但编辑功能空间受限、触控目标未做专门优化。',
-            'CladeForge is designed for the desktop first: a window at least 1280px wide is recommended. On narrow screens the canvas gives up space and the side panels open as overlays; phones can be used for viewing and demonstration, but editing space is limited and touch targets are not optimised.',
+            'CladeForge 以桌面端为设计目标：建议在 ≥1280px 宽的窗口中使用。窄屏下画布会自动让出空间，左右面板改以覆盖层打开，主要触控目标已放大；移动端可用于查看和基础编辑，但复杂编辑仍受空间限制。',
+            'CladeForge is designed for the desktop first: a window at least 1280px wide is recommended. On narrow screens the canvas gives up space, side panels open as overlays, and primary touch targets are enlarged; phones support viewing and basic editing, but complex editing remains space-limited.',
           )}
         </div>
         <div className="narrow-hint-actions">

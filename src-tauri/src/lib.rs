@@ -982,6 +982,8 @@ pub fn run() {
         // module exists to avoid.
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        // About → repository: open the default browser through the native shell.
+        .plugin(tauri_plugin_opener::init())
         // Unsaved-changes close guard (A-01 / C#1): the × button / Alt+F4 / ⌘Q
         // hold for a webview decision once the webview is up (WEBVIEW_READY);
         // `confirm_close_window` is the one-way exit after that decision.

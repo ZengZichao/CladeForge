@@ -167,4 +167,15 @@ describe('validateProject — referential repair of the tree and the data', () =
     const { issues } = validateProject(createSampleProject());
     expect(issues).toEqual([]);
   });
+
+  it('diagnoses a legacy/imported reversed calibration without rewriting it (CF-B-004)', () => {
+    const p = createEmptyProject();
+    p.calibrationPoints = [{ id: 'legacy-cp', nodeId: p.rootId, minAge: 60, maxAge: 55 }];
+    const { project, issues } = validateProject(p);
+    expect(project.calibrationPoints[0]).toMatchObject({ minAge: 60, maxAge: 55 });
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatch(/60/);
+    expect(issues[0]).toMatch(/55/);
+    expect(issues[0]).toMatch(/min|max|最小|最大/i);
+  });
 });
