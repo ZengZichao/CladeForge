@@ -72,6 +72,7 @@ export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddC
   const rootFallback = targetId === doc.rootId && selection.length === 0;
   const unnamed = tr('未命名节点', 'Unnamed node');
   const targetLabel = targetNode ? targetNode.label || unnamed : '';
+  const validCount = Number.isInteger(count) && count >= 1 && count <= 50;
 
   const confirm = () => {
     // Re-validate the target at submit time: the node could have been deleted
@@ -85,29 +86,18 @@ export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddC
       onCancel();
       return;
     }
-    // P-04: an explicit 0 used to be silently turned into 1 ("typed 0, got a
-    // new child"). Zero children is a NO-OP with a clear message, never a
-    // hidden default; the Add button is disabled for the same condition.
-    if (!Number.isFinite(count) || count < 1) {
-      notify.info(
-        tr('子节点数量至少为 1：未添加任何节点。', 'Number of children must be at least 1: nothing was added.'),
-      );
-      return;
-    }
-    // GUI-A P2: over-max used to be CLAMPED to 50 while under-min was refused,
-    // i.e. two different rules for the same declared range [1, 50]. Both ends
-    // are now refused: the button is disabled above and this path re-checks for
-    // the Enter key. No silent coercion in either direction.
-    if (count > 50) {
+    // One rule for every submit path: a child count is an integer in [1, 50].
+    // In particular, do not round a decimal (2.5 used to create 3 children).
+    if (!validCount) {
       notify.info(
         tr(
-          `每节点子节点数最多为 50：未添加任何节点。`,
-          `Number of children is capped at 50: nothing was added.`,
+          '子节点数量必须为 1–50 之间的整数：未添加任何节点。',
+          'Number of children must be an integer between 1 and 50: nothing was added.',
         ),
       );
       return;
     }
-    const n = Math.round(count);
+    const n = count;
     apply((d) => {
       // 用户反馈 (2026-11-23): gene-tree target → edit the gene doc; otherwise
       // the species project as before.
@@ -191,6 +181,7 @@ export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddC
           type="number"
           min={1}
           max={50}
+          step={1}
           value={count}
           onChange={(e) => setCount(Number(e.target.value))}
           onKeyDown={(e) => {
@@ -213,11 +204,11 @@ export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddC
         {/* GUI-A P2: state the range violation INLINE, next to the field that
             carries it — the same visible reason NumberField gives for an
             out-of-range age. */}
-        {(count < 1 || count > 50) && (
-          <div className="field-error">
+        {!validCount && (
+          <div className="field-error" role="alert">
             {tr(
-              `数量需在 1–50 之间（当前 ${count}）`,
-              `Number of children must be between 1 and 50 (currently ${count})`,
+              `数量必须为 1–50 之间的整数（当前 ${count}）`,
+              `Number of children must be an integer between 1 and 50 (currently ${count})`,
             )}
           </div>
         )}
@@ -241,7 +232,7 @@ export function AddChildrenDialog({ open, targetId, geneTreeId, onCancel }: AddC
           <button
             className="btn primary"
             onClick={confirm}
-            disabled={!targetNode || !(count >= 1 && count <= 50)}
+            disabled={!targetNode || !validCount}
           >
             {S.addDialog.confirm}
           </button>

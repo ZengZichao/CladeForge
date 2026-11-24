@@ -96,6 +96,19 @@ function writePin(key: string, value: boolean) {
   }
 }
 
+/** The canvas claims Space for panning on every non-input target, including
+ * buttons. Handle it at the button boundary so native activation is not
+ * cancelled; suppress repeats just as a held native button key does. */
+function activateOnSpace(
+  e: React.KeyboardEvent,
+  activate: (event: React.SyntheticEvent) => void,
+) {
+  if (e.key !== ' ') return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!e.repeat) activate(e);
+}
+
 /** Generate a stable ID from a string (the fallback when `id` is not provided). */
 function stableId(s: string): string {
   let h = 0;
@@ -200,14 +213,14 @@ export function Section({
     writeStored(persistId, next);
   };
 
-  const toggleFav = (e: React.MouseEvent) => {
+  const toggleFav = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     const next = !fav;
     setFav(next);
     writeFav(persistId, next);
   };
 
-  const togglePin = (e: React.MouseEvent) => {
+  const togglePin = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     const next = !pin;
     setPin(next);
@@ -254,6 +267,7 @@ export function Section({
             type="button"
             className={`section-pin${pin ? ' active' : ''}`}
             onClick={togglePin}
+            onKeyDown={(e) => activateOnSpace(e, togglePin)}
             title={pin ? S.section.unpin : S.section.pin}
             aria-pressed={pin}
             aria-label={pin ? S.section.unpin : S.section.pin}
@@ -266,6 +280,7 @@ export function Section({
             type="button"
             className={`section-fav${fav ? ' active' : ''}`}
             onClick={toggleFav}
+            onKeyDown={(e) => activateOnSpace(e, toggleFav)}
             title={fav ? S.section.unfavorite : S.section.favorite}
             aria-pressed={fav}
           >
@@ -316,7 +331,7 @@ export function GroupSection({
     setOpen(next);
     writeStored(groupId, next);
   };
-  const togglePin = (e: React.MouseEvent) => {
+  const togglePin = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     const next = !pin;
     setPin(next);
@@ -347,6 +362,7 @@ export function GroupSection({
             type="button"
             className={`group-pin${pin ? ' active' : ''}`}
             onClick={togglePin}
+            onKeyDown={(e) => activateOnSpace(e, togglePin)}
             title={pin ? S.section.unpin : S.section.pin}
             aria-pressed={pin}
             aria-label={pin ? S.section.unpin : S.section.pin}

@@ -11,7 +11,7 @@
 // half-standard, half-reconciled chimera.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useStore, persistedProject } from './model/store';
+import { useStore, captureWorkspace, workspaceHasPanels } from './model/store';
 import type { Project } from './model/types';
 import { confirmCloseTab } from './ui/tabs';
 import * as file from './io/fileActions';
@@ -41,6 +41,7 @@ import { useLanguage, onLanguageChange, currentLanguage } from './ui/i18n';
 import { tr } from './ui/strings';
 import { buildConsensusTree } from './model/consensus';
 import { addBuiltGeneTree, createBlankGeneDoc, createGeneDocFromSpecies } from './model/geneTreeBuild';
+import { createEmptyProject } from './model/sampleTree';
 import { AboutDialog } from './ui/AboutDialog';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { ExportSettingsDialog } from './ui/ExportSettingsDialog';
@@ -323,6 +324,27 @@ export function App() {
   // ⌘. toggles both side panels in the active workspace — a quick collapse on
   // small windows. Shared state: whichever workspace is live reads it.
   const [panelsHidden, setPanelsHidden] = useState(false);
+  const [bothPanelsHidden, setBothPanelsHidden] = useState(false);
+  const panelsHiddenRef = useRef(panelsHidden);
+  const bothPanelsHiddenRef = useRef(bothPanelsHidden);
+  panelsHiddenRef.current = panelsHidden;
+  bothPanelsHiddenRef.current = bothPanelsHidden;
+  const showAllPanels = useCallback(() => {
+    setPanelsHidden(false);
+    window.dispatchEvent(new CustomEvent('cladeforge:show-panels'));
+  }, []);
+  // IMP-003: resetting local data invalidates the debounce for the outgoing
+  // workspace. The version is committed with the blank workspace; the effect
+  // below consumes that reset without scheduling another write. A later edit
+  // schedules normally again.
+  const [autosaveResetVersion, setAutosaveResetVersion] = useState(0);
+  const handledAutosaveReset = useRef(0);
+  const resetLocalWorkspace = useCallback(() => {
+    setAutosaveResetVersion((v) => v + 1);
+    useStore.getState().loadWorkspace([createEmptyProject(S.tabs.untitled)], 0);
+    setPanelsHidden(false);
+    setBothPanelsHidden(false);
+  }, []);
 
   const openAddForSelection = useCallback(() => {
     const s = useStore.getState();
@@ -454,9 +476,12 @@ export function App() {
         e.preventDefault();
         setShortcutsOpen(true);
       } else if (k === '.') {
-        // ⌘. toggles the side panels (same path as the header button, S19).
-        e.preventDefault();
-        setPanelsHidden((h) => !h);
+        // ⌘. follows the header button's content-aware availability: an empty
+        // workspace has no side panels, so the chord must not flip hidden state.
+        if (workspaceHasPanels(s)) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('cladeforge:toggle-panels'));
+        }
       } else if (k === '=' || k === '+') {
         e.preventDefault();
         // S11: zoom keys route to the active workspace.
@@ -538,7 +563,7 @@ export function App() {
   useEffect(() => {
     const ws = readWorkspace();
     if (ws) {
-      useStore.getState().loadWorkspace(ws.projects, ws.activeIndex);
+      useStore.getState().loadWorkspace(ws.projects, ws.activeIndex, ws.tabStates);
       if (ws.skipped > 0) notify.info(skippedTabs(ws.skipped));
     } else {
       const saved = readAutoSave();
@@ -556,27 +581,24 @@ export function App() {
   const tabs = useStore((s) => s.tabs);
   const activeTabId = useStore((s) => s.activeTabId);
   const tabStore = useStore((s) => s.tabStore);
+  const reconEditTarget = useStore((s) => s.reconEditTarget);
+  const activeGeneTreeId = useStore((s) => s.activeGeneTreeId);
   // The title tracks the active document and the dirty marker (A-10).
   const activeTabDirty = useStore((s) => s.revision !== s.lastSavedRevision);
   useEffect(() => {
     document.title = `${activeTabDirty ? '● ' : ''}${project.name || S.tabs.untitled} — ${appNameRef.current}`;
   }, [project.name, activeTabDirty]);
   useEffect(() => {
+    if (autosaveResetVersion !== handledAutosaveReset.current) {
+      handledAutosaveReset.current = autosaveResetVersion;
+      return;
+    }
     const t = setTimeout(() => {
-      const s = useStore.getState();
-      const projects = s.tabs
-        .map((id) =>
-          id === s.activeTabId
-            ? // While 「基因树编辑」 is swapped, persist the species project
-              // with the edited gene doc merged back — never the bare gene doc.
-              persistedProject(s)
-            : s.tabStore[id]?.project,
-        )
-        .filter((p): p is Project => Boolean(p));
-      writeWorkspace(projects, Math.max(0, s.tabs.indexOf(s.activeTabId)));
+      const { projects, activeIndex, tabStates } = captureWorkspace(useStore.getState());
+      writeWorkspace(projects, activeIndex, tabStates);
     }, 800);
     return () => clearTimeout(t);
-  }, [project, tabs, activeTabId, tabStore]);
+  }, [project, tabs, activeTabId, tabStore, reconMode, reconEditTarget, activeGeneTreeId, autosaveResetVersion]);
 
   // Multi-tree import chooser: fileActions delegates here.
   useEffect(() => {
@@ -613,10 +635,14 @@ export function App() {
   // (The Toolbar is rendered outside the handler's closure scope, so the
   // button talks through a window event rather than a prop drilling chain.)
   useEffect(() => {
-    const onToggle = () => setPanelsHidden((h) => !h);
+    const onToggle = () => {
+      if (!workspaceHasPanels(useStore.getState())) return;
+      if (panelsHiddenRef.current || bothPanelsHiddenRef.current) showAllPanels();
+      else setPanelsHidden(true);
+    };
     window.addEventListener('cladeforge:toggle-panels', onToggle);
     return () => window.removeEventListener('cladeforge:toggle-panels', onToggle);
-  }, []);
+  }, [showAllPanels]);
 
   return (
     <div className={`app${macosTitlebar ? ' macos-titlebar' : ''}`} key={lang}>
@@ -629,7 +655,11 @@ export function App() {
           onOpenAbout={() => setAboutOpen(true)}
         />
         <Toolbar onAddChildrenDialog={openAddForSelection} />
-        <HeaderActions prefsOpen={prefsOpen} onPrefsOpenChange={setPrefsOpen} />
+        <HeaderActions
+          prefsOpen={prefsOpen}
+          onPrefsOpenChange={setPrefsOpen}
+          onResetLocalData={resetLocalWorkspace}
+        />
       </div>
 
       {/* The mode switch cross-fades the whole workspace (fade + a whisper of
@@ -641,6 +671,7 @@ export function App() {
             <ReconWorkspace
               panelsHidden={panelsHidden}
               onShowPanels={() => setPanelsHidden(false)}
+              onBothPanelsHiddenChange={setBothPanelsHidden}
               onCopySpeciesTree={copySpeciesTreeToGene}
               onAddChildrenDialog={openAddForNode}
               onAddChildrenDialogGene={openAddForGeneNode}
@@ -650,7 +681,9 @@ export function App() {
           <ErrorBoundary scope={tr('标准工作区', 'Standard workspace')}>
             <StandardWorkspace
               panelsHidden={panelsHidden}
+              autosaveResetVersion={autosaveResetVersion}
               onShowPanels={() => setPanelsHidden(false)}
+              onBothPanelsHiddenChange={setBothPanelsHidden}
               onAddChildrenDialog={openAddForNode}
             />
           </ErrorBoundary>

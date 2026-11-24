@@ -362,8 +362,95 @@ export function insertParent(project: Project, childId: NodeId): NodeId | null {
 
 /** A node's age when it is a usable finite number, else undefined. */
 function finiteAge(node: TreeNode | undefined): number | undefined {
-  if (!node || typeof node.age !== 'number' || !Number.isFinite(node.age)) return undefined;
-  return node.age;
+  return finiteAgeValue(node?.age);
+}
+
+function finiteAgeValue(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+type AgeEvidence = Pick<TreeNode, 'age' | 'ageMin' | 'ageMax' | 'ageSource' | 'ageCitation'>;
+
+function ageEvidenceOf(node: TreeNode | undefined): AgeEvidence {
+  return {
+    age: node?.age,
+    ageMin: node?.ageMin,
+    ageMax: node?.ageMax,
+    ageSource: node?.ageSource,
+    ageCitation: node?.ageCitation,
+  };
+}
+
+/** Retain missing age evidence on the calibration target; its own fields win. */
+function mergeMissingAgeEvidence(src: AgeEvidence, dst: AgeEvidence): void {
+  if (dst.age === undefined) dst.age = src.age;
+  if (dst.ageMin === undefined) dst.ageMin = src.ageMin;
+  if (dst.ageMax === undefined) dst.ageMax = src.ageMax;
+  if (dst.ageSource === undefined) dst.ageSource = src.ageSource;
+  if (dst.ageCitation === undefined) dst.ageCitation = src.ageCitation;
+}
+
+/**
+ * Dry-run the parent relations, age-evidence merge and calibration remapping of
+ * a reroot. Nothing in the document (or the id source) is touched, so a refusal
+ * is atomic even when the reversal would have travelled through a deep path.
+ */
+function simulateRerootTime(
+  project: Project,
+  rootId: NodeId,
+  rewire: (parents: Map<NodeId, NodeId | null>) => void,
+  rootAge: number | undefined,
+  suppressFormerRoot?: { fromId: NodeId; calibrationTargetId: NodeId },
+): boolean {
+  const parents = new Map<NodeId, NodeId | null>();
+  const ageEvidence = new Map<NodeId, AgeEvidence>();
+  const calibrations = (project.calibrationPoints ?? []).map((cp) => ({ ...cp }));
+  for (const node of Object.values(project.nodes)) {
+    parents.set(node.id, node.parentId);
+    ageEvidence.set(node.id, ageEvidenceOf(node));
+  }
+  rewire(parents);
+  const rootEvidence = ageEvidence.get(rootId) ?? ageEvidenceOf(undefined);
+  rootEvidence.age = rootAge;
+  ageEvidence.set(rootId, rootEvidence);
+
+  if (suppressFormerRoot) {
+    const { fromId, calibrationTargetId } = suppressFormerRoot;
+    const children = [...parents].filter(([, parentId]) => parentId === fromId).map(([id]) => id);
+    if (children.length <= 1) {
+      const survivor = children[0] ?? rootId;
+      const formerRootEvidence = ageEvidence.get(fromId);
+      const targetEvidence = ageEvidence.get(calibrationTargetId);
+      // Root-level dates describe the root divergence, just like its calibration.
+      // They must not become a tip age on the lineage that merely survives R.
+      if (formerRootEvidence && targetEvidence) {
+        mergeMissingAgeEvidence(formerRootEvidence, targetEvidence);
+      }
+      if (children.length === 1) parents.set(survivor, parents.get(fromId) ?? null);
+      parents.delete(fromId);
+      for (const cp of calibrations) {
+        if (cp.nodeId === fromId) cp.nodeId = calibrationTargetId;
+      }
+    }
+  }
+
+  for (const [id, parentId] of parents) {
+    if (parentId === null) continue;
+    if (!parents.has(parentId)) return false;
+    const age = finiteAgeValue(ageEvidence.get(id)?.age);
+    const parentAge = finiteAgeValue(ageEvidence.get(parentId)?.age);
+    if (age !== undefined && parentAge !== undefined && age > parentAge) return false;
+  }
+
+  const seenCalibrations = new Set<string>();
+  for (const cp of calibrations) {
+    if (seenCalibrations.has(cp.id)) continue;
+    seenCalibrations.add(cp.id);
+    if (cp.minAge > cp.maxAge || !ageEvidence.has(cp.nodeId)) return false;
+    const age = finiteAgeValue(ageEvidence.get(cp.nodeId)?.age);
+    if (age !== undefined && (age < cp.minAge || age > cp.maxAge)) return false;
+  }
+  return true;
 }
 
 /** Move `id` under `newParentId`. Rejects moves that would create a cycle. */
@@ -493,6 +580,126 @@ export function ladderize(project: Project, ascending = false): void {
 }
 
 /**
+ * Re-root directly on `targetId`: the selected node keeps its identity, label,
+ * annotations and age, and becomes the project root with no incoming branch.
+ * The path to the former root is reversed and every incoming edge's length and
+ * riders move with that physical edge. A former unifurcating root is suppressed
+ * without manufacturing a tip; its references follow the surviving lineage while
+ * its age evidence and calibration follow the new root. Unknown lengths remain unknown. The
+ * candidate parent/age/calibration relations are dry-run first; a time-ordering
+ * conflict returns false without changing the document or rewriting ages.
+ *
+ * This is deliberately NOT branch-midpoint rooting. Callers that need to split
+ * an incoming edge at a fraction must use `rerootOnBranch` instead.
+ */
+export function rerootAtNode(project: Project, targetId: NodeId): boolean {
+  const target = project.nodes[targetId];
+  if (!target || target.parentId === null) return false;
+  const oldRootId = project.rootId;
+
+  // Target -> parent -> ... -> old root. Snapshot before rewiring, with a cycle
+  // guard so malformed parent links refuse the operation rather than hanging.
+  const path: NodeId[] = [];
+  const seen = new Set<NodeId>();
+  let current: NodeId | null = targetId;
+  while (current !== null && !seen.has(current)) {
+    const node: TreeNode | undefined = project.nodes[current];
+    if (!node) return false;
+    seen.add(current);
+    path.push(current);
+    current = node.parentId;
+  }
+  if (path[path.length - 1] !== oldRootId) return false;
+
+  const timeValid = simulateRerootTime(
+    project,
+    targetId,
+    (parents) => {
+      parents.set(targetId, null);
+      for (let j = 0; j < path.length - 1; j += 1) parents.set(path[j + 1], path[j]);
+    },
+    target.age,
+    { fromId: oldRootId, calibrationTargetId: targetId },
+  );
+  if (!timeValid) return false;
+
+  interface EdgeRiders {
+    branchLength: number | undefined;
+    support: number | undefined;
+    supportKind: SupportKind | undefined;
+    supportScale: SupportScale | undefined;
+    branchStyle: Partial<BranchStyle> | undefined;
+    branchEvents: EvolutionaryEvent[];
+  }
+  const riders = new Map<NodeId, EdgeRiders>();
+  for (const id of path) {
+    const node = project.nodes[id];
+    riders.set(id, {
+      branchLength: knownLength(node.branchLength),
+      support: node.support,
+      supportKind: node.supportKind,
+      supportScale: node.supportScale,
+      branchStyle: node.branchStyle ? { ...node.branchStyle } : undefined,
+      branchEvents: project.events.filter((e) => e.nodeId === id && e.target === 'branch'),
+    });
+  }
+
+  const oldParent = project.nodes[target.parentId];
+  if (!oldParent) return false;
+  oldParent.childrenIds = oldParent.childrenIds.filter((id) => id !== targetId);
+  target.parentId = null;
+  // The selected vertex survives, but its incoming edge ceases to exist. The
+  // edge's riders move to the old parent in the reversal below, not onto root.
+  target.branchLength = undefined;
+  target.support = undefined;
+  target.supportKind = undefined;
+  target.supportScale = undefined;
+  target.branchStyle = undefined;
+
+  for (let j = 0; j < path.length - 1; j += 1) {
+    const lower = project.nodes[path[j]];
+    const upper = project.nodes[path[j + 1]];
+    upper.childrenIds = upper.childrenIds.filter((id) => id !== lower.id);
+    lower.childrenIds.push(upper.id);
+    upper.parentId = lower.id;
+    const rider = riders.get(lower.id);
+    if (!rider) continue;
+    upper.branchLength = rider.branchLength;
+    upper.support = rider.support;
+    upper.supportKind = rider.supportKind;
+    upper.supportScale = rider.supportScale;
+    upper.branchStyle = rider.branchStyle;
+    for (const event of rider.branchEvents) event.nodeId = upper.id;
+  }
+
+  project.rootId = targetId;
+  const formerRoot = project.nodes[oldRootId];
+  if (formerRoot && formerRoot.parentId !== null && formerRoot.childrenIds.length <= 1) {
+    const survivor = formerRoot.childrenIds[0] ?? targetId;
+    reattachNodeReferences(project, oldRootId, survivor, targetId);
+    const survivorNode = project.nodes[survivor];
+    if (survivor !== targetId && survivorNode) {
+      // The former root's incoming edge is merged into the survivor's incoming
+      // edge. Its scalar support/style riders must make the same trip; where
+      // both edges declare a value, the surviving lineage's value is specific.
+      if (survivorNode.support === undefined) {
+        survivorNode.support = formerRoot.support;
+        survivorNode.supportKind = formerRoot.supportKind;
+        survivorNode.supportScale = formerRoot.supportScale;
+      } else {
+        survivorNode.supportKind ??= formerRoot.supportKind;
+        survivorNode.supportScale ??= formerRoot.supportScale;
+      }
+      if (formerRoot.branchStyle || survivorNode.branchStyle) {
+        survivorNode.branchStyle = { ...formerRoot.branchStyle, ...survivorNode.branchStyle };
+      }
+    }
+    deleteNode(project, oldRootId, false);
+  }
+  return true;
+}
+
+/**
  * Re-root the tree on the branch entering `targetId`, at `fraction` of the way
  * from that branch's PARENT end towards `targetId` (0.5 = the middle of the
  * branch, the neutral position when only "which branch is the root on" is known
@@ -514,12 +721,12 @@ export function ladderize(project: Project, ascending = false): void {
  * root edges cannot be checked and `validateTimeData` skips the inversion the
  * re-root created.
  *
- * A unifurcation left at the former root is suppressed, and the events / fossil
- * calibrations that hung on it are re-attached to the surviving lineage instead
- * of being silently deleted. Returns false when the target is missing or already
- * the root.
+ * A unifurcation left at the former root is suppressed. Its events follow the
+ * surviving lineage, while its age evidence and fossil calibrations follow the
+ * new root instead of becoming a tip-age constraint. Returns false without mutation when the target is
+ * missing/already root, or the candidate ages/calibrations violate time ordering.
  */
-export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5): boolean {
+export function rerootOnBranch(project: Project, targetId: NodeId, fraction = 0.5): boolean {
   const target = project.nodes[targetId];
   if (!target || target.parentId === null) return false;
   const oldRootId = project.rootId;
@@ -536,6 +743,30 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
     path.push(c);
     c = project.nodes[c]?.parentId ?? null;
   }
+  if (path[path.length - 1] !== oldRootId) return false;
+
+  const parentAge = finiteAge(project.nodes[oldParentId]);
+  const targetAge = finiteAge(target);
+  const rootAge = parentAge !== undefined && targetAge !== undefined
+    ? parentAge + f * (targetAge - parentAge)
+    : undefined;
+  // A private placeholder lets the dry-run validate the fresh root without
+  // consuming an id or leaving a half-created node behind on rejection.
+  let simulatedRootId: NodeId = '__cladeforge_reroot_root__';
+  while (project.nodes[simulatedRootId]) simulatedRootId += '_';
+  const timeValid = simulateRerootTime(
+    project,
+    simulatedRootId,
+    (parents) => {
+      parents.set(simulatedRootId, null);
+      parents.set(targetId, simulatedRootId);
+      parents.set(oldParentId, simulatedRootId);
+      for (let j = 0; j < path.length - 1; j += 1) parents.set(path[j + 1], path[j]);
+    },
+    rootAge,
+    { fromId: oldRootId, calibrationTargetId: simulatedRootId },
+  );
+  if (!timeValid) return false;
 
   // Snapshot everything that rides on a physical edge BEFORE anything is
   // rewired. Reversing the edge between path[j+1] and path[j] keeps the edge's
@@ -598,11 +829,7 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
   }
 
   // Where the split branch sits between two dated endpoints, so does the root.
-  const parentAge = finiteAge(oldParent);
-  const targetAge = finiteAge(target);
-  if (parentAge !== undefined && targetAge !== undefined) {
-    root.age = parentAge + f * (targetAge - parentAge);
-  }
+  if (rootAge !== undefined) root.age = rootAge;
 
   project.rootId = root.id;
 
@@ -625,10 +852,11 @@ export function rerootAtNode(project: Project, targetId: NodeId, fraction = 0.5)
 }
 
 /**
- * Move a node's annotations onto a surviving lineage before the node is spliced
- * out, so a re-root never destroys evidence. Per-character records are
- * merged with the survivor winning, because an existing hypothesis on the
- * surviving node is the more specific statement.
+ * Move a node's evidence before it is spliced out, so a re-root never destroys
+ * annotations, nested meta, age bounds or provenance, custom edges, or
+ * hypothesis records. Missing values are retained recursively; the destination
+ * wins every conflict because its statement is the more specific one. Age
+ * evidence targets the new root rather than the surviving lineage.
  *
  * Stored (non-active) hypothesis layers are migrated with the SAME care as the
  * live ones: their events and notes used to be left behind on the dying node id,
@@ -643,6 +871,38 @@ function reattachNodeReferences(
   calibrationTargetId: NodeId = toId,
 ): void {
   if (fromId === toId) return;
+  const from = project.nodes[fromId];
+  const to = project.nodes[toId];
+  if (from && to) {
+    if (from.charStates) {
+      if (!to.charStates) to.charStates = {};
+      mergeMissingValue(from.charStates, to.charStates);
+    }
+    if (from.charMeta) {
+      if (!to.charMeta) to.charMeta = {};
+      mergeMissingValue(from.charMeta, to.charMeta);
+    }
+    if (from.annotations) {
+      if (!to.annotations) to.annotations = {};
+      mergeMissingValue(from.annotations, to.annotations);
+    }
+    if (from.meta) {
+      if (!to.meta) to.meta = {};
+      mergeMissingValue(from.meta, to.meta);
+    }
+    if (from.hypothesisNote && !to.hypothesisNote) to.hypothesisNote = from.hypothesisNote;
+    // Age evidence describes the root divergence, not the surviving lineage.
+    // Route it to the same new root as the former root's calibration; existing
+    // new-root values remain the more specific evidence.
+    const calibrationTarget = project.nodes[calibrationTargetId];
+    if (calibrationTarget) mergeMissingAgeEvidence(from, calibrationTarget);
+  }
+  // Custom edges are evidence too. Remap both endpoints before deleteNode sees
+  // the suppressed id, otherwise its incident-edge cleanup destroys them.
+  for (const edge of project.customEdges) {
+    if (edge.sourceId === fromId) edge.sourceId = toId;
+    if (edge.targetId === fromId) edge.targetId = toId;
+  }
   for (const e of project.events) if (e.nodeId === fromId) e.nodeId = toId;
   for (const cp of project.calibrationPoints ?? []) {
     if (cp.nodeId === fromId) cp.nodeId = calibrationTargetId;
@@ -655,6 +915,25 @@ function reattachNodeReferences(
   }
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Recursively retain missing evidence. The destination is the survivor, so it
+ * wins every scalar/array conflict; nested records still contribute keys the
+ * survivor does not define (rather than losing a whole meta/annotation bag).
+ * Prototype-mutating keys are never merged.
+ */
+function mergeMissingValue(src: unknown, dst: unknown): void {
+  if (!isPlainRecord(src) || !isPlainRecord(dst)) return;
+  for (const [key, value] of Object.entries(src)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (!Object.hasOwn(dst, key)) dst[key] = value;
+    else mergeMissingValue(value, dst[key]);
+  }
+}
+
 /** Merge `from`'s record into `to`'s for a node-keyed record map. */
 function mergeNodeRecord<T>(
   records: Record<NodeId, T>,
@@ -662,18 +941,12 @@ function mergeNodeRecord<T>(
   to: NodeId,
 ): void {
   const src = records[from];
-  if (!src) return;
+  if (src === undefined || src === null) return;
   const dst = records[to];
   if (dst === undefined || dst === null) records[to] = src;
-  else if (typeof dst === 'object' && typeof src === 'object') {
-    for (const [k, v] of Object.entries(src)) {
-      if (!(k in (dst as Record<string, unknown>))) (dst as Record<string, unknown>)[k] = v;
-    }
-  }
+  else mergeMissingValue(src, dst);
   // Both values scalar (a hypothesis note is a plain string): the survivor's
-  // own note is the more specific statement and wins the merge. Iterating a
-  // string's entries here (Object.entries("note") → "0","1",…) would crash the
-  // `in` check below, so scalars are handled before that path.
+  // own note is the more specific statement and wins the merge.
   delete records[from];
 }
 
@@ -694,8 +967,8 @@ export interface MidpointPlacement {
 export interface MidpointResult {
   ok: boolean;
   placement?: MidpointPlacement;
-  /** Why rooting was refused: nothing to measure on this tree. */
-  failure?: 'too-small' | 'no-usable-lengths';
+  /** Why rooting was refused: no measurable path, or a time-ordering conflict. */
+  failure?: 'too-small' | 'no-usable-lengths' | 'time-inversion';
 }
 
 /**
@@ -838,7 +1111,7 @@ export function midpointRoot(project: Project): MidpointResult {
 /**
  * Node to re-root on for MIDPOINT rooting: the node at the lower end of the
  * branch that contains the true midpoint of the tree's longest tip-to-tip
- * (patristic) path. Pair with `rerootAtNode`.
+ * (patristic) path. Pair with `rerootOnBranch`.
  *
  * NOTE: this returns only the branch — the root belongs *inside* it, so callers
  * that care about branch lengths must use `midpointRoot` / `applyMidpointReroot`
@@ -863,8 +1136,8 @@ export function applyMidpointReroot(project: Project): MidpointResult {
   if (!result.ok || !result.placement) return result;
   const { targetId, fraction } = result.placement;
   if (project.nodes[targetId]?.parentId === null) return { ok: false, failure: 'no-usable-lengths' };
-  const done = rerootAtNode(project, targetId, fraction);
-  return done ? result : { ok: false, failure: 'no-usable-lengths' };
+  const done = rerootOnBranch(project, targetId, fraction);
+  return done ? result : { ok: false, failure: 'time-inversion' };
 }
 
 /** Why an outgroup selection cannot root the tree. */
@@ -967,7 +1240,7 @@ export function checkOutgroupReroot(project: Project, outgroupIds: NodeId[]): Ou
  * ENTERING the outgroup (for a single node, that node's own incoming branch; for
  * several, their MRCA's incoming branch) — at its midpoint, the neutral position
  * when only the outgroup is specified. Rooting a single node one level too high
- * (`rerootAtNode(n.parentId)`) would treat "outgroup = A" as "outgroup =
+ * (`rerootOnBranch(n.parentId)`) would treat "outgroup = A" as "outgroup =
  * (A,B)", mis-polarising the entire tree and making the k = 1 and k >= 2 paths
  * contradict each other. The result is a value the caller has to check — a
  * refused re-root must not look like a successful no-op.
@@ -992,7 +1265,7 @@ export function outgroupReroot(project: Project, outgroupIds: NodeId[]): Outgrou
       if (!target) return { ok: false, reason: 'not-monophyletic' };
     }
   }
-  const done = rerootAtNode(project, target as NodeId);
+  const done = rerootOnBranch(project, target as NodeId);
   if (!done) return { ok: false, reason: 'unrootable' };
   return { ok: true, rootEdgeOf: target as NodeId };
 }
@@ -2631,6 +2904,7 @@ export function removeEnvironmentalEvent(project: Project, id: string): void {
 // --- calibration points -----------------------------------------------------
 
 export function addCalibrationPoint(project: Project, point: CalibrationPoint): void {
+  if (point.minAge > point.maxAge) return;
   project.calibrationPoints.push(point);
 }
 
@@ -2640,7 +2914,11 @@ export function updateCalibrationPoint(
   patch: Partial<CalibrationPoint>,
 ): void {
   const c = project.calibrationPoints.find((x) => x.id === id);
-  if (c) Object.assign(c, patch);
+  if (!c) return;
+  const minAge = patch.minAge ?? c.minAge;
+  const maxAge = patch.maxAge ?? c.maxAge;
+  if (minAge > maxAge) return;
+  Object.assign(c, patch);
 }
 
 export function removeCalibrationPoint(project: Project, id: string): void {
@@ -2668,6 +2946,7 @@ export function setCalibrationForNode(
   maxAge: number,
   label?: string,
 ): void {
+  if (minAge > maxAge) return;
   const existing = project.calibrationPoints.find((c) => c.nodeId === nodeId);
   if (existing) {
     existing.minAge = minAge;

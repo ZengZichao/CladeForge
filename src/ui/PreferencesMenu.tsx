@@ -63,12 +63,15 @@ function applyUiScale(scale: number): void {
 export function PreferencesMenu({
   open: openProp,
   onOpenChange,
+  onResetLocalData,
 }: {
   /** Controlled open state. App supplies it so the dialog survives the locale
    *  switch (the app subtree remounts on `key={lang}`); standalone mounts fall
    *  back to internal state. */
   open?: boolean;
   onOpenChange?: (v: boolean) => void;
+  /** App invalidates its pending autosave and discards all tabs after storage is cleared. */
+  onResetLocalData?: () => void;
 } = {}) {
   const langPref = useLanguagePref();
   const historyLimit = useStore((s) => s.historyLimit);
@@ -154,7 +157,10 @@ export function PreferencesMenu({
     requestConfirm({
       key: 'clear-local-data',
       title: S.review.clearLocalData,
-      message: S.review.clearLocalDataConfirm,
+      message: `${S.review.clearLocalDataConfirm} ${tr(
+        '所有打开的文档将被丢弃，并替换为一个空白工作区。',
+        'All open documents will be discarded and replaced with a blank workspace.',
+      )}`,
       confirmLabel: S.review.clearLocalData,
       danger: true,
       onConfirm: () => {
@@ -164,8 +170,10 @@ export function PreferencesMenu({
           localStorage.clear();
           if (keepTheme) localStorage.setItem('cladeforge:theme', keepTheme);
         } catch {
-          /* storage already broken */
+          /* storage already broken — still discard the in-memory workspace */
         }
+        useStore.getState().resetHistoryLimit();
+        onResetLocalData?.();
         notify.success(S.review.clearedLocalData);
       },
     });
@@ -359,7 +367,10 @@ export function PreferencesMenu({
                       <div className="prefs-row-label">
                         <span className="prefs-label">{S.review.clearLocalData}</span>
                         <span className="prefs-desc">
-                          {tr('清除本地恢复区与偏好设置；磁盘上的项目文件不受影响。', 'Clears the local recovery area and preferences; project files on disk are untouched.')}
+                          {tr(
+                            '清除本地恢复区与偏好设置，并丢弃所有打开文档；磁盘上的项目文件不受影响。',
+                            'Clears the local recovery area and preferences and discards all open documents; project files on disk are untouched.',
+                          )}
                         </span>
                       </div>
                       <div className="prefs-row-control">

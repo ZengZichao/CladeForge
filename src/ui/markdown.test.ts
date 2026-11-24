@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { parseMarkdown, renderBlocks, tocOf } from './markdown';
 
 describe('parseMarkdown', () => {
@@ -45,9 +46,61 @@ describe('parseMarkdown', () => {
     expect(p.props.children[0]).toBe('<script>alert(1)</script>');
   });
 
-  it('rejects javascript: link schemes (allow-list: http(s) and anchors)', () => {
-    const blocks = parseMarkdown('[x](javascript:alert(1)) [y](https://ok.example)');
-    expect(blocks[0].kind).toBe('para');
+  it('BUG-001: removes HTML comments before parsing headings and paragraphs', () => {
+    const blocks = parseMarkdown('<!-- AI-PROVENANCE: hidden -->\n# Visible\n\nBefore\n<!-- hidden paragraph -->\nAfter');
+    expect(blocks.map((b) => b.kind)).toEqual(['heading', 'para', 'para']);
+    const html = renderToStaticMarkup(renderBlocks(blocks));
+    expect(html).not.toContain('AI-PROVENANCE');
+    expect(html).not.toContain('hidden');
+    expect(html).toContain('Visible');
+    expect(html).toContain('<p>Before</p><p>After</p>');
+  });
+
+  it('BUG-001: removes multiline comments, including comment-like block syntax', () => {
+    const blocks = parseMarkdown('<!-- AI-PROVENANCE:\n# not a heading\n\n[link](javascript:alert(1))\n-->\n## Real heading');
+    expect(blocks.map((b) => b.kind)).toEqual(['heading']);
+    expect(renderToStaticMarkup(renderBlocks(blocks))).not.toContain('AI-PROVENANCE');
+    expect(tocOf(blocks).map((t) => t.text)).toEqual(['Real heading']);
+  });
+
+  it('BUG-001: never exposes HTML comments from fenced code examples', () => {
+    const blocks = parseMarkdown('```html\n<!-- hidden example -->\n<p>Visible example</p>\n```');
+    expect(blocks.map((b) => b.kind)).toEqual(['code']);
+    const html = renderToStaticMarkup(renderBlocks(blocks));
+    expect(html).not.toContain('hidden example');
+    expect(html).toContain('&lt;p&gt;Visible example&lt;/p&gt;');
+  });
+
+  it('BUG-001: does not expose an unterminated HTML comment', () => {
+    const blocks = parseMarkdown('Visible\n<!-- AI-PROVENANCE: hidden to EOF');
+    expect(blocks.map((b) => b.kind)).toEqual(['para']);
+    expect(renderToStaticMarkup(renderBlocks(blocks))).toBe('<p>Visible</p>');
+  });
+
+  it('B-X03: renders relative manual links as readable text without navigation', () => {
+    const blocks = parseMarkdown('[MANUAL_EN.md](./MANUAL_EN.md) and [guide](../guide.md#start)');
+    expect(renderToStaticMarkup(renderBlocks(blocks))).toBe(
+      '<p>MANUAL_EN.md (./MANUAL_EN.md) and guide (../guide.md#start)</p>',
+    );
+  });
+
+  it('keeps external links safe and disables opener access', () => {
+    const blocks = parseMarkdown('[bad](javascript:alert(1)) [bad data](data:text/html,x) [ok](https://ok.example)');
+    const html = renderToStaticMarkup(renderBlocks(blocks));
+    expect(html).toContain('<p>bad bad data ');
+    expect(html).toContain('<a href="https://ok.example" target="_blank" rel="noreferrer noopener">ok</a>');
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('data:text/html');
+  });
+
+  it('B-X03: the shipped manuals contain no visible provenance or raw relative link markup', () => {
+    const root = fileURLToPath(new URL('../../docs', import.meta.url));
+    for (const name of ['MANUAL_ZH.md', 'MANUAL_EN.md']) {
+      const text = readFileSync(`${root}/${name}`, 'utf8');
+      const html = renderToStaticMarkup(renderBlocks(parseMarkdown(text)));
+      expect(html).not.toContain('AI-PROVENANCE');
+      expect(html).not.toMatch(/\[[^\]]+\]\([^)]*\.md(?:#[^)]*)?\)/);
+    }
   });
 
   it('parses the shipped manuals without throwing and builds a real TOC', () => {

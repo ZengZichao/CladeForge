@@ -14,7 +14,7 @@ import { openSample } from './sampleOpener';
 import { requestConfirm } from './confirmDialog';
 import { useDialogFocus } from './useDialogFocus';
 import { notify } from './toast';
-import { S, tr } from './strings';
+import { S, modKey, tr } from './strings';
 import { usePresence } from './motion';
 
 function SampleRow({
@@ -74,7 +74,7 @@ export function SampleLibraryDialog({ open, onClose }: { open: boolean; onClose:
               key={sample.id}
               sample={sample}
               onOpenNew={() => {
-                openSample(sample);
+                openSample(sample, { openInNewTab: true });
                 onClose();
               }}
               onReplace={() => {
@@ -82,8 +82,8 @@ export function SampleLibraryDialog({ open, onClose }: { open: boolean; onClose:
                   key: 'sample-replace-current',
                   title: S.review.sampleReplaceCurrent,
                   message: tr(
-                    `将用示例「${tr(sample.label, sample.labelEn)}」替换当前文档的内容。此操作不能通过撤销恢复（如需保留，请先在画布上按 ⌘S 写入项目文件）。`,
-                    `This replaces the current document's content with the sample "${tr(sample.label, sample.labelEn)}". It cannot be undone (save the current work first with ⌘S if you need it).`,
+                    `将用示例「${tr(sample.label, sample.labelEn)}」替换当前文档的内容。此操作不能通过撤销恢复（如需保留，请先在画布上按 ${modKey()}S 写入项目文件）。`,
+                    `This replaces the current document's content with the sample "${tr(sample.label, sample.labelEn)}". It cannot be undone (save the current work first with ${modKey()}S if you need it).`,
                   ),
                   confirmLabel: S.review.sampleReplaceCurrent,
                   danger: true,

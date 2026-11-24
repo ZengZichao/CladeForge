@@ -248,6 +248,18 @@ export function validateProject(project: Project): ValidationResult {
   } else {
     project.calibrationPoints = [];
   }
+  // A reversed interval imported from an older/hand-edited file is damage, not
+  // a cue to swap or clamp the bounds. Preserve the evidence and report it so
+  // the user can make an explicit scientific correction in the Time panel.
+  for (const calibration of project.calibrationPoints) {
+    if (calibration.minAge <= calibration.maxAge) continue;
+    issues.push(
+      tr(
+        `校准点「${calibration.label || calibration.id}」的最小年龄 ${calibration.minAge} 大于最大年龄 ${calibration.maxAge}；已保留原值，请在时间面板修正`,
+        `Calibration "${calibration.label || calibration.id}" has minimum age ${calibration.minAge} greater than maximum age ${calibration.maxAge}; values were preserved for explicit correction in the Time panel`,
+      ),
+    );
+  }
 
   // The active layer must be one of the declared layers, otherwise every
   // hypothesis the user reads on screen belongs to no layer at all.

@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createEmptyProject } from './sampleTree';
-import { addCharacter, addChildren, rerootAtNode, setNodeState } from './treeOps';
+import { addCharacter, addChildren, rerootOnBranch, setNodeState } from './treeOps';
 import { newCharacter } from './characters';
 import { parsimony, presetCostMatrix } from './parsimony';
 import { reconstructMk } from './asr';
@@ -127,7 +127,7 @@ describe('scientific invariants the reviews asked to pin', () => {
     const total = () =>
       Object.values(p.nodes).reduce((sum, n) => (n.parentId ? sum + (n.branchLength ?? 0) : sum), 0);
     const before = total();
-    rerootAtNode(p, Object.values(p.nodes).find((n) => n.childrenIds.length > 0 && n.parentId)!.id, 0.5);
+    rerootOnBranch(p, Object.values(p.nodes).find((n) => n.childrenIds.length > 0 && n.parentId)!.id, 0.5);
     const after = total();
     expect(after).toBeCloseTo(before, 6);
   });

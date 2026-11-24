@@ -25,6 +25,7 @@ import {
   setEdgeLabel,
   setEdgeStyle,
   setNodeAge,
+  updateCalibrationPoint,
   setHypothesisNote,
   setNodeStyle,
   setSubtreeBranchColor,
@@ -449,11 +450,19 @@ function NodePanel({
                   `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
                   `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
                 )}
+                validate={(v) =>
+                  v > calibration.maxAge
+                    ? tr(
+                        '最小年龄不能大于最大年龄（Min age ≤ Max age）',
+                        'Minimum age cannot exceed maximum age (Min age ≤ Max age)',
+                      )
+                    : null
+                }
                 onCommit={(v) =>
                   v !== undefined &&
                   apply((d) => {
                     const c = d.calibrationPoints.find((cp) => cp.nodeId === id);
-                    if (c) c.minAge = v;
+                    if (c) updateCalibrationPoint(d, c.id, { minAge: v });
                   })
                 }
               />
@@ -468,11 +477,19 @@ function NodePanel({
                   `年龄（单位：${timeUnitLabel(timeUnit)}）；Ma = 百万年前`,
                   `Age in ${timeUnitLabel(timeUnit)}; Ma = million years ago`,
                 )}
+                validate={(v) =>
+                  v < calibration.minAge
+                    ? tr(
+                        '最大年龄不能小于最小年龄（Max age ≥ Min age）',
+                        'Maximum age cannot be less than minimum age (Max age ≥ Min age)',
+                      )
+                    : null
+                }
                 onCommit={(v) =>
                   v !== undefined &&
                   apply((d) => {
                     const c = d.calibrationPoints.find((cp) => cp.nodeId === id);
-                    if (c) c.maxAge = v;
+                    if (c) updateCalibrationPoint(d, c.id, { maxAge: v });
                   })
                 }
               />
@@ -481,9 +498,19 @@ function NodePanel({
               {tr('此节点已绑定校准区间', 'This node has a calibration range')}
               {calibration.minAge}–{calibration.maxAge} {timeUnit}
             </div>
+            <div className="hint">
+              {tr(
+                '默认状态为无校准覆盖；重置不会改写节点年龄。',
+                'The default is no calibration override; reset leaves the node age unchanged.',
+              )}
+            </div>
             <div className="field row-actions">
               <button
                 className="btn danger"
+                title={tr(
+                  '移除该节点的时间校准覆盖；不恢复样本数值',
+                  'Remove this node’s time calibration override; no sample values are restored',
+                )}
                 onClick={() =>
                   apply((d) => {
                     d.calibrationPoints = d.calibrationPoints.filter(
@@ -492,7 +519,7 @@ function NodePanel({
                   })
                 }
               >
-                {tr('移除校准', 'Remove calibration')}
+                {tr('恢复默认（移除校准）', 'Reset to default (remove calibration)')}
               </button>
             </div>
           </>

@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Cross1Icon, HamburgerMenuIcon, ViewVerticalIcon } from '@radix-ui/react-icons';
-import { useStore } from '../model/store';
+import { useStore, reconWorkspaceHasContent } from '../model/store';
 import { S, tr } from '../ui/strings';
 import { ReconPanel } from '../ui/ReconPanel';
 import { ReconInspector } from '../ui/ReconInspector';
@@ -69,6 +69,7 @@ function readReconWidth(key: string, fallback: number): number {
 export function ReconWorkspace({
   panelsHidden,
   onShowPanels,
+  onBothPanelsHiddenChange,
   onCopySpeciesTree,
   onAddChildrenDialog,
   onAddChildrenDialogGene,
@@ -76,6 +77,9 @@ export function ReconWorkspace({
   panelsHidden: boolean;
   /** A#2: restores both panels after the header / ⌘. double-hide. */
   onShowPanels: () => void;
+  /** Reports independent double-hide only while a nested standard editor is
+      mounted; coordination and empty surfaces explicitly publish false. */
+  onBothPanelsHiddenChange?: (bothHidden: boolean) => void;
   /** Empty state: 新建协调视图 — seeds the reconciliation from the species tree. */
   onCopySpeciesTree: () => void;
   /** Opens the shared add-children dialog (owned by App) — the tree-edit
@@ -91,13 +95,6 @@ export function ReconWorkspace({
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const geneSelection = useStore((s) => s.geneSelection);
   const speciesSelection = useStore((s) => s.selection);
-  const geneTreeCount = useStore((s) => s.project.geneTrees?.length ?? 0);
-  // While 「基因树编辑」 is swapped, `project` IS the gene doc — the count that
-  // matters for workspace chrome comes from the backed-up species project.
-  const geneEditBackup = useStore((s) => s.geneEditBackup);
-  const effectiveGeneTreeCount = geneEditBackup
-    ? (geneEditBackup.project.geneTrees?.length ?? 0)
-    : geneTreeCount;
   // 用户反馈: 物种树编辑 / 基因树编辑 render the STANDARD workspace — same
   // side panels, same mouse gestures as 标准视图. 协调映射编辑 / 协调嵌套预览
   // render the coordination canvas below (side-by-side / embedded respectively).
@@ -131,11 +128,21 @@ export function ReconWorkspace({
   const mid = windowWidth < MID;
   const wide = windowWidth >= WIDE;
   const fullNarrow = windowWidth < FULL_NARROW;
-  // 用户反馈：with NO gene tree there is nothing for the left panel to list or
-  // edit — the empty stage carries the creation entries itself, so the sidebar
-  // stays out of the way until a gene tree exists. While 「基因树编辑」 is
-  // swapped, the gene trees live on the backup, not on `project`.
-  const reconEmpty = effectiveGeneTreeCount === 0;
+  // 用户反馈：with no usable active gene tree there is nothing for the left
+  // panel to list or edit — the empty stage carries the creation entries itself,
+  // so the sidebar stays out of the way. The shared predicate also follows the
+  // species-tree backup while 「基因树编辑」 has the gene document swapped in.
+  const reconEmpty = !useStore(reconWorkspaceHasContent);
+  const rendersStandardWorkspace =
+    (reconEditTarget === 'species' || reconEditTarget === 'gene') && !reconEmpty;
+  // App's master toggle must not mistake a stale nested-editor report for the
+  // current surface. Keep the latest callback in a ref so this effect depends
+  // only on the rendered surface, not on a parent's inline callback identity.
+  const bothPanelsHiddenChangeRef = useRef(onBothPanelsHiddenChange);
+  bothPanelsHiddenChangeRef.current = onBothPanelsHiddenChange;
+  useEffect(() => {
+    if (!rendersStandardWorkspace) bothPanelsHiddenChangeRef.current?.(false);
+  }, [rendersStandardWorkspace]);
 
   const openGenePanel = useCallback(() => {
     setLeftDrawerOpen(true);
@@ -147,7 +154,7 @@ export function ReconWorkspace({
   // switch row keeps one fixed position across all four modes. Species needs
   // no swap (the project IS the species tree); the gene tree was swapped into
   // `project` by setReconEditTarget before this branch rendered.
-  if ((reconEditTarget === 'species' || reconEditTarget === 'gene') && !reconEmpty) {
+  if (rendersStandardWorkspace) {
     return (
       <div className="body recon-workspace recon-editing">
         <ReconToolbar />
@@ -155,6 +162,7 @@ export function ReconWorkspace({
           <StandardWorkspace
             panelsHidden={panelsHidden}
             onShowPanels={onShowPanels}
+            onBothPanelsHiddenChange={onBothPanelsHiddenChange}
             onAddChildrenDialog={onAddChildrenDialog}
           />
         </div>
@@ -179,7 +187,7 @@ export function ReconWorkspace({
         {/* 用户反馈: ONE plain left panel stacks the two surviving sections
             (视图 / 节点映射). On the narrowest tier a toggle button opens the
             panel as a full overlay. */}
-        {fullNarrow && (
+        {fullNarrow && !reconEmpty && (
           <button
             className="panel-toggle-btn left"
             onClick={openGenePanel}
@@ -190,26 +198,28 @@ export function ReconWorkspace({
           </button>
         )}
 
-        <div
-          ref={leftPanelRef}
-          className={`panel panel-left recon-left${!leftInline ? ' overlay' : ''}`}
-          style={{
-            width: leftInline ? leftWidth : 280,
-            ...(!leftInline && !leftDrawerOpen && { display: 'none' }),
-          }}
-        >
-          {!leftInline && (
-            <button
-              className="overlay-close"
-              onClick={() => setLeftDrawerOpen(false)}
-              title={S.panel.closeOverlay}
-              aria-label={S.panel.closeOverlay}
-            >
-              <Cross1Icon />
-            </button>
-          )}
-          <ReconPanel />
-        </div>
+        {!reconEmpty && (
+          <div
+            ref={leftPanelRef}
+            className={`panel panel-left recon-left${!leftInline ? ' overlay' : ''}`}
+            style={{
+              width: leftInline ? leftWidth : 280,
+              ...(!leftInline && !leftDrawerOpen && { display: 'none' }),
+            }}
+          >
+            {!leftInline && (
+              <button
+                className="overlay-close"
+                onClick={() => setLeftDrawerOpen(false)}
+                title={S.panel.closeOverlay}
+                aria-label={S.panel.closeOverlay}
+              >
+                <Cross1Icon />
+              </button>
+            )}
+            <ReconPanel />
+          </div>
+        )}
         {/* A#2: when the header / ⌘. toggle hid BOTH panels, each edge gets its
             own way back; previously neither button existed in this state. */}
         {panelsHidden && !fullNarrow && !reconEmpty && (

@@ -26,6 +26,7 @@ import { newId } from '../model/treeOps';
 import { defaultLayers, pruneLayerStore } from '../model/layers';
 import { validateProject } from '../model/validate';
 import { assertProjectInput, stripBom } from './limits';
+import type { WorkspaceTabState } from '../model/store';
 import {
   classifyStorageError,
   failureMessage,
@@ -496,6 +497,8 @@ interface WorkspaceFile {
   version: string;
   activeIndex: number;
   projects: Project[];
+  /** Optional for workspaces written before per-tab view-state persistence. */
+  tabStates?: WorkspaceTabState[];
 }
 
 /**
@@ -507,13 +510,18 @@ interface WorkspaceFile {
  * save. The result is also published on the autosave channel, which raises the
  * warning toast, so no caller has to remember to check.
  */
-export function writeWorkspace(projects: Project[], activeIndex: number): WriteResult {
+export function writeWorkspace(
+  projects: Project[],
+  activeIndex: number,
+  tabStates?: WorkspaceTabState[],
+): WriteResult {
   const payload: WorkspaceFile = {
     app: 'CladeForge',
     kind: 'workspace',
     version: PROJECT_VERSION,
     activeIndex,
     projects,
+    ...(tabStates ? { tabStates } : {}),
   };
   let text: string;
   try {
@@ -546,6 +554,24 @@ export interface WorkspaceRestore {
   skipped: number;
   /** Every repair / note collected while restoring the tabs. */
   issues: string[];
+  /** View state aligned with `projects`; absent entries use legacy defaults. */
+  tabStates?: WorkspaceTabState[];
+}
+
+function readWorkspaceTabState(value: unknown): WorkspaceTabState | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (
+    typeof raw.reconMode !== 'boolean' ||
+    typeof raw.reconEditTarget !== 'string' ||
+    !['species', 'gene', 'recon', 'embedded'].includes(raw.reconEditTarget) ||
+    !(raw.activeGeneTreeId === null || typeof raw.activeGeneTreeId === 'string')
+  ) return undefined;
+  return {
+    reconMode: raw.reconMode,
+    reconEditTarget: raw.reconEditTarget as WorkspaceTabState['reconEditTarget'],
+    activeGeneTreeId: raw.activeGeneTreeId,
+  };
 }
 
 /**
@@ -583,9 +609,10 @@ export function readWorkspace(): WorkspaceRestore | null {
   }
   if (!Array.isArray(data.projects) || data.projects.length === 0) return null;
   const projects: Project[] = [];
+  const tabStates: (WorkspaceTabState | undefined)[] = [];
   const issues: string[] = [];
   let skipped = 0;
-  for (const p of data.projects) {
+  for (const [index, p] of data.projects.entries()) {
     const src = p as Project & RawProject;
     if (!src || typeof src !== 'object' || !src.nodes || !src.rootId || !src.nodes[src.rootId]) {
       skipped += 1;
@@ -594,6 +621,7 @@ export function readWorkspace(): WorkspaceRestore | null {
     try {
       const restored = finalizeProject(src, String(src.version ?? PROJECT_VERSION));
       projects.push(restored.project);
+      tabStates.push(Array.isArray(data.tabStates) ? readWorkspaceTabState(data.tabStates[index]) : undefined);
       issues.push(...restored.issues);
     } catch {
       skipped += 1;
@@ -605,6 +633,7 @@ export function readWorkspace(): WorkspaceRestore | null {
     activeIndex: typeof data.activeIndex === 'number' ? data.activeIndex : 0,
     skipped,
     issues,
+    ...(Array.isArray(data.tabStates) ? { tabStates: tabStates as WorkspaceTabState[] } : {}),
   };
 }
 

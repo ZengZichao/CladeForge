@@ -7,6 +7,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { createElement, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { useStore } from '../model/store';
 import { PreferencesMenu } from './PreferencesMenu';
 import { ConfirmDialog } from './confirmDialog';
 
@@ -88,5 +89,26 @@ describe('Preferences › Reset local data (BUG-04)', () => {
     click(confirmBtn);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(document.querySelector('.prefs-dialog')).toBeNull();
+  });
+
+  it('CF-B-002: the undo-limit control persists 1000 and reset restores 100', () => {
+    useStore.getState().setHistoryLimit(100);
+    mount();
+    click(document.querySelector('.prefs-trigger'));
+    const limit = Array.from(document.querySelectorAll<HTMLSelectElement>('.prefs-select'))
+      .find((select) => Array.from(select.options).some((option) => option.value === '1000'))!;
+    expect(limit).toBeDefined();
+    act(() => {
+      limit.value = '1000';
+      limit.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(useStore.getState().historyLimit).toBe(1000);
+    expect(localStorage.getItem('cladeforge:historyLimit')).toBe('1000');
+
+    click(document.querySelector('.prefs-reset-btn'));
+    const confirm = document.querySelector('[role="alertdialog"]')!;
+    click(confirm.querySelector('.actions button:last-child'));
+    expect(localStorage.getItem('cladeforge:historyLimit')).toBeNull();
+    expect(useStore.getState().historyLimit).toBe(100);
   });
 });

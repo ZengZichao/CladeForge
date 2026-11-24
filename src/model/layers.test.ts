@@ -153,6 +153,18 @@ describe('layer switching after a character deletion', () => {
     p.nodes[p.rootId].hypothesisNote = 'H2 note on root';
     switchLayer(p, layer1);
     expect(p.layerStore[layer2].events.length).toBe(1);
+    const shared = newCharacter('shared');
+    const rootOnly = newCharacter('root-only');
+    addCharacter(p, shared);
+    addCharacter(p, rootOnly);
+    setNodeState(p, p.rootId, shared.id, shared.states[0].id);
+    setNodeState(p, p.rootId, rootOnly.id, rootOnly.states[0].id);
+    setNodeState(p, a, shared.id, shared.states[1].id);
+    p.nodes[p.rootId].hypothesisNote = 'layer 1 root note';
+    p.nodes[a].hypothesisNote = 'layer 1 survivor note';
+    p.events = [newEvent('hgt', 'node', p.rootId)];
+    p.calibrationPoints = [{ id: 'cp-root', nodeId: p.rootId, minAge: 50, maxAge: 60 }];
+    expect(p.nodes[p.rootId].charStates?.[rootOnly.id]).toBe(rootOnly.states[0].id);
 
     // Re-root onto tip `b`: the old root has one child left, so it is spliced
     // out and every reference on it must move to the survivor.
@@ -166,6 +178,12 @@ describe('layer switching after a character deletion', () => {
       expect(p.nodes[nid]).toBeDefined();
     }
     expect(notes[a]).toBe('H2 note on a'); // survivor's own note wins the merge
+    expect(p.events[0].nodeId).toBe(a);
+    expect(p.calibrationPoints[0].nodeId).toBe(p.rootId);
+    expect(p.rootId).toBe(b);
+    expect(p.nodes[a].charStates?.[shared.id]).toBe(shared.states[1].id); // survivor wins
+    expect(p.nodes[a].charStates?.[rootOnly.id]).toBe(rootOnly.states[0].id); // root-only evidence survives
+    expect(p.nodes[a].hypothesisNote).toBe('layer 1 survivor note');
 
     // Loading the document back must not report anything pruned: nothing is
     // dangling any more.

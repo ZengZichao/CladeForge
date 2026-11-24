@@ -76,13 +76,16 @@ describe('midpointText', () => {
     expect(text).toContain('没有按 1 计入');
   });
 
-  it('distinguishes the two failures', () => {
+  it('distinguishes measurement failures from a rejected time-inconsistent result', () => {
     const small = midpointText({ ok: false, failure: 'too-small' });
     const none = midpointText({ ok: false, failure: 'no-usable-lengths' });
+    const time = midpointText({ ok: false, failure: 'time-inversion' });
     expect(small).not.toBe(none);
     expect(small).toContain('少于 3');
     expect(none).toContain('枝长');
-    for (const t of [small, none]) expect(t).toContain('未执行');
+    expect(time).toContain('年龄');
+    expect(time).toContain('校准');
+    for (const t of [small, none, time]) expect(t).toContain('未执行');
   });
 
   it('rounds float noise out of the diameter', () => {
@@ -147,7 +150,7 @@ describe('the notices agree with the model types they describe', () => {
   it('every MidpointResult failure string is covered by a branch', () => {
     // Compile-time plus run-time guard: if treeOps adds a failure kind the
     // switch must grow, not fall through to the length case.
-    const all: MidpointResult['failure'][] = ['too-small', 'no-usable-lengths'];
+    const all: MidpointResult['failure'][] = ['too-small', 'no-usable-lengths', 'time-inversion'];
     for (const f of all) {
       expect(midpointText({ ok: false, failure: f })).toMatch(/未执行|skipped/);
     }

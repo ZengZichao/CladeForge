@@ -34,6 +34,7 @@ import {
   removeCharacterState,
   reparent,
   rerootAtNode,
+  rerootOnBranch,
   resetIdGenerator,
   sequentialIdGenerator,
   setCharacterCostMatrix,
@@ -63,6 +64,31 @@ function expectIntegrity(p: Project): void {
     expect(parent.childrenIds).toContain(id);
   }
   expect(collectSubtree(p, p.rootId).size).toBe(Object.keys(p.nodes).length);
+}
+
+function nodeIdByLabel(p: Project, label: string): string {
+  const node = Object.values(p.nodes).find((n) => n.label === label);
+  if (!node) throw new Error(`Missing fixture node ${label}`);
+  return node.id;
+}
+
+function totalKnownLength(p: Project): number {
+  return Object.values(p.nodes).reduce(
+    (sum, n) => sum + (n.parentId !== null ? (knownLength(n.branchLength) ?? 0) : 0),
+    0,
+  );
+}
+
+function patristicDistance(p: Project, aLabel: string, bLabel: string): number | undefined {
+  const path = pathBetween(p, nodeIdByLabel(p, aLabel), nodeIdByLabel(p, bLabel));
+  if (!path) return undefined;
+  let total = 0;
+  for (const id of path.branches) {
+    const length = knownLength(p.nodes[id].branchLength);
+    if (length === undefined) return undefined;
+    total += length;
+  }
+  return total;
 }
 
 describe('treeOps', () => {
@@ -155,25 +181,53 @@ describe('treeOps', () => {
     expect(p.nodes[p.rootId].childrenIds).toEqual([a, b]);
   });
 
-  it('rerootAtNode re-hangs the tree and suppresses the old binary root', () => {
-    const p = createEmptyProject();
-    const oldRoot = p.rootId;
-    addChildren(p, p.rootId, 2); // root -> (a, b)
-    const a = p.nodes[oldRoot].childrenIds[0];
-    const [c] = addChildren(p, a, 2); // a -> (c, d)
-    expect(Object.keys(p.nodes)).toHaveLength(5);
+  it('rerootAtNode makes the selected node the root without splitting its 500-length edge', () => {
+    const p = parseNewick("(('Taxon_A':100,'Taxon_B':500)X:200,'Taxon_C':300)R;");
+    const oldRoot = nodeIdByLabel(p, 'R');
+    const target = nodeIdByLabel(p, 'Taxon_B');
+    p.nodes[target].annotations = { accession: 'B-001', host: 'human' };
+    p.nodes[target].style = { fill: '#123456' };
+    const targetBefore = { ...p.nodes[target] };
+    const nodeCount = Object.keys(p.nodes).length;
 
-    expect(rerootAtNode(p, c)).toBe(true);
-    expect(p.rootId).not.toBe(oldRoot);
-    expect(p.nodes[oldRoot]).toBeUndefined(); // binary root became a unifurcation and was spliced
-    expect(Object.keys(p.nodes)).toHaveLength(5); // +newRoot, -oldRoot
-    expect(p.nodes[c].parentId).toBe(p.rootId);
+    expect(rerootAtNode(p, target)).toBe(true);
+    expect(p.rootId).toBe(target);
+    expect(p.nodes[target].parentId).toBeNull();
+    expect(p.nodes[target].label).toBe('Taxon_B');
+    expect(p.nodes[target].annotations).toEqual(targetBefore.annotations);
+    expect(p.nodes[target].style).toEqual(targetBefore.style);
+    expect(p.nodes[target].branchLength).toBeUndefined();
+    expect(p.nodes[oldRoot]).toBeUndefined();
+    expect(Object.keys(p.nodes)).toHaveLength(nodeCount - 1);
+    expect(nodeIdByLabel(p, 'X')).not.toBe(target);
+    // The incoming 500 edge moved intact to X; suppressing R merged X–R (200)
+    // with R–C (300), rather than splitting 500 into two artificial halves.
+    expect(p.nodes[nodeIdByLabel(p, 'X')].branchLength).toBe(500);
+    expect(p.nodes[nodeIdByLabel(p, 'Taxon_C')].branchLength).toBe(500);
+    expect(p.nodes[nodeIdByLabel(p, 'Taxon_A')].branchLength).toBe(100);
+    expect(totalKnownLength(p)).toBe(1100);
+    expect(patristicDistance(p, 'Taxon_A', 'Taxon_B')).toBe(600);
+    expect(patristicDistance(p, 'Taxon_B', 'Taxon_C')).toBe(1000);
     expectIntegrity(p);
   });
 
   it('rerootAtNode refuses the existing root', () => {
     const p = createEmptyProject();
     expect(rerootAtNode(p, p.rootId)).toBe(false);
+  });
+
+  it('rerootOnBranch keeps midpoint semantics in a separate exported operation', () => {
+    const p = parseNewick('((A:2,B:2)X:4,C:6)R;');
+    const target = nodeIdByLabel(p, 'X');
+    expect(rerootOnBranch(p, target, 0.25)).toBe(true);
+    expect(p.rootId).not.toBe(target);
+    expect(p.nodes[p.rootId].label).toBe('');
+    expect(p.nodes[target].parentId).toBe(p.rootId);
+    expect(p.nodes[target].branchLength).toBe(3);
+    expect(p.nodes[nodeIdByLabel(p, 'C')].branchLength).toBe(7); // 1 + C's original 6
+    expect(totalKnownLength(p)).toBe(14);
+    expect(patristicDistance(p, 'A', 'C')).toBe(12);
+    expectIntegrity(p);
   });
 
   it('mrcaOf and pathBetween locate the common ancestor and connecting path', () => {
@@ -213,7 +267,7 @@ describe('treeOps', () => {
     const t = midpointTarget(p);
     expect(t).not.toBeNull();
     expect(t).not.toBe(p.rootId);
-    expect(rerootAtNode(p, t as string)).toBe(true);
+    expect(rerootOnBranch(p, t as string)).toBe(true);
     expectIntegrity(p);
   });
 
@@ -547,15 +601,14 @@ describe('branch lengths and ages across a re-root', () => {
     expect(p.nodes.a.branchLength).toBe(2);
   });
 
-  it('dates the fresh root so a re-root’s age inversions become checkable', () => {
+  it('rejects an outgroup reroot that would create a dated ancestry inversion', () => {
     const clean = chronogram();
     expect(validateTimeData(clean)).toEqual([]); // the fixture is consistent
     const p = chronogram();
-    expect(outgroupReroot(p, ['c']).ok).toBe(true);
-    // Midpoint of the branch from X (60 Ma) to C (0 Ma).
-    expect(p.nodes[p.rootId].age).toBe(30);
-    const issues = validateTimeData(p);
-    expect(issues.some((s) => /older than its parent/.test(s))).toBe(true);
+    const before = structuredClone(p);
+    expect(outgroupReroot(p, ['c'])).toEqual({ ok: false, reason: 'unrootable' });
+    expect(p).toEqual(before);
+    expect(validateTimeData(p)).toEqual([]);
   });
 
   it('re-attaches the former root’s events and calibrations, not deletes them', () => {
@@ -595,6 +648,23 @@ describe('branch lengths and ages across a re-root', () => {
     expect(pathLength(p, root, 'a')).toBeCloseTo(3, 10);
     expect(pathLength(p, root, 'c')).toBeCloseTo(3, 10);
     expect(totalLength(p)).toBe(7);
+  });
+
+  it('reports a time-calibration rejection from midpoint rooting without mutating the tree', () => {
+    const p = createEmptyProject();
+    p.nodes[p.rootId].label = 'R';
+    p.nodes[p.rootId].age = 100;
+    p.calibrationPoints = [{ id: 'cp-root', nodeId: p.rootId, minAge: 95, maxAge: 105 }];
+    add(p, 'x', 'X', p.rootId, { age: 80, branchLength: 20 });
+    add(p, 'a', 'A', 'x', { age: 0, branchLength: 80 });
+    add(p, 'b', 'B', 'x', { age: 0, branchLength: 80 });
+    add(p, 'c', 'C', p.rootId, { age: 20, branchLength: 80 });
+    expect(validateTimeData(p)).toEqual([]);
+    expect(midpointRoot(p).placement).toMatchObject({ targetId: 'x', fraction: 0.5 });
+    const before = structuredClone(p);
+
+    expect(applyMidpointReroot(p)).toEqual({ ok: false, failure: 'time-inversion' });
+    expect(p).toEqual(before);
   });
 
   it('excludes branch lengths that are missing and says the diameter is partial', () => {

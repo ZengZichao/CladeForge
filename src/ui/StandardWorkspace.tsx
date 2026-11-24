@@ -86,7 +86,7 @@ function readPanelWidth(key: string, fallback: number): number {
 // raises the warning toast itself).
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
 
-function useAutoSaveStatus(): { status: SaveStatus; detail: string | null } {
+function useAutoSaveStatus(resetVersion: number): { status: SaveStatus; detail: string | null } {
   const project = useStore((s) => s.project);
   const tabs = useStore((s) => s.tabs);
   const activeTabId = useStore((s) => s.activeTabId);
@@ -108,12 +108,18 @@ function useAutoSaveStatus(): { status: SaveStatus; detail: string | null } {
     if (outcome && pendingSince !== null && outcome.at >= pendingSince) setPendingSince(null);
   }, [outcome, pendingSince]);
 
+  useEffect(() => {
+    if (resetVersion === 0) return;
+    setPendingSince(null);
+    setOutcome(null);
+  }, [resetVersion]);
+
   const status: SaveStatus =
     pendingSince !== null ? 'saving' : outcome ? (outcome.ok ? 'saved' : 'failed') : 'idle';
   return { status, detail: outcome && !outcome.ok ? outcome.message ?? null : null };
 }
 
-function StatusBar() {
+function StatusBar({ autosaveResetVersion }: { autosaveResetVersion: number }) {
   const nodeCount = useStore((s) => Object.keys(s.project.nodes).length);
   // GUI-C OBS-1: "Nodes" counts EVERY node (tips + internal), which readers
   // routinely misinterpret as the tip count. State both.
@@ -146,7 +152,7 @@ function StatusBar() {
   // now LOCATES its clade (the reason it exists), and the degradation chips open
   // the in-app manual where the behaviour is explained.
   const focusNode = useStore((s) => s.focusNode);
-  const { status: saveStatus, detail: saveDetail } = useAutoSaveStatus();
+  const { status: saveStatus, detail: saveDetail } = useAutoSaveStatus(autosaveResetVersion);
   const minScaleReached = useStore((s) => s.view.scale <= MIN_VIEW_SCALE + 1e-9);
 
   // Dirty flag + capacity/LOD disclosures: the status bar is where a user looks
@@ -182,6 +188,15 @@ function StatusBar() {
             '尚未写入过项目文件：当前内容只在本地恢复区（自动保存），重启后仍可恢复；执行「保存项目」写入磁盘。',
             'No project file yet: the content lives in the local recovery area (autosave) and survives a restart; “Save project” writes it to disk.',
           );
+  const layerToggleLabel = layers.length < 2
+    ? tr(
+        `只有「${activeLayerName}」一个假说层；添加另一层后才能切换`,
+        `Only one hypothesis layer (${activeLayerName}); add another layer to enable switching`,
+      )
+    : tr(
+        `当前假说层「${activeLayerName}」：点击切换到下一层`,
+        `Active hypothesis layer (${activeLayerName}): click to switch to the next layer`,
+      );
   return (
     // The selection count is announced to assistive tech (the canvas tree has
     // no aria-live region of its own).
@@ -225,16 +240,15 @@ function StatusBar() {
       {activeLayerName && (
         <button
           className="status-layer"
+          disabled={layers.length < 2}
           onClick={() => {
             if (layers.length < 2) return;
             const idx = layers.findIndex((l) => l.id === activeLayerId);
             const next = layers[(idx + 1 + layers.length) % layers.length];
             if (next) apply((d) => void switchLayer(d, next.id));
           }}
-          title={tr(
-            '当前假说层：点击切换到下一层',
-            'Active hypothesis layer: click to switch to the next layer',
-          )}
+          title={layerToggleLabel}
+          aria-label={layerToggleLabel}
         >
           {/* A#10: the other status chips use a half-width colon; this one was
               the odd full-width 「：」out. */}
@@ -327,10 +341,14 @@ function LeftPanelContent() {
 
 export function StandardWorkspace({
   panelsHidden,
+  autosaveResetVersion = 0,
   onShowPanels,
+  onBothPanelsHiddenChange,
   onAddChildrenDialog,
 }: {
   panelsHidden: boolean;
+  autosaveResetVersion?: number;
+  onBothPanelsHiddenChange?: (bothHidden: boolean) => void;
   /** A#2: restores BOTH panels from the double-hidden state reached via the
    *  header button / ⌘.; without this the edge toggle had no way to bring the
    *  left panel back (the per-panel hide buttons only cover their own side). */
@@ -367,6 +385,14 @@ export function StandardWorkspace({
   // the ⌘. global toggle).
   const [leftHidden, setLeftHidden] = useState(false);
   const [rightHidden, setRightHidden] = useState(false);
+  // The master toggle owns BOTH panels. Clear independent collapses when it is
+  // engaged so clearing `panelsHidden` actually restores both sides.
+  useEffect(() => {
+    if (panelsHidden) {
+      setLeftHidden(false);
+      setRightHidden(false);
+    }
+  }, [panelsHidden]);
   const isNarrow = windowWidth < NARROW_THRESHOLD;
   // V16/M43 (UI_UX_REVIEW): 1024 px is the common laptop-window width, and the
   // fixed rails + two panels used to leave the canvas ~350px with every label
@@ -380,6 +406,20 @@ export function StandardWorkspace({
     setMidFold(fold);
     if (!fold) setUserReopenedRight(false);
   }, [windowWidth]);
+
+  const bothPanelsHidden = !isNarrow && showPanels && leftHidden && rightHidden && !panelsHidden;
+  useEffect(() => {
+    onBothPanelsHiddenChange?.(bothPanelsHidden);
+  }, [bothPanelsHidden, onBothPanelsHiddenChange]);
+
+  useEffect(() => {
+    const showBoth = () => {
+      setLeftHidden(false);
+      setRightHidden(false);
+    };
+    window.addEventListener('cladeforge:show-panels', showBoth);
+    return () => window.removeEventListener('cladeforge:show-panels', showBoth);
+  }, []);
 
   /**
    * 用户反馈: the left rail is gone — there is ONE plain left panel. The
@@ -630,7 +670,7 @@ export function StandardWorkspace({
             !(midFold && !userReopenedRight) && <PropertiesPanel />}
         </div>
       </div>
-      <StatusBar />
+      <StatusBar autosaveResetVersion={autosaveResetVersion} />
       {menu && (
         <ContextMenu
           target={menu}
