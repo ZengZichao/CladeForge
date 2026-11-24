@@ -2,7 +2,7 @@
 
 # CladeForge — User Manual (English)
 
-**Applies to CladeForge v0.3.0**
+**Applies to CladeForge v0.3.1**
 
 中文版本：[MANUAL_ZH.md](./MANUAL_ZH.md)
 
@@ -38,19 +38,19 @@ This manual covers every feature of the application, organised by workflow stage
 
 | Platform | Minimum OS | Architecture | Disk | RAM |
 |----------|-----------|-------------|------|-----|
-| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0 not re-measured | 512 MB |
+| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0/v0.3.1 not re-measured | 512 MB |
 | Windows | 10 (64-bit) | x86_64 | v0.2.0 release includes `.msi`; size not measured | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 release includes `.deb`/AppImage; size not measured | 512 MB |
 
 ¹ 11.0 (Big Sur) is the supported floor and is declared in `src-tauri/tauri.conf.json`
 (`bundle.macOS.minimumSystemVersion`), so a packaged build writes it into the bundle's
 `LSMinimumSystemVersion`. The v0.1.0 bundle predates that key and still carries Tauri's
-default `10.13`; v0.2.0/v0.3.0 use the declared floor. No macOS release older than 11.0 has
+default `10.13`; v0.2.0/v0.3.0/v0.3.1 use the declared floor. No macOS release older than 11.0 has
 been tested.
 
 ² v0.1.0 produced only `CladeForge_0.1.0_aarch64.dmg` (non-fat arm64). The v0.2.0 release
-page lists arm64 and x86_64 macOS builds; v0.3.0 is the current source line and has not been
-packaged yet. Universal builds remain documented but untested (`rustup target add
+page lists arm64 and x86_64 macOS builds; v0.3.1 is the current source line and its artifacts are
+produced by `.github/workflows/release.yml`. Universal builds remain documented but untested (`rustup target add
 aarch64-apple-darwin x86_64-apple-darwin`, then
 `npm run tauri build -- --target universal-apple-darwin`, which needs `lipo`).
 
@@ -60,6 +60,7 @@ The application ships no browser engine of its own, but it renders into the oper
 
 **Pre-built binaries** — Download from the [Releases page](https://github.com/ZengZichao/CladeForge/releases):
 - v0.2.0: macOS `.dmg` (arm64 and x86_64), Windows `.msi` (x64), Linux `.deb` or AppImage (x86_64).
+- v0.3.1: current patch release; pre-built artifacts are produced from `.github/workflows/release.yml`.
 - v0.3.0: pre-built artifacts are published from `.github/workflows/release.yml`; build from source below if no artifact has been published for your platform.
 
 **Build from source** — clone the repository:

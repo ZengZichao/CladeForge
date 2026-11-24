@@ -5,7 +5,27 @@
 All notable changes to CladeForge are documented here. Format: Keep a
 Changelog 1.1.0; versions follow [SemVer](https://semver.org) while pre-1.0.
 
-## [Unreleased]
+## [0.3.1] — 2026-11-25
+
+Tagged patch release. Pre-built artifacts are produced by `.github/workflows/release.yml`
+as a draft, then published after all platform builds and attachments are verified.
+
+### Release summary
+- Repair the confirmed A/B/C actual-test defects: panel recovery, preference persistence,
+  sample new-tab semantics, calibration validation, reconciliation-view restoration,
+  integer child counts, prefixed NeXML import, narrow-screen overflow, favourite/pin controls,
+  time-constraint reset, manual rendering, repository navigation, and Save all tabs.
+- Separate direct-node rerooting from branch-midpoint rooting; preserve branch lengths,
+  time ordering, root-age evidence, annotations, metadata, hypothesis records, and custom edges.
+- Bind asynchronous saves to the originating tab/revision, keep browser downloads honestly
+  unsaved, and provide explicit Download and close semantics in the browser.
+- Persist per-tab reconciliation view state, restore both independently hidden panels in one
+  action, prevent local-data reset from re-autosaving discarded documents, and propagate panel
+  availability across standard/reconciliation workspaces.
+- Harden Markdown comment/link rendering and line-ending normalization, reject prototype-polluting
+  evidence keys, enforce NeXML element/attribute namespaces, and expose exact HEX input in compact rows.
+- Raise coarse-pointer touch targets to 44px, keep 320/390px layouts contained, and prevent reconciliation
+  zoom controls from clipping their enlarged children.
 
 ### Fixed — 2026-11-18 软件实际测试报告（A/B/C）修复
 - **P2 / BUG-03**：「添加子节点」数量上限与下限改为同一策略——超过 50 与小于 1 一样禁用提交、给出同行内错误提示，不再静默钳制；节点年龄在无校准时也强制 ≥ 0。

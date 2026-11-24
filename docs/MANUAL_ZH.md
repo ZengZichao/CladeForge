@@ -2,7 +2,7 @@
 
 # CladeForge 用户手册（中文）
 
-**适用版本 CladeForge v0.3.0**
+**适用版本 CladeForge v0.3.1**
 
 英文版本：[MANUAL_EN.md](./MANUAL_EN.md)
 
@@ -38,17 +38,17 @@ CladeForge 是一款本地优先的跨平台桌面应用，用于构建、注释
 
 | 平台 | 最低系统 | 架构 | 磁盘 | 内存 |
 |------|---------|------|------|------|
-| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 实测 12.8 MiB（v0.2.0 arm64 应用包；安装包 4.8 MiB）；v0.3.0 未重新测量 | 512 MB |
+| macOS | 11.0 (Big Sur)¹ | arm64 (aarch64)² | 实测 12.8 MiB（v0.2.0 arm64 应用包；安装包 4.8 MiB）；v0.3.0/v0.3.1 未重新测量 | 512 MB |
 | Windows | 10 (64 位) | x86_64 | v0.2.0 发布包含 `.msi`；体积未测量 | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 发布包含 `.deb`/AppImage；体积未测量 | 512 MB |
 
 ¹ 11.0 (Big Sur) 是支持下限，并已在 `src-tauri/tauri.conf.json` 中声明
 （`bundle.macOS.minimumSystemVersion`），因此打包构建会把它写入应用包的
 `LSMinimumSystemVersion`。v0.1.0 的应用包早于该键的设置，仍带着 Tauri 的默认值 `10.13`；
-v0.2.0/v0.3.0 使用声明的下限。11.0 以下的 macOS 未做过测试。
+v0.2.0/v0.3.0/v0.3.1 使用声明的下限。11.0 以下的 macOS 未做过测试。
 
 ² v0.1.0 只产出了 `CladeForge_0.1.0_aarch64.dmg`（非胖 arm64）。v0.2.0 发布页列出 arm64 与
-x86_64 的 macOS 构建；v0.3.0 是当前源码线，尚未打包。通用 `.dmg` 仍是记录在案但未验证的
+x86_64 的 macOS 构建；v0.3.1 是当前源码线，其产物由发布工作流构建。通用 `.dmg` 仍是记录在案但未验证的
 选项（先 `rustup target add aarch64-apple-darwin x86_64-apple-darwin`，再
 `npm run tauri build -- --target universal-apple-darwin`，需要 `lipo`）。
 
@@ -58,6 +58,7 @@ x86_64 的 macOS 构建；v0.3.0 是当前源码线，尚未打包。通用 `.dm
 
 **预构建二进制包** — 从 [Releases 页面](https://github.com/ZengZichao/CladeForge/releases) 下载：
 - v0.2.0：macOS `.dmg`（arm64 与 x86_64）、Windows `.msi`（x64）、Linux `.deb` 或 AppImage（x86_64）。
+- v0.3.1：当前补丁版本；预构建产物由 `.github/workflows/release.yml` 构建。
 - v0.3.0：预构建产物由 `.github/workflows/release.yml` 构建并发布；若你的平台没有产物，请按下方从源码构建。
 
 **从源码构建** — 克隆仓库：
