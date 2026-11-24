@@ -4,7 +4,7 @@
 
 ## Supported versions
 
-CladeForge is at v0.3.0 and pre-1.0. Fixes land on the default branch and are picked up by
+CladeForge is at v0.3.1 and pre-1.0. Fixes land on the default branch and are picked up by
 whatever release is current at the time; there is no long-term-support branch.
 
 | Version | Supported |

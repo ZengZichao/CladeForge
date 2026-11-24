@@ -44,7 +44,7 @@ equal-rates (ER) sub-model.
 
 | Platform | Minimum OS | Architecture | Disk Space | RAM |
 |----------|-----------|-------------|-----------|-----|
-| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0 not re-measured | 512 MB |
+| macOS | 11.0 (Big Sur) | arm64, x86_64 | 12.8 MiB measured (v0.2.0 arm64 bundle; installer 4.8 MiB); v0.3.0/v0.3.1 not re-measured | 512 MB |
 | Windows | 10 (64-bit) | x86_64 | v0.2.0 release includes `.msi`; size not measured | 512 MB |
 | Linux | glibc ≥ 2.28 | x86_64 | v0.2.0 release includes `.deb`/AppImage; size not measured | 512 MB |
 
@@ -60,10 +60,10 @@ What is actually attached to a release varies by version, so this is stated per 
 than promised for all of them. Check the [Releases page](https://github.com/ZengZichao/CladeForge/releases)
 for what a given tag carries.
 
-- **Unreleased (working tree)** — the built-in samples are reduced from seven to three
-  feature-oriented demos (`feature-tour`, `large-tree`, `recon-family`) with all real biological
-  background removed; numeric structure is unchanged and the cross-check fixtures were regenerated.
-  See the [Unreleased] section of the CHANGELOG for details.
+- **v0.3.1** — current patch release. It repairs the confirmed A/B/C actual-test defects and
+  hardens save/tab state, rerooting invariants, NeXML namespace handling, responsive/touch layout,
+  and Markdown rendering. Artifacts are produced by `.github/workflows/release.yml`; see the
+  [Releases page](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.1).
 - **v0.3.0** — tagged release line, published with artifacts from
   `.github/workflows/release.yml` (see the [Releases page](https://github.com/ZengZichao/CladeForge/releases/tag/v0.3.0)).
 - **v0.2.0** — release page assets: `.dmg` for macOS on both Apple Silicon and Intel, `.msi`
@@ -142,9 +142,10 @@ concept DOI always resolves to the newest archived version.
 - **v0.1.0:** [10.5281/zenodo.23053394](https://doi.org/10.5281/zenodo.23053394)
 - **v0.2.0:** the version DOI is assigned by Zenodo when the release is archived.
 - **v0.3.0:** [10.5281/zenodo.24108672](https://doi.org/10.5281/zenodo.24108672) (archived 2026-11-10).
+- **v0.3.1:** the version DOI is assigned by Zenodo when this release is archived; until then, cite the concept DOI above.
 
-> Zeng, Z. (2026). *CladeForge* (Version v0.3.0) [Computer software]. Zenodo.
-> https://doi.org/10.5281/zenodo.24108672
+> Zeng, Z. (2026). *CladeForge* (Version v0.3.1) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23053393
 
 No journal citation is available yet. The machine-readable form is in [`CITATION.cff`](./CITATION.cff).
 
