@@ -99,7 +99,7 @@ export function parseMarkdown(src: string): Block[] {
   // so multiline comment bodies cannot become headings, lists or paragraphs.
   // An unterminated comment is hidden through EOF, matching HTML comment rules.
   const withoutComments = src.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
-  const lines = withoutComments.split('\n').map((l) => l.replace('\r', ''));
+  const lines = withoutComments.replace(/\r\n?/g, '\n').split('\n');
   const blocks: Block[] = [];
   let i = 0;
   let headingCounter = 0;

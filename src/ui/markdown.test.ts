@@ -46,6 +46,12 @@ describe('parseMarkdown', () => {
     expect(p.props.children[0]).toBe('<script>alert(1)</script>');
   });
 
+  it('normalizes CRLF and bare CR line endings without joining words', () => {
+    const blocks = parseMarkdown('# Heading\r\n\r\nFirst\rSecond');
+    expect(blocks.map((block) => block.kind)).toEqual(['heading', 'para']);
+    expect(renderToStaticMarkup(renderBlocks(blocks))).toBe('<h4 id="manual-heading-1">Heading</h4><p>First Second</p>');
+  });
+
   it('BUG-001: removes HTML comments before parsing headings and paragraphs', () => {
     const blocks = parseMarkdown('<!-- AI-PROVENANCE: hidden -->\n# Visible\n\nBefore\n<!-- hidden paragraph -->\nAfter');
     expect(blocks.map((b) => b.kind)).toEqual(['heading', 'para', 'para']);
